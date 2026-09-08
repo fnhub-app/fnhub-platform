@@ -453,7 +453,7 @@ function unitEditStatusChange(){
   var status=(document.getElementById('ue_status')||{}).value||'';
   var row=document.getElementById('ue_assign_row');
   // Show tenant section for all statuses except condemned (or archived)
-  var hideStatuses = ['archived','condemned'];
+  var hideStatuses = ['archived','condemned','new_construction'];   // a unit being built has no tenant yet
   if(row) row.style.display = hideStatuses.includes(status) ? 'none' : 'flex';
   // Condemned units cannot be under renovation — disable and uncheck
   var urChk = document.getElementById('ue_under_renovation');

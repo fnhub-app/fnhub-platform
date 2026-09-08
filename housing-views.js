@@ -342,6 +342,7 @@ function renderInventoryView(){
     occupied:    {bg:'var(--info-blue-bg)',c:'#1d4ed8',label:'Occupied'},
     under_repair:{bg:'var(--warn-amber-bg)',c:'var(--warn-amber-text)',label:'Vacant'},
     reserved:    {bg:'#faf5ff',c:'#7c3aed',label:'Reserved'},
+    new_construction: {bg:'var(--info-blue-bg)',c:'var(--info-blue)',label:'New Construction'},
     condemned:   {bg:'var(--danger-bg)',c:'var(--danger)',label:'Condemned'},
     archived:    {bg:'#f4f4f0',c:'var(--gray)',   label:'Archived'}
   };
@@ -1341,6 +1342,7 @@ function unitSearchFilter(q) {
     occupied:    {bg:'var(--info-blue-bg)',c:'#1d4ed8',label:'Occupied'},
     under_repair:{bg:'var(--success-bg)',c:'var(--success)',label:'Vacant'},
     reserved:    {bg:'#faf5ff',c:'#7c3aed',label:'Reserved'},
+    new_construction: {bg:'var(--info-blue-bg)',c:'var(--info-blue)',label:'New Construction'},
     condemned:   {bg:'var(--danger-bg)',c:'var(--danger)',label:'Condemned'}
   };
 
@@ -2046,7 +2048,7 @@ function _housingReconcile(){
   // it used to fall into `other` ("Other / no status"), which both mislabeled
   // a legitimate state and put condemned units in the Set-to-Vacant sweep's
   // target list — one click away from becoming assignable again.
-  var buckets = { assigned:[], vacant:[], reno:[], reserved:[], condemned:[], archived:[], other:[] };
+  var buckets = { assigned:[], vacant:[], reno:[], reserved:[], newconst:[], condemned:[], archived:[], other:[] };
   units.forEach(function(u){
     if(!u) return;
     if(u.archived){ buckets.archived.push(u); return; }
@@ -2054,6 +2056,7 @@ function _housingReconcile(){
     if(u.assignedName || u.assignedTo){ buckets.assigned.push(u); }
     else if(st === 'vacant'){ buckets.vacant.push(u); }
     else if(st === 'condemned'){ buckets.condemned.push(u); }
+    else if(st === 'new_construction'){ buckets.newconst.push(u); }
     else if(u.under_renovation || st.indexOf('renovat') !== -1 || st.indexOf('repair') !== -1){ buckets.reno.push(u); }
     else if(st === 'reserved'){ buckets.reserved.push(u); }
     else { buckets.other.push(u); }
@@ -2188,6 +2191,7 @@ function showReconcileReport(){
     + stateRow('Vacant', R.buckets.vacant)
     + stateRow('Under renovation / repair', R.buckets.reno)
     + stateRow('Reserved (no tenant)', R.buckets.reserved)
+    + stateRow('New Construction', R.buckets.newconst, R.buckets.newconst.length ? 'accepted state' : '')
     + stateRow('Condemned', R.buckets.condemned, R.buckets.condemned.length ? 'accepted state' : '')
     + stateRow('Other / no status', R.buckets.other, R.buckets.other.length ? 'see below' : '')
     + stateRow('Archived', R.buckets.archived, R.buckets.archived.length ? 'not counted in total' : '')
