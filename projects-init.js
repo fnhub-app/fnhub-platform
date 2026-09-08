@@ -320,8 +320,42 @@ function _prjBumpNumber(num) {
 
 // ── Derived values ───────────────────────────────────────────────────────────
 function _prjData(p) { return (p && typeof p.data === 'object' && p.data) || {}; }
+// ── Purchase Orders (PO draw-down tracking; mirrors the MR/SOW payments
+// model but supports MULTIPLE POs per project — a capital project runs
+// several contracts). State: data.purchaseOrders = [{id, number, amount,
+// vendor, milestoneId, source, rfqId, draws:[{id,type,phaseNo,label,amount,
+// paid,paidDate,releaseDate,invoice}]}]. Paid draws are real money out and
+// feed the P & L "Paid" column + the Spent strip alongside tagged expenses;
+// PO amounts are the "Committed" column. No schema change — rides data jsonb.
+function _prjPos(p) { return _prjData(p).purchaseOrders || []; }
+function _prjPoNum(v) { return parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')) || 0; }
+function _prjPoPaid(po) {
+  return (po && po.draws || []).reduce(function(s, dr){ return s + (dr.paid ? _prjPoNum(dr.amount) : 0); }, 0);
+}
+function _prjPoScheduled(po) {
+  return (po && po.draws || []).reduce(function(s, dr){ return s + _prjPoNum(dr.amount); }, 0);
+}
+function _prjPoCommitted(po) { return _prjPoNum(po && po.amount); }
+// Paid PO draws total across the project (all POs).
+function _prjPoPaidTotal(p) {
+  return _prjPos(p).reduce(function(s, po){ return s + _prjPoPaid(po); }, 0);
+}
+// Per-milestone rollups for the P & L (msId = '' means "not tied to a milestone").
+function _prjPoCommittedForMs(p, msId) {
+  return _prjPos(p).filter(function(po){ return (po.milestoneId || '') === (msId || ''); })
+                   .reduce(function(s, po){ return s + _prjPoCommitted(po); }, 0);
+}
+function _prjPoPaidForMs(p, msId) {
+  return _prjPos(p).filter(function(po){ return (po.milestoneId || '') === (msId || ''); })
+                   .reduce(function(s, po){ return s + _prjPoPaid(po); }, 0);
+}
+
 function _prjSpent(p) {
-  return (_prjData(p).expenses || []).reduce(function(sum, e){ return sum + (Number(e.amount) || 0); }, 0);
+  // Money actually out = tagged/untagged expenses + paid PO draws. Expenses
+  // and PO draws are separate mechanisms for a given cost (a project records
+  // one or the other), so summing both does not double-count.
+  var exp = (_prjData(p).expenses || []).reduce(function(sum, e){ return sum + (Number(e.amount) || 0); }, 0);
+  return exp + _prjPoPaidTotal(p);
 }
 function _prjMilestoneStats(p) {
   var ms = _prjData(p).milestones || [];
@@ -438,6 +472,7 @@ function openPrjModal(id) {
   _prjRenderOverview();
   _prjRenderMilestones();
   _prjRenderCosts();
+  _prjRenderPos();
   _prjRenderPnl();
   _prjRenderLots();
   _prjRefreshStrip();
@@ -552,6 +587,7 @@ function _prjBuildModalHTML() {
         '<button type="button" class="tic-tab tic-active" data-modal-tab="overview"   onclick="_prjSwitchTab(\'overview\')"   role="tab">Overview</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="milestones" onclick="_prjSwitchTab(\'milestones\')" role="tab">Milestones</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="costs"      onclick="_prjSwitchTab(\'costs\')"      role="tab">Costs</button>' +
+        '<button type="button" class="tic-tab"            data-modal-tab="po"         onclick="_prjSwitchTab(\'po\')"         role="tab">Purchase Orders</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="pnl"        onclick="_prjSwitchTab(\'pnl\')"        role="tab">P &amp; L</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="lots"       onclick="_prjSwitchTab(\'lots\')"       role="tab">Lots &amp; Units</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="documents"  onclick="_prjSwitchTab(\'documents\')"  role="tab">Documents</button>' +
@@ -561,6 +597,7 @@ function _prjBuildModalHTML() {
         '<div class="tic-panel tic-active" data-modal-panel="overview"   id="prj_panel_overview"></div>' +
         '<div class="tic-panel"            data-modal-panel="milestones" id="prj_panel_milestones"></div>' +
         '<div class="tic-panel"            data-modal-panel="costs"      id="prj_panel_costs"></div>' +
+        '<div class="tic-panel"            data-modal-panel="po"         id="prj_panel_po"></div>' +
         '<div class="tic-panel"            data-modal-panel="pnl"        id="prj_panel_pnl"></div>' +
         '<div class="tic-panel"            data-modal-panel="lots"       id="prj_panel_lots"></div>' +
         '<div class="tic-panel"            data-modal-panel="documents"  id="prj_panel_documents"></div>' +
@@ -590,7 +627,8 @@ function _prjSwitchTab(name) {
     pn.classList.toggle('tic-active', pn.getAttribute('data-modal-panel') === name);
   });
   if (name === 'documents') _prjMountDocs();
-  if (name === 'pnl') _prjRenderPnl();   // recompute from the latest expenses/budgets
+  if (name === 'po') _prjRenderPos();
+  if (name === 'pnl') _prjRenderPnl();   // recompute from the latest expenses/budgets/POs
   _prjApplyReadOnly();
 }
 
@@ -1333,9 +1371,14 @@ function _prjRenderPnl() {
   var ms  = d.data.milestones || [];
   var exp = d.data.expenses || [];
 
-  var actualFor = function(msId) {
+  // Paid for a milestone = tagged expenses + paid PO draws on POs tagged to it.
+  var expFor = function(msId) {
     return exp.filter(function(e){ return e.milestoneId === msId; })
               .reduce(function(s, e){ return s + (Number(e.amount) || 0); }, 0);
+  };
+  var paidFor = function(msId) { return expFor(msId) + _prjPoPaidForMs(d, msId); };
+  var moneyCell = function(v) {
+    return '<td style="text-align:right;">' + (v ? _prjMoney(v, true) : '<span style="color:var(--muted);">—</span>') + '</td>';
   };
   var varCell = function(v, hasBudget) {
     if (!hasBudget) return '<td style="text-align:right;color:var(--muted);">—</td>';
@@ -1347,46 +1390,57 @@ function _prjRenderPnl() {
   // no cost) carry pnlHidden on the milestone — the milestone itself stays on
   // the Milestones tab. Hidden rows that still have money against them are
   // rolled into one aggregate line so the totals never understate.
-  var budgetTotal = 0, actualTotal = 0;
-  var hiddenBudget = 0, hiddenActual = 0, hiddenNames = [];
+  // Columns: Budget | PO Committed (PO totals tagged here) | Paid (tagged
+  // expenses + paid PO draws) | Variance (Budget − Paid).
+  var budgetTotal = 0, committedTotal = 0, paidTotal = 0;
+  var hiddenBudget = 0, hiddenCommitted = 0, hiddenPaid = 0, hiddenNames = [];
   var rows = '';
   ms.forEach(function(m, i) {
     var budget = (m.budgetAmount != null && m.budgetAmount !== '') ? Number(m.budgetAmount) : null;
-    var actual = actualFor(m.id);
+    var committed = _prjPoCommittedForMs(d, m.id);
+    var paid = paidFor(m.id);
     budgetTotal += budget || 0;
-    actualTotal += actual;
+    committedTotal += committed;
+    paidTotal += paid;
     if (m.pnlHidden) {
       hiddenBudget += budget || 0;
-      hiddenActual += actual;
+      hiddenCommitted += committed;
+      hiddenPaid += paid;
       hiddenNames.push({ i: i, name: m.name || '(unnamed)' });
       return;
     }
     rows += '<tr' + (m.done ? ' style="opacity:.72;"' : '') + '>' +
       '<td>' + _prjEsc(m.name || '(unnamed)') + (m.done ? ' <span style="color:var(--success);" title="Milestone complete">✓</span>' : '') + '</td>' +
-      '<td style="text-align:right;"><input class="tic-input" type="number" min="0" step="0.01" placeholder="0.00" value="' + (budget != null ? _prjEsc(budget) : '') + '" onchange="_prjMsBudget(' + i + ', this.value)" style="max-width:130px;text-align:right;padding:5px 9px;font-size:12px;display:inline-block;"/></td>' +
-      '<td style="text-align:right;">' + (actual ? _prjMoney(actual, true) : '<span style="color:var(--muted);">—</span>') + '</td>' +
-      varCell(budget != null ? budget - actual : 0, budget != null) +
+      '<td style="text-align:right;"><input class="tic-input" type="number" min="0" step="0.01" placeholder="0.00" value="' + (budget != null ? _prjEsc(budget) : '') + '" onchange="_prjMsBudget(' + i + ', this.value)" style="max-width:120px;text-align:right;padding:5px 9px;font-size:12px;display:inline-block;"/></td>' +
+      moneyCell(committed) +
+      moneyCell(paid) +
+      varCell(budget != null ? budget - paid : 0, budget != null) +
       '<td style="width:24px;"><button type="button" class="prj-row-remove" title="Remove this row from the P &amp; L (the milestone stays on the Milestones tab)" onclick="_prjPnlHide(' + i + ')">✕</button></td>' +
     '</tr>';
   });
-  if (hiddenBudget > 0 || hiddenActual > 0) {
+  if (hiddenBudget > 0 || hiddenCommitted > 0 || hiddenPaid > 0) {
     rows += '<tr><td style="color:var(--muted);">Removed rows (still counted)</td>' +
       '<td style="text-align:right;color:var(--muted);">' + (hiddenBudget ? _prjMoney(hiddenBudget, true) : '—') + '</td>' +
-      '<td style="text-align:right;color:var(--muted);">' + (hiddenActual ? _prjMoney(hiddenActual, true) : '—') + '</td>' +
+      '<td style="text-align:right;color:var(--muted);">' + (hiddenCommitted ? _prjMoney(hiddenCommitted, true) : '—') + '</td>' +
+      '<td style="text-align:right;color:var(--muted);">' + (hiddenPaid ? _prjMoney(hiddenPaid, true) : '—') + '</td>' +
       '<td style="text-align:right;color:var(--muted);">—</td><td></td></tr>';
   }
 
-  var untagged = exp.filter(function(e){ return !e.milestoneId; })
-                    .reduce(function(s, e){ return s + (Number(e.amount) || 0); }, 0);
-  if (untagged > 0) {
-    actualTotal += untagged;
+  var untaggedExp = exp.filter(function(e){ return !e.milestoneId; })
+                       .reduce(function(s, e){ return s + (Number(e.amount) || 0); }, 0);
+  var untaggedCommitted = _prjPoCommittedForMs(d, '');
+  var untaggedPaid = untaggedExp + _prjPoPaidForMs(d, '');
+  if (untaggedExp > 0 || untaggedCommitted > 0 || _prjPoPaidForMs(d, '') > 0) {
+    committedTotal += untaggedCommitted;
+    paidTotal += untaggedPaid;
     rows += '<tr><td style="color:var(--muted);">Not tied to a milestone</td>' +
       '<td style="text-align:right;color:var(--muted);">—</td>' +
-      '<td style="text-align:right;">' + _prjMoney(untagged, true) + '</td>' +
+      moneyCell(untaggedCommitted) +
+      moneyCell(untaggedPaid) +
       '<td style="text-align:right;color:var(--muted);">—</td><td></td></tr>';
   }
 
-  var totalVar = budgetTotal - actualTotal;
+  var totalVar = budgetTotal - paidTotal;
   var funded = Number(d.budget) || 0;
   // Funded-budget comparison row: how the milestone budget allocation stacks
   // up against what the funder(s) actually granted. Positive variance =
@@ -1396,31 +1450,38 @@ function _prjRenderPnl() {
     ? '<tr><td style="color:var(--muted);">Project funded budget</td>' +
         '<td style="text-align:right;font-weight:600;">' + _prjMoney(funded, true) + '</td>' +
         '<td style="text-align:right;color:var(--muted);">—</td>' +
+        '<td style="text-align:right;color:var(--muted);">—</td>' +
         varCell(funded - budgetTotal, true) +
       '<td></td></tr>'
     : '';
   var fundedNote = (funded > 0 && budgetTotal - funded >= 0.005)
     ? '<div style="font-size:12px;color:var(--warn-amber-text,#b45309);margin-top:8px;">⚠️ Milestone budgets total ' + _prjMoney(budgetTotal, true) + ' — ' + _prjMoney(budgetTotal - funded, true) + ' more than the ' + _prjMoney(funded, true) + ' funded budget.</div>'
     : '';
+  // Committed-but-unpaid exposure across all POs (informational).
+  var openCommitment = Math.max(0, committedTotal - paidTotal);
 
   host.innerHTML =
     '<div class="tic-section">' +
-      '<div class="tic-section-h">Profit &amp; Loss — Budget vs Actual by Milestone</div>' +
+      '<div class="tic-section-h">Profit &amp; Loss — Budget vs Committed vs Paid by Milestone</div>' +
       (ms.length
         ? '<div class="prj-table-wrap"><table class="prj-table"><thead><tr>' +
-            '<th>Milestone</th><th style="text-align:right;">Budget</th><th style="text-align:right;">Actual</th><th style="text-align:right;">Variance</th><th></th>' +
+            '<th>Milestone</th><th style="text-align:right;">Budget</th><th style="text-align:right;" title="Purchase orders committed to this milestone">PO Committed</th><th style="text-align:right;" title="Tagged expenses + paid PO draws">Paid</th><th style="text-align:right;">Variance</th><th></th>' +
           '</tr></thead><tbody>' + rows +
           '<tr style="border-top:2px solid var(--border);"><td style="font-weight:700;">Total</td>' +
             '<td style="text-align:right;font-weight:700;">' + _prjMoney(budgetTotal, true) + '</td>' +
-            '<td style="text-align:right;font-weight:700;">' + _prjMoney(actualTotal, true) + '</td>' +
+            '<td style="text-align:right;font-weight:700;">' + _prjMoney(committedTotal, true) + '</td>' +
+            '<td style="text-align:right;font-weight:700;">' + _prjMoney(paidTotal, true) + '</td>' +
             varCell(totalVar, budgetTotal > 0) +
           '<td></td></tr>' + fundedRow + '</tbody></table></div>' + fundedNote +
+          (openCommitment > 0.005
+            ? '<div style="font-size:12px;color:var(--info-blue);margin-top:8px;">🧾 Open PO commitment (committed but not yet paid): ' + _prjMoney(openCommitment, true) + '.</div>'
+            : '') +
           (hiddenNames.length
             ? '<div style="font-size:12px;color:var(--muted);margin-top:8px;">Hidden from P &amp; L: ' +
                 hiddenNames.map(function(h){ return _prjEsc(h.name) + ' <button type="button" class="btn btn-ghost" style="padding:1px 7px;font-size:10px;" onclick="_prjPnlRestore(' + h.i + ')">restore</button>'; }).join(' · ') +
               '</div>'
             : '') +
-          '<div style="font-size:12px;color:var(--muted);margin-top:8px;">Enter each milestone\'s budget here; actuals come from expenses tagged to that milestone on the Costs tab. Variance = budget − actual (red means over budget). Rows without a cost (e.g. "Funding confirmed") can be removed with the ✕ — the milestone itself stays on the Milestones tab.</div>'
+          '<div style="font-size:12px;color:var(--muted);margin-top:8px;">Enter each milestone\'s budget here. <b>PO Committed</b> is the total of purchase orders tagged to the milestone (Purchase Orders tab); <b>Paid</b> is tagged expenses plus paid PO draws. Variance = budget − paid (red means over budget). Rows without a cost can be removed with the ✕ — the milestone itself stays on the Milestones tab.</div>'
         : '<div style="color:var(--muted);font-size:13px;">No milestones yet — add them on the Milestones tab to build the P &amp; L breakdown.</div>') +
     '</div>';
 }
@@ -1446,6 +1507,328 @@ function _prjPnlRestore(i) {
   delete ms[i].pnlHidden;
   _prjRenderPnl();
   _prjScheduleAutoSave();
+}
+
+// ── Purchase Orders tab ──────────────────────────────────────────────────────
+// Mirrors the Maintenance Request payments model (PO total + a draw schedule
+// of material/phase/holdback rows, each with a paid toggle + date + invoice,
+// and a paid-vs-outstanding progress bar) — but a project holds MULTIPLE POs.
+// Each PO can be tied to a milestone so its total (Committed) and paid draws
+// (Paid) roll into the P & L. Paid toggles + invoices persist immediately;
+// amount edits refresh only that PO's summary so focus is never lost.
+var PRJ_PO_TYPE_BADGE = {
+  material: 'MATERIAL', phase: 'PHASE', holdback: 'HOLDBACK'
+};
+
+function _prjPoDrawUid() { return 'dr_' + Math.random().toString(36).slice(2, 9) + Date.now().toString(36); }
+
+function _prjPoStandardSchedule(total) {
+  total = _prjPoNum(total);
+  var holdback = Math.round(total * 0.10);
+  var material = Math.round(total * 0.20);
+  var phase1   = Math.max(0, total - holdback - material);
+  return [
+    { id: _prjPoDrawUid(), type: 'material', label: 'Material Deposit', amount: material, paid: false, paidDate: '', invoice: null },
+    { id: _prjPoDrawUid(), type: 'phase', phaseNo: 1, label: 'Phase 1', amount: phase1, paid: false, paidDate: '', invoice: null },
+    { id: _prjPoDrawUid(), type: 'holdback', label: 'Holdback', amount: holdback, paid: false, paidDate: '', releaseDate: '', invoice: null }
+  ];
+}
+
+function _prjRenderPos() {
+  var d = window._prjDraft;
+  var host = document.getElementById('prj_panel_po');
+  if (!host || !d) return;
+  if (!d.data.purchaseOrders) d.data.purchaseOrders = [];
+  var pos = d.data.purchaseOrders;
+  var manage = _prjCanManage();
+  var isSaved = !!d.id;
+  var ms = d.data.milestones || [];
+
+  var intro = '<div class="tic-section"><div class="tic-section-h">Purchase Orders</div>' +
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:10px;">Record each contract / purchase order and pay it down in steps (material deposit, phases, holdback). Tie a PO to a milestone and its total shows as <b>PO Committed</b> and its paid draws as <b>Paid</b> on the P &amp; L.</div>';
+
+  if (!pos.length) {
+    host.innerHTML = intro +
+      '<div style="color:var(--muted);font-size:13px;padding:6px 0 12px;">No purchase orders yet.</div>' +
+      (manage ? '<button type="button" class="btn btn-primary" onclick="_prjPoAdd()">+ Add Purchase Order</button>' : '') +
+      '</div>';
+    _prjApplyReadOnly();
+    return;
+  }
+
+  var body = pos.map(function(po){ return _prjPoCardHtml(po, ms, manage, isSaved); }).join('');
+  host.innerHTML = intro +
+    '<div style="display:flex;flex-direction:column;gap:16px;">' + body + '</div>' +
+    (manage ? '<div style="margin-top:14px;"><button type="button" class="btn btn-primary" onclick="_prjPoAdd()">+ Add Purchase Order</button></div>' : '') +
+    '</div>';
+  _prjApplyReadOnly();
+}
+
+function _prjPoSummaryHtml(po) {
+  var total = _prjPoCommitted(po);
+  var paid  = _prjPoPaid(po);
+  var pct   = total > 0 ? Math.round(paid / total * 100) : 0;
+  var outstanding = Math.max(0, total - paid);
+  var sched = _prjPoScheduled(po);
+  var barColor = pct >= 100 ? 'var(--success)' : 'var(--info-blue)';
+  var h = '';
+  h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px;">';
+  h +=   '<span style="font-size:12px;font-weight:700;color:var(--text);">Payment progress</span>';
+  h +=   '<span style="font-size:13px;font-weight:800;color:' + (pct >= 100 ? 'var(--success)' : 'var(--text)') + ';">' + pct + '%</span>';
+  h += '</div>';
+  h += '<div style="height:10px;background:var(--border);border-radius:5px;overflow:hidden;"><div style="height:100%;width:' + Math.min(100, Math.max(0, pct)) + '%;background:' + barColor + ';transition:width .2s;"></div></div>';
+  h += '<div style="display:flex;gap:18px;flex-wrap:wrap;margin-top:10px;">';
+  h +=   '<div><div class="txt-muted-xs">PO Total</div><div style="font-weight:800;font-size:14px;">' + _prjMoney(total, true) + '</div></div>';
+  h +=   '<div><div class="txt-muted-xs">Paid</div><div style="font-weight:800;font-size:14px;color:var(--success);">' + _prjMoney(paid, true) + '</div></div>';
+  h +=   '<div><div class="txt-muted-xs">Outstanding</div><div style="font-weight:800;font-size:14px;color:' + (outstanding > 0 ? 'var(--warn-amber-text,var(--text))' : 'var(--muted)') + ';">' + _prjMoney(outstanding, true) + '</div></div>';
+  h += '</div>';
+  if (total > 0 && po.draws && po.draws.length) {
+    var diff = sched - total;
+    if (Math.abs(diff) > 0.005) {
+      var msg = diff > 0 ? ('Scheduled payments exceed the PO by ' + _prjMoney(diff, true))
+                         : (_prjMoney(-diff, true) + ' of the PO is not yet scheduled');
+      h += '<div style="margin-top:8px;font-size:11px;font-weight:600;color:var(--warn-amber-text,#8a6d3b);">⚠ ' + msg + '</div>';
+    }
+  }
+  return h;
+}
+
+function _prjPoCardHtml(po, ms, manage, isSaved) {
+  var dis = manage ? '' : ' disabled';
+  var poJs = "'" + po.id + "'";
+  var msOpts = '<option value="">— No milestone —</option>' + ms.map(function(m){
+    return '<option value="' + _prjEsc(m.id) + '"' + ((po.milestoneId || '') === m.id ? ' selected' : '') + '>' + _prjEsc(m.name || '(unnamed)') + '</option>';
+  }).join('');
+
+  var h = '<div class="box-bg-card" style="border:1px solid var(--border);border-radius:10px;padding:14px;">';
+
+  // Header: PO number + remove
+  h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">';
+  h +=   '<span style="font-size:11px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);">Purchase Order</span>';
+  if (po.source === 'rfq') h += '<span style="padding:2px 9px;border-radius:10px;font-size:10px;font-weight:700;background:var(--info-blue-bg);color:var(--info-blue);">From awarded RFQ</span>';
+  h +=   '<span style="flex:1;"></span>';
+  if (manage) h += '<button type="button" title="Remove this PO" onclick="_prjPoRemove(' + poJs + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:17px;line-height:1;">&times;</button>';
+  h += '</div>';
+
+  // PO fields
+  h += '<div class="grid-c2-10">';
+  h +=   '<div class="f"><label>PO / Contract #</label><input class="tic-input" type="text" placeholder="e.g. PO-2026-0042" value="' + _prjEsc(po.number || '') + '"' + dis + ' oninput="_prjPoSetField(' + poJs + ',\'number\',this.value)"/></div>';
+  h +=   '<div class="f"><label>PO Total <span style="font-size:10px;font-weight:400;color:var(--muted);">(amount to be paid down)</span></label><input class="tic-input" type="text" inputmode="decimal" placeholder="0.00" value="' + (po.amount ? _prjEsc(String(po.amount)) : '') + '"' + dis + ' oninput="_prjPoSetField(' + poJs + ',\'amount\',this.value)"/></div>';
+  h += '</div>';
+  h += '<div class="grid-c2-10" style="margin-top:8px;">';
+  h +=   '<div class="f"><label>Vendor / Contractor</label><input class="tic-input" type="text" placeholder="Business name" value="' + _prjEsc(po.vendor || '') + '"' + dis + ' oninput="_prjPoSetField(' + poJs + ',\'vendor\',this.value)"/></div>';
+  h +=   '<div class="f"><label>Milestone <span style="font-size:10px;font-weight:400;color:var(--muted);">(for the P &amp; L)</span></label><select class="tic-input"' + dis + ' onchange="_prjPoSetField(' + poJs + ',\'milestoneId\',this.value)">' + msOpts + '</select></div>';
+  h += '</div>';
+
+  // Progress summary (own element so amount edits refresh in place)
+  h += '<div style="margin-top:12px;"><div id="prj_po_summary_' + _prjEsc(po.id) + '">' + _prjPoSummaryHtml(po) + '</div></div>';
+
+  // Draw schedule
+  h += '<div style="margin-top:14px;">';
+  h +=   '<div style="font-size:12px;font-weight:700;color:var(--text);margin-bottom:8px;">Payment Schedule</div>';
+  if (!(po.draws && po.draws.length)) {
+    h += '<div class="txt-muted-xs" style="margin-bottom:10px;">No payments set up yet. A standard schedule is a Material deposit, one or more Phases, and a Holdback.</div>';
+    if (manage) {
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;">';
+      h +=   '<button type="button" class="btn btn-primary" style="padding:5px 12px;font-size:12px;" onclick="_prjPoSetupSchedule(' + poJs + ')">+ Set up standard schedule</button>';
+      h +=   '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjPoAddDraw(' + poJs + ',\'material\')">+ Material</button>';
+      h +=   '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjPoAddDraw(' + poJs + ',\'phase\')">+ Phase</button>';
+      h +=   '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjPoAddDraw(' + poJs + ',\'holdback\')">+ Holdback</button>';
+      h += '</div>';
+    }
+  } else {
+    h += '<div style="display:flex;flex-direction:column;gap:10px;">';
+    po.draws.forEach(function(dr){ h += _prjPoDrawRowHtml(po, dr, manage, isSaved); });
+    h += '</div>';
+    if (manage) {
+      h += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">';
+      h +=   '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjPoAddDraw(' + poJs + ',\'phase\')">+ Add Phase</button>';
+      h +=   '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjPoAddDraw(' + poJs + ',\'material\')">+ Material</button>';
+      h +=   '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjPoAddDraw(' + poJs + ',\'holdback\')">+ Holdback</button>';
+      h += '</div>';
+    }
+    if (!isSaved) h += '<div class="txt-muted-xs" style="margin-top:10px;">Save the project to attach invoice files to each payment.</div>';
+  }
+  h += '</div>';
+
+  h += '</div>';
+  return h;
+}
+
+function _prjPoDrawRowHtml(po, dr, manage, isSaved) {
+  var dis = manage ? '' : ' disabled';
+  var poJs = "'" + po.id + "'"; var drJs = "'" + dr.id + "'";
+  var badgeBg = { material: 'rgba(var(--accent-rgb),.16)', phase: 'var(--info-blue-bg)', holdback: 'var(--warn-amber-bg)' }[dr.type] || 'var(--border)';
+  var badgeC  = { material: 'var(--accent-ink,var(--text))', phase: 'var(--info-blue)', holdback: 'var(--warn-amber-text,#8a6d3b)' }[dr.type] || 'var(--text)';
+  var badge = '<span style="padding:1px 7px;border-radius:9px;font-size:9px;font-weight:800;background:' + badgeBg + ';color:' + badgeC + ';">' + (PRJ_PO_TYPE_BADGE[dr.type] || 'PAYMENT') + '</span>';
+
+  var h = '<div style="padding:12px;border:1px solid var(--border);border-radius:8px;' + (dr.paid ? 'background:var(--success-bg);' : '') + '">';
+  h += '<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' + badge +
+    '<input type="text" value="' + _prjEsc(dr.label || '') + '"' + dis + ' oninput="_prjPoSetDrawField(' + poJs + ',' + drJs + ',\'label\',this.value)" style="flex:1;min-width:120px;border:none;background:transparent;font-weight:700;font-size:13px;color:var(--text);padding:2px 0;" placeholder="Payment name"/>' +
+    (manage ? '<button type="button" title="Remove" onclick="_prjPoRemoveDraw(' + poJs + ',' + drJs + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:16px;line-height:1;">&times;</button>' : '') +
+    '</div>';
+  h += '<div class="grid-c2-10">';
+  h +=   '<div class="f"><label>Amount</label><input class="tic-input" type="text" inputmode="decimal" value="' + (dr.amount ? _prjEsc(String(dr.amount)) : '') + '"' + dis + ' oninput="_prjPoSetDrawField(' + poJs + ',' + drJs + ',\'amount\',this.value)" placeholder="0.00"/></div>';
+  if (dr.type === 'holdback') {
+    h += '<div class="f"><label>Holdback release date</label><input class="tic-input" type="date" value="' + _prjEsc(dr.releaseDate || '') + '"' + dis + ' onchange="_prjPoSetDrawField(' + poJs + ',' + drJs + ',\'releaseDate\',this.value)"/></div>';
+  } else { h += '<div class="f"></div>'; }
+  h += '</div>';
+  h += '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-top:8px;">';
+  h +=   '<label style="display:flex;align-items:center;gap:7px;font-size:13px;margin:0;cursor:pointer;"><input type="checkbox"' + (dr.paid ? ' checked' : '') + dis + ' onchange="_prjPoTogglePaid(' + poJs + ',' + drJs + ',this.checked)" style="width:15px;height:15px;accent-color:var(--yellow);"/> Paid</label>';
+  if (dr.paid) h += '<div class="f" style="margin:0;"><input class="tic-input" type="date" value="' + _prjEsc(dr.paidDate || '') + '"' + dis + ' onchange="_prjPoSetDrawField(' + poJs + ',' + drJs + ',\'paidDate\',this.value)" title="Date paid"/></div>';
+  h += '</div>';
+  // Invoice chip
+  h += '<div style="margin-top:10px;padding-top:8px;border-top:1px dashed var(--border);">';
+  if (dr.invoice && dr.invoice.path) {
+    h += '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">';
+    h +=   '<span style="font-size:11px;font-weight:700;color:var(--success);">📎 Invoice:</span>';
+    h +=   '<button type="button" style="background:none;border:none;cursor:pointer;font-size:11px;padding:0;text-decoration:underline;color:var(--text);" onclick="_prjPoViewInvoice(' + poJs + ',' + drJs + ')">' + _prjEsc(dr.invoice.name || 'View invoice') + '</button>';
+    if (manage) h += '<button type="button" onclick="_prjPoRemoveInvoice(' + poJs + ',' + drJs + ')" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:11px;text-decoration:underline;">remove</button>';
+    h += '</div>';
+  } else if (manage) {
+    if (isSaved) {
+      h += '<label style="font-size:11px;font-weight:600;color:var(--info-blue);cursor:pointer;">📎 Attach invoice (PDF/photo)<input type="file" accept="application/pdf,image/*" style="display:none;" onchange="_prjPoUploadInvoice(' + poJs + ',' + drJs + ',this)"/></label>';
+    } else {
+      h += '<span class="txt-muted-xs">📎 Save the project first to attach an invoice.</span>';
+    }
+  } else {
+    h += '<span class="txt-muted-xs">No invoice attached.</span>';
+  }
+  h += '</div></div>';
+  return h;
+}
+
+// ── PO mutators ──────────────────────────────────────────────────────────────
+function _prjPoFind(poId) {
+  var d = window._prjDraft;
+  return (d && d.data.purchaseOrders || []).find(function(po){ return po.id === poId; }) || null;
+}
+function _prjPoRefreshSummary(poId) {
+  var po = _prjPoFind(poId);
+  var el = document.getElementById('prj_po_summary_' + poId);
+  if (po && el) el.innerHTML = _prjPoSummaryHtml(po);
+  _prjRefreshStrip();
+}
+function _prjPoAdd() {
+  var d = window._prjDraft;
+  if (!d || !_prjCanManage()) return;
+  if (!d.data.purchaseOrders) d.data.purchaseOrders = [];
+  d.data.purchaseOrders.push({ id: _prjUuid(), number: '', amount: 0, vendor: '', milestoneId: '', source: 'manual', draws: [] });
+  _prjRenderPos();
+  _prjScheduleAutoSave();
+}
+function _prjPoRemove(poId) {
+  var d = window._prjDraft;
+  if (!d || !_prjCanManage()) return;
+  var po = _prjPoFind(poId);
+  var go = function() {
+    d.data.purchaseOrders = (d.data.purchaseOrders || []).filter(function(po){ return po.id !== poId; });
+    _prjRenderPos(); _prjRenderPnl(); _prjRefreshStrip(); _prjScheduleAutoSave();
+  };
+  if (po && (_prjPoPaid(po) > 0 || (po.draws && po.draws.length)) && typeof showConfirm === 'function') {
+    showConfirm({ title: 'Remove this purchase order?', message: 'This deletes the PO and its payment schedule from the project. This cannot be undone.', confirmText: 'Remove PO', cancelText: 'Cancel' })
+      .then(function(ok){ if (ok) go(); });
+  } else { go(); }
+}
+function _prjPoSetField(poId, field, v) {
+  var po = _prjPoFind(poId); if (!po) return;
+  if (field === 'amount') { po.amount = _prjPoNum(v); po.source = 'manual'; _prjPoRefreshSummary(poId); _prjRenderPnl(); }
+  else po[field] = v;
+  if (field === 'milestoneId') _prjRenderPnl();
+  _prjScheduleAutoSave();
+}
+function _prjPoSetupSchedule(poId) {
+  var po = _prjPoFind(poId); if (!po) return;
+  if (po.draws && po.draws.length) { if (typeof showToast === 'function') showToast('A schedule already exists.', { type: 'info' }); return; }
+  if (_prjPoNum(po.amount) <= 0) { if (typeof showToast === 'function') showToast('Enter the PO total first.', { type: 'error' }); return; }
+  po.draws = _prjPoStandardSchedule(po.amount);
+  _prjRenderPos(); _prjRenderPnl(); _prjScheduleAutoSave();
+}
+function _prjPoAddDraw(poId, type) {
+  var po = _prjPoFind(poId); if (!po) return;
+  if (!po.draws) po.draws = [];
+  var draw;
+  if (type === 'phase') {
+    var maxPhase = 0;
+    po.draws.forEach(function(dr){ if (dr.type === 'phase' && (dr.phaseNo || 0) > maxPhase) maxPhase = dr.phaseNo || 0; });
+    var no = maxPhase + 1;
+    draw = { id: _prjPoDrawUid(), type: 'phase', phaseNo: no, label: 'Phase ' + no, amount: 0, paid: false, paidDate: '', invoice: null };
+  } else if (type === 'holdback') {
+    draw = { id: _prjPoDrawUid(), type: 'holdback', label: 'Holdback', amount: 0, paid: false, paidDate: '', releaseDate: '', invoice: null };
+  } else {
+    draw = { id: _prjPoDrawUid(), type: 'material', label: 'Material', amount: 0, paid: false, paidDate: '', invoice: null };
+  }
+  // Keep holdback rows last.
+  if (type !== 'holdback') {
+    var hbIdx = po.draws.findIndex(function(dr){ return dr.type === 'holdback'; });
+    if (hbIdx >= 0) po.draws.splice(hbIdx, 0, draw); else po.draws.push(draw);
+  } else { po.draws.push(draw); }
+  _prjRenderPos(); _prjRenderPnl(); _prjScheduleAutoSave();
+}
+function _prjPoRemoveDraw(poId, drawId) {
+  var po = _prjPoFind(poId); if (!po || !po.draws) return;
+  po.draws = po.draws.filter(function(dr){ return dr.id !== drawId; });
+  _prjRenderPos(); _prjRenderPnl(); _prjScheduleAutoSave();
+}
+function _prjPoSetDrawField(poId, drawId, field, v) {
+  var po = _prjPoFind(poId); if (!po || !po.draws) return;
+  var dr = po.draws.find(function(x){ return x.id === drawId; }); if (!dr) return;
+  dr[field] = (field === 'amount') ? _prjPoNum(v) : v;
+  if (field === 'amount') { _prjPoRefreshSummary(poId); _prjRenderPnl(); }
+  _prjScheduleAutoSave();
+}
+function _prjPoTogglePaid(poId, drawId, checked) {
+  var po = _prjPoFind(poId); if (!po || !po.draws) return;
+  var dr = po.draws.find(function(x){ return x.id === drawId; }); if (!dr) return;
+  dr.paid = !!checked;
+  if (dr.paid && !dr.paidDate) dr.paidDate = new Date().toISOString().slice(0, 10);
+  _prjRenderPos(); _prjRenderPnl(); _prjScheduleAutoSave();
+}
+async function _prjPoUploadInvoice(poId, drawId, input) {
+  var file = input && input.files && input.files[0];
+  if (!file) return;
+  var d = window._prjDraft;
+  if (!d || !d.id) { if (typeof showToast === 'function') showToast('Save the project first, then attach invoices.', { type: 'error' }); input.value = ''; return; }
+  var po = _prjPoFind(poId); var dr = po && po.draws && po.draws.find(function(x){ return x.id === drawId; });
+  if (!dr) { input.value = ''; return; }
+  var safe = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+  var path = 'projects/' + d.id + '/po/' + poId + '/' + drawId + '_' + safe;
+  if (typeof showToast === 'function') showToast('Uploading invoice…', { type: 'info' });
+  try {
+    await sbUploadFile(path, file);
+    if (typeof sbSaveFileMeta === 'function') { try { sbSaveFileMeta('project', d.id, path, file.name, file.size, file.type); } catch (e) {} }
+    dr.invoice = { path: path, name: file.name };
+    await _prjPersistNowSafe();   // persist immediately so the file can't be orphaned
+    if (typeof showToast === 'function') showToast('✓ Invoice attached', { type: 'info' });
+    _prjRenderPos();
+  } catch (e) {
+    console.warn('[Projects PO] invoice upload failed:', e);
+    if (typeof showToast === 'function') showToast('Invoice upload failed', { type: 'error' });
+  }
+  input.value = '';
+}
+async function _prjPoViewInvoice(poId, drawId) {
+  var po = _prjPoFind(poId); var dr = po && po.draws && po.draws.find(function(x){ return x.id === drawId; });
+  if (!dr || !dr.invoice || !dr.invoice.path) return;
+  try {
+    var url = (typeof sbGetSignedUrl === 'function') ? await sbGetSignedUrl(dr.invoice.path) : null;
+    if (url) window.open(url, '_blank');
+    else if (typeof showToast === 'function') showToast('Could not open invoice', { type: 'error' });
+  } catch (e) { if (typeof showToast === 'function') showToast('Could not open invoice', { type: 'error' }); }
+}
+function _prjPoRemoveInvoice(poId, drawId) {
+  var po = _prjPoFind(poId); var dr = po && po.draws && po.draws.find(function(x){ return x.id === drawId; });
+  if (!dr) return;
+  dr.invoice = null;
+  _prjRenderPos(); _prjScheduleAutoSave();
+}
+// Immediate persist for paid-toggle / invoice actions (bypasses the 2.5s
+// debounce so an attached invoice or a Paid flip can't be lost).
+async function _prjPersistNowSafe() {
+  var d = window._prjDraft;
+  if (!d || !d.id || !_prjCanManage()) return;
+  try { await _prjSaveProject(_prjBuildRow(d), false); _prjSyncCache(Object.assign({}, d)); }
+  catch (e) { console.warn('[Projects PO] persist failed:', e); }
 }
 
 // ── Expense document attachments (funder compliance) ─────────────────────────
@@ -2138,32 +2521,40 @@ function _prjBuildStatusReportPdf(d) {
   }
 
   // Budget vs actual (same numbers as the P & L tab; every milestone listed)
-  if (ms.length || exp.length) {
-    var actualFor = function(msId) {
+  if (ms.length || exp.length || _prjPos(d).length) {
+    // Same numbers as the P & L tab: Paid = tagged expenses + paid PO draws;
+    // PO Committed = PO totals tagged to the milestone.
+    var expFor = function(msId) {
       return exp.filter(function(e){ return e.milestoneId === msId; })
                 .reduce(function(s, e){ return s + (Number(e.amount) || 0); }, 0);
     };
-    var budgetTotal = 0, actualTotal = 0;
+    var budgetTotal = 0, committedTotal = 0, paidTotal = 0;
     var pnlRows = ms.map(function(m) {
       var budget = (m.budgetAmount != null && m.budgetAmount !== '') ? Number(m.budgetAmount) : null;
-      var actual = actualFor(m.id);
+      var committed = _prjPoCommittedForMs(d, m.id);
+      var paid = expFor(m.id) + _prjPoPaidForMs(d, m.id);
       budgetTotal += budget || 0;
-      actualTotal += actual;
-      return [m.name || '(unnamed)', budget != null ? money(budget) : '—', actual ? money(actual) : '—',
-              budget != null ? signedMoney(budget - actual) : '—'];
+      committedTotal += committed;
+      paidTotal += paid;
+      return [m.name || '(unnamed)', budget != null ? money(budget) : '—',
+              committed ? money(committed) : '—', paid ? money(paid) : '—',
+              budget != null ? signedMoney(budget - paid) : '—'];
     });
-    var untagged = exp.filter(function(e){ return !e.milestoneId; })
-                      .reduce(function(s, e){ return s + (Number(e.amount) || 0); }, 0);
-    if (untagged > 0) {
-      actualTotal += untagged;
-      pnlRows.push(['Not tied to a milestone', '—', money(untagged), '—']);
+    var untaggedExp = exp.filter(function(e){ return !e.milestoneId; })
+                         .reduce(function(s, e){ return s + (Number(e.amount) || 0); }, 0);
+    var untaggedCommitted = _prjPoCommittedForMs(d, '');
+    var untaggedPaid = untaggedExp + _prjPoPaidForMs(d, '');
+    if (untaggedExp > 0 || untaggedCommitted > 0 || _prjPoPaidForMs(d, '') > 0) {
+      committedTotal += untaggedCommitted;
+      paidTotal += untaggedPaid;
+      pnlRows.push(['Not tied to a milestone', '—', untaggedCommitted ? money(untaggedCommitted) : '—', money(untaggedPaid), '—']);
     }
-    pnlRows.push(['TOTAL', money(budgetTotal), money(actualTotal), budgetTotal > 0 ? signedMoney(budgetTotal - actualTotal) : '—']);
-    if (funded > 0) pnlRows.push(['Project funded budget', money(funded), '—', signedMoney(funded - budgetTotal)]);
-    section('Budget vs Actual', {
-      head: [['Milestone', 'Budget', 'Actual', 'Variance']],
+    pnlRows.push(['TOTAL', money(budgetTotal), money(committedTotal), money(paidTotal), budgetTotal > 0 ? signedMoney(budgetTotal - paidTotal) : '—']);
+    if (funded > 0) pnlRows.push(['Project funded budget', money(funded), '—', '—', signedMoney(funded - budgetTotal)]);
+    section('Budget vs Committed vs Paid', {
+      head: [['Milestone', 'Budget', 'PO Committed', 'Paid', 'Variance']],
       body: pnlRows,
-      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' } },
+      columnStyles: { 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' } },
     });
   }
 
