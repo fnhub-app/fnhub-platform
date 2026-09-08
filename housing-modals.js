@@ -233,6 +233,7 @@ function openUnitEditModal(unitId){
   set('ue_building_name', u.buildingName || '');
   set('ue_funder',u.funder); set('ue_phase',u.phase); set('ue_year',u.year);
   set('ue_major_reno_year', u.majorRenoYear != null ? u.majorRenoYear : '');
+  set('ue_square_feet', u.squareFeet != null ? u.squareFeet : '');
   set('ue_dept_number', u.deptNumber);
   set('ue_cmhc_value', u.cmhcValue);
   set('ue_acct_number', u.acctNumber);
@@ -719,6 +720,11 @@ function saveUnitEdit(){
   u.funder=get('ue_funder'); u.phase=get('ue_phase'); u.year=get('ue_year');
   // Major renovation year — resets the effective age for the rent age factor.
   u.majorRenoYear = mryN;
+  // Square footage — informational (buildings/facility records); rides the
+  // data jsonb like every other unit field.
+  var sfRaw = get('ue_square_feet');
+  var sfN = (sfRaw === '' || sfRaw == null) ? null : Math.round(Number(sfRaw));
+  u.squareFeet = (sfN != null && !isNaN(sfN) && sfN >= 0) ? sfN : null;
   u.deptNumber=get('ue_dept_number');
   u.acctNumber=get('ue_acct_number');
   u.hydro_meter_number = get('ue_hydro_meter') || null;
