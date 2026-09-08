@@ -35,6 +35,33 @@
 
 BEGIN;
 
+-- 0. The tenants_tenant_type_chk CHECK constraint predates the 'department'
+--    and 'business' values the app's commercial-building flow writes
+--    (sbTypeCommercialTenantForAssignment) -- step 3 below, and that app
+--    flow itself, both fail against it. Extend it IN PLACE: the original
+--    expression is kept verbatim and OR'd with the two new values, so every
+--    currently-allowed value stays allowed. No-op if already extended.
+DO $$
+DECLARE
+  def  text;
+  expr text;
+BEGIN
+  SELECT pg_get_constraintdef(oid) INTO def
+    FROM pg_constraint
+   WHERE conname = 'tenants_tenant_type_chk' AND conrelid = 'tenants'::regclass;
+  IF def IS NULL THEN
+    RAISE NOTICE 'tenants_tenant_type_chk not found - nothing to extend';
+  ELSIF def LIKE '%department%' THEN
+    RAISE NOTICE 'tenants_tenant_type_chk already allows department - unchanged';
+  ELSE
+    expr := regexp_replace(def, '^CHECK\s*', '', 'i');
+    EXECUTE 'ALTER TABLE tenants DROP CONSTRAINT tenants_tenant_type_chk';
+    EXECUTE 'ALTER TABLE tenants ADD CONSTRAINT tenants_tenant_type_chk CHECK ('
+            || expr || ' OR tenant_type IN (''department'', ''business''))';
+    RAISE NOTICE 'tenants_tenant_type_chk extended (was: %)', def;
+  END IF;
+END $$;
+
 WITH b(id, num, street, bname, sqft, note) AS (VALUES
   ('WA-WA-SKA-SHOO-STREET-37',  '37',  'Wa Wa Ska Shoo Street', 'Band Office',                    3000,
    'Used daily by members, workers, and clients. Requires LED lighting upgrades and other energy conservation measures for energy efficiency and a properly lit work environment.'),
