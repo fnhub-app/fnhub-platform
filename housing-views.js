@@ -2088,6 +2088,11 @@ function _housingReconcile(){
 
   // Occupied units nothing references (no linked app, no claim, no name match).
   var occNoApp = buckets.assigned.filter(function(u){
+    // Commercial / admin / band BUILDINGS are occupied by a department or
+    // business, not a member — they never need a person-style file-update
+    // application, so the create-apps sweep must not offer to mint one.
+    var _sec = window._SECONDARY_TYPES || ['commercial_building', 'admin_building', 'band_building'];
+    if(_sec.indexOf(u.type) !== -1) return false;
     if(u.assignedTo && appById[u.assignedTo]) return false;
     if(activeApps.some(function(a){ return a.assignedUnit===u.id; })) return false;
     if(activeApps.some(function(a){ return norm((a.fn||'')+' '+(a.ln||''))===norm(u.assignedName); })) return false;
