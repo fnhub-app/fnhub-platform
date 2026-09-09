@@ -102,16 +102,60 @@ async function resolveMemberUnit(admin: any, email: string, linkedAppIds: string
     // LITERAL: unescaped % / _ are LIKE wildcards, and underscores are legal
     // in emails -- an account like mary_s@x.com would match mary.s@x.com and
     // resolve SOMEONE ELSE'S unit (and their maintenance history).
-    const emailLit = email.replace(/[\\%_]/g, (c: string) => '\\' + c)
+    const likeLit = (s: string) => String(s || '').replace(/[\\%_]/g, (c: string) => '\\' + c)
+    const emailLit = likeLit(email)
+
+    // (1) Email-matched tenant rows. Do NOT require current_unit_id on the
+    // matching row: the housing sync trigger MINTS A SEPARATE tenants row per
+    // occupancy (full_name + current_unit_id, no email), while the member's
+    // email is usually saved on a DIFFERENT tenants row for the same person.
+    // Requiring both on one row is why a housed member with a correct email on
+    // file got no "My home" card. So take the unit id from any email-matched
+    // row that has one, and remember the name(s) for the fallbacks below.
+    const names: string[] = []
     const { data: ts } = await admin.from('tenants')
-      .select('current_unit_id').ilike('email', emailLit).is('merged_into', null)
-      .not('current_unit_id', 'is', null).limit(1)
-    if (ts && ts[0] && ts[0].current_unit_id) unitId = ts[0].current_unit_id
+      .select('full_name,current_unit_id').ilike('email', emailLit).is('merged_into', null)
+    if (ts && ts.length) {
+      for (const t of ts) {
+        if (t.current_unit_id && !unitId) unitId = t.current_unit_id
+        const nm = String(t.full_name || '').trim()
+        if (nm && names.indexOf(nm) === -1) names.push(nm)
+      }
+    }
+
+    // (2) Split-row fix: the email row had no unit, so find a sibling tenants
+    // row for the SAME name that carries the current_unit_id (the trigger's
+    // active occupancy row). Exact, case-insensitive name match; accept only a
+    // UNIQUE unit so a shared name can never resolve to someone else's home.
+    if (!unitId) {
+      for (const nm of names) {
+        const { data: sib } = await admin.from('tenants')
+          .select('current_unit_id').ilike('full_name', likeLit(nm)).is('merged_into', null)
+          .not('current_unit_id', 'is', null).limit(2)
+        const ids = Array.from(new Set((sib || []).map((r: any) => r.current_unit_id).filter(Boolean)))
+        if (ids.length === 1) { unitId = ids[0] as string; break }
+      }
+    }
+
+    // (3) Occupancy is authoritative on the UNIT. If no tenants row linked a
+    // unit at all (e.g. current_unit_id was never populated), fall back to the
+    // unit currently assigned to this same person by name. Same exact-match +
+    // uniqueness guard; skip archived units.
+    if (!unitId) {
+      for (const nm of names) {
+        const { data: byName } = await admin.from('housing_units')
+          .select('id').ilike('assigned_name', likeLit(nm)).eq('archived', false).limit(2)
+        if (byName && byName.length === 1) { unitId = byName[0].id; break }
+      }
+    }
+
+    // (4) Linked application's assigned unit (unchanged fallback).
     if (!unitId && linkedAppIds && linkedAppIds.length) {
       const { data: apps } = await admin.from('housing_applications')
         .select('assigned_unit_id').in('id', linkedAppIds).not('assigned_unit_id', 'is', null).limit(1)
       if (apps && apps[0] && apps[0].assigned_unit_id) unitId = apps[0].assigned_unit_id
     }
+
     if (!unitId) return null
     const { data: us } = await admin.from('housing_units').select('id, num, street').eq('id', unitId).limit(1)
     if (!us || !us[0]) return null
