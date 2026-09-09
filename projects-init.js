@@ -328,6 +328,14 @@ function _prjData(p) { return (p && typeof p.data === 'object' && p.data) || {};
 // feed the P & L "Paid" column + the Spent strip alongside tagged expenses;
 // PO amounts are the "Committed" column. No schema change — rides data jsonb.
 function _prjPos(p) { return _prjData(p).purchaseOrders || []; }
+// PO number(s) for reports: the numbered POs from the Purchase Orders tab,
+// falling back to the legacy Overview poNumber (removed from the UI, kept for
+// projects that still carry it).
+function _prjPoNumbersLabel(p) {
+  var nums = _prjPos(p).map(function(po){ return (po.number || '').trim(); }).filter(Boolean);
+  if (nums.length) return nums.join(', ');
+  return (_prjData(p).poNumber || '').trim() || '—';
+}
 function _prjPoNum(v) { return parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')) || 0; }
 function _prjPoPaid(po) {
   return (po && po.draws || []).reduce(function(s, dr){ return s + (dr.paid ? _prjPoNum(dr.amount) : 0); }, 0);
@@ -689,7 +697,6 @@ function _prjRenderOverview() {
         '</select>' +
         '<input id="prj_f_funding_other" class="tic-input" type="text" placeholder="Funding source…" style="margin-top:6px;' + (selVal === 'other' ? '' : 'display:none;') + '" value="' + _prjEsc(otherVal) + '" oninput="window._prjDraft.funding_source=this.value"/></div>' +
         '<div class="f"><label>Funded Budget (CAD)' + (hasGrants ? ' <span style="font-size:10px;font-weight:400;color:var(--muted);">(= sum of grants below)</span>' : '') + '</label><input id="prj_f_budget" class="tic-input" type="number" min="0" step="0.01" placeholder="e.g. 2500000" value="' + (d.budget != null ? _prjEsc(d.budget) : '') + '"' + (hasGrants ? ' disabled' : '') + ' oninput="window._prjDraft.budget=(this.value===\'\'?null:Number(this.value));_prjRefreshStrip()"/></div>' +
-        '<div class="f"><label>PO # <span style="font-size:10px;font-weight:400;color:var(--muted);">(from accounting)</span></label><input id="prj_f_po" class="tic-input" type="text" placeholder="e.g. PO-2026-0042" value="' + _prjEsc(d.data.poNumber || '') + '" oninput="window._prjDraft.data.poNumber=this.value"/></div>' +
         '<div class="f"><label>Department # <span style="font-size:10px;font-weight:400;color:var(--muted);">(cost-centre)</span></label><input id="prj_f_dept" class="tic-input" type="text" placeholder="e.g. 15-4200" value="' + _prjEsc(d.data.deptNumber || '') + '" oninput="window._prjDraft.data.deptNumber=this.value"/></div>' +
         '<div class="f"><label>Start Date</label><input id="prj_f_start" class="tic-input" type="date" value="' + _prjEsc(d.start_date || '') + '" onchange="window._prjDraft.start_date=this.value||null"/></div>' +
         '<div class="f"><label>Target Completion</label><input id="prj_f_target" class="tic-input" type="date" value="' + _prjEsc(d.target_date || '') + '" onchange="window._prjDraft.target_date=this.value||null;_prjRefreshStrip()"/></div>' +
@@ -1612,7 +1619,7 @@ function _prjPoCardHtml(po, ms, manage, isSaved) {
 
   // PO fields
   h += '<div class="grid-c2-10">';
-  h +=   '<div class="f"><label>PO / Contract #</label><input class="tic-input" type="text" placeholder="e.g. PO-2026-0042" value="' + _prjEsc(po.number || '') + '"' + dis + ' oninput="_prjPoSetField(' + poJs + ',\'number\',this.value)"/></div>';
+  h +=   '<div class="f"><label>PO / Contract #</label><input class="tic-input" type="text" placeholder="e.g. PO-2026-0042" value="' + _prjEsc(po.number || '') + '"' + dis + ' oninput="_prjPoSetField(' + poJs + ',\'number\',this.value)"/>' + _prjPoDocChipHtml(po, manage, isSaved) + '</div>';
   h +=   '<div class="f"><label>PO Total <span style="font-size:10px;font-weight:400;color:var(--muted);">(amount to be paid down)</span></label><input class="tic-input" type="text" inputmode="decimal" placeholder="0.00" value="' + (po.amount ? _prjEsc(String(po.amount)) : '') + '"' + dis + ' oninput="_prjPoSetField(' + poJs + ',\'amount\',this.value)"/></div>';
   h += '</div>';
   h += '<div class="grid-c2-10" style="margin-top:8px;">';
@@ -1821,6 +1828,86 @@ function _prjPoRemoveInvoice(poId, drawId) {
   if (!dr) return;
   dr.invoice = null;
   _prjRenderPos(); _prjScheduleAutoSave();
+}
+
+// ── PO document (the signed PO / contract itself, next to the PO number) ─────
+// Rides on po.doc = {path, name}, same shape as a grant's funding agreement or
+// a draw's invoice; uploaded to the PO folder and filed in the Documents tab.
+function _prjPoDocChipHtml(po, manage, isSaved) {
+  var poJs = "'" + po.id + "'";
+  if (po.doc && po.doc.path) {
+    return '<div style="margin-top:6px;"><span class="prj-doc-chip prj-doc-ok">' +
+        '<a href="#" onclick="_prjPoOpenDoc(' + poJs + ');return false;" title="Open ' + _prjEsc(po.doc.name || 'PO document') + '">📄 PO document</a>' +
+        (manage ? '<button type="button" title="Detach the PO document" onclick="_prjPoUnlinkDoc(' + poJs + ')">✕</button>' : '') +
+      '</span></div>';
+  }
+  if (!manage) return '';
+  if (!isSaved) return '<div class="txt-muted-xs" style="margin-top:6px;">Save the project to attach the PO document.</div>';
+  return '<div style="margin-top:6px;"><button type="button" class="prj-doc-chip prj-doc-missing" title="Attach the signed PO / contract" onclick="_prjPoAttachDoc(' + poJs + ')">📎 Attach PO document</button></div>';
+}
+function _prjPoAttachDoc(poId) {
+  var d = window._prjDraft;
+  if (!d || !_prjCanManage()) return;
+  if (!d.id) { if (typeof showToast === 'function') showToast('Save the project first, then attach the PO document', { type: 'error' }); return; }
+  var po = _prjPoFind(poId);
+  if (!po) return;
+  var input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.pdf,.png,.jpg,.jpeg,.doc,.docx';
+  input.style.display = 'none';
+  document.body.appendChild(input);
+  input.onchange = async function() {
+    var file = input.files && input.files[0];
+    input.remove();
+    if (!file) return;
+    if (file.size > 25 * 1024 * 1024) { if (typeof showToast === 'function') showToast('File is too large (25 MB max)', { type: 'error' }); return; }
+    var safe = file.name.replace(/[^A-Za-z0-9._-]/g, '_');
+    var path = 'projects/' + d.id + '/po/' + po.id + '/doc_' + safe;
+    try {
+      if (typeof showToast === 'function') showToast('Uploading ' + safe + '…', { type: 'info' });
+      await sbUploadFile(path, file);
+      if (typeof sbSaveFileMeta === 'function') { try { sbSaveFileMeta('project', d.id, path, file.name, file.size, file.type); } catch (e) {} }
+      po.doc = { path: path, name: file.name };
+      await _prjPersistNowSafe();   // persist immediately so the file can't be orphaned
+      if (typeof auditEntry === 'function') {
+        auditEntry('PRJ:' + d.id, 'project_po_doc_attached', 'PO document ' + file.name + ' attached to ' + (po.number || 'PO') + ' on ' + (d.project_number || d.name));
+      }
+      _prjRenderPos();
+      if (typeof showToast === 'function') showToast('✓ PO document attached', { type: 'info' });
+    } catch (e) {
+      console.warn('[Projects PO] doc upload failed:', e);
+      if (typeof showToast === 'function') showToast('Upload failed — check your connection and try again', { type: 'error' });
+    }
+  };
+  input.click();
+}
+async function _prjPoOpenDoc(poId) {
+  var po = _prjPoFind(poId);
+  if (!po || !po.doc || !po.doc.path) return;
+  try {
+    var url = (typeof sbGetSignedUrl === 'function') ? await sbGetSignedUrl(po.doc.path) : null;
+    if (url) window.open(url, '_blank', 'noopener');
+    else if (typeof showToast === 'function') showToast('Could not open the PO document', { type: 'error' });
+  } catch (e) {
+    console.warn('[Projects PO] open doc:', e);
+    if (typeof showToast === 'function') showToast('Could not open the PO document', { type: 'error' });
+  }
+}
+function _prjPoUnlinkDoc(poId) {
+  var d = window._prjDraft;
+  if (!d || !_prjCanManage()) return;
+  var po = _prjPoFind(poId);
+  if (!po || !po.doc || typeof showConfirm !== 'function') return;
+  showConfirm({
+    title: 'Detach PO document?',
+    message: 'Detach "' + _prjEsc(po.doc.name || '') + '" from this PO? The file itself stays in the project\'s Documents tab.',
+    confirmText: 'Detach',
+  }).then(async function(ok) {
+    if (!ok) return;
+    delete po.doc;
+    try { await _prjPersistNowSafe(); } catch (e) { console.warn('[Projects PO] detach doc save:', e); }
+    _prjRenderPos();
+  });
 }
 // Immediate persist for paid-toggle / invoice actions (bypasses the 2.5s
 // debounce so an attached invoice or a Paid flip can't be lost).
@@ -2320,7 +2407,7 @@ function _prjGenerateRequestPdf(req, exp) {
         doc.text('Project: ' + (d.project_number || '') + '  ' + (d.name || ''), 14, y);
         doc.text('Date: ' + (req.date || ''), 150, y); y += 5;
         doc.text('Funder: ' + (req.funder || '—') + (req.grantReference ? '  (Ref: ' + req.grantReference + ')' : ''), 14, y); y += 5;
-        doc.text('Department #: ' + (d.data.deptNumber || '—') + '    PO #: ' + (d.data.poNumber || '—'), 14, y); y += 5;
+        doc.text('Department #: ' + (d.data.deptNumber || '—') + '    PO #: ' + _prjPoNumbersLabel(d), 14, y); y += 5;
         doc.text('Prepared by: ' + ((window.HOUSING_SESSION && (HOUSING_SESSION.name || HOUSING_SESSION.email)) || ''), 14, y); y += 4;
 
         var rows = exp.map(function(e, idx) {
@@ -2471,7 +2558,7 @@ function _prjBuildStatusReportPdf(d) {
       ['Start date', d.start_date || '—'],
       ['Target completion', d.target_date || '—'],
       ['Funding source', d.funding_source || '—'],
-      ['Department # / PO #', (data.deptNumber || '—') + '  /  ' + (data.poNumber || '—')],
+      ['Department # / PO #', (data.deptNumber || '—') + '  /  ' + _prjPoNumbersLabel(d)],
       ['Funded budget', funded ? money(funded) : '—'],
       ['Spent to date', money(spent) + (funded ? '  (' + Math.round(spent / funded * 100) + '% of budget)' : '')],
       ['Remaining', funded ? signedMoney(funded - spent) : '—'],
