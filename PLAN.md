@@ -992,6 +992,89 @@ Three pre-existing findings the capture surfaced, none blocking the demo:
 
 ---
 
+## Phase RX — Incremental React / TypeScript adoption  ⬜ (planning only, not started)
+
+**Why considered.** The app is vanilla JS, one file per page, state in globals
+(`window.applications`, `_sowCache`, `housingUnits`), manual renders
+(`renderWorklist()`, `_prjRenderPnl()`), and full-page navigation. The pain the
+audit cycles keep hitting is **duplicated, drifted markup** (the Edit Unit modal
+is copied across `inventory.html`/`tenants.html`/`match.html` and has drifted;
+the TIC/SOW modals are loaded on multiple pages) and **manual-render bugs**
+(which refresh function to call after a save; `sow.progress` vs
+`sow.paymentProgress`; cache-shape mismatches). Components + reactive state +
+types are the direct remedy for exactly those.
+
+**Governing principle:** every phase ships value on its own and can be the LAST
+one done. No big-bang rewrite; the app stays live and shippable throughout.
+Migrate one component family at a time; each step is reversible.
+
+### The pivotal decision (make first): build step or not?
+- **No build step** — React from cdnjs (UMD) + `htm` (tagged-template markup, no
+  JSX). Preserves the "edit a file, push, Cloudflare serves it" model exactly.
+  No JSX, **no TypeScript**.
+- **Add a build step (Vite)** — unlocks JSX **and** TypeScript + the ecosystem,
+  at the cost of `node_modules`, a compile stage in CI, and `.assetsignore` /
+  deploy-workflow changes.
+- 🔖 Recommendation: **add the build step** (TypeScript catches most of the
+  audit-cycle bug classes), but only after Phase RX2 proves the workflow on one
+  tiny surface.
+
+### Guardrails (hold across every phase)
+- **Edge functions, SQL, RLS, Supabase schema: untouched.** React changes none
+  of them; do not bundle unrelated changes.
+- The Supabase raw-`fetch` data layer (`shared-data.js`) is **wrapped, not
+  rewritten** — React reads/writes through existing trusted functions
+  (`sbSaveUnit`, `sbLoadApplications`, …).
+- **Preserve and re-test the fragile cross-cutting layer after every phase:**
+  offline/degraded save queue (Phase O), the 401 session-expiry interceptor,
+  idle-logout redirect ordering, the PWA service worker.
+- **OCAP intact** — data still lives in the nation's Supabase; nothing new
+  leaves. New CDN script sources must be added to CSP in `_headers`.
+
+### Phases
+- **RX0 — Guardrails (no framework).** Snapshot behavior of the cross-cutting
+  bits above so they can be regression-tested. Confirm the wrap-don't-rewrite
+  data-layer boundary.
+- **RX1 — Type safety, zero runtime change.** `// @ts-check` + JSDoc on the
+  shared layer first (`shared-config.js`, `shared-data.js`, `shared-sow.js`),
+  then outward; add `tsc --noEmit --checkJs` as a CI check (same pattern as
+  `tools/check-colors.js`). Catches wrong-field / cache-shape bugs at author
+  time. **Fully reversible; captures a large share of the benefit alone.**
+- **RX2 — First React island (the proof).** Rebuild ONE high-duplication,
+  well-bounded component — the **Edit Unit modal** — as a single React
+  component mounted into all three pages via `ReactDOM.createRoot`, talking to
+  the same `sbSaveUnit`/`sbLoadUnits`. This is where the build (or CDN+htm) is
+  stood up, CSP updated, compile wired into deploy. **Decision gate:** live with
+  it ~2 weeks — did dev speed / drift-bug rate improve? If no → stop.
+- **RX3 — Convert the other duplicated surfaces.** Same island pattern, in
+  duplication-pain order: **TIC**, **SOW / Maintenance Request modal**, then
+  shared `_cardGrid`/`_cardTile` and the KPI strip. Still islands in existing
+  HTML pages.
+- **RX4 — First real SPA section.** Convert the natural cluster that already
+  shares components — **Inventory + Tenants + Match** — into one React app with
+  a client router; kill the full-page reloads between them, keep data in memory.
+  Other pages stay static and link in.
+- **RX5 — Migrate the remainder page-by-page.** `housing.html` (hub), then
+  `renos`, `rfq`, `contractors`, `inspections`, `projects`. **Finance last**
+  (~9.8k lines / 22 files, money-critical, works today).
+- **RX6 — Decommission.** Delete each old `.html` / inline copy only once its
+  React equivalent is proven in production.
+
+### Success metrics (checked at each gate)
+Time-to-add-a-field · count of "fixed one file, forgot the other" bugs · CI /
+deploy friction. If these don't improve, the migration isn't paying for itself —
+**stop and keep the hybrid.**
+
+### Honest take
+RX1 alone captures a large share of the benefit at a fraction of the risk.
+RX2–RX3 test whether full React is worth it, cheaply. RX4–RX6 are the real
+commitment — take them only if the early phases prove out. React fixes none of
+the actual platform constraints (Supabase schema/RLS, edge-function deploys,
+OCAP), so the case rests entirely on developer velocity and the duplicated-code
+bug class.
+
+---
+
 ## Rollback points
 - Pre-refactor snapshots (Phase C)
 
