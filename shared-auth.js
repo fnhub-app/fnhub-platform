@@ -1,3 +1,4 @@
+// @ts-check
 /* ============================================================
  * shared-auth.js — CLFN Housing Suite
  * Session management, authentication state, role resolution
@@ -26,6 +27,7 @@
 // ── Session bag ─────────────────────────────────────────────────────────────
 // Mutable object — auth layer writes to it; app layer reads from it.
 // Never cache a copy; always read the current reference.
+/** @type {HousingSession} */
 var HOUSING_SESSION = { email: '', name: '', role: '', accessToken: '' };
 
 // ── Supabase REST headers ───────────────────────────────────────────────────
@@ -34,6 +36,7 @@ var HOUSING_SESSION = { email: '', name: '', role: '', accessToken: '' };
 if (typeof SUPABASE_ANON === 'undefined') {
   console.error('[CLFN] FATAL: shared-config.js did not load before shared-auth.js. Check your <script> tags and that shared-config.js is accessible.');
 }
+/** @type {Record<string, string>} */
 var HOUSING_HEADERS = {
   'apikey':        (typeof SUPABASE_ANON !== 'undefined' ? SUPABASE_ANON : ''),
   'Authorization': 'Bearer ' + (typeof SUPABASE_ANON !== 'undefined' ? SUPABASE_ANON : ''),
@@ -48,7 +51,7 @@ window._viewAsRole  = '';                     // '' = not using view-as
 // ── CLFN_AUTH ───────────────────────────────────────────────────────────────
 // Central auth state object. All session reads should go through here or
 // window.currentRole. Direct reads of HOUSING_SESSION are also fine.
-window.CLFN_AUTH = {
+window.CLFN_AUTH = /** @type {any} */ ({
   currentRole:     'housing_employee_l1',
   isAuthenticated: false,
 
@@ -61,7 +64,7 @@ window.CLFN_AUTH = {
     window._viewAsRole   = '';
     console.log('[CLFN] Session cleared');
   }
-};
+});
 
 // ── Access-token refresh ─────────────────────────────────────────────────────
 // The Supabase access token (JWT) expires (default ~1h). Without refreshing it,
@@ -534,7 +537,7 @@ window._handleSessionExpired = _handleSessionExpired;
       try {
         if (resp && resp.status === 401 && !_handling
             && typeof SUPABASE_URL !== 'undefined' && SUPABASE_URL) {
-          var url = (typeof input === 'string') ? input : (input && input.url) || '';
+          var url = (typeof input === 'string') ? input : (input && /** @type {Request} */ (input).url) || '';
           var isSb   = url.indexOf(SUPABASE_URL) === 0;
           var isAuth = url.indexOf('/auth/v1/') !== -1;
           var haveSession = !!(typeof HOUSING_SESSION !== 'undefined'

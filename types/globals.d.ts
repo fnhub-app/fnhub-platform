@@ -35,7 +35,7 @@ interface NationConfig {
 interface HousingSession {
   accessToken?: string;
   refreshToken?: string;
-  tokenExp?: string | number;
+  tokenExp?: number;
   role?: string;
   name?: string;
   email?: string;
@@ -97,6 +97,14 @@ interface Window {
   _moduleEnablementHydrated: boolean;
   showModuleDisabledNotice: (...args: any[]) => any;
 
+  // --- Auth layer (shared-auth.js) ---
+  CLFN_AUTH: any;
+  _booting: boolean;
+  _accessExpired: boolean;
+  _authFetchWrapped: boolean;
+  _onLogout: ((...args: any[]) => any) | null;
+  IDLE_TIMEOUT_MS: number;
+
   // --- Session / settings ---
   HOUSING_SESSION: HousingSession | null;
   _appSettings: Record<string, any>;
@@ -147,8 +155,6 @@ declare var _sowCache: Record<string, { sows: any[] } & Record<string, any>>;
 declare var _sowNumbersReconciled: boolean;
 /** RFQ cache keyed by rfq id (shared-data.js / rfq.js). */
 declare var _rfqCache: Record<string, any>;
-/** Supabase auth headers object for REST calls (shared-auth.js). */
-declare var HOUSING_HEADERS: Record<string, string>;
 /** SOW list helpers (shared-data.js). */
 declare function getUnitSowList(unitId: string): any[];
 declare function saveSowList(unitId: string, list: any[], ...args: any[]): any;
@@ -345,7 +351,6 @@ declare var value: any;
 declare var width: any;
 
 // --- Window members also referenced bare in shared-data.js -------------------
-declare var HOUSING_SESSION: HousingSession | null;
 declare var moduleOn: (mod: string) => boolean;
 declare var APP_STATUS: Record<string, string>;
 declare var SUPABASE_ANON: string;
@@ -398,3 +403,4 @@ interface HTMLElement {
 
 // App code stores a running total on a sliced array (sowItems._total).
 interface Array<T> { _total?: number; }
+declare var switchRole: any;
