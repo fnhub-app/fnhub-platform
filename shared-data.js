@@ -1,3 +1,4 @@
+// @ts-check
 /* ============================================================
  * shared-data.js — CLFN Housing Suite
  * Supabase data layer: role mapping, CRUD operations, audit
@@ -5553,7 +5554,7 @@ function _ctExpiryCell(dateStr) {
   if (!dateStr) return '<span class="txt-xs-muted">—</span>';
   var d = new Date(dateStr);
   if (isNaN(d.getTime())) return '<span class="txt-xs-muted">'+escapeHtml(dateStr)+'</span>';
-  var days = Math.round((d - new Date()) / (24*3600*1000));
+  var days = Math.round((d.getTime() - Date.now()) / (24*3600*1000));
   var cls = days < 0 ? 'ct-tag-expired' : days < 30 ? 'ct-tag-expiring' : 'ct-tag-valid';
   var lbl = days < 0 ? 'Expired' : days < 30 ? '<30 days' : 'Valid';
   return '<div class="ct-exp-cell">' +
@@ -6498,7 +6499,7 @@ function renderUnitScoreTable(){
     if(maxInGroup>0)maxScore+=maxInGroup;
   });
   var maxEl=document.getElementById('unit_score_max');
-  if(maxEl)maxEl.textContent=maxScore;
+  if(maxEl)maxEl.textContent=String(maxScore);
   var prevFactor='';
   tbody.innerHTML=model.map(function(row){
     var isNew=row.factor!==prevFactor;
@@ -6781,7 +6782,7 @@ function matchScoreCandidateUnits(app) {
   var needsBeds = 1;
   if (app.habitants) needsBeds = Math.max(1, 1 + (app.coApp ? 1 : 0) + app.habitants.length);
   var needsAccess = app.accessibility && app.accessibility !== 'None' && app.accessibility !== '0' && app.accessibility !== 0;
-  var age = app.dob ? Math.floor((new Date() - new Date(app.dob)) / (365.25*24*3600*1000)) : 0;
+  var age = app.dob ? Math.floor((new Date().getTime() - new Date(app.dob).getTime()) / (365.25*24*3600*1000)) : 0;
   var eldersMin = (window._appSettings && window._appSettings.eldersAgeMin) || 65;
   var isElders = age >= eldersMin;
   var eligible = isElders ? vacantUnits : vacantUnits.filter(function(u){ return !u.isElders; });
@@ -9273,7 +9274,7 @@ function updateUnitScorePts(id,val){
     if(mx>0)maxScore+=mx;
   });
   var maxEl=document.getElementById('unit_score_max');
-  if(maxEl)maxEl.textContent=maxScore;
+  if(maxEl)maxEl.textContent=String(maxScore);
 }
 
 // Inject the print-panel DOM on first use so every page gets it for free —
@@ -9923,7 +9924,7 @@ async function sendRfqToRecipients(rfq, contractorList) {
         if (fBlob.size > 3 * 1024 * 1024) { console.warn('[rfq attach] skipping (>3MB):', attachedPaths[ai]); _attachSkipped++; continue; }
         var b64 = await new Promise(function(resolve) {
           var reader = new FileReader();
-          reader.onload  = function(e) { var d = e.target.result; resolve(d.substring(d.indexOf(',') + 1)); };
+          reader.onload  = function(e) { var d = /** @type {string} */ (e.target.result); resolve(d.substring(d.indexOf(',') + 1)); };
           reader.onerror = function()  { resolve(null); };
           reader.readAsDataURL(fBlob);
         });

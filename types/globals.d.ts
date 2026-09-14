@@ -142,7 +142,6 @@ declare var SUPABASE_URL: string;
 declare var CLFN_PERMS: any;
 /** Effective role for permission checks. */
 declare var currentRole: string | null;
-declare var _realRoleForPermissions: any;
 /** SOW cache keyed by unit id: { [unitId]: { sows: any[] } } (shared-data.js). */
 declare var _sowCache: Record<string, { sows: any[] } & Record<string, any>>;
 declare var _sowNumbersReconciled: boolean;
@@ -157,3 +156,245 @@ declare function isSowCompleted(sow: any): boolean;
 /** Audit + toast (shared-data.js / shared-ui.js). */
 declare function auditEntry(entityId: string, action: string, detail?: any, user?: any): any;
 declare function showToast(msg: string, opts?: { type?: string; duration?: number; position?: string }): any;
+
+// --- Cross-file app globals used by shared-data.js (RX1 slice 3) --------------
+// Pragmatic `any` placeholders for functions/caches/libs defined in files not
+// yet type-checked (housing-*.js, scoring.js, finance-*.js, rfq.js,
+// notifications.js, the DocLibrary component, the XLSX/SheetJS lib, etc.).
+// `any` satisfies both bare `X` and `window.X` access and is callable /
+// indexable. Tighten these into real signatures as each defining file opts in.
+declare var APPROVAL_AUTHORITY: any;
+declare var DEFAULT_MATCH_PRIORITY_MODEL: any;
+declare var DocLibrary: any;
+declare var HOUSING_UNITS_DATA: any;
+declare var SOW_CATEGORIES: any;
+declare var XLSX: any;
+declare var _HOUSING_TENANT_DOC_CATEGORIES: any;
+declare var _SECONDARY_TYPES: any;
+declare var _appStampSaved: any;
+declare var _appSubmissions: any;
+declare var _arrearsCache: any;
+declare var _bcrRegistry: any;
+declare var _cardGrid: any;
+declare var _cardTile: any;
+declare var _cicNotesCtId: any;
+declare var _cicVisitedTabs: any;
+declare var _contractors: any;
+declare var _ctApprovalIdx: any;
+declare var _ctDeepLinkReturn: any;
+declare var _ctEditIdx: any;
+declare var _ctFiles: any;
+declare var _ctLastSaved: any;
+declare var _ctPendingAction: any;
+declare var _ctPeople: any;
+declare var _ctSetView: any;
+declare var _currentDetailUnitId: any;
+declare var _currentExportView: any;
+declare var _currentScorecardApp: any;
+declare var _docSigsHidden: any;
+declare var _emailEventCcRoles: any;
+declare var _generateRfqPdfBase64: any;
+declare var _initScrollCollapse: any;
+declare var _inspections: any;
+declare var _lastScoreResult: any;
+declare var _matchActiveChip: any;
+declare var _mergeGroups: any;
+declare var _navSkipPush: any;
+declare var _pendingLookupUser: any;
+declare var _printPanelDoc: any;
+declare var _printThemeStyles: any;
+declare var _renderEmailTemplate: any;
+declare var _renderLandingKpis: any;
+declare var _renoBudget: any;
+declare var _renoProgress: any;
+declare var _renosSetView: any;
+declare var _resolveActiveStaffForRoles: any;
+declare var _returnToNavReferrer: any;
+declare var _rfqDocList: any;
+declare var _rfqDocStr: any;
+declare var _rfqDocSub: any;
+declare var _rpAfterContractorSave: any;
+declare var _rpPendingPhotos: any;
+declare var _rpStoredPhotos: any;
+declare var _scApp: any;
+declare var _showView: any;
+declare var _sigPads: any;
+declare var _sowAfterContractorSave: any;
+declare var _sowCollectWorkOrder: any;
+declare var _sowEditingProjectNumber: any;
+declare var _sowFiles: any;
+declare var _sowForceNew: any;
+declare var _sowItemIdx: any;
+declare var _sowPopulateFieldEmployees: any;
+declare var _sowPopulateWorkOrder: any;
+declare var _sowPromptWorkOrderEmail: any;
+declare var _sowRefreshStrip: any;
+declare var _sowSafePreprintSave: any;
+declare var _sowSeed: any;
+declare var _staffCache: any;
+declare var _staffFilter: any;
+declare var _tenantFilesLib: any;
+declare var _tenantFilesUnitId: any;
+declare var _tenantMrSubmissions: any;
+declare var _termsParseHtml: any;
+declare var _themeAccentHex: any;
+declare var _themeAccentInkHex: any;
+declare var _total: any;
+declare var _udpFilesLib: any;
+declare var _userLookupTimer: any;
+declare var _viewAsRole: any;
+declare var _viewMode: any;
+declare var _viewToggleHtml: any;
+declare var _wlArchiveApp: any;
+declare var _wlArchiveSow: any;
+declare var _wlCancelRfq: any;
+declare var _wlSetView: any;
+declare var applications: any;
+declare var arrearsAllocationBlock: any;
+declare var arrearsJointMatches: any;
+declare var arrearsStateForTenant: any;
+declare var arrearsTenantByName: any;
+declare var arrearsWorklistItems: any;
+declare var auditLog: any;
+declare var buildNationFooterStrip: any;
+declare var checked: any;
+declare var contentWindow: any;
+declare var contractorSearchFilter: any;
+declare var currentUser: any;
+declare var dataset: any;
+declare var disabled: any;
+declare var edGuard: any;
+declare var escapeHtml: any;
+declare var flushOfflineFiles: any;
+declare var focus: any;
+declare var formatCurrency: any;
+declare var formatPhone: any;
+declare var generateAppId: any;
+declare var getContext: any;
+declare var getTermsBody: any;
+declare var height: any;
+declare var hideAllViews: any;
+declare var housingUnits: any;
+declare var href: any;
+declare var indexOf: any;
+declare var isBcrd: any;
+declare var jspdf: any;
+declare var liveMatchPriorityModel: any;
+declare var liveV2Tiers: any;
+declare var loadJsPdf: any;
+declare var notifyApplicationApprovedWaitlist: any;
+declare var notifyContractorStatusChange: any;
+declare var notifyContractorSubmitted: any;
+declare var notifyRfqAward: any;
+declare var notifyRfqRegret: any;
+declare var onclick: any;
+declare var openBcrManager: any;
+declare var openCommercialApp: any;
+declare var openContractorSearch: any;
+declare var openEditModal: any;
+declare var openRenoProgress: any;
+declare var openSowModal: any;
+declare var openTenantMergeManager: any;
+declare var options: any;
+declare var pushNav: any;
+declare var renderDashTable: any;
+declare var renderDashboard: any;
+declare var renderInspectionsList: any;
+declare var renderInventoryView: any;
+declare var renderMatchView: any;
+declare var renderRecentActivity: any;
+declare var renderRenoApprovalsView: any;
+declare var renderRubricTable: any;
+declare var renderRubricTableV2: any;
+declare var renderScorecardActions: any;
+declare var renderSowFiles: any;
+declare var renderTenantsView: any;
+declare var renderV2ScoringEditor: any;
+declare var saveSOW: any;
+declare var sbCopyFile: any;
+declare var sbDeleteFile: any;
+declare var sbGetFileUrl: any;
+declare var sbGetSignedUrl: any;
+declare var sbListFiles: any;
+declare var sbLoadFileMeta: any;
+declare var sbSaveFileMeta: any;
+declare var sbUploadAndSave: any;
+declare var scLoadDocs: any;
+declare var select: any;
+declare var selectedIndex: any;
+declare var sendNotification: any;
+declare var setHeaderNavActive: any;
+declare var setNavActive: any;
+declare var setNavReferrer: any;
+declare var setText: any;
+declare var showConfirm: any;
+declare var showLanding: any;
+declare var showPrompt: any;
+declare var src: any;
+declare var srcdoc: any;
+declare var substring: any;
+declare var tableApplyFilterSort: any;
+declare var tableBindColumnMenuClicks: any;
+declare var tableRefreshSortIndicators: any;
+declare var tableRegisterColumns: any;
+declare var tableStateGet: any;
+declare var toDataURL: any;
+declare var udpRenderSowTable: any;
+declare var updateDashStats: any;
+declare var value: any;
+declare var width: any;
+
+// --- Window members also referenced bare in shared-data.js -------------------
+declare var HOUSING_SESSION: HousingSession | null;
+declare var moduleOn: (mod: string) => boolean;
+declare var APP_STATUS: Record<string, string>;
+declare var SUPABASE_ANON: string;
+declare var STORAGE_BUCKET: string;
+declare var ROLE_FORCED_DEPT: Record<string, any>;
+declare var nationPortalBase: () => string;
+declare var nationEmailDomain: () => string;
+declare var nationDisplay: () => string;
+
+// --- DOM access pragmatics (RX1) ---------------------------------------------
+// The shared layer reads inputs via document.getElementById(...).value etc.,
+// which tsc rejects because getElementById returns the base HTMLElement. Rather
+// than cast hundreds of call sites (churn/risk in a 10k-line file), widen the
+// element types with the SPECIFIC props the code touches, as optionals. This is
+// a targeted relaxation, not a blanket index signature, so genuinely unknown
+// property typos are still caught. App code also stores a few expando props on
+// elements (_total, _scApp) -- declared here too. Tighten with real element
+// casts when these files are React-migrated (RX4+).
+interface Element {
+  onclick?: any;
+  value?: any;
+  checked?: any;
+  src?: any;
+  href?: any;
+  dataset?: any;
+  selectedIndex?: any;
+  options?: any;
+  select?: any;
+  focus?: any;
+  disabled?: any;
+}
+interface HTMLElement {
+  value?: any;
+  checked?: any;
+  disabled?: any;
+  src?: any;
+  href?: any;
+  srcdoc?: any;
+  selectedIndex?: any;
+  options?: any;
+  select?: any;
+  contentWindow?: any;
+  getContext?: any;
+  toDataURL?: any;
+  width?: any;
+  height?: any;
+  _total?: any;
+  _scApp?: any;
+}
+
+// App code stores a running total on a sliced array (sowItems._total).
+interface Array<T> { _total?: number; }
