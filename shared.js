@@ -418,6 +418,14 @@ window.loadJsPdf = function loadJsPdf(opts) {
       ai.setAttribute('href', 'apple-touch-icon.png');
       _head.appendChild(ai);
     }
+    // Standard cross-browser PWA meta (the modern replacement for the Apple one).
+    if (!document.querySelector('meta[name="mobile-web-app-capable"]')) {
+      var mcap = document.createElement('meta');
+      mcap.setAttribute('name', 'mobile-web-app-capable');
+      mcap.setAttribute('content', 'yes');
+      _head.appendChild(mcap);
+    }
+    // Kept for older iOS Safari, which still only honours the apple- prefix.
     if (!document.querySelector('meta[name="apple-mobile-web-app-capable"]')) {
       var cap = document.createElement('meta');
       cap.setAttribute('name', 'apple-mobile-web-app-capable');
