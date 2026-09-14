@@ -1,3 +1,4 @@
+// @ts-check
 /* ============================================================
  * shared-ui.js — CLFN Housing Suite
  * UI primitives: toast, navigation stack, header, role switcher
@@ -1108,7 +1109,7 @@ function edGuard(featureName, callback) {
     });
 
     drop.addEventListener('mousedown', function(e){
-      var item = e.target.closest('.clfn-ss-item');
+      var item = /** @type {Element} */(e.target).closest('.clfn-ss-item');
       if (item) { e.preventDefault(); selectItem(item.getAttribute('data-id'), item.getAttribute('data-label')); }
     });
 
@@ -1117,7 +1118,7 @@ function edGuard(featureName, callback) {
     // any outside click it was consumed and never re-added, so from the second
     // open onward the dropdown stayed glued open until Escape.
     document.addEventListener('click', function(e){
-      if (isOpen && !wrap.contains(e.target) && !drop.contains(e.target)) close();
+      if (isOpen && !wrap.contains(/** @type {Node} */(e.target)) && !drop.contains(/** @type {Node} */(e.target))) close();
     });
 
     caret.addEventListener('mousedown', function(e){

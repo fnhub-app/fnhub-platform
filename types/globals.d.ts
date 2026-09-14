@@ -105,6 +105,16 @@ interface Window {
   _onLogout: ((...args: any[]) => any) | null;
   IDLE_TIMEOUT_MS: number;
 
+  // --- UI / nav layer (shared-ui.js) ---
+  _navStack: any[];
+  _navMap: any;
+  _extraViewIds: any;
+  CLFN_PAGE_ROUTES: any;
+  _tableRegistry: Record<string, any>;
+  clfnSearchSelect: (...args: any[]) => any;
+  _swipeTabsWired: boolean;
+  _onSwitchRole: ((...args: any[]) => any) | null;
+
   // --- Session / settings ---
   HOUSING_SESSION: HousingSession | null;
   _appSettings: Record<string, any>;
@@ -200,7 +210,6 @@ declare var _currentScorecardApp: any;
 declare var _docSigsHidden: any;
 declare var _emailEventCcRoles: any;
 declare var _generateRfqPdfBase64: any;
-declare var _initScrollCollapse: any;
 declare var _inspections: any;
 declare var _lastScoreResult: any;
 declare var _matchActiveChip: any;
@@ -215,7 +224,6 @@ declare var _renoBudget: any;
 declare var _renoProgress: any;
 declare var _renosSetView: any;
 declare var _resolveActiveStaffForRoles: any;
-declare var _returnToNavReferrer: any;
 declare var _rfqDocList: any;
 declare var _rfqDocStr: any;
 declare var _rfqDocSub: any;
@@ -223,7 +231,6 @@ declare var _rpAfterContractorSave: any;
 declare var _rpPendingPhotos: any;
 declare var _rpStoredPhotos: any;
 declare var _scApp: any;
-declare var _showView: any;
 declare var _sigPads: any;
 declare var _sowAfterContractorSave: any;
 declare var _sowCollectWorkOrder: any;
@@ -262,15 +269,12 @@ declare var arrearsStateForTenant: any;
 declare var arrearsTenantByName: any;
 declare var arrearsWorklistItems: any;
 declare var auditLog: any;
-declare var buildNationFooterStrip: any;
 declare var checked: any;
 declare var contentWindow: any;
 declare var contractorSearchFilter: any;
 declare var currentUser: any;
 declare var dataset: any;
 declare var disabled: any;
-declare var edGuard: any;
-declare var escapeHtml: any;
 declare var flushOfflineFiles: any;
 declare var focus: any;
 declare var formatCurrency: any;
@@ -279,7 +283,6 @@ declare var generateAppId: any;
 declare var getContext: any;
 declare var getTermsBody: any;
 declare var height: any;
-declare var hideAllViews: any;
 declare var housingUnits: any;
 declare var href: any;
 declare var indexOf: any;
@@ -302,7 +305,6 @@ declare var openRenoProgress: any;
 declare var openSowModal: any;
 declare var openTenantMergeManager: any;
 declare var options: any;
-declare var pushNav: any;
 declare var renderDashTable: any;
 declare var renderDashboard: any;
 declare var renderInspectionsList: any;
@@ -330,8 +332,6 @@ declare var select: any;
 declare var selectedIndex: any;
 declare var sendNotification: any;
 declare var setHeaderNavActive: any;
-declare var setNavActive: any;
-declare var setNavReferrer: any;
 declare var setText: any;
 declare var showConfirm: any;
 declare var showLanding: any;
@@ -339,11 +339,6 @@ declare var showPrompt: any;
 declare var src: any;
 declare var srcdoc: any;
 declare var substring: any;
-declare var tableApplyFilterSort: any;
-declare var tableBindColumnMenuClicks: any;
-declare var tableRefreshSortIndicators: any;
-declare var tableRegisterColumns: any;
-declare var tableStateGet: any;
 declare var toDataURL: any;
 declare var udpRenderSowTable: any;
 declare var updateDashStats: any;
@@ -371,6 +366,7 @@ declare var nationDisplay: () => string;
 // casts when these files are React-migrated (RX4+).
 interface Element {
   onclick?: any;
+  style?: any;
   value?: any;
   checked?: any;
   src?: any;
@@ -399,8 +395,9 @@ interface HTMLElement {
   height?: any;
   _total?: any;
   _scApp?: any;
+  _clfnTimer?: any;
 }
 
 // App code stores a running total on a sliced array (sowItems._total).
 interface Array<T> { _total?: number; }
-declare var switchRole: any;
+declare var showEmployeeHome: any;
