@@ -2133,6 +2133,7 @@
       +     '<div class="header-export-group">Occupancy Agreements</div>'
       +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal()" class="header-export-item">'+(nationShort())+' Residential Occupancy Agreement</button>'
       +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'temporary_lease\')" class="header-export-item">Temporary Occupancy Agreement (Fixed Term)</button>'
+      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'monthly_temp_lease\')" class="header-export-item">Month-to-Month Occupancy Agreement (All-Inclusive)</button>'
       +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'commercial_lease\')" class="header-export-item">Commercial Occupancy &amp; Lease Agreement</button>'
       +     '<button type="button" onclick="window._ticOpenReplacementLeaseModal && window._ticOpenReplacementLeaseModal()" class="header-export-item">Replacement Lease Agreement (No Appliances)</button>'
       +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'replacement_contract\')" class="header-export-item">Rental / Homeownership Agreement (Replacement Contract)</button>'
@@ -3150,12 +3151,14 @@
   var _LEASE_TITLES = {
     residential_lease:    'Residential Lease Agreement',
     temporary_lease:      'Temporary Residential Occupancy Agreement (Fixed Term)',
+    monthly_temp_lease:   'Month-to-Month Occupancy Agreement (All-Inclusive)',
     commercial_lease:     'Commercial Occupancy & Lease Agreement',
     replacement_contract: 'Rental / Homeownership Agreement — Replacement Contract'
   };
   var _LEASE_FILE_SLUGS = {
     residential_lease:    'Occupancy_Agreement',
     temporary_lease:      'Temporary_Occupancy_Agreement',
+    monthly_temp_lease:   'Month_to_Month_Occupancy_Agreement',
     commercial_lease:     'Commercial_Lease_Agreement',
     replacement_contract: 'Replacement_Contract'
   };
@@ -3448,7 +3451,7 @@
       if (typeof showToast === 'function') showToast('Assign a unit to this tenant before creating an agreement.', { type:'error' });
       return;
     }
-    _ticLeaseDocKey = ({ temporary_lease:1, commercial_lease:1, replacement_contract:1 }[docKey]) ? docKey : 'residential_lease';
+    _ticLeaseDocKey = ({ temporary_lease:1, monthly_temp_lease:1, commercial_lease:1, replacement_contract:1 }[docKey]) ? docKey : 'residential_lease';
     var isTemp = !!_LEASE_FIXED_TERM[_ticLeaseDocKey];   // fixed-term docs need an end date
     var _docTitle   = _LEASE_TITLES[_ticLeaseDocKey] || 'Residential Lease Agreement';
     var _clauseList = _getEffectiveLeaseClauses();
@@ -3988,6 +3991,7 @@
       startYear:              startYear,
       termStartDate:          fv('ls_start_date'),
       termEndDate:            fv('ls_end_date'),
+      termEndDateOrOpen:      fv('ls_end_date') || 'Open-ended (month-to-month, no fixed end date)',
       contactPerson:          (_ticState.tenant && (_ticState.tenant.contact_person || _ticState.tenant.contactPerson)) || '',
       tenantName:             fv('ls_t_name'),
       coTenantName:           fv('ls_co_name'),
@@ -4073,7 +4077,7 @@
           ctx.y += 7; pdf.setTextColor(0);
         }
 
-        var _partyLabel = _ticLeaseDocKey === 'temporary_lease' ? 'Occupant' : 'Tenant';
+        var _partyLabel = (_ticLeaseDocKey === 'temporary_lease' || _ticLeaseDocKey === 'monthly_temp_lease') ? 'Occupant' : 'Tenant';
         _addSigBlock('Landlord / Housing Manager', 'ls_sig_staff',    tokens.landlordName);
         _addSigBlock(_partyLabel,                  'ls_sig_tenant',   tokens.tenantName);
         if (tokens.coTenantName) _addSigBlock('Co-' + _partyLabel, 'ls_sig_cotenant', tokens.coTenantName);

@@ -4465,6 +4465,98 @@ var CONTRACTS_DOCS_REGISTRY = [
       + '<p>{coTenantName}</p>'
   },
   {
+    key:         'monthly_temp_lease',
+    label:       'Month-to-Month Occupancy Agreement (All-Inclusive)',
+    description: 'Month-to-month (open-ended) occupancy agreement for visiting professionals and community members needing temporary shelter. All-inclusive monthly fee (utilities included). Start date required; end date optional (leave blank for open-ended). Generated from the TIC alongside the other agreements. Supports {token} substitution.',
+    defaultClauses: [
+      {
+        id:    'mo_init_term',
+        label: 'Section 2 - Month-to-Month Term & No Security of Tenure',
+        text:  'This is a temporary, month-to-month occupancy. It has no fixed end date and continues only from month to month until ended by either party on one clear month of written notice, or on the estimated departure date if one is stated. The Occupant acknowledges that this Agreement creates no permanent tenancy, no security of tenure, and no expectation of continued or permanent housing, and agrees to vacate and surrender the Residence when the occupancy ends.'
+      },
+      {
+        id:    'mo_init_allin',
+        label: 'Section 3 - All-Inclusive Fee (Utilities Included)',
+        text:  'The monthly fee is all-inclusive and covers heat, hydro/electricity, and water/sewer supplied to the Residence for ordinary residential use. Utility accounts remain in the name of the Nation; the Occupant shall not open, transfer, or close any utility account for the Residence. Personal services (telephone, internet/cable) and insurance on the Occupant\'s own belongings are the Occupant\'s responsibility. The Occupant shall not use the Residence in a way that causes utility consumption grossly beyond normal residential use, and is liable for any such excess.'
+      },
+      {
+        id:    'mo_init_condition',
+        label: 'Section 6 - Cleanliness, Damage & Move-Out',
+        text:  'The Occupant shall keep the Residence clean and sanitary throughout the occupancy and shall return it at move-out clean, free of the Occupant\'s belongings and garbage, and in the same condition as received, reasonable wear and tear excepted, with all keys returned. The Occupant is responsible for the cost of cleaning, repairs, or replacement arising from any damage beyond normal wear and tear caused by the Occupant, their household, or their guests. The Nation may inspect the Residence at move-in and move-out and may charge cleaning and damage costs against amounts owing.'
+      },
+      {
+        id:    'mo_init_drug',
+        label: 'Section 11 - Smoking, Cannabis & Drug Provisions',
+        text:  'Cannabis cultivation, production, and processing in any quantity is strictly prohibited on the premises as a condition of this Agreement regardless of federal legality. Any breach of the cannabis prohibition constitutes immediate grounds for termination without a cure period. Unlawful drug activity - including possession, production, trafficking, or storage of controlled substances - also constitutes immediate grounds for termination. The Occupant acknowledges full liability for all remediation costs arising from cannabis cultivation or prohibited drug activity on the premises.'
+      },
+      {
+        id:    'mo_init_juris',
+        label: 'Section 15 - Acknowledgement of Jurisdiction',
+        text:  'This Agreement is governed by the inherent jurisdiction of {nationName} and the Indian Act, R.S.C. 1985, c. I-5. The Ontario Residential Tenancies Act, 2006 does not apply to this Agreement. Any dispute arising under this Agreement shall be addressed through the internal grievance process established by the {nationName} Housing Policy.'
+      }
+    ],
+    defaultBody:
+        '<h2>{nationName} Housing Program</h2>'
+      + '<h1>Month-to-Month Occupancy Agreement (All-Inclusive)</h1>'
+      + '<p>This Agreement is made on the <strong>{executionDay}</strong> day of <strong>{executionMonth}</strong>, <strong>{executionYear}</strong>.</p>'
+      + '<h3>Parties</h3>'
+      + '<p><strong>Landlord:</strong> {nationName} (hereinafter "the Landlord" or "the Nation")</p>'
+      + '<p><strong>Occupant:</strong> {tenantName} (hereinafter "the Occupant")</p>'
+      + '<p><strong>Co-Occupant:</strong> {coTenantName}</p>'
+      + '<h3>1. Premises</h3>'
+      + '<p>The Landlord grants the Occupant temporary occupancy of the residential premises located at Lot {residenceLot}, {residenceStreet} on the reserve lands of {nationName} (the "Residence"). Unit type: {residenceBedBath}. Housing stream: {residenceStream}. This Agreement is intended for visiting professionals engaged in service to the community and for community members requiring temporary shelter.</p>'
+      + '<h3>2. Term (Month-to-Month)</h3>'
+      + '<p>This is a temporary, month-to-month occupancy. It commences on <strong>{termStartDate}</strong> and continues from month to month. Estimated departure date (if known): <strong>{termEndDateOrOpen}</strong>. This Agreement has no fixed end date, does not create a permanent tenancy, and confers no security of tenure or expectation of continued or permanent housing. It continues only until ended in accordance with section 4. <em>(Occupant initials required.)</em></p>'
+      + '<h3>3. All-Inclusive Monthly Fee (Utilities Included)</h3>'
+      + '<p>The Occupant shall pay an all-inclusive occupancy fee of <strong>{rentAmount}</strong> per month (pro-rated for any partial month), due on or before the first day of each month, payable to the {nationName} Housing Department. This all-inclusive fee covers heat, hydro/electricity, and water/sewer supplied to the Residence for ordinary residential use. Telephone, internet/cable, and insurance on the Occupant\'s own belongings are not included and are the Occupant\'s responsibility. Utility accounts remain in the name of the Nation and shall not be opened, transferred, or closed by the Occupant. <em>(Occupant initials required.)</em></p>'
+      + '<h3>4. Ending the Occupancy (Notice to Vacate)</h3>'
+      + '<p>Either party may end this Agreement by giving one clear month of written notice. The Nation may end this Agreement immediately for material breach, including non-payment of the occupancy fee, unauthorized occupants, damage, or prohibited activity. On the end of the occupancy the Occupant shall vacate and surrender the Residence and return all keys.</p>'
+      + '<h3>5. Authorized Occupants</h3>'
+      + '<p>The following persons are authorized to reside in the Residence in addition to the Occupant: {occupant1Name} {occupant2Name} {occupant3Name} {occupant4Name} {occupant5Name} {occupant6Name}. No other person may occupy the Residence without prior written consent of the Landlord.</p>'
+      + '<h3>6. Cleanliness, Damage &amp; Move-Out</h3>'
+      + '<p>The Occupant shall keep the Residence clean and sanitary during the occupancy and shall return it at move-out clean, emptied of the Occupant\'s belongings and garbage, and in the same condition as received (reasonable wear and tear excepted), with all keys returned. The Occupant is responsible for the cost of cleaning, repair, or replacement of any damage beyond normal wear and tear caused by the Occupant, their household, or their guests. The Nation may inspect the Residence at move-in and move-out and may charge cleaning and damage costs against amounts owing. <em>(Occupant initials required.)</em></p>'
+      + '<h3>7. Use of the Residence &amp; Conduct</h3>'
+      + '<ol>'
+      + '<li>Use the Residence only as a private residence and not for any business or unlawful purpose.</li>'
+      + '<li>Not disturb the reasonable peace and quiet of neighbours or the community.</li>'
+      + '<li>Not sublet, assign, or transfer occupancy of the Residence, and not operate a short-term rental.</li>'
+      + '<li>Be responsible for the conduct of household members and guests.</li>'
+      + '</ol>'
+      + '<h3>8. Furnishings &amp; Contents</h3>'
+      + '<p>Where the Residence is provided furnished or with appliances, the Occupant shall use them with reasonable care and return them in the same condition, reasonable wear and tear excepted. The Nation is not responsible for the Occupant\'s personal belongings; the Occupant is responsible for insuring their own contents.</p>'
+      + '<h3>9. Occupant Responsibilities</h3>'
+      + '<ol>'
+      + '<li>Maintain the Residence in a clean, safe, and habitable condition.</li>'
+      + '<li>Report any required repairs or maintenance to the {nationName} Housing Department promptly.</li>'
+      + '<li>Not cause or permit damage beyond normal wear and tear.</li>'
+      + '<li>Comply with the {nationName} Housing Policy, community by-laws, and all applicable laws.</li>'
+      + '<li>Permit the Landlord reasonable access for inspections and repairs with reasonable notice, except in emergencies.</li>'
+      + '</ol>'
+      + '<h3>10. Landlord Responsibilities</h3>'
+      + '<ol>'
+      + '<li>Provide the Residence in a habitable condition at commencement.</li>'
+      + '<li>Maintain the structural integrity of the Residence and attend to necessary repairs within a reasonable time.</li>'
+      + '<li>Supply the included utilities in section 3 for ordinary residential use.</li>'
+      + '<li>Provide 24 hours notice before entering the Residence except in emergencies.</li>'
+      + '</ol>'
+      + '<h3>11. Smoking, Cannabis &amp; Drug Provisions</h3>'
+      + '<p>Cannabis cultivation, production, and processing is strictly prohibited on the premises. Unlawful drug activity constitutes grounds for immediate termination. The Occupant is liable for all remediation costs arising from prohibited activity. <em>(Occupant initials required.)</em></p>'
+      + '<h3>12. Overholding</h3>'
+      + '<p>If the Occupant remains in the Residence after the occupancy has ended without the Nation\'s written consent, the continued occupancy is unauthorized (overholding), does not create a tenancy, and the Occupant shall pay an occupancy fee at the rate in section 3 for each day of overholding, in addition to any costs the Nation incurs to recover possession.</p>'
+      + '<h3>13. Recovery of Amounts Owing</h3>'
+      + '<p>The Occupant authorizes {nationName} to recover unpaid occupancy fees, damage charges, cleaning charges, and other housing-related debts from any Band payments, per capita distributions, honoraria, or program benefits administered by the Nation.</p>'
+      + '<h3>14. No Security of Tenure</h3>'
+      + '<p>This Agreement is temporary. It creates no tenancy, no security of tenure, and no expectation of permanent or continued housing beyond the occupancy, which may be ended in accordance with section 4.</p>'
+      + '<h3>15. Jurisdiction</h3>'
+      + '<p>This Agreement is governed by the inherent jurisdiction of {nationName}. The Ontario Residential Tenancies Act, 2006 does not apply. Disputes shall be resolved through the internal grievance process of the {nationName} Housing Policy. <em>(Occupant initials required.)</em></p>'
+      + '<h3>Landlord Signature</h3>'
+      + '<p>{landlordName}, Housing Manager &mdash; {nationName}</p>'
+      + '<h3>Occupant Signature</h3>'
+      + '<p>{tenantName}</p>'
+      + '<h3>Co-Occupant Signature</h3>'
+      + '<p>{coTenantName}</p>'
+  },
+  {
     key:         'commercial_lease',
     label:       'Commercial Occupancy & Lease Agreement',
     description: 'Fixed-term lease for a business or department occupying a commercial / admin / band building. Generated from the TIC alongside the residential agreements. Supports {token} substitution.',
