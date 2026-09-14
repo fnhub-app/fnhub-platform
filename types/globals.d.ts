@@ -126,6 +126,34 @@ interface Window {
 
 // Globals referenced WITHOUT a `window.` prefix in the shared layer. These are
 // all assigned as `window.X = ...`, so declaring them here as ambient vars only
-// tells tsc they exist globally (no runtime redeclaration).
+// tells tsc they exist globally (no runtime redeclaration). A global `declare
+// var`/`declare function` also satisfies `window.X` access (Window extends the
+// global scope), so this block is the single place to register cross-file
+// globals as more files opt into type-checking.
 declare var NATION_CONFIG: NationConfig;
 declare var nationShort: () => string;
+
+// --- Config/enum globals also referenced bare (defined in shared-config.js) ---
+declare var ROLE: Record<string, any>;
+declare var SUPABASE_URL: string;
+
+// --- Cross-file globals used by shared-sow.js (defined elsewhere in the app) ---
+/** Permission helpers (shared-config.js / CLFN_PERMS). */
+declare var CLFN_PERMS: any;
+/** Effective role for permission checks. */
+declare var currentRole: string | null;
+declare var _realRoleForPermissions: any;
+/** SOW cache keyed by unit id: { [unitId]: { sows: any[] } } (shared-data.js). */
+declare var _sowCache: Record<string, { sows: any[] } & Record<string, any>>;
+declare var _sowNumbersReconciled: boolean;
+/** RFQ cache keyed by rfq id (shared-data.js / rfq.js). */
+declare var _rfqCache: Record<string, any>;
+/** Supabase auth headers object for REST calls (shared-auth.js). */
+declare var HOUSING_HEADERS: Record<string, string>;
+/** SOW list helpers (shared-data.js). */
+declare function getUnitSowList(unitId: string): any[];
+declare function saveSowList(unitId: string, list: any[], ...args: any[]): any;
+declare function isSowCompleted(sow: any): boolean;
+/** Audit + toast (shared-data.js / shared-ui.js). */
+declare function auditEntry(entityId: string, action: string, detail?: any, user?: any): any;
+declare function showToast(msg: string, opts?: { type?: string; duration?: number; position?: string }): any;

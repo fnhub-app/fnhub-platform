@@ -1,3 +1,4 @@
+// @ts-check
 /* ============================================================
  * shared-sow.js — CLFN Housing Suite
  * Multi-SOW helpers shared between housing.html and renos.html.
