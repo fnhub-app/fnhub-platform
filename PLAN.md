@@ -992,7 +992,11 @@ Three pre-existing findings the capture surfaced, none blocking the demo:
 
 ---
 
-## Phase RX — Incremental React / TypeScript adoption  ⬜ (planning only, not started)
+## Phase RX — Incremental React / TypeScript adoption  ⏳ (RX0 + RX1 shipped 2026-09; RX2+ pending)
+
+**Status.** RX0 (guardrail baseline) and RX1 (type-checking the whole shared
+layer) are **shipped and live in CI**. RX2 (first React island) is the next
+step and gates the build-step decision below — not started.
 
 **Why considered.** The app is vanilla JS, one file per page, state in globals
 (`window.applications`, `_sowCache`, `housingUnits`), manual renders
@@ -1032,14 +1036,35 @@ Migrate one component family at a time; each step is reversible.
   leaves. New CDN script sources must be added to CSP in `_headers`.
 
 ### Phases
-- **RX0 — Guardrails (no framework).** Snapshot behavior of the cross-cutting
-  bits above so they can be regression-tested. Confirm the wrap-don't-rewrite
-  data-layer boundary.
-- **RX1 — Type safety, zero runtime change.** `// @ts-check` + JSDoc on the
-  shared layer first (`shared-config.js`, `shared-data.js`, `shared-sow.js`),
-  then outward; add `tsc --noEmit --checkJs` as a CI check (same pattern as
-  `tools/check-colors.js`). Catches wrong-field / cache-shape bugs at author
-  time. **Fully reversible; captures a large share of the benefit alone.**
+- **RX0 — Guardrails (no framework).**  ✅ shipped. Baseline of the fragile
+  cross-cutting behaviors documented in `docs/REACT-MIGRATION-REGRESSION.md`
+  (idle logout, 401 interceptor, PWA/service worker, degraded-mode save timeout,
+  offline file queue, session-login audit, cross-page auth) with a standing
+  per-phase regression checklist. Wrap-don't-rewrite data-layer boundary
+  confirmed.
+- **RX1 — Type safety, zero runtime change.**  ✅ shipped (shared layer). Opt-in
+  `tsc --noEmit` type-checking with **no build step** and no runtime change (a
+  CI check only). Delivered across 6 slices:
+  - `tsconfig.json` (allowJs/checkJs, `include` is the opt-in allowlist that
+    ratchets up file by file); `types/globals.d.ts` (the app's global type
+    contract — `Window` + cross-file globals; `NATION_CONFIG`/`HOUSING_SESSION`/
+    module registry typed; a targeted DOM widening, not a blanket index sig);
+    `.github/workflows/typecheck.yml` (runs on every JS/types push, check-only,
+    never blocks a deploy); `.assetsignore` excludes the dev-only type files.
+  - **All 6 shared-layer files now check clean at 0 errors:** `shared.js`,
+    `shared-config.js`, `shared-sow.js`, `shared-data.js` (10.1k lines, started
+    at 1,087 errors), `shared-auth.js`, `shared-ui.js`. Every runtime-file change
+    was a comment/JSDoc-cast or a provably behaviorally-identical line
+    (Date-minus-Date → `.getTime()`; `textContent = number` → `String(number)`;
+    no-op `( )` groupings). No behavioral change anywhere.
+  - Value proven: the checker enforces the real `_sowCache` `{unitId:{sows:[]}}`
+    wrapper shape (an earlier bug got this wrong) and the numeric token-refresh
+    math, and now guards them on every push. **Fully reversible; captures a large
+    share of the benefit alone.**
+  - 🔖 Remaining (optional, later or at React-migration time): extend the same
+    opt-in checking to page modules (`scoring.js`, `approval-authority.js`,
+    `notifications.js`, `housing-*.js`, `finance-*.js`) by adding each to
+    tsconfig `include` and declaring/typing what it surfaces.
 - **RX2 — First React island (the proof).** Rebuild ONE high-duplication,
   well-bounded component — the **Edit Unit modal** — as a single React
   component mounted into all three pages via `ReactDOM.createRoot`, talking to
