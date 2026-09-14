@@ -1,3 +1,4 @@
+// @ts-check
 /* ============================================================
  * shared-config.js — CLFN Housing Suite
  * ⚠️  REPLACE THE SUPABASE_ANON VALUE BELOW WITH YOUR KEY
@@ -750,7 +751,7 @@ window.isSuperUser = function() {
   // role='super_user' is treated as a super user regardless of email.
   // The email allowlist is kept as a bootstrap (so the platform owner can
   // promote new super users without being one themselves yet).
-  var sess = window.HOUSING_SESSION || {};
+  var sess = /** @type {HousingSession} */ (window.HOUSING_SESSION || {});
   var role = (sess.role || window._realRole || '').toLowerCase();
   if (role === 'super_user') return true;
   var email = (sess.email || '').toLowerCase();
@@ -874,12 +875,12 @@ window.showModuleDisabledNotice = function(label){
 // (nation_config_override) are still merged on top at login via
 // applyNationOverrides().
 window.NATION_CONFIG = window.NATION_CONFIG || (function(){
-  var n = window._NATION || {};
+  var n = /** @type {NationConfig} */ (window._NATION || {});
   // Fallbacks are nation-NEUTRAL (platform default / empty), never CLFN literals.
   // CLFN sets each of these in its own directory entry, so CLFN is unaffected;
   // other nations must never inherit CLFN's name, domain, or mailbox (OCAP).
   var disp = n.display_name || 'Home Land Homes';
-  var em = (n.email && typeof n.email === 'object') ? n.email : {};
+  var em = /** @type {Record<string, any>} */ ((n.email && typeof n.email === 'object') ? n.email : {});
   return {
     id:           n.id    || 'default',
     name:         disp,

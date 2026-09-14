@@ -1,0 +1,19 @@
+{
+  "//": "Phase RX1 - opt-in type checking for the vanilla JS shared layer. No emit, no build; tsc --noEmit is a CI check only. Files are added to 'include' one at a time as they are cleaned. See PLAN.md Phase RX and docs/REACT-MIGRATION-REGRESSION.md.",
+  "compilerOptions": {
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "target": "ES2019",
+    "moduleDetection": "legacy",
+    "lib": ["ES2019", "DOM", "DOM.Iterable"],
+    "types": [],
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true
+  },
+  "include": [
+    "types/globals.d.ts",
+    "shared-config.js"
+  ]
+}

@@ -1,0 +1,35 @@
+name: Type check (tsc --noEmit)
+
+# Phase RX1 (see PLAN.md Phase RX). Runs `tsc --noEmit` over the opt-in file set
+# in tsconfig.json to catch type/shape bugs in the vanilla-JS shared layer. This
+# is a CHECK ONLY: it emits nothing, ships nothing, and does not block or alter
+# any deploy workflow. Files are added to tsconfig "include" as they are cleaned,
+# so the gate ratchets up over the migration rather than flipping on all at once.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '*.js'
+      - 'types/**'
+      - 'tsconfig.json'
+      - '.github/workflows/typecheck.yml'
+  pull_request:
+    paths:
+      - '*.js'
+      - 'types/**'
+      - 'tsconfig.json'
+      - '.github/workflows/typecheck.yml'
+
+jobs:
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install TypeScript (pinned)
+        run: npm install -g typescript@5.9.2
+      - name: Type check the opt-in shared layer
+        run: tsc -p tsconfig.json
