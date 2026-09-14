@@ -929,13 +929,249 @@ function _prjRenderMilestones() {
   }).join('');
 
   var stats = _prjMilestoneStats(d);
+  var aiBtn = _prjAiMsOn()
+    ? '<button type="button" class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="_prjMsAiOpen()"><span style="color:var(--yellow);">✦</span> Draft with AI</button>'
+    : '';
   host.innerHTML =
     '<div class="tic-section">' +
-      '<div class="tic-section-h">Milestones' + (stats.total ? ' — ' + stats.done + ' of ' + stats.total + ' complete' : '') + '</div>' +
-      '<div class="prj-rows" id="prj_ms_rows">' + (rows || '<div style="color:var(--muted);font-size:13px;">No milestones yet — add one below or pick a project type on the Overview tab to apply its template.</div>') + '</div>' +
+      '<div class="tic-section-h" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;"><span style="flex:1;">Milestones' + (stats.total ? ' — ' + stats.done + ' of ' + stats.total + ' complete' : '') + '</span>' + aiBtn + '</div>' +
+      '<div class="prj-rows" id="prj_ms_rows">' + (rows || '<div style="color:var(--muted);font-size:13px;">No milestones yet — add one below, pick a project type on the Overview tab to apply its template' + (_prjAiMsOn() ? ', or Draft with AI' : '') + '.</div>') + '</div>' +
       '<button type="button" class="prj-addrow" onclick="_prjMsAdd()">+ Add milestone</button>' +
     '</div>';
   _prjWireMsDrag();
+}
+
+// ── AI milestone drafting ────────────────────────────────────────────────────
+// Staff describe the project (or attach a scoping/funding document) and the AI
+// proposes a milestone plan they review and add. Gated by the ai_assistant
+// module + manage-projects authority. Uses the shared ai-chat Edge Function via
+// _aiCall (type 'project_milestones'); no DB access, single call.
+function _prjAiMsOn() {
+  return typeof _aiCall === 'function'
+    && (!window.CLFN_MODULES || (window.CLFN_MODULES.isEnabled && window.CLFN_MODULES.isEnabled('ai_assistant')))
+    && _prjCanManage();
+}
+
+// Lazy-load pdf.js (same cdnjs build + worker as arrears.js) for reading PDFs.
+var _prjPdfjsPromise = null;
+function _prjLoadPdfjs() {
+  if (window.pdfjsLib) return Promise.resolve();
+  if (_prjPdfjsPromise) return _prjPdfjsPromise;
+  _prjPdfjsPromise = new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js';
+    s.onload = function () {
+      try { window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'; } catch (e) {}
+      resolve();
+    };
+    s.onerror = function () { _prjPdfjsPromise = null; reject(new Error('PDF library failed to load (offline?)')); };
+    document.head.appendChild(s);
+  });
+  return _prjPdfjsPromise;
+}
+
+// Read a dropped/selected file to plain text: text-like files directly, PDFs via
+// pdf.js. DOCX and other binaries are not parsed (ask the user to paste/PDF).
+function _prjMsAiReadFile(f) {
+  return new Promise(function (resolve, reject) {
+    if (!f) { resolve(''); return; }
+    var isPdf = /\.pdf$/i.test(f.name) || f.type === 'application/pdf';
+    var isText = /\.(txt|md|csv|json|text)$/i.test(f.name) || /^text\//.test(f.type) || f.type === 'application/json';
+    if (isText) {
+      var r = new FileReader();
+      r.onload = function () { resolve(String(r.result || '').slice(0, 20000)); };
+      r.onerror = function () { reject(new Error('Could not read the file')); };
+      r.readAsText(f);
+      return;
+    }
+    if (isPdf) {
+      var pr = new FileReader();
+      pr.onload = function () {
+        _prjLoadPdfjs().then(function () {
+          return window.pdfjsLib.getDocument({ data: new Uint8Array(pr.result) }).promise;
+        }).then(function (doc) {
+          var out = [], chain = Promise.resolve();
+          var pages = Math.min(doc.numPages, 30);   // cap: scoping docs are short
+          for (var i = 1; i <= pages; i++) {
+            (function (n) {
+              chain = chain.then(function () {
+                var st = document.getElementById('prj_msai_status');
+                if (st) st.textContent = 'Reading ' + f.name + ' — page ' + n + ' of ' + pages + '…';
+                return doc.getPage(n).then(function (p) { return p.getTextContent(); })
+                  .then(function (tc) { out.push((tc.items || []).map(function (it) { return it.str; }).join(' ')); });
+              });
+            })(i);
+          }
+          return chain.then(function () { resolve(out.join('\n').slice(0, 20000)); });
+        }).catch(reject);
+      };
+      pr.onerror = function () { reject(new Error('Could not read the PDF')); };
+      pr.readAsArrayBuffer(f);
+      return;
+    }
+    reject(new Error('Unsupported file type. Paste the text, or attach a PDF or text file.'));
+  });
+}
+
+function _prjMsAiOpen() {
+  if (!_prjAiMsOn()) return;
+  var d = window._prjDraft; if (!d) return;
+  window._prjMsAiDocText = '';
+  window._prjMsAiSuggestions = null;
+  var ov = document.createElement('div');
+  ov.id = 'prjMsAiModal';
+  ov.className = 'modal-overlay modal-overlay-centered modal-z-1100 is-open';
+  ov.innerHTML =
+    '<div class="modal-body" style="max-width:640px;">' +
+      '<div class="modal-hdr">' +
+        '<div class="modal-hdr-title"><span style="color:var(--yellow);">✦</span> Draft milestones with AI</div>' +
+        '<button type="button" class="btn-close-dark-30" onclick="_prjMsAiClose()">&times;</button>' +
+      '</div>' +
+      '<div style="padding:14px 24px 4px;">' +
+        '<p class="txt-help m-0">Describe the project — scope, funding, timeline — or attach a scoping/funding document. The AI proposes a milestone plan you review before adding. Nothing is added until you confirm.</p>' +
+        '<textarea id="prj_msai_prompt" class="tic-input" rows="5" placeholder="e.g. Develop 12 serviced lots on Whabistan Rd over two years, ISC-funded; include servicing, road, and lot handover." style="width:100%;margin-top:10px;resize:vertical;"></textarea>' +
+        '<div style="margin-top:10px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
+          '<label class="btn btn-ghost" style="padding:6px 12px;font-size:12px;cursor:pointer;margin:0;">📎 Attach document (PDF or text)<input type="file" accept=".pdf,.txt,.md,.csv,.json,application/pdf,text/*" style="display:none;" onchange="_prjMsAiPickFile(this)"/></label>' +
+          '<span id="prj_msai_status" style="font-size:12px;color:var(--muted);"></span>' +
+        '</div>' +
+        '<div id="prj_msai_preview" style="margin-top:12px;"></div>' +
+      '</div>' +
+      '<div class="modal-footer">' +
+        '<button type="button" class="btn btn-ghost" onclick="_prjMsAiClose()">Cancel</button>' +
+        '<button type="button" class="btn btn-primary" id="prj_msai_gen_btn" onclick="_prjMsAiGenerate()">Generate milestones</button>' +
+      '</div>' +
+    '</div>';
+  document.body.appendChild(ov);
+  var ta = document.getElementById('prj_msai_prompt'); if (ta) ta.focus();
+}
+
+function _prjMsAiClose() {
+  var m = document.getElementById('prjMsAiModal'); if (m) m.remove();
+  window._prjMsAiDocText = '';
+  window._prjMsAiSuggestions = null;
+}
+
+function _prjMsAiPickFile(input) {
+  var f = input && input.files && input.files[0];
+  input.value = '';
+  if (!f) return;
+  var st = document.getElementById('prj_msai_status');
+  if (st) st.textContent = 'Reading ' + f.name + '…';
+  _prjMsAiReadFile(f).then(function (text) {
+    window._prjMsAiDocText = text || '';
+    if (st) st.textContent = f.name + ' attached (' + (window._prjMsAiDocText.length) + ' chars of text). It will be sent with your prompt.';
+  }).catch(function (e) {
+    window._prjMsAiDocText = '';
+    if (st) st.textContent = (e && e.message) || 'Could not read that file.';
+  });
+}
+
+function _prjMsAiGenerate() {
+  var d = window._prjDraft; if (!d) return;
+  var typed = (document.getElementById('prj_msai_prompt') || {}).value || '';
+  var doc = window._prjMsAiDocText || '';
+  if (!typed.trim() && !doc.trim()) {
+    if (typeof showToast === 'function') showToast('Type a description or attach a document first.', { type: 'error' });
+    return;
+  }
+  var btn = document.getElementById('prj_msai_gen_btn');
+  var st = document.getElementById('prj_msai_status');
+  if (btn) { btn.disabled = true; btn.textContent = 'Generating…'; }
+  if (st) st.textContent = 'Asking the AI…';
+
+  var msg = 'Project description from staff:\n' + (typed.trim() || '(none - use the document below)');
+  if (doc.trim()) msg += '\n\nSource document text:\n"""\n' + doc.trim() + '\n"""';
+
+  _aiCall({
+    type: 'project_milestones',
+    message: msg,
+    context: {
+      nation: (typeof nationDisplay === 'function' ? nationDisplay() : '') || '',
+      projectName: d.name || d.project_number || 'this project',
+      projectType: (typeof _prjTypeLabel === 'function' ? _prjTypeLabel(d.type) : d.type) || 'capital project',
+      existingMilestones: (d.data.milestones || []).map(function (m) { return m.name; }).filter(Boolean),
+      role: window.currentRole || '',
+    },
+    history: [],
+  }).then(function (data) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Generate milestones'; }
+    if (data && data.error) { if (st) st.textContent = 'AI error: ' + data.error; return; }
+    var list = _prjMsAiParse(data && data.reply);
+    if (!list.length) {
+      if (st) st.textContent = 'The AI did not return a usable milestone list. Try adding more detail.';
+      return;
+    }
+    if (st) st.textContent = list.length + ' milestones suggested — review and add.';
+    window._prjMsAiSuggestions = list;
+    _prjMsAiRenderPreview(list);
+  }).catch(function (e) {
+    if (btn) { btn.disabled = false; btn.textContent = 'Generate milestones'; }
+    if (st) st.textContent = (e && e.message) || 'AI request failed.';
+  });
+}
+
+// Parse the AI reply into milestone objects. Tolerates a code fence or stray
+// prose around the JSON array.
+function _prjMsAiParse(reply) {
+  if (!reply || typeof reply !== 'string') return [];
+  var txt = reply.trim().replace(/^```(?:json)?/i, '').replace(/```$/,'').trim();
+  var arr = null;
+  try { arr = JSON.parse(txt); } catch (e) {
+    var m = txt.match(/\[[\s\S]*\]/);
+    if (m) { try { arr = JSON.parse(m[0]); } catch (e2) { arr = null; } }
+  }
+  if (!Array.isArray(arr)) return [];
+  return arr.map(function (o) {
+    if (!o) return null;
+    var name = String(o.name || o.title || '').trim();
+    if (!name) return null;
+    var td = String(o.targetDate || o.target_date || '').trim();
+    if (td && !/^\d{4}-\d{2}-\d{2}$/.test(td)) td = '';
+    return { name: name.slice(0, 200), targetDate: td || null, notes: String(o.notes || '').trim().slice(0, 500) };
+  }).filter(Boolean).slice(0, 30);
+}
+
+function _prjMsAiRenderPreview(list) {
+  var host = document.getElementById('prj_msai_preview');
+  if (!host) return;
+  var rows = list.map(function (m, i) {
+    return '<label style="display:flex;align-items:flex-start;gap:9px;padding:8px 0;border-bottom:1px solid var(--border);cursor:pointer;">' +
+      '<input type="checkbox" checked data-msai-i="' + i + '" style="accent-color:var(--yellow);width:15px;height:15px;margin-top:2px;"/>' +
+      '<span style="flex:1;min-width:0;">' +
+        '<span style="font-size:13px;font-weight:600;">' + _prjEsc(m.name) + '</span>' +
+        (m.targetDate ? '<span style="font-size:11px;color:var(--muted);"> · ' + _prjEsc(m.targetDate) + '</span>' : '') +
+        (m.notes ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">' + _prjEsc(m.notes) + '</div>' : '') +
+      '</span>' +
+    '</label>';
+  }).join('');
+  host.innerHTML =
+    '<div style="font-size:12px;font-weight:700;margin-bottom:4px;">Suggested milestones</div>' +
+    '<div style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;padding:2px 12px;">' + rows + '</div>' +
+    '<button type="button" class="btn btn-primary" style="margin-top:12px;" onclick="_prjMsAiApply()">+ Add selected milestones</button>';
+}
+
+function _prjMsAiApply() {
+  var d = window._prjDraft; var list = window._prjMsAiSuggestions;
+  if (!d || !list || !list.length) return;
+  if (!d.data.milestones) d.data.milestones = [];
+  var host = document.getElementById('prj_msai_preview');
+  var picked = [];
+  if (host) {
+    host.querySelectorAll('input[data-msai-i]').forEach(function (cb) {
+      if (cb.checked) { var m = list[parseInt(cb.getAttribute('data-msai-i'), 10)]; if (m) picked.push(m); }
+    });
+  }
+  if (!picked.length) { if (typeof showToast === 'function') showToast('Select at least one milestone.', { type: 'error' }); return; }
+  picked.forEach(function (m) {
+    d.data.milestones.push({ id: _prjUuid(), name: m.name, targetDate: m.targetDate || null, done: false, completedDate: null, notes: m.notes || '', budgetAmount: null });
+  });
+  if (typeof auditEntry === 'function' && d.id) {
+    auditEntry('PRJ:' + d.id, 'project_milestones_ai', picked.length + ' AI-drafted milestone(s) added to ' + (d.project_number || d.name));
+  }
+  _prjMsAiClose();
+  _prjRenderMilestones();
+  if (typeof _prjScheduleAutoSave === 'function') _prjScheduleAutoSave();
+  if (typeof showToast === 'function') showToast('Added ' + picked.length + ' milestone' + (picked.length === 1 ? '' : 's') + '.', { type: 'info' });
 }
 
 // Drag-to-reorder for milestone rows. Pointer events (not HTML5 drag&drop) so

@@ -485,6 +485,14 @@ serve(async (req) => {
       return json({ reply })
     }
 
+    // --- Project milestones: single call, no tools; returns a JSON array ---
+    if (type === 'project_milestones') {
+      const data = await callClaude(buildSystem('project_milestones', context), buildMessages(message, history))
+      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: (message || '').slice(0, 500), replyChars: reply.length, tables: [], turns: 1 })
+      return json({ reply })
+    }
+
     // --- Chat mode: tool-use loop with the read-only query_database tool ---
     const system = buildSystem('chat', context)
     const messages = buildMessages(message, history)
@@ -730,6 +738,28 @@ event), and Users (add/deactivate staff).
 `
 
 function buildSystem(type: string, ctx: any): string {
+  if (type === 'project_milestones') {
+    const nation = ctx?.nation || 'the First Nation'
+    const ptype = ctx?.projectType || 'capital project'
+    const pname = ctx?.projectName || 'this project'
+    const existing = Array.isArray(ctx?.existingMilestones) && ctx.existingMilestones.length
+      ? ('\n\nMilestones already on the plan (do NOT repeat these): ' + ctx.existingMilestones.join('; '))
+      : ''
+    return `You are a capital-projects planner for a First Nations housing department (` + nation + `). You help staff draft a realistic milestone plan for a housing capital project.
+
+Project: ` + pname + ` (type: ` + ptype + `).
+
+The user will describe the project, or paste text from a scoping/funding document. From that, produce an ordered milestone plan a housing manager could work from: planning and approvals, funding confirmation, design/engineering, permits, procurement/tender, site work, construction phases, inspections, and closeout/occupancy - adapted to what the input actually describes.
+
+Rules:
+- Output ONLY a JSON array. No prose, no code fence, no explanation before or after.
+- Each element: {"name": string, "targetDate": string, "notes": string}.
+- name: short, specific milestone label (a few words).
+- targetDate: "YYYY-MM-DD" ONLY if the input clearly implies a date or sequence you can date; otherwise an empty string "". Never invent precise dates that were not implied.
+- notes: one short sentence of context, or "".
+- Order the array chronologically. Produce 8 to 16 milestones unless the input clearly calls for fewer or more.
+- Ground every milestone in the input; do not pad with generic filler.` + existing
+  }
   if (type === 'draft') {
     const app = ctx?.app ?? {}
     const name = [app.fn, app.ln].filter(Boolean).join(' ') || 'the applicant'
