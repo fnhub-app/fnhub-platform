@@ -18,6 +18,7 @@
     "shared-sow.js",
     "shared-data.js",
     "shared-auth.js",
-    "shared-ui.js"
+    "shared-ui.js",
+    "shared.js"
   ]
 }

@@ -132,6 +132,32 @@ interface Window {
   onRezNewAppIssue: (...args: any[]) => any;
   _isLot: (...args: any[]) => boolean;
 
+  // --- Base layer: theme / fonts / storage / utils (shared.js) ---
+  _applyTheme: (...args: any[]) => any;
+  THEME_DEFAULTS: any;
+  THEME_KEYS: any;
+  FONT_DEFS: any;
+  _loadGoogleFont: (...args: any[]) => any;
+  _setFavicon: (...args: any[]) => any;
+  _mixHex: (...args: any[]) => any;
+  _luminance: (...args: any[]) => any;
+  _hexToRgbStr: (...args: any[]) => any;
+  _onAccent: (...args: any[]) => any;
+  _accentInk: (...args: any[]) => any;
+  _brandInk: (...args: any[]) => any;
+  _themeOnAccentHex: any;
+  _themeOnAccentRgb: any;
+  _themeAccentRgb: any;
+  _themeAccentInkRgb: any;
+  SbStorage: any;
+  SigWidget: any;
+  sbUploadFile: (...args: any[]) => any;
+  sbStorageHeaders: (...args: any[]) => any;
+  uploadFileResilient: (...args: any[]) => any;
+  parseCurrency: (...args: any[]) => any;
+  fmtCurrency: (...args: any[]) => any;
+  showAlert: (...args: any[]) => any;
+
   // --- Rent model / calculations ---
   RENT_MODEL_DEFAULTS: any;
   getRentModel: (...args: any[]) => any;
@@ -366,6 +392,12 @@ declare var nationDisplay: () => string;
 // casts when these files are React-migrated (RX4+).
 interface Element {
   onclick?: any;
+  onchange?: any;
+  ondrop?: any;
+  ondragover?: any;
+  ondragleave?: any;
+  click?: any;
+  files?: any;
   style?: any;
   value?: any;
   checked?: any;
@@ -396,8 +428,11 @@ interface HTMLElement {
   _total?: any;
   _scApp?: any;
   _clfnTimer?: any;
+  _setDrawLocked?: any;
+  files?: any;
 }
 
 // App code stores a running total on a sliced array (sowItems._total).
 interface Array<T> { _total?: number; }
 declare var showEmployeeHome: any;
+declare var _setFavicon: any;
