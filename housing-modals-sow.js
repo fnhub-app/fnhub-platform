@@ -229,6 +229,7 @@ function _buildSowModalHTML() {
         '<button type="button" class="tic-tab"            data-modal-tab="scope"     onclick="setSowTab(\'scope\')"     role="tab">Work Items</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="workorder" onclick="setSowTab(\'workorder\')" role="tab">Work Order</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="payments"  onclick="setSowTab(\'payments\')"  role="tab" id="sow_tab_payments">Payments</button>' +
+        '<button type="button" class="tic-tab"            data-modal-tab="contracting" onclick="setSowTab(\'contracting\')" role="tab" id="sow_tab_contracting">Contracting</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="documents" onclick="setSowTab(\'documents\')" role="tab">Documents</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="safety"    onclick="setSowTab(\'safety\')"    role="tab">Health &amp; Safety</button>' +
         '<button type="button" class="tic-tab"            data-modal-tab="acct"      onclick="setSowTab(\'acct\')"      role="tab">Accountability</button>' +
@@ -501,6 +502,13 @@ function _buildSowModalHTML() {
           '<div id="sow_payments_body"></div>' +
         '</div>' +
 
+        // Contracting tab — full Contractor Agreement, mirroring the RFQ
+        // Contracting tab, for a Maintenance Request assigned directly to a
+        // contractor (no tender). Rendered on demand by _sowRenderContracting.
+        '<div class="tic-panel" data-modal-panel="contracting">' +
+          '<div id="sow_contracting_body"></div>' +
+        '</div>' +
+
         // Approvals tab removed — HM / ED approval flow is handled outside
         // the SOW form (Renovation Approvals view, internal-only). The
         // hidden inputs below preserve the IDs that saveSOW reads so the
@@ -616,6 +624,7 @@ function setSowTab(name) {
   // work items on open, so items added on the Work Items tab show up here.
   if (name === 'workorder' && typeof _sowRenderWorkOrderItems === 'function') _sowRenderWorkOrderItems();
   if (name === 'payments'  && typeof _sowRenderPayments === 'function') _sowRenderPayments();
+  if (name === 'contracting' && typeof _sowRenderContracting === 'function') _sowRenderContracting();
   if (typeof _sowRefreshStrip === 'function') _sowRefreshStrip();
   _updateSowSaveButtonState();
 }
@@ -981,6 +990,7 @@ function openSowModal(unitId, projectNumber) {
   // the saved record (or prefilled from an awarded RFQ / the MR total for a
   // new one). _sowRenderPayments reads this; input handlers mutate it in place.
   if (typeof _sowInitPayState === 'function') _sowInitPayState(saved);
+  if (typeof _sowInitContractState === 'function') _sowInitContractState(saved);
 
   // Apply a one-shot seed handed off by the Reno Questionnaire. Done in-flow
   // (the modal DOM is fully mounted here) instead of a post-open setTimeout
@@ -2824,6 +2834,7 @@ function saveSOW(opts){
   // saved earlier when the payments tab was never opened this session (state
   // was seeded from `saved` at open).
   if (typeof _sowCollectPayments === 'function') _sowCollectPayments(data);
+  if (typeof _sowCollectContract === 'function') _sowCollectContract(data);
 
   // ── Approval-chain authority gate + status derivation ────────────────────
   // Extracted to _sowComputeApprovalStatus (mutates data in place): authority
@@ -3764,3 +3775,372 @@ window._sowUploadDrawInvoice= _sowUploadDrawInvoice;
 window._sowViewDrawInvoice  = _sowViewDrawInvoice;
 window._sowRemoveDrawInvoice= _sowRemoveDrawInvoice;
 window._sowPayMarkComplete  = _sowPayMarkComplete;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Contracting tab — full Contractor Agreement for a Maintenance Request that is
+// assigned directly to a contractor (no RFQ tender). Mirrors the RFQ Contracting
+// tab and produces the SAME PDF via the shared window.buildContractPdf
+// (shared-contract.js). State rides sow.contract on the housing_sow.data jsonb,
+// exactly like payments (sow.po/sow.draws). Management-only edit.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function _sowContractEditable(){
+  var meta = window._sowCurrentSowMeta || {};
+  if(meta.approval_status === 'completed'){
+    if(typeof canReopenSow === 'function' && !canReopenSow()) return false;
+  }
+  var role = window._realRole || window.currentRole || 'staff';
+  if(typeof ROLE !== 'undefined' && ROLE.isManagement) return !!ROLE.isManagement(role);
+  return true;
+}
+function _sowConNum(v){ return (typeof _sowPayNum === 'function') ? _sowPayNum(v) : (parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0); }
+function _sowConMoney(n){
+  var x = _sowConNum(n);
+  return '$' + x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+}
+function _sowConEsc(s){ return (typeof _esc === 'function') ? _esc(s) : String(s==null?'':s).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); }
+
+function _sowContractDefault(){
+  return {
+    contract_number:'', contract_date:'', contract_start:'',
+    substantial_completion_date:'', total_completion_date:'', holdback_days:'45', holdback_release:'',
+    price_materials:'', price_labour:'', price_equipment:'', price_subcontractors:'', price_other:'', labour_hours:'',
+    sig_name:'', sig_title:'', ct_signatory_name:'', ct_signatory_title:'', sow_summary:'',
+    scope_detail_rows:[], materials_rows:[], exclusions_rows:[], clfn_supplied_rows:[], subcontractor_rows:[], milestones:[]
+  };
+}
+
+// Seed the working contract state once per modal open.
+function _sowInitContractState(saved){
+  var st, def = _sowContractDefault();
+  if(saved && saved.contract && typeof saved.contract === 'object'){
+    st = JSON.parse(JSON.stringify(saved.contract));
+    Object.keys(def).forEach(function(k){ if(st[k]==null) st[k]=def[k]; });
+    ['scope_detail_rows','materials_rows','exclusions_rows','clfn_supplied_rows','subcontractor_rows','milestones'].forEach(function(k){ if(!Array.isArray(st[k])) st[k]=[]; });
+  } else {
+    st = def;
+    if(typeof window.nextContractNumber === 'function') st.contract_number = window.nextContractNumber();
+    st.contract_date = new Date().toISOString().slice(0,10);
+    var total = _sowConNum((document.getElementById('sow_total_cost')||{}).value);
+    if(total>0) st.price_labour = String(total);   // seed total under Labour; staff re-split
+  }
+  window._sowContractState = st;
+  window._sowContractCt = null;
+}
+
+// ── Row renderers (each mutates window._sowContractState.<arr> and re-renders) ──
+function _sowConRows(key){ var st=window._sowContractState||{}; if(!Array.isArray(st[key])) st[key]=[]; return st[key]; }
+function _sowConRowField(key, i, field, val){ var a=_sowConRows(key); if(a[i]){ a[i][field]=val; if(key==='milestones' && (field==='gross')) _sowConMilestoneCalc(i); } }
+function _sowConMilestoneCalc(i){
+  var a=_sowConRows('milestones'); var r=a[i]; if(!r) return;
+  var gross=_sowConNum(r.gross); r.holdback=(gross*0.10).toFixed(2); r.net=(gross-gross*0.10).toFixed(2);
+  var hb=document.getElementById('sow_con_ms_hb_'+i), nt=document.getElementById('sow_con_ms_net_'+i);
+  if(hb) hb.textContent=_sowConMoney(r.holdback); if(nt) nt.textContent=_sowConMoney(r.net);
+}
+function _sowConAddRow(key, blank){ _sowConRows(key).push(blank); _sowRenderContracting(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }
+function _sowConRemoveRow(key, i){ var a=_sowConRows(key); a.splice(i,1); _sowRenderContracting(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }
+
+function _sowConSubOptions(selId){
+  var cts = window._contractors || [];
+  var opts = '<option value="">— Select contractor —</option>';
+  cts.forEach(function(c){
+    var id = c.id || c.contractor_id || '';
+    opts += '<option value="'+_sowConEsc(id)+'"'+(String(selId)===String(id)?' selected':'')+'>'+_sowConEsc(c.name || c.business_name || id)+'</option>';
+  });
+  return opts;
+}
+function _sowConSubChange(i, sel){
+  var a=_sowConRows('subcontractor_rows'); if(!a[i]) return;
+  a[i].contractorId = sel.value;
+  var cts = window._contractors || [];
+  var ct = cts.filter(function(c){ return String(c.id||c.contractor_id)===String(sel.value); })[0];
+  if(ct){ a[i].name = ct.name || ct.business_name || ''; a[i].trade = a[i].trade || ct.trade || ct.specialty || ''; }
+  _sowRenderContracting();
+  if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave();
+}
+
+// ── Main render ──────────────────────────────────────────────────────────────
+function _sowRenderContracting(){
+  var host = document.getElementById('sow_contracting_body');
+  if(!host) return;
+  if(!window._sowContractState) _sowInitContractState(null);
+  var st = window._sowContractState;
+  var editable = _sowContractEditable();
+  var dis = editable ? '' : ' disabled';
+
+  // Resolve the assigned contractor (async) to show the header + prefill signatory.
+  var ctId = (document.getElementById('sow_contractor_id')||{}).value || '';
+  if(ctId && !window._sowContractCt && typeof _resolveContractorForEmail==='function'){
+    _resolveContractorForEmail(ctId).then(function(ct){
+      if(ct){ window._sowContractCt = ct;
+        if(!st.ct_signatory_name) st.ct_signatory_name = (ct.sigCt && ct.sigCt.name) || ct.name || '';
+        _sowRenderContracting();
+      }
+    }).catch(function(){});
+  }
+  var ct = window._sowContractCt;
+
+  function inp(id, val, ph, type){ return '<input id="'+id+'" type="'+(type||'text')+'" value="'+_sowConEsc(val||'')+'" placeholder="'+_sowConEsc(ph||'')+'"'+dis+'/>'; }
+  function fld(lbl, ctl){ return '<div class="f"><label>'+lbl+'</label>'+ctl+'</div>'; }
+
+  var readOnlyBanner = editable ? '' :
+    '<div style="padding:8px 12px;background:var(--warn-amber-bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--warn-amber-text,#8a6d3b);margin-bottom:12px;">🔒 View only — contracting is management-only.</div>';
+
+  var h = readOnlyBanner;
+
+  // Contractor header
+  h += '<div class="tic-section"><div class="tic-section-h">Contractor</div>';
+  h += '<div style="font-size:13px;color:var(--text);padding:2px 0 8px;">'
+     + (ct ? ('<b>'+_sowConEsc(ct.name||'')+'</b>'+(ct.address?(' · '+_sowConEsc(ct.address)):'')+(ct.phone?(' · '+_sowConEsc(ct.phone)):''))
+           : (ctId ? 'Resolving assigned contractor…' : '<span style="color:var(--muted);">No contractor assigned. Set “Assigned To” to a contractor on the Overview tab to build a contract.</span>'))
+     + '</div></div>';
+
+  // Contract meta
+  h += '<div class="tic-section"><div class="tic-section-h">Contract Details</div><div class="grid-c2-10">'
+     + fld('Contract #', '<input id="sow_con_number" type="text" value="'+_sowConEsc(st.contract_number||'')+'" readonly style="background:var(--surface-2,#f3f3f3);"/>')
+     + fld('Contract Date', inp('sow_con_date', st.contract_date, '', 'date'))
+     + fld('Start Date', inp('sow_con_start', st.contract_start, '', 'date'))
+     + fld('Substantial Completion', inp('sow_con_subcompl', st.substantial_completion_date, '', 'date'))
+     + fld('Total Completion', inp('sow_con_totcompl', st.total_completion_date, '', 'date'))
+     + fld('Holdback (days)', inp('sow_con_hbdays', st.holdback_days, '45'))
+     + '</div></div>';
+
+  // Price breakdown
+  h += '<div class="tic-section"><div class="tic-section-h">Contract Price Breakdown</div><div class="grid-c3-tight">'
+     + fld('Materials', inp('sow_con_pmat', st.price_materials, '0.00'))
+     + fld('Labour', inp('sow_con_plab', st.price_labour, '0.00'))
+     + fld('Equipment', inp('sow_con_peqp', st.price_equipment, '0.00'))
+     + fld('Subcontractors', inp('sow_con_psub', st.price_subcontractors, '0.00'))
+     + fld('Other', inp('sow_con_poth', st.price_other, '0.00'))
+     + fld('Labour Hours', inp('sow_con_lhours', st.labour_hours, ''))
+     + '</div></div>';
+
+  // Schedule B — milestone payments
+  var msRows = _sowConRows('milestones').map(function(m, i){
+    return '<div class="prj-row" style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;align-items:center;">'
+      + '<input type="text" placeholder="Milestone" value="'+_sowConEsc(m.name||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'name\',this.value)"/>'
+      + '<input type="text" placeholder="%" value="'+_sowConEsc(m.pct||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'pct\',this.value)"/>'
+      + '<input type="text" placeholder="Gross" value="'+_sowConEsc(m.gross||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'gross\',this.value)"/>'
+      + '<span id="sow_con_ms_hb_'+i+'" style="font-size:12px;color:var(--muted);text-align:right;">'+_sowConMoney(m.holdback)+'</span>'
+      + '<span id="sow_con_ms_net_'+i+'" style="font-size:12px;color:var(--text);text-align:right;">'+_sowConMoney(m.net)+'</span>'
+      + (editable ? '<button type="button" class="prj-row-remove" onclick="_sowConRemoveRow(\'milestones\','+i+')">✕</button>' : '<span></span>')
+      + '</div>';
+  }).join('');
+  h += '<div class="tic-section"><div class="tic-section-h">Schedule B — Milestone Payments</div>'
+     + '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;"><span>Name</span><span>%</span><span>Gross</span><span style="text-align:right;">Holdback</span><span style="text-align:right;">Net</span><span></span></div>'
+     + '<div style="display:flex;flex-direction:column;gap:6px;">'+ (msRows || '<div class="txt-muted-xs">No milestones. Holdback auto-computes at 10% of gross.</div>') +'</div>'
+     + (editable ? '<button type="button" class="prj-addrow" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : '')
+     + '</div>';
+
+  // Generic 3-col / text row sections
+  function simpleRows(key, cols){
+    return _sowConRows(key).map(function(r, i){
+      var inputs = cols.map(function(c){
+        return '<input type="text" placeholder="'+_sowConEsc(c.ph)+'" value="'+_sowConEsc(r[c.f]||'')+'"'+dis+' oninput="_sowConRowField(\''+key+'\','+i+',\''+c.f+'\',this.value)" style="flex:'+(c.flex||1)+';min-width:0;"/>';
+      }).join('');
+      return '<div style="display:flex;gap:6px;align-items:center;">'+inputs+(editable?'<button type="button" class="prj-row-remove" onclick="_sowConRemoveRow(\''+key+'\','+i+')">✕</button>':'')+'</div>';
+    }).join('');
+  }
+  function section(title, key, cols, blank, hint){
+    return '<div class="tic-section"><div class="tic-section-h">'+title+'</div>'
+      + '<div style="display:flex;flex-direction:column;gap:6px;">'+(simpleRows(key,cols) || ('<div class="txt-muted-xs">'+(hint||'None added.')+'</div>'))+'</div>'
+      + (editable ? '<button type="button" class="prj-addrow" onclick="_sowConAddRow(\''+key+'\','+JSON.stringify(blank).replace(/"/g,'&quot;')+')">+ Add</button>' : '')
+      + '</div>';
+  }
+  h += section('Materials &amp; Specifications', 'materials_rows', [{f:'material',ph:'Material',flex:1},{f:'specification',ph:'Specification',flex:1},{f:'notes',ph:'Notes',flex:1}], {material:'',specification:'',notes:''});
+  h += section('Exclusions &amp; Assumptions', 'exclusions_rows', [{f:'text',ph:'Exclusion / assumption',flex:1}], {text:''});
+  h += section('Items Supplied by Nation', 'clfn_supplied_rows', [{f:'item',ph:'Item supplied by the Nation',flex:1}], {item:''});
+
+  // Subcontractors (contractor picker + trade + scope)
+  var subRows = _sowConRows('subcontractor_rows').map(function(r, i){
+    return '<div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">'
+      + '<select'+dis+' onchange="_sowConSubChange('+i+',this)" style="flex:1;min-width:140px;">'+_sowConSubOptions(r.contractorId)+'</select>'
+      + '<input type="text" placeholder="Trade" value="'+_sowConEsc(r.trade||'')+'"'+dis+' oninput="_sowConRowField(\'subcontractor_rows\','+i+',\'trade\',this.value)" style="flex:1;min-width:100px;"/>'
+      + '<input type="text" placeholder="Scope" value="'+_sowConEsc(r.scope||'')+'"'+dis+' oninput="_sowConRowField(\'subcontractor_rows\','+i+',\'scope\',this.value)" style="flex:1.4;min-width:120px;"/>'
+      + (editable?'<button type="button" class="prj-row-remove" onclick="_sowConRemoveRow(\'subcontractor_rows\','+i+')">✕</button>':'')
+      + '</div>';
+  }).join('');
+  h += '<div class="tic-section"><div class="tic-section-h">Subcontractors</div>'
+     + '<div class="txt-muted-xs" style="margin-bottom:6px;">Every subcontractor must provide a valid WSIB clearance and proof of $2,000,000 CGL insurance — the requirement prints in the contract automatically.</div>'
+     + '<div style="display:flex;flex-direction:column;gap:6px;">'+(subRows || '<div class="txt-muted-xs">None.</div>')+'</div>'
+     + (editable ? '<button type="button" class="prj-addrow" onclick="_sowConAddRow(\'subcontractor_rows\',{contractorId:\'\',name:\'\',trade:\'\',scope:\'\'})">+ Add subcontractor</button>' : '')
+     + '</div>';
+
+  // Signatures
+  function sigPad(id, label){
+    return '<div style="margin-bottom:14px;"><div class="tic-field-lbl" style="margin-bottom:6px;">'+label+'</div>'
+      + '<div class="sig-canvas-wrap"><div class="tab-bar">'
+      + '<button type="button" onclick="setSigMethod(\''+id+'\',\'canvas\')" id="'+id+'_tab_canvas" class="tab-item active">&#9999;&#65039; Draw</button>'
+      + '<button type="button" onclick="setSigMethod(\''+id+'\',\'type\')"   id="'+id+'_tab_type"   class="tab-item">&#9000;&#65039; Type</button>'
+      + '<button type="button" onclick="setSigMethod(\''+id+'\',\'wet\')"    id="'+id+'_tab_wet"    class="tab-item">&#128396; Wet</button>'
+      + '</div>'
+      + '<div id="'+id+'_panel_canvas" class="bg-paper"><canvas id="'+id+'" width="600" height="90" style="width:100%;height:90px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
+      + '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;border-top:1px solid var(--border);">'
+      + '<span class="txt-xs-muted">Sign with finger or mouse</span>'
+      + '<button type="button" onclick="clearSig(\''+id+'\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+      + '</div></div>'
+      + '<div id="'+id+'_panel_type" class="sec-hidden"><input type="text" id="'+id+'_typed" placeholder="Type full legal name" style="width:100%;border:none;border-bottom:2px solid var(--dark);background:transparent;font-size:18px;font-family:Georgia,serif;font-style:italic;color:var(--text);outline:none;padding:4px 0;box-sizing:border-box;"/>'
+      + '<div style="font-size:10px;color:var(--muted);margin-top:6px;">Typing your name constitutes a legal electronic signature</div></div>'
+      + '<div id="'+id+'_panel_wet" class="sec-hidden"><div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form and collect a wet signature, or use an e-signature service and attach the signed copy.</div>'
+      + '<input type="text" id="'+id+'_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
+      + '</div></div>';
+  }
+  h += '<div class="tic-section"><div class="tic-section-h">Signatures</div>'
+     + '<div class="grid-c2-10">'
+     +   fld('Owner Representative (name)', inp('sow_con_signame', st.sig_name, 'Housing Manager / ED'))
+     +   fld('Owner Representative (title)', inp('sow_con_sigtitle', st.sig_title, 'Title'))
+     +   fld('Contractor Signatory (name)', inp('sow_con_ctname', st.ct_signatory_name, 'Signing for the contractor'))
+     +   fld('Contractor Signatory (title)', inp('sow_con_cttitle', st.ct_signatory_title, 'Title'))
+     + '</div>'
+     + '<div style="margin-top:12px;">' + sigPad('sow_ct_sig_owner','Owner Representative Signature') + sigPad('sow_ct_sig','Contractor Signature') + sigPad('sow_ct_initial','Contractor Initials (acknowledgement)') + '</div>'
+     + '</div>';
+
+  // Generate
+  if(editable){
+    h += '<div style="margin-top:6px;"><button type="button" class="btn btn-primary" onclick="_sowGenerateContract()">📄 Generate Contract</button>'
+       + '<span class="txt-muted-xs" style="margin-left:10px;">Fills the standard Contractor Agreement PDF and files it to the unit’s documents.</span></div>';
+  }
+
+  host.innerHTML = h;
+
+  // Wire live-state binding for the scalar fields (contract meta + price + sigs names)
+  function bind(id, key){ var el=document.getElementById(id); if(el) el.addEventListener('input', function(){ st[key]=el.value; if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }); }
+  bind('sow_con_date','contract_date'); bind('sow_con_start','contract_start');
+  bind('sow_con_subcompl','substantial_completion_date'); bind('sow_con_totcompl','total_completion_date');
+  bind('sow_con_hbdays','holdback_days');
+  bind('sow_con_pmat','price_materials'); bind('sow_con_plab','price_labour'); bind('sow_con_peqp','price_equipment');
+  bind('sow_con_psub','price_subcontractors'); bind('sow_con_poth','price_other'); bind('sow_con_lhours','labour_hours');
+  bind('sow_con_signame','sig_name'); bind('sow_con_sigtitle','sig_title');
+  bind('sow_con_ctname','ct_signatory_name'); bind('sow_con_cttitle','ct_signatory_title');
+
+  // Wire signature pads
+  if(typeof _initSigPad === 'function'){ ['sow_ct_sig_owner','sow_ct_sig','sow_ct_initial'].forEach(function(id){ try{ _initSigPad(id); }catch(e){} }); }
+}
+
+// Persist contract edits onto the saved record (mirrors _sowPersistPayments).
+function _sowPersistContract(){
+  if(!(_sowUnitId && window._sowEditingProjectNumber)) return;
+  var sow = (typeof getSowByProjectNumber === 'function') ? getSowByProjectNumber(_sowUnitId, window._sowEditingProjectNumber) : null;
+  if(!sow) return;
+  _sowCollectContract(sow);
+  if(typeof upsertSowInList === 'function') upsertSowInList(_sowUnitId, sow);
+}
+// Debounced persist of contract edits (only once the MR has been saved).
+var _sowContractSaveTimer = null;
+function _sowContractScheduleSave(){
+  if(_sowContractSaveTimer) clearTimeout(_sowContractSaveTimer);
+  _sowContractSaveTimer = setTimeout(function(){
+    if(window._sowCurrentSowMeta) _sowPersistContract();
+  }, 2500);
+}
+
+// ── Readiness gates (mirror rfq: hard block vs soft warn) ──
+function _sowContractMissing(){
+  var st = window._sowContractState || {};
+  var out = [];
+  if(!window._sowContractCt && !((document.getElementById('sow_contractor_id')||{}).value)) out.push('A contractor must be assigned (Overview tab → Assigned To)');
+  var priceAny = ['price_materials','price_labour','price_equipment','price_subcontractors','price_other'].some(function(k){ return _sowConNum(st[k])>0; });
+  if(!priceAny) out.push('A contract price (at least one Price Breakdown amount)');
+  if(!st.contract_date) out.push('A contract date');
+  if(!st.total_completion_date && !st.substantial_completion_date) out.push('A completion date');
+  var msSum = _sowConRows('milestones').reduce(function(s,m){ return s + _sowConNum(m.gross); }, 0);
+  var priceTot = ['price_materials','price_labour','price_equipment','price_subcontractors','price_other'].reduce(function(s,k){ return s + _sowConNum(st[k]); }, 0);
+  if(msSum > priceTot + 0.01 && priceTot > 0) out.push('Milestone gross total ('+_sowConMoney(msSum)+') exceeds the contract price ('+_sowConMoney(priceTot)+')');
+  return out;
+}
+function _sowContractMissingSigs(){
+  var g = (typeof getSigDataURL==='function') ? getSigDataURL : function(){ return ''; };
+  var out = [];
+  if(!g('sow_ct_sig_owner')) out.push('Owner representative signature');
+  if(!g('sow_ct_sig')) out.push('Contractor signature');
+  if(!g('sow_ct_initial')) out.push('Contractor initials');
+  return out;
+}
+
+// ── Generate the contract PDF (shared builder) ──
+async function _sowGenerateContract(){
+  if(!_sowContractEditable()){ if(typeof showToast==='function') showToast('Contracting is management-only.', {type:'error'}); return; }
+  var st = window._sowContractState || {};
+  var hard = _sowContractMissing();
+  if(hard.length){
+    if(typeof showAlert==='function') showAlert('Not ready to generate the contract:\n\n• ' + hard.join('\n• '));
+    else if(typeof showToast==='function') showToast('Missing: ' + hard.join(', '), {type:'error'});
+    return;
+  }
+  var soft = _sowContractMissingSigs();
+  if(soft.length && typeof showConfirm==='function'){
+    var ok = await showConfirm({ title:'Generate without all signatures?', message:'Missing: ' + soft.join(', ') + '. You can generate an unsigned copy to sign on paper.', confirmText:'Generate anyway' });
+    if(!ok) return;
+  }
+
+  var ct = window._sowContractCt || {};
+  var unitId = window._sowUnitId || '';
+  var addr = (document.getElementById('sow_address')||{}).value || '';
+  var tenant = (document.getElementById('sow_tenant_name')||{}).value || '';
+  var numFmt = _sowConMoney;
+  var pMat=_sowConNum(st.price_materials), pLab=_sowConNum(st.price_labour), pEqp=_sowConNum(st.price_equipment),
+      pSubc=_sowConNum(st.price_subcontractors), pOth=_sowConNum(st.price_other);
+  var pSub = pMat+pLab+pEqp+pSubc+pOth;
+  st.holdback_release = (typeof _contractAddDays==='function') ? _contractAddDays(st.substantial_completion_date||st.total_completion_date||'', st.holdback_days) : '';
+
+  var tokens = {
+    rfqNumber:'', contractNumber: st.contract_number||'', contractDate: st.contract_date||'',
+    propertyAddress: addr, sowReference: window._sowEditingProjectNumber || '',
+    startDate: st.contract_start||'', substantialCompletionDate: st.substantial_completion_date||'', totalCompletionDate: st.total_completion_date||'',
+    contractorLegalName: ct.name||'', contractorOperatingName: ct.name||'', contractorAddressLine1: ct.address||'', contractorAddressLine2:'',
+    contractorGstHst: ct.hst||'', contractorWsib: ct.wsibNum||'', contractorPhone: ct.phone||'',
+    contractorSignatoryName: st.ct_signatory_name || (ct.sigCt && ct.sigCt.name) || ct.name || '',
+    contractorSignatoryTitle: st.ct_signatory_title || (ct.sigCt && ct.sigCt.title) || '',
+    contractorSignatoryEmail: ct.email||'',
+    contractPrice: numFmt(pSub), contractPriceExclTax: numFmt(pSub),
+    nationName: (window.NATION_CONFIG && NATION_CONFIG.display_name) || 'Housing Authority',
+    nationShort: (window.NATION_CONFIG && NATION_CONFIG.short) || '',
+    clfnSignatoryName: st.sig_name||'', clfnSignatoryTitle: st.sig_title||'',
+    sowSummary: st.sow_summary || (tenant ? ('Maintenance request at '+addr+' for '+tenant+'.') : ('Maintenance request at '+addr+'.')),
+    sowDetailTable: (st.scope_detail_rows||[]).filter(function(r){return r.category||r.description;}).map(function(r,i){return (i+1)+'. '+[r.category,r.description,r.notes].filter(Boolean).join(' — ');}).join('\n') || '',
+    materialsSpecifications: (st.materials_rows||[]).filter(function(r){return r.material||r.specification;}).map(function(r,i){return (i+1)+'. '+[r.material,r.specification,r.notes].filter(Boolean).join(' — ');}).join('\n') || '',
+    exclusionsAssumptions: (st.exclusions_rows||[]).filter(function(r){return r.text;}).map(function(r,i){return (i+1)+'. '+r.text;}).join('\n') || '',
+    clfnSuppliedItems: (st.clfn_supplied_rows||[]).filter(function(r){return r.item;}).map(function(r,i){return (i+1)+'. '+r.item;}).join('\n') || 'None',
+    priceMaterials: numFmt(pMat), priceLabour: numFmt(pLab), priceEquipment: numFmt(pEqp), priceSubcontractors: numFmt(pSubc), priceOther: numFmt(pOth),
+    priceSubtotal: numFmt(pSub), priceTax:'$0.00', priceTotalInclTax: numFmt(pSub),
+    labourHours: st.labour_hours||'', holdbackRelease: numFmt(st.holdback_release)
+  };
+  var savedBody = (typeof getContractBody==='function') ? getContractBody('contractor_agreement') : '';
+  try {
+    var blob = await window.buildContractPdf(tokens, st, savedBody, numFmt, { sigIds:{ initial:'sow_ct_initial', owner:'sow_ct_sig_owner', contractor:'sow_ct_sig' } });
+    var slug = (ct.name || 'contractor').replace(/[^A-Za-z0-9]+/g,'_').slice(0,40);
+    var filename = ((window.NATION_CONFIG && NATION_CONFIG.short) || 'Nation') + '_Contract_' + (st.contract_number||'') + '_' + slug + '.pdf';
+    // persist the contract state onto the saved record first
+    if(window._sowCurrentSowMeta) { try{ _sowPersistContract(); }catch(e){} }
+    await window.fileContractPdf(blob, filename, {
+      unitId: unitId,
+      entities: [],
+      savedMsg: 'Contract PDF saved — added to unit documents'
+    });
+    if(typeof auditEntry==='function' && unitId){ auditEntry('SOW:'+unitId, 'sow_contract_generated', 'Contractor Agreement ' + (st.contract_number||'') + ' generated for ' + (ct.name||'contractor') + ' on ' + addr); }
+  } catch(e){
+    console.warn('[sow contract] generate failed:', e);
+    if(typeof showToast==='function') showToast('Could not generate the contract. Check your connection and try again.', {type:'error'});
+  }
+}
+
+// Copy the working contract state onto the SOW record on save.
+function _sowCollectContract(data){
+  if(!data) return;
+  var st = window._sowContractState;
+  if(st && (st.contract_number || st.contract_date || _sowConRows('milestones').length ||
+            ['price_materials','price_labour','price_equipment','price_subcontractors','price_other'].some(function(k){ return _sowConNum(st[k])>0; }))){
+    data.contract = JSON.parse(JSON.stringify(st));
+  }
+}
+
+// Expose contracting handlers for inline onclick strings (file is not IIFE-
+// wrapped so these are already global; kept explicit like the payments block).
+window._sowRenderContracting = _sowRenderContracting;
+window._sowInitContractState = _sowInitContractState;
+window._sowCollectContract   = _sowCollectContract;
+window._sowConRowField       = _sowConRowField;
+window._sowConAddRow         = _sowConAddRow;
+window._sowConRemoveRow      = _sowConRemoveRow;
+window._sowConSubChange      = _sowConSubChange;
+window._sowGenerateContract  = _sowGenerateContract;
