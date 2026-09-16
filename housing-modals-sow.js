@@ -3926,8 +3926,10 @@ function _sowRenderContracting(){
   }
   var ct = window._sowContractCt;
 
-  function inp(id, val, ph, type){ return '<input id="'+id+'" type="'+(type||'text')+'" value="'+_sowConEsc(val||'')+'" placeholder="'+_sowConEsc(ph||'')+'"'+dis+'/>'; }
+  function inp(id, val, ph, type){ return '<input id="'+id+'" class="stg-lookup-input" type="'+(type||'text')+'" value="'+_sowConEsc(val||'')+'" placeholder="'+_sowConEsc(ph||'')+'"'+dis+'/>'; }
   function fld(lbl, ctl){ return '<div class="f"><label>'+lbl+'</label>'+ctl+'</div>'; }
+  // Section wrapper matching the RFQ Contracting tab (card + dark header bar).
+  function sec(title, inner){ return '<div class="card card-flush"><div class="modal-hdr"><div class="lbl-yellow">'+title+'</div></div><div class="sec-pad">'+inner+'</div></div>'; }
 
   var readOnlyBanner = editable ? '' :
     '<div style="padding:8px 12px;background:var(--warn-amber-bg);border:1px solid var(--border);border-radius:8px;font-size:12px;color:var(--warn-amber-text,#8a6d3b);margin-bottom:12px;">🔒 View only — contracting is management-only.</div>';
@@ -3935,31 +3937,31 @@ function _sowRenderContracting(){
   var h = readOnlyBanner;
 
   // Contractor header
-  h += '<div class="tic-section"><div class="tic-section-h">Contractor</div>';
-  h += '<div style="font-size:13px;color:var(--text);padding:2px 0 8px;">'
-     + (ct ? ('<b>'+_sowConEsc(ct.name||'')+'</b>'+(ct.address?(' · '+_sowConEsc(ct.address)):'')+(ct.phone?(' · '+_sowConEsc(ct.phone)):''))
-           : (ctId ? 'Resolving assigned contractor…' : '<span style="color:var(--muted);">No contractor assigned. Set “Assigned To” to a contractor on the Overview tab to build a contract.</span>'))
-     + '</div></div>';
+  h += sec('Contractor',
+        '<div style="font-size:13px;color:var(--text);">'
+      + (ct ? ('<b>'+_sowConEsc(ct.name||'')+'</b>'+(ct.address?(' · '+_sowConEsc(ct.address)):'')+(ct.phone?(' · '+_sowConEsc(ct.phone)):''))
+            : (ctId ? 'Resolving assigned contractor…' : '<span style="color:var(--muted);">No contractor assigned. Set “Assigned To” to a contractor on the Overview tab to build a contract.</span>'))
+      + '</div>');
 
   // Contract meta
-  h += '<div class="tic-section"><div class="tic-section-h">Contract Details</div><div class="grid-c2-10">'
-     + fld('Contract #', '<input id="sow_con_number" type="text" value="'+_sowConEsc(st.contract_number||'')+'" readonly style="background:var(--surface-2,#f3f3f3);"/>')
+  h += sec('Contract Details', '<div class="tic-grid-2">'
+     + fld('Contract # <span style="font-size:10px;color:var(--muted);">auto-assigned</span>', '<input id="sow_con_number" class="stg-lookup-input" type="text" value="'+_sowConEsc(st.contract_number||'')+'" readonly style="background:var(--bg);color:var(--muted);"/>')
      + fld('Contract Date', inp('sow_con_date', st.contract_date, '', 'date'))
      + fld('Start Date', inp('sow_con_start', st.contract_start, '', 'date'))
-     + fld('Substantial Completion', inp('sow_con_subcompl', st.substantial_completion_date, '', 'date'))
-     + fld('Total Completion', inp('sow_con_totcompl', st.total_completion_date, '', 'date'))
+     + fld('Substantial Completion Date', inp('sow_con_subcompl', st.substantial_completion_date, '', 'date'))
+     + fld('Total Completion Date', inp('sow_con_totcompl', st.total_completion_date, '', 'date'))
      + fld('Holdback (days)', inp('sow_con_hbdays', st.holdback_days, '45'))
-     + '</div></div>';
+     + '</div>');
 
   // Price breakdown
-  h += '<div class="tic-section"><div class="tic-section-h">Contract Price Breakdown</div><div class="grid-c3-tight">'
-     + fld('Materials', inp('sow_con_pmat', st.price_materials, '0.00'))
-     + fld('Labour', inp('sow_con_plab', st.price_labour, '0.00'))
-     + fld('Equipment', inp('sow_con_peqp', st.price_equipment, '0.00'))
-     + fld('Subcontractors', inp('sow_con_psub', st.price_subcontractors, '0.00'))
-     + fld('Other', inp('sow_con_poth', st.price_other, '0.00'))
+  h += sec('Contract Price Breakdown', '<div class="tic-grid-2">'
+     + fld('Materials ($)', inp('sow_con_pmat', st.price_materials, '$0.00'))
+     + fld('Labour ($)', inp('sow_con_plab', st.price_labour, '$0.00'))
+     + fld('Equipment ($)', inp('sow_con_peqp', st.price_equipment, '$0.00'))
+     + fld('Subcontractors ($)', inp('sow_con_psub', st.price_subcontractors, '$0.00'))
+     + fld('Other ($)', inp('sow_con_poth', st.price_other, '$0.00'))
      + fld('Labour Hours', inp('sow_con_lhours', st.labour_hours, ''))
-     + '</div></div>';
+     + '</div>');
 
   // Schedule B — milestone payments
   var msRows = _sowConRows('milestones').map(function(m, i){
@@ -3972,12 +3974,11 @@ function _sowRenderContracting(){
       + (editable ? '<button type="button" title="Remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;" onclick="_sowConRemoveRow(\'milestones\','+i+')">✕</button>' : '<span></span>')
       + '</div>';
   }).join('');
-  h += '<div class="tic-section"><div class="tic-section-h">Schedule B — Milestone Payments</div>'
-     + '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;"><span>Name</span><span>%</span><span>Gross</span><span style="text-align:right;">Holdback</span><span style="text-align:right;">Net</span><span></span></div>'
+  h += sec('Schedule B — Milestone Payments',
+       '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;"><span>Name</span><span>%</span><span>Gross</span><span style="text-align:right;">Holdback</span><span style="text-align:right;">Net</span><span></span></div>'
      + '<div style="display:flex;flex-direction:column;gap:6px;">'+ (msRows || '<div class="txt-muted-xs">No milestones. Holdback auto-computes at 10% of gross.</div>') +'</div>'
      + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;margin-right:8px;" onclick="_sowConSetupSchedule()">Set up standard schedule (20 / 70 / 10)</button>' : '')
-     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : '')
-     + '</div>';
+     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : ''));
 
   // Generic 3-col / text row sections
   function simpleRows(key, cols){
@@ -3989,10 +3990,9 @@ function _sowRenderContracting(){
     }).join('');
   }
   function section(title, key, cols, blank, hint){
-    return '<div class="tic-section"><div class="tic-section-h">'+title+'</div>'
-      + '<div style="display:flex;flex-direction:column;gap:6px;">'+(simpleRows(key,cols) || ('<div class="txt-muted-xs">'+(hint||'None added.')+'</div>'))+'</div>'
-      + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\''+key+'\','+JSON.stringify(blank).replace(/"/g,'&quot;')+')">+ Add</button>' : '')
-      + '</div>';
+    return sec(title,
+        '<div style="display:flex;flex-direction:column;gap:6px;">'+(simpleRows(key,cols) || ('<div class="txt-muted-xs">'+(hint||'None added.')+'</div>'))+'</div>'
+      + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\''+key+'\','+JSON.stringify(blank).replace(/"/g,'&quot;')+')">+ Add</button>' : ''));
   }
   h += section('Materials &amp; Specifications', 'materials_rows', [{f:'material',ph:'Material',flex:1},{f:'specification',ph:'Specification',flex:1},{f:'notes',ph:'Notes',flex:1}], {material:'',specification:'',notes:''});
   h += section('Exclusions &amp; Assumptions', 'exclusions_rows', [{f:'text',ph:'Exclusion / assumption',flex:1}], {text:''});
@@ -4007,11 +4007,10 @@ function _sowRenderContracting(){
       + (editable?'<button type="button" title="Remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;" onclick="_sowConRemoveRow(\'subcontractor_rows\','+i+')">✕</button>':'')
       + '</div>';
   }).join('');
-  h += '<div class="tic-section"><div class="tic-section-h">Subcontractors</div>'
-     + '<div class="txt-muted-xs" style="margin-bottom:6px;">Every subcontractor must provide a valid WSIB clearance and proof of $2,000,000 CGL insurance — the requirement prints in the contract automatically.</div>'
+  h += sec('Subcontractors',
+       '<div class="txt-muted-xs" style="margin-bottom:6px;">Every subcontractor must provide a valid WSIB clearance and proof of $2,000,000 CGL insurance — the requirement prints in the contract automatically.</div>'
      + '<div style="display:flex;flex-direction:column;gap:6px;">'+(subRows || '<div class="txt-muted-xs">None.</div>')+'</div>'
-     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'subcontractor_rows\',{contractorId:\'\',name:\'\',trade:\'\',scope:\'\'})">+ Add subcontractor</button>' : '')
-     + '</div>';
+     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'subcontractor_rows\',{contractorId:\'\',name:\'\',trade:\'\',scope:\'\'})">+ Add subcontractor</button>' : ''));
 
   // Signatures
   function sigPad(id, label){
@@ -4032,15 +4031,14 @@ function _sowRenderContracting(){
       + '<input type="text" id="'+id+'_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
       + '</div></div>';
   }
-  h += '<div class="tic-section"><div class="tic-section-h">Signatures</div>'
-     + '<div class="grid-c2-10">'
+  h += sec('Signatures',
+       '<div class="tic-grid-2">'
      +   fld('Owner Representative (name)', inp('sow_con_signame', st.sig_name, 'Housing Manager / ED'))
      +   fld('Owner Representative (title)', inp('sow_con_sigtitle', st.sig_title, 'Title'))
      +   fld('Contractor Signatory (name)', inp('sow_con_ctname', st.ct_signatory_name, 'Signing for the contractor'))
      +   fld('Contractor Signatory (title)', inp('sow_con_cttitle', st.ct_signatory_title, 'Title'))
      + '</div>'
-     + '<div style="margin-top:12px;">' + sigPad('sow_ct_sig_owner','Owner Representative Signature') + sigPad('sow_ct_sig','Contractor Signature') + sigPad('sow_ct_initial','Contractor Initials (acknowledgement)') + '</div>'
-     + '</div>';
+     + '<div style="margin-top:12px;">' + sigPad('sow_ct_sig_owner','Owner Representative Signature') + sigPad('sow_ct_sig','Contractor Signature') + sigPad('sow_ct_initial','Contractor Initials (acknowledgement)') + '</div>');
 
   // Generate
   if(editable){
