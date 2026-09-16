@@ -4239,11 +4239,20 @@ async function _sowGenerateContract(){
     var filename = ((window.NATION_CONFIG && NATION_CONFIG.short) || 'Nation') + '_Contract_' + (st.contract_number||'') + '_' + slug + '.pdf';
     // persist the contract state onto the saved record first
     if(window._sowCurrentSowMeta) { try{ _sowPersistContract(); }catch(e){} }
-    await window.fileContractPdf(blob, filename, {
+    var storePath = await window.fileContractPdf(blob, filename, {
       unitId: unitId,
       entities: [],
-      savedMsg: 'Contract PDF saved — added to unit documents'
+      savedMsg: 'Contract PDF saved — added to this request’s Documents'
     });
+    // Also surface it on THIS Maintenance Request's Documents tab (entity 'sow'),
+    // not just the unit's Documents. No re-upload — reuse the stored path.
+    if(storePath && unitId){
+      try { if(typeof sbSaveFileMeta==='function') await sbSaveFileMeta('sow', unitId, storePath, filename, blob.size, 'application/pdf'); } catch(e){ console.warn('[sow contract] sow file meta:', e); }
+      if(Array.isArray(window._sowFiles)){
+        window._sowFiles.push({ name: filename, type: 'application/pdf', size: blob.size, path: storePath, addedAt: new Date().toLocaleDateString() });
+        if(typeof renderSowFiles==='function') renderSowFiles();
+      }
+    }
     if(typeof auditEntry==='function' && unitId){ auditEntry('SOW:'+unitId, 'sow_contract_generated', 'Contractor Agreement ' + (st.contract_number||'') + ' generated for ' + (ct.name||'contractor') + ' on ' + addr); }
     // Email the contract to the contractor (same as the RFQ process).
     try { await _sowEmailContract(blob, filename, ct, addr, st.contract_number || window._sowEditingProjectNumber || ''); } catch(e){ console.warn('[sow contract] email step:', e); }
