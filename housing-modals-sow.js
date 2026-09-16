@@ -3845,10 +3845,24 @@ function _sowInitContractState(saved){
 
 // ── Row renderers (each mutates window._sowContractState.<arr> and re-renders) ──
 function _sowConRows(key){ var st=window._sowContractState||{}; if(!Array.isArray(st[key])) st[key]=[]; return st[key]; }
-function _sowConRowField(key, i, field, val){ var a=_sowConRows(key); if(a[i]){ a[i][field]=val; if(key==='milestones' && (field==='gross')) _sowConMilestoneCalc(i); } }
-function _sowConMilestoneCalc(i){
+function _sowConRowField(key, i, field, val){ var a=_sowConRows(key); if(a[i]){ a[i][field]=val; if(key==='milestones' && (field==='pct' || field==='gross')) _sowConMilestoneCalc(i, field); } }
+// Bidirectional Schedule B calc (mirrors the RFQ _rfqCalcMilestoneRow): typing a
+// % derives gross from the contract price; typing a gross derives the %. Holdback
+// is 10% of gross and net = 90%. Sibling fields update in place so focus isn't
+// lost while typing.
+function _sowConMilestoneCalc(i, source){
   var a=_sowConRows('milestones'); var r=a[i]; if(!r) return;
-  var gross=_sowConNum(r.gross); r.holdback=(gross*0.10).toFixed(2); r.net=(gross-gross*0.10).toFixed(2);
+  var total=_sowConSubtotalFrom();
+  var pct=_sowConNum(r.pct), gross=_sowConNum(r.gross);
+  if(source==='pct' && total>0){
+    gross = total*pct/100; r.gross = gross.toFixed(2);
+    var ge=document.getElementById('sow_con_ms_gross_'+i); if(ge) ge.value=r.gross;
+  } else if(source==='gross' && total>0){
+    pct = gross/total*100; r.pct = String(Math.round(pct*100)/100);
+    var pe=document.getElementById('sow_con_ms_pct_'+i); if(pe) pe.value=r.pct;
+  }
+  var holdback=gross*0.10; r.holdback=holdback.toFixed(2);
+  var net=gross-holdback; r.net=(net>=0?net:0).toFixed(2);
   var hb=document.getElementById('sow_con_ms_hb_'+i), nt=document.getElementById('sow_con_ms_net_'+i);
   if(hb) hb.textContent=_sowConMoney(r.holdback); if(nt) nt.textContent=_sowConMoney(r.net);
 }
@@ -3967,8 +3981,8 @@ function _sowRenderContracting(){
   var msRows = _sowConRows('milestones').map(function(m, i){
     return '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;align-items:center;">'
       + '<input type="text" placeholder="Milestone" value="'+_sowConEsc(m.name||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'name\',this.value)"/>'
-      + '<input type="text" placeholder="%" value="'+_sowConEsc(m.pct||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'pct\',this.value)"/>'
-      + '<input type="text" placeholder="Gross" value="'+_sowConEsc(m.gross||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'gross\',this.value)"/>'
+      + '<input type="text" id="sow_con_ms_pct_'+i+'" placeholder="%" value="'+_sowConEsc(m.pct||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'pct\',this.value)"/>'
+      + '<input type="text" id="sow_con_ms_gross_'+i+'" placeholder="Gross" value="'+_sowConEsc(m.gross||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'gross\',this.value)"/>'
       + '<span id="sow_con_ms_hb_'+i+'" style="font-size:12px;color:var(--muted);text-align:right;">'+_sowConMoney(m.holdback)+'</span>'
       + '<span id="sow_con_ms_net_'+i+'" style="font-size:12px;color:var(--text);text-align:right;">'+_sowConMoney(m.net)+'</span>'
       + (editable ? '<button type="button" title="Remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;" onclick="_sowConRemoveRow(\'milestones\','+i+')">✕</button>' : '<span></span>')
