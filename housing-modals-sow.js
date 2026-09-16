@@ -3867,6 +3867,25 @@ function _sowConMilestoneCalc(i, source){
   if(hb) hb.textContent=_sowConMoney(r.holdback); if(nt) nt.textContent=_sowConMoney(r.net);
 }
 function _sowConAddRow(key, blank){ _sowConRows(key).push(blank); _sowRenderContracting(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }
+// When the contract price changes, re-derive each milestone's gross from its %
+// (percent-driven rows follow the price), and recompute holdback/net. Updates
+// the row inputs/labels in place so the price field keeps focus.
+function _sowConRecalcMilestonesFromPrice(){
+  var st=window._sowContractState; if(!st || !Array.isArray(st.milestones)) return;
+  var total=_sowConSubtotalFrom();
+  st.milestones.forEach(function(r, i){
+    var pct=_sowConNum(r.pct);
+    if(pct>0 && total>0){
+      r.gross=(total*pct/100).toFixed(2);
+      var ge=document.getElementById('sow_con_ms_gross_'+i); if(ge) ge.value=r.gross;
+    }
+    var gross=_sowConNum(r.gross);
+    r.holdback=(gross*0.10).toFixed(2);
+    var net=gross-gross*0.10; r.net=(net>=0?net:0).toFixed(2);
+    var hb=document.getElementById('sow_con_ms_hb_'+i); if(hb) hb.textContent=_sowConMoney(r.holdback);
+    var nt=document.getElementById('sow_con_ms_net_'+i); if(nt) nt.textContent=_sowConMoney(r.net);
+  });
+}
 
 // Contract price subtotal (sum of the Price Breakdown fields).
 function _sowConSubtotalFrom(st){ st = st || window._sowContractState || {}; return ['price_materials','price_labour','price_equipment','price_subcontractors','price_other'].reduce(function(s,k){ return s + _sowConNum(st[k]); }, 0); }
@@ -4064,11 +4083,14 @@ function _sowRenderContracting(){
 
   // Wire live-state binding for the scalar fields (contract meta + price + sigs names)
   function bind(id, key){ var el=document.getElementById(id); if(el) el.addEventListener('input', function(){ st[key]=el.value; if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }); }
+  // Price fields also re-derive the Schedule B milestone grosses from their %
+  // (live, in place) like the RFQ Contracting tab's _rfqRecalcPrices.
+  function bindPrice(id, key){ var el=document.getElementById(id); if(el) el.addEventListener('input', function(){ st[key]=el.value; _sowConRecalcMilestonesFromPrice(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }); }
   bind('sow_con_date','contract_date'); bind('sow_con_start','contract_start');
   bind('sow_con_subcompl','substantial_completion_date'); bind('sow_con_totcompl','total_completion_date');
   bind('sow_con_hbdays','holdback_days');
-  bind('sow_con_pmat','price_materials'); bind('sow_con_plab','price_labour'); bind('sow_con_peqp','price_equipment');
-  bind('sow_con_psub','price_subcontractors'); bind('sow_con_poth','price_other'); bind('sow_con_lhours','labour_hours');
+  bindPrice('sow_con_pmat','price_materials'); bindPrice('sow_con_plab','price_labour'); bindPrice('sow_con_peqp','price_equipment');
+  bindPrice('sow_con_psub','price_subcontractors'); bindPrice('sow_con_poth','price_other'); bind('sow_con_lhours','labour_hours');
   bind('sow_con_signame','sig_name'); bind('sow_con_sigtitle','sig_title');
   bind('sow_con_ctname','ct_signatory_name'); bind('sow_con_cttitle','ct_signatory_title');
 
