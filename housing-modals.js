@@ -344,6 +344,12 @@ function openUnitEditModal(unitId){
       _eb.style.color      = u.unitEdSig.decision === 'approved' ? 'var(--success)' : 'var(--warn-amber-text)';
     }
   }
+  // Pre-populate the HM/ED approver names with a changeable picker of active
+  // Housing Managers / Executive Directors (a nation may have more than one).
+  if(typeof wireApproverPicker === 'function'){
+    wireApproverPicker('ue_sig_hm_name', 'housing_manager');
+    wireApproverPicker('ue_sig_ed_name', 'ed');
+  }
 
   // Archive / Restore button in footer — gated by archiveUnit authority
   var archWrap = document.getElementById('ue_archive_btn_wrap');

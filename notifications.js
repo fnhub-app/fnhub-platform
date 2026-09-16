@@ -651,6 +651,53 @@ async function _sbLoadActiveStaffByRole(role) {
   }
 }
 
+// ── Approver name pickers (HM / ED) ──────────────────────────────────────────
+// An approval name field pre-populates with a sensible default and offers the
+// active staff who hold that role as a dropdown, so a nation with more than one
+// Housing Manager / Executive Director can pick the right person while still
+// being able to type a name. Uses a <datalist> so it drops onto any existing
+// text input with no layout change. Cached per role for the session.
+window._approverNameCache = window._approverNameCache || {};
+async function _loadApproverNames(role){
+  if(!role) return [];
+  if(window._approverNameCache[role]) return window._approverNameCache[role];
+  var rows = (typeof _sbLoadActiveStaffByRole === 'function') ? await _sbLoadActiveStaffByRole(role) : [];
+  var names = (rows || []).map(function(s){ return String((s && s.name) || '').trim(); }).filter(Boolean);
+  names = names.filter(function(n, i){ return names.indexOf(n) === i; });   // de-dupe
+  window._approverNameCache[role] = names;
+  return names;
+}
+// Wire one approval name input. role: 'housing_manager' | 'ed'. Attaches a
+// datalist of active staff of that role and, when the field is empty, pre-fills
+// a default: the logged-in user if they hold the role, else the sole staff
+// member of that role. opts.unlock=false leaves a readonly field readonly.
+async function wireApproverPicker(inputId, role, opts){
+  opts = opts || {};
+  var el = document.getElementById(inputId);
+  if(!el) return;
+  try {
+    var names = await _loadApproverNames(role);
+    var listId = inputId + '__approvers';
+    var dl = document.getElementById(listId);
+    if(!dl){ dl = document.createElement('datalist'); dl.id = listId; (el.parentNode || document.body).appendChild(dl); }
+    dl.innerHTML = names.map(function(n){ return '<option value="' + String(n).replace(/"/g,'&quot;') + '"></option>'; }).join('');
+    el.setAttribute('list', listId);
+    el.setAttribute('autocomplete', 'off');
+    if(opts.unlock !== false) el.removeAttribute('readonly');
+    if(!el.value || !el.value.trim()){
+      var def = '';
+      var myName = (window.HOUSING_SESSION && HOUSING_SESSION.name) || '';
+      var myRoleRaw = window._realRole || window.currentRole || '';
+      var myRole = (typeof CLFN_PERMS !== 'undefined' && CLFN_PERMS.normalizeRole) ? CLFN_PERMS.normalizeRole(myRoleRaw) : myRoleRaw;
+      var iHoldRole = (myRole === role) || (role === 'ed' && myRole === 'super_user');
+      if(myName && iHoldRole) def = myName;             // I'm the HM/ED entering this
+      else if(names.length === 1) def = names[0];       // only one on file — obvious default
+      if(def) el.value = def;
+    }
+  } catch(e){ console.warn('[approver picker] ' + inputId + ':', e); }
+}
+window.wireApproverPicker = wireApproverPicker;
+
 // ── Per-event notify functions ─────────────────────────────────────────────
 // Each function: resolve recipients, render template, fan out via
 // window.sendNotification. Best-effort, never throws.

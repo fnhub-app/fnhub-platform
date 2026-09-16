@@ -781,6 +781,13 @@ function openRenoBudget(unitId) {
     var hmDate = document.getElementById('rba_hm_date'); if(hmDate) hmDate.value=today;
   }
 
+  // Pre-populate the HM/ED names with a changeable picker of active Housing
+  // Managers / Executive Directors (a nation may have more than one).
+  if(typeof wireApproverPicker === 'function'){
+    wireApproverPicker('rba_hm_name', 'housing_manager');
+    wireApproverPicker('rba_ed_name', 'ed');
+  }
+
   // Status badge
   var badge = document.getElementById('rba_status_badge');
   if(approval && approval.approved) {

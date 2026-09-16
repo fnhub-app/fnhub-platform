@@ -2545,9 +2545,9 @@ async function sowSaveClicked() {
   var mode = (btn && btn.dataset) ? btn.dataset.mode : 'draft';
   // "Save Changes" on an already-created request: plain save, no confusing
   // Submit dialog. data-mode stays 'submit' so saveSOW preserves approval_status.
-  // NOT keepOpen — the form closes and the user lands back on the list they
-  // came from (renovations approvals / worklist), per staff feedback.
-  if (btn && btn.dataset && btn.dataset.existing === '1') { saveSOW(); return; }
+  // keepOpen — the form stays open and just confirms with a toast; the user is
+  // still working the request and should not be redirected off the form.
+  if (btn && btn.dataset && btn.dataset.existing === '1') { saveSOW({keepOpen:true}); return; }
   // "Save Draft" on a new/draft request: also stay open (still authoring).
   if (mode !== 'submit') { saveSOW({keepOpen:true}); return; }
 
@@ -3824,6 +3824,12 @@ function _sowInitContractState(saved){
     var total = _sowConNum((document.getElementById('sow_total_cost')||{}).value);
     if(total>0) st.price_labour = String(total);   // seed total under Labour; staff re-split
   }
+  // Prefill contract dates from the Overview tab (Target Start / Completion)
+  // wherever the contract's own date isn't already set.
+  var _ov = function(id){ var e=document.getElementById(id); return (e && e.value) ? e.value : ''; };
+  if(!st.contract_start)             st.contract_start = _ov('sow_start_date');
+  if(!st.substantial_completion_date) st.substantial_completion_date = _ov('sow_end_date');
+  if(!st.total_completion_date)       st.total_completion_date = _ov('sow_end_date');
   window._sowContractState = st;
   window._sowContractCt = null;
 }
@@ -3865,6 +3871,11 @@ function _sowRenderContracting(){
   if(!host) return;
   if(!window._sowContractState) _sowInitContractState(null);
   var st = window._sowContractState;
+  // Keep contract dates in step with the Overview tab when they're still blank.
+  var _ovd = function(id){ var e=document.getElementById(id); return (e && e.value) ? e.value : ''; };
+  if(!st.contract_start && _ovd('sow_start_date'))             st.contract_start = _ovd('sow_start_date');
+  if(!st.substantial_completion_date && _ovd('sow_end_date'))  st.substantial_completion_date = _ovd('sow_end_date');
+  if(!st.total_completion_date && _ovd('sow_end_date'))        st.total_completion_date = _ovd('sow_end_date');
   var editable = _sowContractEditable();
   var dis = editable ? '' : ' disabled';
 
@@ -3917,19 +3928,19 @@ function _sowRenderContracting(){
 
   // Schedule B — milestone payments
   var msRows = _sowConRows('milestones').map(function(m, i){
-    return '<div class="prj-row" style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;align-items:center;">'
+    return '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;align-items:center;">'
       + '<input type="text" placeholder="Milestone" value="'+_sowConEsc(m.name||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'name\',this.value)"/>'
       + '<input type="text" placeholder="%" value="'+_sowConEsc(m.pct||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'pct\',this.value)"/>'
       + '<input type="text" placeholder="Gross" value="'+_sowConEsc(m.gross||'')+'"'+dis+' oninput="_sowConRowField(\'milestones\','+i+',\'gross\',this.value)"/>'
       + '<span id="sow_con_ms_hb_'+i+'" style="font-size:12px;color:var(--muted);text-align:right;">'+_sowConMoney(m.holdback)+'</span>'
       + '<span id="sow_con_ms_net_'+i+'" style="font-size:12px;color:var(--text);text-align:right;">'+_sowConMoney(m.net)+'</span>'
-      + (editable ? '<button type="button" class="prj-row-remove" onclick="_sowConRemoveRow(\'milestones\','+i+')">✕</button>' : '<span></span>')
+      + (editable ? '<button type="button" title="Remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;" onclick="_sowConRemoveRow(\'milestones\','+i+')">✕</button>' : '<span></span>')
       + '</div>';
   }).join('');
   h += '<div class="tic-section"><div class="tic-section-h">Schedule B — Milestone Payments</div>'
      + '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;"><span>Name</span><span>%</span><span>Gross</span><span style="text-align:right;">Holdback</span><span style="text-align:right;">Net</span><span></span></div>'
      + '<div style="display:flex;flex-direction:column;gap:6px;">'+ (msRows || '<div class="txt-muted-xs">No milestones. Holdback auto-computes at 10% of gross.</div>') +'</div>'
-     + (editable ? '<button type="button" class="prj-addrow" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : '')
+     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : '')
      + '</div>';
 
   // Generic 3-col / text row sections
@@ -3938,13 +3949,13 @@ function _sowRenderContracting(){
       var inputs = cols.map(function(c){
         return '<input type="text" placeholder="'+_sowConEsc(c.ph)+'" value="'+_sowConEsc(r[c.f]||'')+'"'+dis+' oninput="_sowConRowField(\''+key+'\','+i+',\''+c.f+'\',this.value)" style="flex:'+(c.flex||1)+';min-width:0;"/>';
       }).join('');
-      return '<div style="display:flex;gap:6px;align-items:center;">'+inputs+(editable?'<button type="button" class="prj-row-remove" onclick="_sowConRemoveRow(\''+key+'\','+i+')">✕</button>':'')+'</div>';
+      return '<div style="display:flex;gap:6px;align-items:center;">'+inputs+(editable?'<button type="button" title="Remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;" onclick="_sowConRemoveRow(\''+key+'\','+i+')">✕</button>':'')+'</div>';
     }).join('');
   }
   function section(title, key, cols, blank, hint){
     return '<div class="tic-section"><div class="tic-section-h">'+title+'</div>'
       + '<div style="display:flex;flex-direction:column;gap:6px;">'+(simpleRows(key,cols) || ('<div class="txt-muted-xs">'+(hint||'None added.')+'</div>'))+'</div>'
-      + (editable ? '<button type="button" class="prj-addrow" onclick="_sowConAddRow(\''+key+'\','+JSON.stringify(blank).replace(/"/g,'&quot;')+')">+ Add</button>' : '')
+      + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\''+key+'\','+JSON.stringify(blank).replace(/"/g,'&quot;')+')">+ Add</button>' : '')
       + '</div>';
   }
   h += section('Materials &amp; Specifications', 'materials_rows', [{f:'material',ph:'Material',flex:1},{f:'specification',ph:'Specification',flex:1},{f:'notes',ph:'Notes',flex:1}], {material:'',specification:'',notes:''});
@@ -3957,13 +3968,13 @@ function _sowRenderContracting(){
       + '<select'+dis+' onchange="_sowConSubChange('+i+',this)" style="flex:1;min-width:140px;">'+_sowConSubOptions(r.contractorId)+'</select>'
       + '<input type="text" placeholder="Trade" value="'+_sowConEsc(r.trade||'')+'"'+dis+' oninput="_sowConRowField(\'subcontractor_rows\','+i+',\'trade\',this.value)" style="flex:1;min-width:100px;"/>'
       + '<input type="text" placeholder="Scope" value="'+_sowConEsc(r.scope||'')+'"'+dis+' oninput="_sowConRowField(\'subcontractor_rows\','+i+',\'scope\',this.value)" style="flex:1.4;min-width:120px;"/>'
-      + (editable?'<button type="button" class="prj-row-remove" onclick="_sowConRemoveRow(\'subcontractor_rows\','+i+')">✕</button>':'')
+      + (editable?'<button type="button" title="Remove" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:15px;line-height:1;padding:0 4px;" onclick="_sowConRemoveRow(\'subcontractor_rows\','+i+')">✕</button>':'')
       + '</div>';
   }).join('');
   h += '<div class="tic-section"><div class="tic-section-h">Subcontractors</div>'
      + '<div class="txt-muted-xs" style="margin-bottom:6px;">Every subcontractor must provide a valid WSIB clearance and proof of $2,000,000 CGL insurance — the requirement prints in the contract automatically.</div>'
      + '<div style="display:flex;flex-direction:column;gap:6px;">'+(subRows || '<div class="txt-muted-xs">None.</div>')+'</div>'
-     + (editable ? '<button type="button" class="prj-addrow" onclick="_sowConAddRow(\'subcontractor_rows\',{contractorId:\'\',name:\'\',trade:\'\',scope:\'\'})">+ Add subcontractor</button>' : '')
+     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'subcontractor_rows\',{contractorId:\'\',name:\'\',trade:\'\',scope:\'\'})">+ Add subcontractor</button>' : '')
      + '</div>';
 
   // Signatures
@@ -4118,9 +4129,55 @@ async function _sowGenerateContract(){
       savedMsg: 'Contract PDF saved — added to unit documents'
     });
     if(typeof auditEntry==='function' && unitId){ auditEntry('SOW:'+unitId, 'sow_contract_generated', 'Contractor Agreement ' + (st.contract_number||'') + ' generated for ' + (ct.name||'contractor') + ' on ' + addr); }
+    // Email the contract to the contractor (same as the RFQ process).
+    try { await _sowEmailContract(blob, filename, ct, addr, st.contract_number || window._sowEditingProjectNumber || ''); } catch(e){ console.warn('[sow contract] email step:', e); }
   } catch(e){
     console.warn('[sow contract] generate failed:', e);
     if(typeof showToast==='function') showToast('Could not generate the contract. Check your connection and try again.', {type:'error'});
+  }
+}
+
+// Base64-encode a Blob (strips the data: URI prefix) for email attachments.
+function _sowBlobToBase64(blob){
+  return new Promise(function(resolve, reject){
+    try { var fr=new FileReader(); fr.onload=function(){ var s=String(fr.result||''); resolve(s.substring(s.indexOf(',')+1)); }; fr.onerror=function(){ reject(fr.error||new Error('read failed')); }; fr.readAsDataURL(blob); }
+    catch(e){ reject(e); }
+  });
+}
+
+// Email the generated contract PDF to the assigned contractor — mirrors the RFQ
+// _rfqEmailContract flow: a confirm with a default-on recipient checkbox, then
+// sendNotification with the PDF attached (from the nation mailbox).
+async function _sowEmailContract(blob, filename, ct, addr, ref){
+  try {
+    if(typeof showConfirm !== 'function' || typeof sendNotification !== 'function') return;
+    if(!ct || !ct.email){ if(typeof showToast==='function') showToast('No contractor email on file — contract not emailed.', {type:'error'}); return; }
+    var _e = (typeof escapeHtml==='function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+    var r = await showConfirm({
+      title:'Email Contract to Contractor?',
+      message:'Send the generated contract (PDF attached) to the contractor? Uncheck to skip sending.',
+      confirmText:'Send Contract', cancelText:'Cancel',
+      checkbox:{ label:_e(ct.name||'Contractor')+' ('+_e(ct.email)+')', defaultChecked:true }
+    });
+    var ok  = (typeof r==='object' && r) ? r.ok : r;
+    var snd = (typeof r==='object' && r) ? r.checked : false;
+    if(!ok || !snd) return;
+    var b64 = await _sowBlobToBase64(blob);
+    var short = (window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing';
+    await sendNotification({
+      to: ct.email, to_name: ct.name || '',
+      subject: short + ' Housing — Contract: ' + (addr || ref),
+      bodyHtml: '<p>Hello ' + _e(ct.name||'') + ',</p>'
+        + '<p>Please find the attached contract for <strong>' + _e(addr||'the project') + '</strong>' + (ref ? (' (' + _e(ref) + ')') : '') + '.</p>'
+        + '<p>Please review, sign, and return a copy. If you have any questions, reply to this email.</p>'
+        + '<p>Thank you,<br/>' + _e(short) + ' Housing</p>',
+      attachments: [{ name: filename, contentType: 'application/pdf', contentBytes: b64 }],
+      event: 'sow_contract', entity_type: 'sow', entity_id: String(ref || '')
+    });
+    if(typeof showToast==='function') showToast('✓ Contract emailed to ' + (ct.name || 'contractor'), {type:'info'});
+  } catch(e){
+    console.warn('[sow contract] email failed:', e);
+    if(typeof showToast==='function') showToast('Contract email failed: ' + (e && e.message || 'unknown error'), {type:'error'});
   }
 }
 

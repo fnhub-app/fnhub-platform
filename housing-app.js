@@ -524,6 +524,8 @@ function goTo(s){
           if(_hmNameEl && !_hmNameEl.value) _hmNameEl.value = _sessionName;
           if(_hmDateEl && !_hmDateEl.value) _hmDateEl.value = _today;
         }
+        // Offer the other active Housing Managers as a changeable dropdown.
+        if(typeof wireApproverPicker === 'function') wireApproverPicker('sig_hm_name', 'housing_manager');
       }
       if(APPROVAL_AUTHORITY.can('finalApproveApp', _role)) {
         // Unlock ED fields for ED only
@@ -533,6 +535,8 @@ function goTo(s){
           if(_edNameEl && !_edNameEl.value) _edNameEl.value = _sessionName;
           if(_edDateEl && !_edDateEl.value) _edDateEl.value = _today;
         }
+        // Offer the other active Executive Directors as a changeable dropdown.
+        if(typeof wireApproverPicker === 'function') wireApproverPicker('sig_ed_name', 'ed');
       }
     },150);
   }
