@@ -3824,12 +3824,21 @@ function _sowInitContractState(saved){
     var total = _sowConNum((document.getElementById('sow_total_cost')||{}).value);
     if(total>0) st.price_labour = String(total);   // seed total under Labour; staff re-split
   }
+  // Always ensure a contract number when blank (fresh, or a saved contract that
+  // was persisted before a number was assigned).
+  if(!st.contract_number && typeof window.nextContractNumber === 'function') st.contract_number = window.nextContractNumber();
+  if(!st.contract_date) st.contract_date = new Date().toISOString().slice(0,10);
   // Prefill contract dates from the Overview tab (Target Start / Completion)
   // wherever the contract's own date isn't already set.
   var _ov = function(id){ var e=document.getElementById(id); return (e && e.value) ? e.value : ''; };
   if(!st.contract_start)             st.contract_start = _ov('sow_start_date');
   if(!st.substantial_completion_date) st.substantial_completion_date = _ov('sow_end_date');
   if(!st.total_completion_date)       st.total_completion_date = _ov('sow_end_date');
+  // Auto-fill a standard payment schedule (20/70/10) when none exists yet and a
+  // contract price is set — staff can then edit or re-run it.
+  if((!Array.isArray(st.milestones) || !st.milestones.length) && _sowConSubtotalFrom(st) > 0){
+    st.milestones = _sowConBuildStandardSchedule(_sowConSubtotalFrom(st));
+  }
   window._sowContractState = st;
   window._sowContractCt = null;
 }
@@ -3844,6 +3853,31 @@ function _sowConMilestoneCalc(i){
   if(hb) hb.textContent=_sowConMoney(r.holdback); if(nt) nt.textContent=_sowConMoney(r.net);
 }
 function _sowConAddRow(key, blank){ _sowConRows(key).push(blank); _sowRenderContracting(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }
+
+// Contract price subtotal (sum of the Price Breakdown fields).
+function _sowConSubtotalFrom(st){ st = st || window._sowContractState || {}; return ['price_materials','price_labour','price_equipment','price_subcontractors','price_other'].reduce(function(s,k){ return s + _sowConNum(st[k]); }, 0); }
+// Standard payment schedule: 20% deposit / 70% progress / 10% holdback of the
+// contract price. Each phase withholds 10% (net = 90% of its gross); the last
+// phase absorbs any rounding remainder so the gross total equals the subtotal.
+function _sowConBuildStandardSchedule(subtotal){
+  subtotal = _sowConNum(subtotal);
+  var phases = [ {name:'Material Deposit', pct:20}, {name:'Progress Payment', pct:70}, {name:'Holdback / Completion', pct:10} ];
+  var used = 0;
+  return phases.map(function(ph, i){
+    var gross = (i === phases.length-1) ? Math.max(0, Math.round((subtotal - used)*100)/100) : Math.round(ph.pct/100 * subtotal * 100)/100;
+    if(i < phases.length-1) used += gross;
+    var holdback = Math.round(gross * 0.10 * 100)/100;
+    var net = Math.round((gross - holdback) * 100)/100;
+    return { name: ph.name, pct: String(ph.pct), gross: gross.toFixed(2), holdback: holdback.toFixed(2), net: net.toFixed(2) };
+  });
+}
+// Button: (re)build Schedule B from the current contract price.
+function _sowConSetupSchedule(){
+  var st = window._sowContractState; if(!st) return;
+  st.milestones = _sowConBuildStandardSchedule(_sowConSubtotalFrom(st));
+  _sowRenderContracting();
+  if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave();
+}
 function _sowConRemoveRow(key, i){ var a=_sowConRows(key); a.splice(i,1); _sowRenderContracting(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }
 
 function _sowConSubOptions(selId){
@@ -3871,6 +3905,7 @@ function _sowRenderContracting(){
   if(!host) return;
   if(!window._sowContractState) _sowInitContractState(null);
   var st = window._sowContractState;
+  if(!st.contract_number && typeof window.nextContractNumber === 'function') st.contract_number = window.nextContractNumber();
   // Keep contract dates in step with the Overview tab when they're still blank.
   var _ovd = function(id){ var e=document.getElementById(id); return (e && e.value) ? e.value : ''; };
   if(!st.contract_start && _ovd('sow_start_date'))             st.contract_start = _ovd('sow_start_date');
@@ -3940,6 +3975,7 @@ function _sowRenderContracting(){
   h += '<div class="tic-section"><div class="tic-section-h">Schedule B — Milestone Payments</div>'
      + '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;"><span>Name</span><span>%</span><span>Gross</span><span style="text-align:right;">Holdback</span><span style="text-align:right;">Net</span><span></span></div>'
      + '<div style="display:flex;flex-direction:column;gap:6px;">'+ (msRows || '<div class="txt-muted-xs">No milestones. Holdback auto-computes at 10% of gross.</div>') +'</div>'
+     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;margin-right:8px;" onclick="_sowConSetupSchedule()">Set up standard schedule (20 / 70 / 10)</button>' : '')
      + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : '')
      + '</div>';
 
@@ -4201,3 +4237,4 @@ window._sowConAddRow         = _sowConAddRow;
 window._sowConRemoveRow      = _sowConRemoveRow;
 window._sowConSubChange      = _sowConSubChange;
 window._sowGenerateContract  = _sowGenerateContract;
+window._sowConSetupSchedule  = _sowConSetupSchedule;
