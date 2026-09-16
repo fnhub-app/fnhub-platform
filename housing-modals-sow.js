@@ -3834,13 +3834,14 @@ function _sowInitContractState(saved){
   if(!st.contract_start)             st.contract_start = _ov('sow_start_date');
   if(!st.substantial_completion_date) st.substantial_completion_date = _ov('sow_end_date');
   if(!st.total_completion_date)       st.total_completion_date = _ov('sow_end_date');
-  // Auto-fill a standard payment schedule (20/70/10) when none exists yet and a
-  // contract price is set — staff can then edit or re-run it.
+  window._sowContractState = st;
+  window._sowContractCt = null;
+  // Auto-fill the default (RFQ-style) payment schedule when none exists yet and
+  // a contract price is set — staff can then edit or re-run it. Runs after the
+  // state is stored because the builder reads the Materials line from it.
   if((!Array.isArray(st.milestones) || !st.milestones.length) && _sowConSubtotalFrom(st) > 0){
     st.milestones = _sowConBuildStandardSchedule(_sowConSubtotalFrom(st));
   }
-  window._sowContractState = st;
-  window._sowContractCt = null;
 }
 
 // ── Row renderers (each mutates window._sowContractState.<arr> and re-renders) ──
@@ -3850,6 +3851,9 @@ function _sowConRowField(key, i, field, val){ var a=_sowConRows(key); if(a[i]){ 
 // % derives gross from the contract price; typing a gross derives the %. Holdback
 // is 10% of gross and net = 90%. Sibling fields update in place so focus isn't
 // lost while typing.
+// Manual %<->gross edit (mirrors the RFQ _rfqCalcMilestoneRow): typing a % sets
+// gross from the contract price and marks the row 'phase'; typing a dollar sets
+// the % and makes the row fixed (no kind, so it stops auto-tracking the price).
 function _sowConMilestoneCalc(i, source){
   var a=_sowConRows('milestones'); var r=a[i]; if(!r) return;
   var total=_sowConSubtotalFrom();
@@ -3863,46 +3867,88 @@ function _sowConMilestoneCalc(i, source){
   }
   var holdback=gross*0.10; r.holdback=holdback.toFixed(2);
   var net=gross-holdback; r.net=(net>=0?net:0).toFixed(2);
+  r.kind = (source==='pct' && _sowConNum(r.pct)>0) ? 'phase' : '';
   var hb=document.getElementById('sow_con_ms_hb_'+i), nt=document.getElementById('sow_con_ms_net_'+i);
   if(hb) hb.textContent=_sowConMoney(r.holdback); if(nt) nt.textContent=_sowConMoney(r.net);
 }
 function _sowConAddRow(key, blank){ _sowConRows(key).push(blank); _sowRenderContracting(); if(typeof _sowContractScheduleSave==='function') _sowContractScheduleSave(); }
-// When the contract price changes, re-derive each milestone's gross from its %
-// (percent-driven rows follow the price), and recompute holdback/net. Updates
-// the row inputs/labels in place so the price field keeps focus.
+
+// Apply a gross to milestone row i: recompute holdback (10%) / net, refresh the
+// reference % on material/remainder rows, and update DOM in place.
+function _sowConApplyGross(r, i, gross, total, kind){
+  gross = Math.round((parseFloat(gross)||0)*100)/100;
+  var hb = Math.round(gross*10)/100; var net = Math.round((gross-hb)*100)/100;
+  r.gross=String(gross||''); r.holdback=String(hb||''); r.net=String(net>=0?net:0);
+  var showPct = (kind==='material' || kind==='remainder');
+  if(showPct && total>0) r.pct = String(Math.round(gross/total*10000)/100);
+  var ge=document.getElementById('sow_con_ms_gross_'+i); if(ge) ge.value=r.gross;
+  var pe=document.getElementById('sow_con_ms_pct_'+i); if(pe && showPct) pe.value=r.pct;
+  var hbEl=document.getElementById('sow_con_ms_hb_'+i); if(hbEl) hbEl.textContent=_sowConMoney(r.holdback);
+  var ntEl=document.getElementById('sow_con_ms_net_'+i); if(ntEl) ntEl.textContent=_sowConMoney(r.net);
+}
+// When the contract price changes, re-derive milestones by kind (mirrors the RFQ
+// _rfqRefreshMilestonesFromTotal): 'material' = 50% of the Materials line,
+// 'phase' = its % of the contract price, fixed = left as-is; then 'remainder'
+// rows take whatever is left of the contract.
 function _sowConRecalcMilestonesFromPrice(){
   var st=window._sowContractState; if(!st || !Array.isArray(st.milestones)) return;
   var total=_sowConSubtotalFrom();
+  var materials=_sowConNum(st.price_materials);
+  var sumNon=0, remIdx=[];
   st.milestones.forEach(function(r, i){
-    var pct=_sowConNum(r.pct);
-    if(pct>0 && total>0){
-      r.gross=(total*pct/100).toFixed(2);
-      var ge=document.getElementById('sow_con_ms_gross_'+i); if(ge) ge.value=r.gross;
-    }
-    var gross=_sowConNum(r.gross);
-    r.holdback=(gross*0.10).toFixed(2);
-    var net=gross-gross*0.10; r.net=(net>=0?net:0).toFixed(2);
-    var hb=document.getElementById('sow_con_ms_hb_'+i); if(hb) hb.textContent=_sowConMoney(r.holdback);
-    var nt=document.getElementById('sow_con_ms_net_'+i); if(nt) nt.textContent=_sowConMoney(r.net);
+    var kind=r.kind||'';
+    if(kind==='remainder'){ remIdx.push(i); return; }
+    var pct=_sowConNum(r.pct), g;
+    if(kind==='material'){ g=Math.round(materials*50)/100; _sowConApplyGross(r, i, g, total, kind); }
+    else if(pct>0 && total>0){ g=total*pct/100; _sowConApplyGross(r, i, g, total, kind); }
+    else { g=_sowConNum(r.gross); _sowConApplyGross(r, i, g, total, kind); }
+    sumNon += (parseFloat(g)||0);
+  });
+  remIdx.forEach(function(ri){
+    var g=Math.max(0, Math.round((total-sumNon)*100)/100);
+    _sowConApplyGross(st.milestones[ri], ri, g, total, 'remainder');
+    sumNon += g;
   });
 }
 
 // Contract price subtotal (sum of the Price Breakdown fields).
 function _sowConSubtotalFrom(st){ st = st || window._sowContractState || {}; return ['price_materials','price_labour','price_equipment','price_subcontractors','price_other'].reduce(function(s,k){ return s + _sowConNum(st[k]); }, 0); }
-// Standard payment schedule: 20% deposit / 70% progress / 10% holdback of the
-// contract price. Each phase withholds 10% (net = 90% of its gross); the last
-// phase absorbs any rounding remainder so the gross total equals the subtotal.
+// Milestone from a dollar amount (kind-tagged), holdback = 10%, net = 90%.
+function _sowConMsFromAmount(name, gross, pct, kind){
+  gross = Math.round((parseFloat(gross)||0)*100)/100;
+  var holdback = Math.round(gross*10)/100;
+  var net = Math.round((gross-holdback)*100)/100;
+  return { name:name, kind:kind||'', pct:(pct==null?'':String(pct)), gross:String(gross||''), holdback:String(holdback||''), net:String(net>=0?net:0) };
+}
+// Default schedule matching the RFQ Contracting tab (_rfqDefaultMilestones):
+//   "50% Material" = 50% of the Materials line (a supply deposit), then fixed
+//   phases as a % of the contract price, and a FINAL remainder phase.
+//     <  $75k: Material + Phase 1 25% + Phase 2 25% + Phase 3 (remainder)
+//     >= $75k: Material + Phase 1-3 at 20% each     + Phase 4 (remainder)
+// Rows carry a `kind` (material/phase/remainder) that drives the live recompute.
 function _sowConBuildStandardSchedule(subtotal){
-  subtotal = _sowConNum(subtotal);
-  var phases = [ {name:'Material Deposit', pct:20}, {name:'Progress Payment', pct:70}, {name:'Holdback / Completion', pct:10} ];
-  var used = 0;
-  return phases.map(function(ph, i){
-    var gross = (i === phases.length-1) ? Math.max(0, Math.round((subtotal - used)*100)/100) : Math.round(ph.pct/100 * subtotal * 100)/100;
-    if(i < phases.length-1) used += gross;
-    var holdback = Math.round(gross * 0.10 * 100)/100;
-    var net = Math.round((gross - holdback) * 100)/100;
-    return { name: ph.name, pct: String(ph.pct), gross: gross.toFixed(2), holdback: holdback.toFixed(2), net: net.toFixed(2) };
+  var total = _sowConNum(subtotal);
+  var st = window._sowContractState || {};
+  var materials = _sowConNum(st.price_materials);
+  var matDeposit = Math.round(materials*50)/100;      // 50% of Materials
+  if(total>0) matDeposit = Math.min(matDeposit, total);
+  var big = total >= 75000;
+  var phasePct = big ? 20 : 25;
+  var midPhases = big ? ['Phase 1','Phase 2','Phase 3'] : ['Phase 1','Phase 2'];
+  function pctOf(g){ return total>0 ? Math.round(g/total*10000)/100 : null; }
+  var rows = [ _sowConMsFromAmount('50% Material', matDeposit, pctOf(matDeposit), 'material') ];
+  var spent = matDeposit;
+  midPhases.forEach(function(name){
+    var ideal = Math.round(total*phasePct)/100;
+    var remaining = Math.max(0, Math.round((total-spent)*100)/100);
+    var gross = Math.min(ideal, remaining);
+    var clean = gross === ideal;
+    spent += gross;
+    rows.push(_sowConMsFromAmount(name, gross, clean?phasePct:null, clean?'phase':''));
   });
+  var rem = Math.max(0, Math.round((total-spent)*100)/100);
+  rows.push(_sowConMsFromAmount(big?'Phase 4':'Phase 3', rem, pctOf(rem), 'remainder'));
+  return rows;
 }
 // Button: (re)build Schedule B from the current contract price.
 function _sowConSetupSchedule(){
@@ -4010,7 +4056,7 @@ function _sowRenderContracting(){
   h += sec('Schedule B — Milestone Payments',
        '<div style="display:grid;grid-template-columns:1fr 70px 100px 90px 90px 28px;gap:6px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;margin-bottom:4px;"><span>Name</span><span>%</span><span>Gross</span><span style="text-align:right;">Holdback</span><span style="text-align:right;">Net</span><span></span></div>'
      + '<div style="display:flex;flex-direction:column;gap:6px;">'+ (msRows || '<div class="txt-muted-xs">No milestones. Holdback auto-computes at 10% of gross.</div>') +'</div>'
-     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;margin-right:8px;" onclick="_sowConSetupSchedule()">Set up standard schedule (20 / 70 / 10)</button>' : '')
+     + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;margin-right:8px;" onclick="_sowConSetupSchedule()">Reset to default schedule</button>' : '')
      + (editable ? '<button type="button" class="btn btn-ghost btn-sm" style="margin-top:8px;" onclick="_sowConAddRow(\'milestones\',{name:\'\',pct:\'\',gross:\'\',holdback:\'\',net:\'\'})">+ Add milestone</button>' : ''));
 
   // Generic 3-col / text row sections
