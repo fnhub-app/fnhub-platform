@@ -69,6 +69,7 @@ interface Window {
   nationShort: () => string;
   nationDisplay: () => string;
   nationEmailDomain: () => string;
+  nationFinanceEmail: () => string;
   nationId: () => string;
   nationPortalBase: () => string;
   _applyBrandDark: (...args: any[]) => any;

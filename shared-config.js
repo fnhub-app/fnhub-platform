@@ -42,6 +42,7 @@ window.NATIONS_DIRECTORY = window.NATIONS_DIRECTORY || {
     // portal_base below.
     portal_base:   '',
     email_domain:  '',
+    finance_email: '',
     modules_licensed: null
   },
   // CLFN — a normal nation now (carries its own branding); no longer the default.
@@ -61,6 +62,7 @@ window.NATIONS_DIRECTORY = window.NATIONS_DIRECTORY || {
     portal_base:   'https://clfn.fnhub.app',
     email_domain:  'clfn.on.ca',          // staff email domain gate (@<domain> checks)
     housing_email: 'housing@clfn.on.ca',  // the nation's housing dept mailbox (AP/manager defaults)
+    finance_email: 'finance@clfn.on.ca',  // the nation's finance mailbox (rent start/stop notices)
     // Landlord mailing block for generated agreements/leases (kept in config,
     // not as literals in the generators — see the CLFN hard rule).
     landlord_committee: 'Housing Committee',
@@ -377,6 +379,7 @@ window._mapNationRow = function(r){
     portal_base:   'https://' + sub + '.fnhub.app',
     email_domain:  r.email_domain || '',
     housing_email: r.housing_email || '',
+    finance_email: r.finance_email || '',
     // Per-nation email delivery config from the registry, when present. Never
     // inherits another nation's mailbox/provider (OCAP): absent -> the app's
     // email_config falls back to the nation's own housing_email or empty.
@@ -474,7 +477,7 @@ window.CLFN_CONFIG_LOADED = true;
             if (String(rows[ri].subdomain || '').toLowerCase() !== mySub) continue;
             var fresh = window._mapNationRow(rows[ri]);
             if (!fresh) break;
-            ['display_name', 'short', 'primary_color', 'logo', 'email_domain', 'housing_email', 'email'].forEach(function(k){
+            ['display_name', 'short', 'primary_color', 'logo', 'email_domain', 'housing_email', 'finance_email', 'email'].forEach(function(k){
               window._NATION[k] = fresh[k];
             });
             var NC = window.NATION_CONFIG;
@@ -486,6 +489,7 @@ window.CLFN_CONFIG_LOADED = true;
               NC.logo          = fresh.logo          || '';
               NC.email_domain  = fresh.email_domain  || '';
               NC.housing_email = fresh.housing_email || '';
+              NC.finance_email = fresh.finance_email || '';
               var em = (fresh.email && typeof fresh.email === 'object') ? fresh.email : {};
               NC.email_config = {
                 provider:  em.provider  || 'graph',
@@ -891,6 +895,7 @@ window.NATION_CONFIG = window.NATION_CONFIG || (function(){
     role_labels:  n.role_labels || {}, // empty for CLFN — CLFN_PERMS.ROLE_LABELS defaults apply
     email_domain:  n.email_domain  || '',
     housing_email: n.housing_email || '',
+    finance_email: n.finance_email || '',
     landlord_committee: n.landlord_committee || 'Housing Committee',
     mailing_po_box:     n.mailing_po_box     || '',
     mailing_postal:     n.mailing_postal     || '',
@@ -1078,6 +1083,14 @@ window.nationDisplay = function nationDisplay(){
 // sets email_domain in its own directory entry, so CLFN is unaffected.
 window.nationEmailDomain = function nationEmailDomain(){
   return (window.NATION_CONFIG && NATION_CONFIG.email_domain) || '';
+};
+
+// The nation's FINANCE mailbox (rent start/stop notices). Falls back to the
+// housing mailbox, then blank — never a CLFN literal (OCAP). Each nation sets
+// finance_email in its own directory entry.
+window.nationFinanceEmail = function nationFinanceEmail(){
+  var nc = window.NATION_CONFIG || {};
+  return (nc.finance_email || nc.housing_email || '');
 };
 
 // Single accessor for the nation's registry id (the NATIONS_DIRECTORY key,

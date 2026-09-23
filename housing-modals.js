@@ -1124,6 +1124,19 @@ async function ueRemoveTenant() {
     }).catch(function(e){ console.warn('[tenantMovement] insert failed:', e); });
     auditEntry(tenantAppId || String(unitId), 'tenant_vacated',
       tenantName + ' vacated unit ' + (addr || unitId) + ' (move-out: ' + moveOut + ')', actor);
+
+    // Notify Finance to STOP collecting rent for this tenancy. Fire-and-forget;
+    // silent skip if no Finance email is configured.
+    if (typeof notifyFinanceRentStop === 'function') {
+      try {
+        notifyFinanceRentStop({
+          tenantName:  tenantName,
+          unitAddress: addr || String(unitId),
+          moveOutDate: moveOut || '',
+          unitId:      unitId
+        });
+      } catch (e) { console.warn('[notify] finance_rent_stop failed:', e); }
+    }
   }
 
   _ueRemoveTenantFields();

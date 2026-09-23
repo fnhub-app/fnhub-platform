@@ -1237,6 +1237,24 @@ function confirmAssignment() {
     ? function(){ return offerTurnoverRent(u, { context: 'assignment' }); }
     : function(){ return Promise.resolve(); };
   _rentOffer().then(function(){
+    // Notify Finance to BEGIN collecting rent for this new tenancy. Fired after
+    // the turnover-rent offer resolves so the rent amount reflects any
+    // recalculation. Fire-and-forget; silent skip if no Finance email is set.
+    if(typeof notifyFinanceRentStart === 'function'){
+      var _rentVal = (u.monthlyRent != null ? u.monthlyRent : u.monthly_rent);
+      var _rentStr = (_rentVal == null || _rentVal === '')
+        ? ''
+        : (typeof formatCurrency === 'function' ? formatCurrency(_rentVal) : ('$' + _rentVal));
+      try {
+        notifyFinanceRentStart({
+          tenantName:  name,
+          unitAddress: addr,
+          moveInDate:  moveIn || today,
+          rentAmount:  _rentStr,
+          unitId:      u.id
+        });
+      } catch(e){ console.warn('[notify] finance_rent_start failed:', e); }
+    }
     if(typeof promptTenantNote === 'function'){
       promptTenantNote(name, {
         title: 'Move-in note (optional)',

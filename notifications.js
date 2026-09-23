@@ -305,6 +305,47 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
 
+  // ── Finance rent-collection lifecycle events ───────────────────────────
+  {
+    key:                   'finance_rent_start',
+    label:                 'Rent Collection — Start (to Finance)',
+    description:           'Sent to the Finance mailbox when a tenant is assigned to a unit, so Finance knows to begin collecting rent. Goes to the nation Finance email from Settings (silent skip if none is configured); tick CC roles below to also notify staff.',
+    recipientType:         'finance',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['tenantName','unitAddress','moveInDate','rentAmount','nationShort'],
+    defaults: {
+      subject:  '{nationShort} Housing — Begin Rent Collection: {unitAddress}',
+      bodyHtml: '<p>A tenant has been assigned to a unit. Please <strong>begin collecting rent</strong> for this tenancy.</p>'
+              + '<p>Tenant: <strong>{tenantName}</strong><br/>'
+              +    'Unit address: <strong>{unitAddress}</strong><br/>'
+              +    'Move-in / effective date: <strong>{moveInDate}</strong><br/>'
+              +    'Monthly rent: <strong>{rentAmount}</strong></p>'
+              + '<p>Rent collection should start effective the move-in date shown above. If the rent amount is blank or still being calculated, please confirm it with the Housing Department before posting the first charge.</p>'
+              + '<p>Thank you,<br/>{nationShort} Housing</p>'
+    }
+  },
+  {
+    key:                   'finance_rent_stop',
+    label:                 'Rent Collection — Stop (to Finance)',
+    description:           'Sent to the Finance mailbox when a tenant is removed / unsigned from a unit, so Finance knows to stop collecting rent. Goes to the nation Finance email from Settings (silent skip if none is configured); tick CC roles below to also notify staff.',
+    recipientType:         'finance',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['tenantName','unitAddress','moveOutDate','nationShort'],
+    defaults: {
+      subject:  '{nationShort} Housing — Stop Rent Collection: {unitAddress}',
+      bodyHtml: '<p>A tenant has been removed from a unit. Please <strong>stop collecting rent</strong> for this tenancy.</p>'
+              + '<p>Tenant: <strong>{tenantName}</strong><br/>'
+              +    'Unit address: <strong>{unitAddress}</strong><br/>'
+              +    'Move-out / effective date: <strong>{moveOutDate}</strong></p>'
+              + '<p>Rent collection should stop effective the move-out date shown above. Please reconcile any final balance or arrears with the Housing Department.</p>'
+              + '<p>Thank you,<br/>{nationShort} Housing</p>'
+    }
+  },
+
   // ── Application workflow status-change events ───────────────────────────
   {
     key:                   'application_mgr_recommended',
@@ -2754,6 +2795,73 @@ async function notifyRfqCancelled(rfq, contractor, addr) {
 }
 window.notifyRfqCancelled = notifyRfqCancelled;
 
+// ── Finance rent-collection lifecycle notifications ───────────────────────
+// Both send to the nation Finance mailbox (Settings -> Nation `finance_email`,
+// resolved via window.nationFinanceEmail) plus any staff picked in the event's
+// primary/CC role checkboxes. Fire-and-forget; silent skip when no recipient
+// resolves. `info` carries the tenant/unit/date/rent tokens.
+function _financeEmailRecipients(eventKey, primaryEmail) {
+  var seen = {}, emails = [];
+  function add(a){ if(!a) return; var c=String(a).trim().toLowerCase(); if(!c||seen[c]) return; if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return; seen[c]=true; emails.push(c); }
+  add(primaryEmail);
+  return { add: add, emails: emails };
+}
+
+// Fired from confirmAssignment (housing-init.js) when a tenant is assigned to a
+// unit — tells Finance to BEGIN collecting rent.
+async function notifyFinanceRentStart(info) {
+  info = info || {};
+  var eventKey = 'finance_rent_start';
+  var finEmail = (typeof window.nationFinanceEmail === 'function') ? window.nationFinanceEmail() : '';
+  var rc = _financeEmailRecipients(eventKey, finEmail);
+  var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+  if (extraRoles.length) {
+    var extra = await _resolveActiveStaffForRoles(extraRoles);
+    extra.forEach(function(r){ rc.add(r.email); });
+  }
+  if (!rc.emails.length) { console.log('[notify] finance_rent_start skipped - no Finance email configured or CC recipients'); return; }
+  var natShort = (window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing';
+  var rendered = _renderEmailTemplate(eventKey, {
+    tenantName:  info.tenantName  || '—',
+    unitAddress: info.unitAddress || '—',
+    moveInDate:  info.moveInDate  || '—',
+    rentAmount:  info.rentAmount  || '—',
+    nationShort: natShort
+  });
+  if (!rendered) return;
+  await _sendSerially(rc.emails.map(function(e){ return { email: e }; }), function(rcp){
+    return { to: rcp.email, to_name: '', subject: rendered.subject, bodyHtml: rendered.bodyHtml, event: eventKey, entity_type: 'tenant', entity_id: info.unitId || info.unitAddress || '—' };
+  }, eventKey);
+}
+window.notifyFinanceRentStart = notifyFinanceRentStart;
+
+// Fired from the Remove Tenant / vacate flow (housing-modals.js) when a tenant
+// is unsigned from a unit — tells Finance to STOP collecting rent.
+async function notifyFinanceRentStop(info) {
+  info = info || {};
+  var eventKey = 'finance_rent_stop';
+  var finEmail = (typeof window.nationFinanceEmail === 'function') ? window.nationFinanceEmail() : '';
+  var rc = _financeEmailRecipients(eventKey, finEmail);
+  var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+  if (extraRoles.length) {
+    var extra = await _resolveActiveStaffForRoles(extraRoles);
+    extra.forEach(function(r){ rc.add(r.email); });
+  }
+  if (!rc.emails.length) { console.log('[notify] finance_rent_stop skipped - no Finance email configured or CC recipients'); return; }
+  var natShort = (window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing';
+  var rendered = _renderEmailTemplate(eventKey, {
+    tenantName:  info.tenantName  || '—',
+    unitAddress: info.unitAddress || '—',
+    moveOutDate: info.moveOutDate || '—',
+    nationShort: natShort
+  });
+  if (!rendered) return;
+  await _sendSerially(rc.emails.map(function(e){ return { email: e }; }), function(rcp){
+    return { to: rcp.email, to_name: '', subject: rendered.subject, bodyHtml: rendered.bodyHtml, event: eventKey, entity_type: 'tenant', entity_id: info.unitId || info.unitAddress || '—' };
+  }, eventKey);
+}
+window.notifyFinanceRentStop = notifyFinanceRentStop;
+
 // Tokens for the in-house field-employee work-order email — reuses the work
 // order token set and adds the assignee's name.
 function _emailTokensForFieldWorkOrder(sow, unit) {
@@ -3034,6 +3142,12 @@ function _ntfRenderEditorHtml(eventKey) {
       +   'Always sends to the <strong>assigned field employee&#39;s email</strong> (the in-house crew member assigned the work order; '
       +   'silent skip if none is assigned or no email is on file).'
       + '</div>';
+  } else if (cfg.recipientType === 'finance') {
+    primaryBlock +=
+        '<div class="ntf-recipients-fixed">'
+      +   'Always sends to the <strong>nation Finance email</strong> configured in Settings &rarr; Nation '
+      +   '(silent skip if none is set). Use the CC checkboxes below to also notify housing staff.'
+      + '</div>';
   } else if (cfg.recipientType === 'rfq_contractor') {
     primaryBlock +=
         '<div class="ntf-recipients-fixed">'
@@ -3081,7 +3195,7 @@ function _ntfRenderEditorHtml(eventKey) {
     +   '</div>'
     + '</div>'
     + '<div class="ntf-field">'
-    +   '<label class="ntf-label">Recipients' + (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'field_employee'
+    +   '<label class="ntf-label">Recipients' + (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance'
           ? ''
           : ' <span class="ntf-label-hint">(active staff in any ticked role)</span>') + '</label>'
     +   primaryBlock
@@ -3463,7 +3577,7 @@ function _ntfReadEditorState() {
       if (cb.checked) ccRoles.push(cb.getAttribute('data-ntf-cc-role'));
     });
   }
-  var isImplicitRecipient = cfg && (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'rfq_contractor' || cfg.recipientType === 'field_employee');
+  var isImplicitRecipient = cfg && (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'rfq_contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance');
   if (!isImplicitRecipient && !roles.length) {
     showToast('Pick at least one recipient role', {type:'info'});
     return null;
