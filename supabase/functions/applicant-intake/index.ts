@@ -548,6 +548,20 @@ serve(async (req) => {
       if (!String(p.fn || '').trim() || !String(p.ln || '').trim()) {
         return json({ error: 'Please enter the applicant first and last name before submitting.' }, 400)
       }
+      // One active NEW application per member. Refuse a second new-application
+      // submit when this member already has another new submission awaiting
+      // review (status 'submitted') or one already turned into a housing
+      // application (created_app_id set). Declined / withdrawn / draft
+      // submissions do NOT block, so a member can re-apply after a decision.
+      if (row.submission_type === 'new') {
+        const { data: others } = await admin.from('application_submissions')
+          .select('id, status, created_app_id')
+          .eq('applicant_uid', uid).eq('submission_type', 'new').neq('id', subId)
+        const hasActive = (others || []).some((o: any) => o && (o.status === 'submitted' || o.created_app_id))
+        if (hasActive) {
+          return json({ error: 'You already have a housing application in review. You can update that application or wait for a decision; a second new application cannot be submitted.' }, 409)
+        }
+      }
       // Band-number verification (server-side gate; the portal mirrors this
       // client-side for early feedback but this is the enforcement point).
       // Anti-spoofing: neither error message reveals the expected prefix.

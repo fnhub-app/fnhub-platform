@@ -1514,6 +1514,36 @@ function openSubmitModal(){
     return;
   }
 
+  // Hard block: the SAME person (name + date of birth) already has an ACTIVE
+  // application of a scored type. A person cannot hold two active housing
+  // applications, so staff must update or archive/withdraw the existing one
+  // first (name-only matches stay a soft warning, since names aren't unique).
+  var _scoredNew = (appType === 'new_housing' || appType === 'transfer_request');
+  if (_scoredNew && _dups.soft.length) {
+    var _activeDup = _dups.soft.filter(function(a){
+      var at = a.appType || a.app_type || '';
+      var stt = (a.status || '').toLowerCase();
+      var terminal = (stt === 'declined' || stt === 'withdrawn');   // archived already excluded upstream
+      var scored = (at === 'new_housing' || at === 'transfer_request' || at === '');   // '' = legacy scored app
+      return scored && !terminal;
+    });
+    if (_activeDup.length) {
+      var d2 = _activeDup[0];
+      var d2Name = (((d2.fn||'')+' '+(d2.ln||'')).trim()) || d2.id;
+      showConfirm({
+        title:       'Duplicate Application — Cannot Submit',
+        message:     'This applicant already has an active application on file:<br><br>'
+                   + '<strong>' + escapeHtml(d2Name) + '</strong> &nbsp;·&nbsp; ' + escapeHtml(d2.id) + ' &nbsp;·&nbsp; ' + escapeHtml(d2.status||'unknown') + '<br><br>'
+                   + 'The same person cannot have two active applications. Update the existing one, or archive / withdraw it before submitting a new application.',
+        confirmText: 'Open Existing',
+        cancelText:  'Close'
+      }).then(function(ok) {
+        if (ok) window.location.href = 'housing.html?openApp=' + encodeURIComponent(d2.id);
+      });
+      return;
+    }
+  }
+
   function _proceed() {
 
   // If the applicant supplied an email, surface an inline opt-in to send
