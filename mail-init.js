@@ -13,6 +13,7 @@ window._mailQ       = '';
 window._mailStatus  = 'new';
 window._mailUnitSS  = null;
 window._mailActiveId = null;
+window._mailStaffByEmail = {};   // lowercased email -> staff display name
 
 function _mailHeaders() {
   return Object.assign({}, window.HOUSING_HEADERS || {}, { 'Content-Type': 'application/json' });
@@ -36,6 +37,27 @@ async function _mailLoadUnits() {
     var data = await r.json();
     window.housingUnits = data.map(function(row){ return { id: row.id, num: row.num, street: row.street, assignedName: row.assigned_name, archived: !!row.archived }; });
   } catch(e) { console.warn('[mail] units load:', e); }
+}
+
+// Intake emails are FORWARDED by a registered employee, so the sender address
+// is a staff address. Load staff to resolve "Forwarded by <employee>".
+async function _mailLoadStaff() {
+  try {
+    var r = await fetch(window.SUPABASE_URL + '/rest/v1/staff?select=email,name&limit=9999', { headers: _mailHeaders() });
+    if (!r.ok) return;
+    var data = await r.json();
+    var map = {};
+    (data || []).forEach(function(s){ if (s && s.email) map[String(s.email).trim().toLowerCase()] = s.name || ''; });
+    window._mailStaffByEmail = map;
+  } catch(e) { console.warn('[mail] staff load:', e); }
+}
+
+// Resolve who forwarded an intake email: the registered employee's name when
+// the sender matches a staff address, else the email's own display name/address.
+function _mailForwardedBy(row) {
+  var em = String((row && row.from_email) || '').trim().toLowerCase();
+  var staffName = em && window._mailStaffByEmail ? window._mailStaffByEmail[em] : '';
+  return staffName || (row && (row.from_name || row.from_email)) || 'Unknown';
 }
 
 async function loadEmailIntake() {
@@ -89,7 +111,7 @@ function renderEmailIntakeList() {
       ? '<button class="btn btn-primary" style="padding:5px 12px;font-size:12px;" onclick="openMailTriage(\'' + m.id + '\')">Triage &rarr;</button>'
       : '<button class="btn btn-ghost" style="padding:5px 12px;font-size:12px;" onclick="openMailTriage(\'' + m.id + '\')">View</button>';
     return '<tr style="border-bottom:1px solid var(--border);">'
-      + '<td style="padding:10px 12px;">' + _mailEsc(m.from_name || m.from_email || '—') + '<div style="font-size:11px;color:var(--muted);">' + _mailEsc(m.from_name ? (m.from_email||'') : '') + '</div></td>'
+      + '<td style="padding:10px 12px;">' + _mailEsc(_mailForwardedBy(m)) + '<div style="font-size:11px;color:var(--muted);">' + _mailEsc(m.from_email || '') + '</div></td>'
       + '<td style="padding:10px 12px;max-width:280px;">' + _mailEsc(m.subject || '(no subject)') + '</td>'
       + '<td style="padding:10px 12px;white-space:nowrap;color:var(--muted);">' + _mailFmtWhen(m.created_at) + '</td>'
       + '<td style="padding:10px 12px;text-align:center;">' + (atts || '—') + '</td>'
@@ -153,8 +175,8 @@ async function openMailTriage(id) {
     + '</div>'
     + '<div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;">'
     +   '<div>'
-    +     '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">From</div>'
-    +     '<div style="font-size:13px;color:var(--text);">' + _mailEsc(row.from_name || '') + ' &lt;' + _mailEsc(row.from_email || '') + '&gt;</div>'
+    +     '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">Forwarded by</div>'
+    +     '<div style="font-size:13px;color:var(--text);">' + _mailEsc(_mailForwardedBy(row)) + (row.from_email ? ' &lt;' + _mailEsc(row.from_email) + '&gt;' : '') + '</div>'
     +     '<div style="font-size:11px;color:var(--muted);margin-top:6px;">Received ' + _mailFmtWhen(row.created_at) + '</div>'
     +   '</div>'
     +   '<div>'
@@ -313,7 +335,7 @@ async function assignEmailIntake() {
 
     if (typeof auditEntry === 'function') {
       auditEntry(String(unitId), 'email_filed',
-        'Filed forwarded email "' + (row.subject || '(no subject)') + '" from ' + (row.from_email || 'unknown')
+        'Filed forwarded email "' + (row.subject || '(no subject)') + '" forwarded by ' + _mailForwardedBy(row)
         + (filed.length ? ' (' + filed.length + ' file(s))' : '') + (note ? ' — ' + note : ''), actor);
     }
 
@@ -399,6 +421,7 @@ window.dismissEmailIntake = dismissEmailIntake;
     if (view) view.style.display = 'flex';
 
     await _mailLoadUnits();
+    await _mailLoadStaff();
     await loadEmailIntake();
   } catch(e) {
     console.error('[mail] init error:', e);
