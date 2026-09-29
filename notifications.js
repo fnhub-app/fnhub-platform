@@ -2575,6 +2575,151 @@ async function _generateWorkOrderPdfBase64() {
   return ctx.finish();
 }
 
+// ── Maintenance-request source letters (tenant / referral acknowledgment) ────
+// Builds a branded letter PDF for a Maintenance Request based on its Request
+// Source (Overview tab). kind:
+//   'tenant'         — a letter TO the tenant: confirms the request, explains
+//                      that work is prioritized on urgency, funding and safety,
+//                      and (when there are rent arrears) references how arrears
+//                      must be addressed per the Housing Policy.
+//   'acknowledgment' — a letter acknowledging a referral back to the referring
+//                      source (Emergency, Medical Centre — never the Housing
+//                      Department itself), confirming the request was logged.
+// Returns a Blob (application/pdf). All contact/branding is read from
+// NATION_CONFIG / theme (OCAP: no hardcoded nation identity), and every policy
+// citation comes from policyCite() so it tracks each nation's own policy.
+async function _buildSowSourceLetterPdf(kind, info) {
+  info = info || {};
+  await _loadJsPdf();
+  var logo = null;
+  try { logo = await _fetchLogoForPdf(); } catch (e) {}
+
+  var short = (typeof nationShort === 'function' && nationShort()) || info.nationShort || 'Housing';
+  var isTenant = (kind === 'tenant');
+  var title = isTenant ? 'Maintenance Request — Tenant Letter'
+                       : 'Maintenance Request — Acknowledgment of Referral';
+
+  var ctx = _makePdfDoc({
+    headerTitle:    title,
+    headerSubtitle: info.projectNumber || '',
+    logoDataUrl:    logo,
+    footerLeft:     ((window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '') + ' Housing — Confidential'
+  });
+  var pdf = ctx.pdf;
+  var paragraph = ctx.paragraph.bind(ctx);
+  var sectionHeader = ctx.sectionHeader.bind(ctx);
+  var gap = ctx.gap.bind(ctx);
+
+  var today = new Date().toLocaleDateString('en-CA');
+  var esc = function (s) { return String(s == null ? '' : s); };
+
+  // Date + addressee block.
+  paragraph(today, 9);
+  gap(1);
+  var addressee = isTenant
+    ? (info.tenantName || 'Tenant')
+    : (info.sourceContact || info.sourceLabel || 'Referring Party');
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(20);
+  ctx.needSpace(6);
+  pdf.text(esc(addressee), ctx.marginL, ctx.y + 3);
+  ctx.y += 6;
+  pdf.setFont('helvetica', 'normal'); pdf.setTextColor(0);
+  if (!isTenant && info.sourceContact && info.sourceLabel) {
+    paragraph('Referring source: ' + info.sourceLabel, 8.5);
+  }
+  if (info.unitAddress) paragraph((isTenant ? 'Unit: ' : 'Re: unit at ') + info.unitAddress, 8.5);
+  gap(2);
+
+  paragraph('Dear ' + esc(addressee) + ',', 9.5);
+  gap(1);
+
+  // Opening paragraph.
+  if (isTenant) {
+    paragraph('This letter confirms that the ' + short + ' Housing Department has received and '
+      + 'logged a maintenance request for your unit'
+      + (info.unitAddress ? ' at ' + info.unitAddress : '')
+      + (info.projectNumber ? ' (Reference ' + info.projectNumber + ')' : '')
+      + '. The scope of the requested work is summarized below.');
+  } else {
+    paragraph('Thank you for your referral. This letter acknowledges that the ' + short + ' Housing '
+      + 'Department has received and logged a maintenance request'
+      + (info.unitAddress ? ' for the unit at ' + info.unitAddress : '')
+      + (info.projectNumber ? ' (Reference ' + info.projectNumber + ')' : '')
+      + (info.sourceLabel ? ', referred by ' + info.sourceLabel : '')
+      + '. No further action is required from you at this time; the Housing Department will manage the '
+      + 'assessment and any follow-up directly with the tenant.');
+  }
+  gap(2);
+
+  // Requested work summary.
+  var items = (info.items || []).filter(function (it) { return it && (it.description || it.category); });
+  if (items.length) {
+    sectionHeader('Requested Work');
+    items.forEach(function (it, i) {
+      var line = (i + 1) + '. ' + (it.description || '(no description)')
+        + (it.category ? '  [' + it.category + ']' : '');
+      paragraph(line, 8.5);
+    });
+    gap(1);
+  }
+  if (info.condition) { paragraph('Overall unit condition assessed as: ' + info.condition + '.', 8.5); gap(1); }
+
+  // Prioritization statement (mirrors the request Terms — urgency, funding, safety).
+  sectionHeader('How Requests Are Prioritized');
+  paragraph('Maintenance and renovation requests are assessed and prioritized based on the urgency of '
+    + 'the need, the health and safety risk to occupants, and the availability and qualifying criteria '
+    + 'of funding under the applicable program. Requests involving immediate hazards to health or safety '
+    + 'are given priority over general maintenance and cosmetic work. Submission of a request does not '
+    + 'guarantee approval or a specific completion date; the Housing Department will confirm decisions '
+    + 'and scheduling in writing, subject to available resources and funding.');
+  gap(2);
+
+  // Arrears block — tenant letters only, and only when there are arrears.
+  if (isTenant && info.arrears && info.arrears.has) {
+    var a = info.arrears;
+    sectionHeader('Rent Arrears');
+    var gateCite = a.citeGate ? ' (' + a.citeGate + ')' : '';
+    var arrCite  = a.citeArr ? ' (' + a.citeArr + ')' : '';
+    var balStr = (a.balance != null && !isNaN(a.balance) && a.balance > 0)
+      ? ' of ' + ((typeof formatCurrency === 'function') ? formatCurrency(a.balance) : ('$' + Number(a.balance).toFixed(2)))
+      : '';
+    if (a.hasArrangement) {
+      paragraph('Our records show a balance owing' + balStr + ' on the account for this unit, with an '
+        + 'approved repayment arrangement currently on file. Please continue to meet the terms of that '
+        + 'arrangement' + arrCite + '. Maintenance and renovation priority, and any future unit '
+        + 'allocation, may be affected if the arrangement is not kept current' + gateCite + '.');
+    } else {
+      paragraph('Our records indicate that the account for this unit is currently in arrears' + balStr
+        + '. In accordance with the Housing Policy' + gateCite + ', a tenant who is not in good standing '
+        + 'may have maintenance and renovation priority — and any future unit allocation — affected. '
+        + 'Arrears must be addressed either by paying the balance in full or by entering into an approved '
+        + 'repayment arrangement with the Housing Department' + arrCite + '. Please contact the Housing '
+        + 'office as soon as possible to make arrangements.');
+    }
+    gap(2);
+  }
+
+  // Closing.
+  paragraph('If you have any questions about this request, please contact the ' + short
+    + ' Housing office.', 9);
+  gap(3);
+  paragraph('Sincerely,', 9);
+  gap(4);
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(20);
+  ctx.needSpace(6);
+  pdf.text(short + ' Housing Department', ctx.marginL, ctx.y + 3);
+  ctx.y += 6;
+  pdf.setFont('helvetica', 'normal'); pdf.setTextColor(0);
+  if (info.preparedBy) paragraph('Prepared by: ' + info.preparedBy, 8.5);
+
+  var base64 = ctx.finish();
+  var bin = atob(base64);
+  var arr = new Uint8Array(bin.length);
+  for (var bi = 0; bi < bin.length; bi++) arr[bi] = bin.charCodeAt(bi);
+  return new Blob([arr], { type: 'application/pdf' });
+}
+window.generateSowSourceLetter = _buildSowSourceLetterPdf;
+
 // Resolve the contractor's email + name from the in-memory cache first,
 // falling back to Supabase REST if the cache is empty (sub-pages may not
 // have loaded contractors yet). Returns { email, name } or null.

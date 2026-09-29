@@ -249,6 +249,17 @@ function _buildSowModalHTML() {
               '<div class="f"><label>Date Prepared</label><input id="sow_date" type="date"/></div>' +
               '<div class="f"><label>Current Tenant Name</label><input id="sow_tenant_name" type="text" placeholder="Full name of tenant"/></div>' +
               '<div class="f"><label>Prepared By (Staff)</label><input id="sow_prepared_by" type="text" placeholder="Staff name"/></div>' +
+              '<div class="f"><label>Request Source</label>' +
+                '<select id="sow_request_source" onchange="_sowOnRequestSourceChange()">' +
+                  '<option value="">— Select source —</option>' +
+                  '<option value="tenant">Tenant</option>' +
+                  '<option value="emergency">Emergency</option>' +
+                  '<option value="housing">Housing Department</option>' +
+                  '<option value="medical_centre">Medical Centre</option>' +
+                '</select>' +
+                '<div id="sow_source_hint" class="txt-muted-xs" style="margin-top:3px;"></div>' +
+              '</div>' +
+              '<div class="f" id="sow_source_contact_wrap" style="display:none;"><label>Referring Contact <span style="font-size:10px;font-weight:400;color:var(--muted);">(name / organization — for the acknowledgment letter)</span></label><input id="sow_source_contact" type="text" placeholder="e.g. Dr. J. Smith, CLFN Medical Centre"/></div>' +
               '<div class="f"><label>PO Number <span style="font-size:10px;font-weight:400;color:var(--muted);">(from accounting)</span></label><input id="sow_po_number" type="text" placeholder="e.g. PO-2026-0042"/></div>' +
               '<div class="f sow-ct-row"><label>Assigned To</label>' +
                 '<input id="sow_contractor" type="text" placeholder="Search — your Housing Dept or a contractor…" autocomplete="off"' +
@@ -545,6 +556,7 @@ function _buildSowModalHTML() {
         '<button id="sow_new_request_btn" type="button" onclick="sowStartNewRequest()" class="btn btn-ghost" style="display:none;">🆕 New Request</button>' +
         '<button type="button" onclick="printWorkOrder()" class="btn btn-ghost">🏗 Work Order</button>' +
         '<button type="button" onclick="printSOW()" class="btn btn-ghost">🖨 Tenant form</button>' +
+        '<button type="button" id="sow_source_letter_btn" onclick="sowGenerateSourceLetter()" class="btn btn-ghost" style="display:none;">✉️ Letter</button>' +
         '<button type="button" id="sow_progress_btn" onclick="_sowOpenProgress()" class="btn btn-ghost">📊 Progress Report</button>' +
         '<button type="button" id="sow_rfq_btn" onclick="sowOpenRfq()" class="btn btn-ghost" style="display:none;">📋 RFQ</button>' +
         '<span class="tic-footer-spacer"></span>' +
@@ -1044,6 +1056,118 @@ function _applySowSeed(seed){
   }
 }
 window._applySowSeed = _applySowSeed;
+
+// ── Request Source + source letters ───────────────────────────────────────
+// The Overview "Request Source" dropdown (Tenant / Emergency / Housing /
+// Medical Centre) drives an optional letter:
+//   Tenant           -> a tenant letter (prioritization + any rent arrears)
+//   Emergency / Med.  -> an acknowledgment letter back to the referring source
+//   Housing Dept.     -> no letter (the department is the originator)
+// This toggles the referring-contact field, the hint line, and the footer
+// letter button label/visibility. Safe to call on every open.
+function _sowOnRequestSourceChange(){
+  var sel  = document.getElementById('sow_request_source');
+  var src  = sel ? sel.value : '';
+  var wrap = document.getElementById('sow_source_contact_wrap');
+  var hint = document.getElementById('sow_source_hint');
+  var btn  = document.getElementById('sow_source_letter_btn');
+  var isReferral = (src === 'emergency' || src === 'medical_centre');
+  if (wrap) wrap.style.display = isReferral ? '' : 'none';
+  if (hint) {
+    hint.textContent = src === 'tenant'
+        ? 'A tenant letter can be generated (work prioritization + any rent arrears).'
+      : isReferral
+        ? 'An acknowledgment letter can be generated for the referring source.'
+      : src === 'housing'
+        ? 'Housing Department request — no letter is generated.'
+        : '';
+  }
+  if (btn) {
+    if (src === 'tenant')       { btn.style.display = ''; btn.textContent = '✉️ Tenant Letter'; }
+    else if (isReferral)        { btn.style.display = ''; btn.textContent = '✉️ Acknowledgment Letter'; }
+    else                        { btn.style.display = 'none'; }
+  }
+}
+window._sowOnRequestSourceChange = _sowOnRequestSourceChange;
+
+// Generate the source-appropriate letter for the current request, download it,
+// and file it to the unit's documents. Tenant letters resolve rent arrears
+// from the live finance data when it's loaded (arrears.js), else fall back to
+// the Accountability "rent arrears" flag. Async + fully guarded.
+async function sowGenerateSourceLetter(){
+  // Persist current edits without ever downgrading an approved/archived request.
+  if (typeof _sowSafePreprintSave === 'function') _sowSafePreprintSave();
+  else if (typeof saveSOW === 'function') saveSOW({ keepOpen: true });
+
+  var get = function(id){ var el=document.getElementById(id); return el?String(el.value||'').trim():''; };
+  var src = get('sow_request_source');
+  if (!src) { if(typeof showToast==='function') showToast('Select the Request Source on the Overview tab first.', {type:'info'}); return; }
+  if (src === 'housing') { if(typeof showToast==='function') showToast('This request originates from the Housing Department — no letter is generated.', {type:'info'}); return; }
+  if (typeof window.generateSowSourceLetter !== 'function') { if(typeof showToast==='function') showToast('The letter generator is not available on this page.', {type:'error'}); return; }
+
+  var kind = (src === 'tenant') ? 'tenant' : 'acknowledgment';
+  var SRC_LABEL = { emergency:'Emergency Services', medical_centre:'Medical Centre' };
+  var projNum = window._sowEditingProjectNumber || '';
+  var tenantName = get('sow_tenant_name');
+  var items = ((typeof collectSowItems === 'function') ? collectSowItems() : [])
+    .filter(function(it){ return it && (it.description || it.category); });
+
+  var info = {
+    projectNumber: projNum,
+    unitAddress:   get('sow_address'),
+    tenantName:    tenantName,
+    preparedBy:    get('sow_prepared_by'),
+    condition:     get('sow_condition'),
+    sourceLabel:   SRC_LABEL[src] || '',
+    sourceContact: get('sow_source_contact'),
+    items:         items,
+    nationShort:   (typeof nationShort === 'function') ? nationShort() : ''
+  };
+
+  if (kind === 'tenant') {
+    var arr = {
+      has: false, balance: null, hasArrangement: false,
+      citeGate: (typeof policyCite === 'function') ? policyCite('good_standing_gate') : '',
+      citeArr:  (typeof policyCite === 'function') ? policyCite('repayment_extra_pct') : ''
+    };
+    var chkArrears = (function(){ var el=document.getElementById('sow_rent_arrears'); return el?!!el.checked:false; })();
+    try {
+      if (typeof window.arrearsLoad === 'function' && typeof window.arrearsTenantByName === 'function') {
+        await window.arrearsLoad();
+        var t = window.arrearsTenantByName(tenantName);
+        if (t && typeof window.arrearsStateForTenant === 'function') {
+          var st = window.arrearsStateForTenant(t.id);
+          if (st) { arr.balance = st.balance; arr.hasArrangement = !!st.hasApproved; if (st.balance > 0) arr.has = true; }
+        }
+      }
+    } catch(e) { /* fall back to the staff-flagged checkbox */ }
+    if (chkArrears) arr.has = true;
+    info.arrears = arr;
+  }
+
+  if (typeof showToast === 'function') showToast('Generating letter…', {type:'info'});
+  try {
+    var blob = await window.generateSowSourceLetter(kind, info);
+    var short = info.nationShort || 'Housing';
+    var fname = short + ' ' + (kind === 'tenant' ? 'Tenant Letter' : 'Referral Acknowledgment')
+      + (projNum ? ' ' + projNum : '') + '.pdf';
+    if (typeof window.fileContractPdf === 'function' && _sowUnitId) {
+      await window.fileContractPdf(blob, fname, {
+        unitId:   _sowUnitId,
+        savedMsg: 'Letter generated — downloaded and added to unit documents.'
+      });
+    } else {
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a'); a.href = url; a.download = fname; a.click();
+      setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
+      if (typeof showToast === 'function') showToast('Letter downloaded.', {type:'info'});
+    }
+  } catch(e) {
+    console.warn('[sow] source letter generation failed:', e);
+    if (typeof showToast === 'function') showToast('Could not generate the letter: ' + ((e && e.message) || e), {type:'error'});
+  }
+}
+window.sowGenerateSourceLetter = sowGenerateSourceLetter;
 
 // ── AI: auto-fill Work Items from an uploaded quote ───────────────────────
 // User uploads a contractor quote (PDF or photo) on the Scope of Work tab; the
@@ -2769,6 +2893,7 @@ function saveSOW(opts){
     assignedTo:(document.getElementById('sow_assigned_team')||{}).value==='in_house' ? ((document.getElementById('sow_assigned_to')||{}).value||'') : '',
     assignedToName:(function(){ var s=document.getElementById('sow_assigned_to'); if(!s||((document.getElementById('sow_assigned_team')||{}).value)!=='in_house') return ''; var o=s.options[s.selectedIndex]; return (o&&o.getAttribute('data-name'))||''; })(),
     poNumber:get('sow_po_number'),
+    requestSource:get('sow_request_source'), sourceContact:get('sow_source_contact'),
     condition:get('sow_condition'), fundSource:get('sow_fund_source'), totalCost:get('sow_total_cost'),
     startDate:get('sow_start_date'), endDate:get('sow_end_date'), notes:get('sow_notes'),
     hmName:get('sow_hm_name'), hmDate:get('sow_hm_date'),

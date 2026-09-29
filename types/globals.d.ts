@@ -265,6 +265,7 @@ declare var _sowEditingProjectNumber: any;
 declare var _sowFiles: any;
 declare var _sowForceNew: any;
 declare var _sowItemIdx: any;
+declare var _sowOnRequestSourceChange: any;
 declare var _sowPopulateFieldEmployees: any;
 declare var _sowPopulateWorkOrder: any;
 declare var _sowPromptWorkOrderEmail: any;

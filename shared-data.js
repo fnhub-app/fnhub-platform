@@ -5065,6 +5065,8 @@ function populateSow(data){
   var set=function(id,v){ var el=document.getElementById(id); if(el) el.value=v||''; };
   set('sow_address',data.address); set('sow_date',data.date); set('sow_prepared_by',data.preparedBy);
   set('sow_po_number', data.poNumber);
+  set('sow_request_source', data.requestSource);
+  set('sow_source_contact', data.sourceContact);
   set('sow_tenant_name',data.tenantName);
   set('sow_contractor',data.contractor); set('sow_condition',data.condition);
   set('sow_fund_source', data.fundSource);
@@ -5105,6 +5107,8 @@ function populateSow(data){
   else { addSowItem(); }
   // Work Order (execution) block — fill checklist + measurements/materials/notes.
   if (typeof _sowPopulateWorkOrder === 'function') _sowPopulateWorkOrder(data.workOrder);
+  // Sync the Request Source UI (contact field + letter button) to the loaded value.
+  if (typeof _sowOnRequestSourceChange === 'function') _sowOnRequestSourceChange();
 }
 function printContractorAgreement() {
   // Read live form data — no save required to print
@@ -7503,7 +7507,7 @@ function resetRenoScoreModel() {
 }
 function resetSow(){
   ['sow_address','sow_tenant_name','sow_prepared_by','sow_po_number','sow_contractor','sow_total_cost',
-   'sow_notes','sow_hm_name','sow_ed_name',
+   'sow_notes','sow_hm_name','sow_ed_name','sow_request_source','sow_source_contact',
    'sow_sig_tenant_name','sow_sig_staff_name'].forEach(function(id){
     var el=document.getElementById(id); if(el) el.value='';
   });
@@ -7534,6 +7538,8 @@ function resetSow(){
     var el=document.getElementById(id); if(el) el.checked=false;
   });
   if (typeof _sowPopulateWorkOrder === 'function') _sowPopulateWorkOrder(null);
+  // Reset the Request Source UI (hides the contact field + letter button).
+  if (typeof _sowOnRequestSourceChange === 'function') _sowOnRequestSourceChange();
 }
 function rpAddNewContractor() {
   var dd = document.getElementById('rp_ct_dropdown');
