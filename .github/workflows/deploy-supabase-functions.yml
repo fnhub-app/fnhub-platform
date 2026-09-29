@@ -131,9 +131,13 @@ jobs:
               continue
             fi
             echo "──────── Deploying: $name ────────"
-            # support-login is called server-to-server (gated by SUPPORT_LOGIN_SECRET,
-            # not a Supabase JWT), so it must deploy WITHOUT JWT verification.
-            if [ "$name" = "support-login" ]; then
+            # Some functions are called server-to-server WITHOUT a Supabase JWT
+            # and gate themselves with their own shared secret, so they must
+            # deploy WITHOUT JWT verification (otherwise the platform gateway
+            # 401s the caller before our code runs):
+            #   support-login  - gated by SUPPORT_LOGIN_SECRET
+            #   email-intake   - gated by EMAIL_INTAKE_SECRET (Cloudflare Email Worker)
+            if [ "$name" = "support-login" ] || [ "$name" = "email-intake" ]; then
               supabase functions deploy "$name" --project-ref "$REF" --no-verify-jwt
             else
               supabase functions deploy "$name" --project-ref "$REF"
