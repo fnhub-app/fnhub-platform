@@ -305,6 +305,50 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
 
+  // ── Maintenance-request generated letters (PDF, not emailed) ───────────
+  // These are downloaded + filed to the tenant's documents from the
+  // Maintenance Request "Letter" button (driven by the Request Source). They
+  // are NOT emailed — the editor here controls the letter's title (Subject) and
+  // wording (Body). The date, recipient address block, greeting and signature
+  // are added by the generator. Tokens {scopeOfWork} and {arrearsNote} are
+  // filled in from the live request (work items / rent-arrears status) and can
+  // be moved or removed in the body.
+  {
+    key:                   'sow_tenant_letter',
+    label:                 'Maintenance Request — Tenant Letter (PDF)',
+    description:           'Generated when the Maintenance Request source is "Tenant". A downloadable/printable letter (not emailed) filed to the tenant documents. Subject = the letter title; Body = the letter wording. {scopeOfWork} lists the work items and {arrearsNote} inserts the rent-arrears paragraph (with balance + policy citation) when the tenant is in arrears, otherwise nothing.',
+    recipientType:         'letter',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['addressee','tenantName','unitAddress','projectNumber','scopeOfWork','arrearsNote','nationShort'],
+    defaults: {
+      subject:  'Maintenance Request — Tenant Letter',
+      bodyHtml: '<p>This letter confirms that {nationShort} Housing has received and logged a maintenance request for your unit at {unitAddress} (Reference {projectNumber}). The scope of the requested work is summarized below.</p>'
+              + '{scopeOfWork}'
+              + '<p>Maintenance and renovation requests are assessed and prioritized based on the urgency of the need, the health and safety risk to occupants, and the availability and qualifying criteria of funding under the applicable program. Requests involving immediate hazards to health or safety are given priority over general maintenance and cosmetic work. Submission of a request does not guarantee approval or a specific completion date; the Housing Department will confirm decisions and scheduling in writing, subject to available resources and funding.</p>'
+              + '{arrearsNote}'
+              + '<p>If you have any questions about this request, please contact the {nationShort} Housing office.</p>'
+    }
+  },
+  {
+    key:                   'sow_referral_ack_letter',
+    label:                 'Maintenance Request — Referral Acknowledgment (PDF)',
+    description:           'Generated when the Maintenance Request source is "Emergency" or "Medical Centre" (referring sources; never the Housing Department). A downloadable/printable acknowledgment letter (not emailed) filed to the tenant documents. Subject = the letter title; Body = the letter wording. {scopeOfWork} lists the referred work items.',
+    recipientType:         'letter',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['addressee','unitAddress','projectNumber','scopeOfWork','nationShort'],
+    defaults: {
+      subject:  'Maintenance Request — Acknowledgment of Referral',
+      bodyHtml: '<p>Thank you for your referral. This letter acknowledges that {nationShort} Housing has received and logged a maintenance request for the unit at {unitAddress} (Reference {projectNumber}). The referred scope of work is summarized below.</p>'
+              + '{scopeOfWork}'
+              + '<p>Maintenance and renovation requests are assessed and prioritized based on the urgency of the need, the health and safety risk to occupants, and the availability and qualifying criteria of funding under the applicable program. Requests involving immediate hazards to health or safety are given priority over general maintenance and cosmetic work.</p>'
+              + '<p>No further action is required from you at this time; the Housing Department will manage the assessment and any follow-up directly with the tenant. If you have any questions, please contact the {nationShort} Housing office.</p>'
+    }
+  },
+
   // ── Finance rent-collection lifecycle events ───────────────────────────
   {
     key:                   'finance_rent_start',
@@ -2588,6 +2632,20 @@ async function _generateWorkOrderPdfBase64() {
 // Returns a Blob (application/pdf). All contact/branding is read from
 // NATION_CONFIG / theme (OCAP: no hardcoded nation identity), and every policy
 // citation comes from policyCite() so it tracks each nation's own policy.
+// Convert the editor's rich-text body (HTML) into an ordered list of plain-text
+// paragraphs for jsPDF. Block tags become paragraph breaks; <li> becomes a
+// bullet; a detached element decodes entities and strips remaining tags safely.
+function _letterHtmlToParagraphs(html) {
+  var norm = String(html || '')
+    .replace(/<\s*br\s*\/?>/gi, '\n')
+    .replace(/<\s*li[^>]*>/gi, '• ')
+    .replace(/<\/(p|div|li|h[1-6]|tr|ul|ol)>/gi, '\n');
+  var el = document.createElement('div');
+  el.innerHTML = norm;
+  var text = el.textContent || el.innerText || '';
+  return text.split('\n').map(function (s) { return s.replace(/\s+/g, ' ').trim(); }).filter(Boolean);
+}
+
 async function _buildSowSourceLetterPdf(kind, info) {
   info = info || {};
   await _loadJsPdf();
@@ -2596,8 +2654,60 @@ async function _buildSowSourceLetterPdf(kind, info) {
 
   var short = (typeof nationShort === 'function' && nationShort()) || info.nationShort || 'Housing';
   var isTenant = (kind === 'tenant');
-  var title = isTenant ? 'Maintenance Request — Tenant Letter'
-                       : 'Maintenance Request — Acknowledgment of Referral';
+  var eventKey = isTenant ? 'sow_tenant_letter' : 'sow_referral_ack_letter';
+  var esc = function (s) { return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); };
+
+  var addressee = isTenant
+    ? (info.tenantName || 'Tenant')
+    : (info.sourceContact || info.sourceLabel || 'Referring Party');
+
+  // Build the dynamic HTML-fragment tokens the editable body references.
+  var items = (info.items || []).filter(function (it) { return it && (it.description || it.category); });
+  var scopeHtml = items.length
+    ? items.map(function (it, i) {
+        return '<p>' + (i + 1) + '. ' + esc(it.description || '(no description)')
+          + (it.category ? ' [' + esc(it.category) + ']' : '') + '</p>';
+      }).join('')
+    : '<p>(No specific work items were listed.)</p>';
+  if (info.condition) scopeHtml += '<p>Overall unit condition assessed as: ' + esc(info.condition) + '.</p>';
+
+  var arrearsHtml = '';
+  if (isTenant && info.arrears && info.arrears.has) {
+    var a = info.arrears;
+    var gateCite = a.citeGate ? ' (' + esc(a.citeGate) + ')' : '';
+    var arrCite  = a.citeArr ? ' (' + esc(a.citeArr) + ')' : '';
+    var balStr = (a.balance != null && !isNaN(a.balance) && a.balance > 0)
+      ? ' of ' + ((typeof formatCurrency === 'function') ? formatCurrency(a.balance) : ('$' + Number(a.balance).toFixed(2)))
+      : '';
+    arrearsHtml = a.hasArrangement
+      ? '<p>Our records show a balance owing' + balStr + ' on the account for this unit, with an approved '
+        + 'repayment arrangement currently on file. Please continue to meet the terms of that arrangement'
+        + arrCite + '. Maintenance and renovation priority, and any future unit allocation, may be affected '
+        + 'if the arrangement is not kept current' + gateCite + '.</p>'
+      : '<p>Our records indicate that the account for this unit is currently in arrears' + balStr
+        + '. In accordance with the Housing Policy' + gateCite + ', a tenant who is not in good standing may '
+        + 'have maintenance and renovation priority — and any future unit allocation — affected. Arrears must '
+        + 'be addressed either by paying the balance in full or by entering into an approved repayment '
+        + 'arrangement with the Housing Department' + arrCite + '. Please contact the Housing office as soon '
+        + 'as possible to make arrangements.</p>';
+  }
+
+  var tokens = {
+    addressee:     addressee,
+    tenantName:    info.tenantName || '',
+    unitAddress:   info.unitAddress || '—',
+    projectNumber: info.projectNumber || '—',
+    nationShort:   short,
+    scopeOfWork:   scopeHtml,
+    arrearsNote:   arrearsHtml
+  };
+
+  // Editable title (Subject) + body (Body) from Settings → Notifications, with
+  // tokens substituted. Falls back to the registry defaults when unsaved.
+  var rendered = (typeof _renderEmailTemplate === 'function') ? _renderEmailTemplate(eventKey, tokens) : null;
+  var title = (rendered && rendered.subject)
+    || (isTenant ? 'Maintenance Request — Tenant Letter' : 'Maintenance Request — Acknowledgment of Referral');
+  var bodyHtml = (rendered && rendered.bodyHtml) || '';
 
   var ctx = _makePdfDoc({
     headerTitle:    title,
@@ -2607,102 +2717,29 @@ async function _buildSowSourceLetterPdf(kind, info) {
   });
   var pdf = ctx.pdf;
   var paragraph = ctx.paragraph.bind(ctx);
-  var sectionHeader = ctx.sectionHeader.bind(ctx);
   var gap = ctx.gap.bind(ctx);
+  var plain = function (s) { return String(s == null ? '' : s); };
 
+  // Fixed scaffolding: date + addressee block + greeting.
   var today = new Date().toLocaleDateString('en-CA');
-  var esc = function (s) { return String(s == null ? '' : s); };
-
-  // Date + addressee block.
   paragraph(today, 9);
   gap(1);
-  var addressee = isTenant
-    ? (info.tenantName || 'Tenant')
-    : (info.sourceContact || info.sourceLabel || 'Referring Party');
   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(20);
   ctx.needSpace(6);
-  pdf.text(esc(addressee), ctx.marginL, ctx.y + 3);
+  pdf.text(plain(addressee), ctx.marginL, ctx.y + 3);
   ctx.y += 6;
   pdf.setFont('helvetica', 'normal'); pdf.setTextColor(0);
-  if (!isTenant && info.sourceContact && info.sourceLabel) {
-    paragraph('Referring source: ' + info.sourceLabel, 8.5);
-  }
+  if (!isTenant && info.sourceContact && info.sourceLabel) paragraph('Referring source: ' + info.sourceLabel, 8.5);
   if (info.unitAddress) paragraph((isTenant ? 'Unit: ' : 'Re: unit at ') + info.unitAddress, 8.5);
   gap(2);
-
-  paragraph('Dear ' + esc(addressee) + ',', 9.5);
+  paragraph('Dear ' + plain(addressee) + ',', 9.5);
   gap(1);
 
-  // Opening paragraph.
-  if (isTenant) {
-    paragraph('This letter confirms that the ' + short + ' Housing Department has received and '
-      + 'logged a maintenance request for your unit'
-      + (info.unitAddress ? ' at ' + info.unitAddress : '')
-      + (info.projectNumber ? ' (Reference ' + info.projectNumber + ')' : '')
-      + '. The scope of the requested work is summarized below.');
-  } else {
-    paragraph('Thank you for your referral. This letter acknowledges that the ' + short + ' Housing '
-      + 'Department has received and logged a maintenance request'
-      + (info.unitAddress ? ' for the unit at ' + info.unitAddress : '')
-      + (info.projectNumber ? ' (Reference ' + info.projectNumber + ')' : '')
-      + (info.sourceLabel ? ', referred by ' + info.sourceLabel : '')
-      + '. No further action is required from you at this time; the Housing Department will manage the '
-      + 'assessment and any follow-up directly with the tenant.');
-  }
+  // Editable body.
+  _letterHtmlToParagraphs(bodyHtml).forEach(function (p) { paragraph(p, 9); gap(1); });
+
+  // Fixed scaffolding: signature.
   gap(2);
-
-  // Requested work summary.
-  var items = (info.items || []).filter(function (it) { return it && (it.description || it.category); });
-  if (items.length) {
-    sectionHeader('Requested Work');
-    items.forEach(function (it, i) {
-      var line = (i + 1) + '. ' + (it.description || '(no description)')
-        + (it.category ? '  [' + it.category + ']' : '');
-      paragraph(line, 8.5);
-    });
-    gap(1);
-  }
-  if (info.condition) { paragraph('Overall unit condition assessed as: ' + info.condition + '.', 8.5); gap(1); }
-
-  // Prioritization statement (mirrors the request Terms — urgency, funding, safety).
-  sectionHeader('How Requests Are Prioritized');
-  paragraph('Maintenance and renovation requests are assessed and prioritized based on the urgency of '
-    + 'the need, the health and safety risk to occupants, and the availability and qualifying criteria '
-    + 'of funding under the applicable program. Requests involving immediate hazards to health or safety '
-    + 'are given priority over general maintenance and cosmetic work. Submission of a request does not '
-    + 'guarantee approval or a specific completion date; the Housing Department will confirm decisions '
-    + 'and scheduling in writing, subject to available resources and funding.');
-  gap(2);
-
-  // Arrears block — tenant letters only, and only when there are arrears.
-  if (isTenant && info.arrears && info.arrears.has) {
-    var a = info.arrears;
-    sectionHeader('Rent Arrears');
-    var gateCite = a.citeGate ? ' (' + a.citeGate + ')' : '';
-    var arrCite  = a.citeArr ? ' (' + a.citeArr + ')' : '';
-    var balStr = (a.balance != null && !isNaN(a.balance) && a.balance > 0)
-      ? ' of ' + ((typeof formatCurrency === 'function') ? formatCurrency(a.balance) : ('$' + Number(a.balance).toFixed(2)))
-      : '';
-    if (a.hasArrangement) {
-      paragraph('Our records show a balance owing' + balStr + ' on the account for this unit, with an '
-        + 'approved repayment arrangement currently on file. Please continue to meet the terms of that '
-        + 'arrangement' + arrCite + '. Maintenance and renovation priority, and any future unit '
-        + 'allocation, may be affected if the arrangement is not kept current' + gateCite + '.');
-    } else {
-      paragraph('Our records indicate that the account for this unit is currently in arrears' + balStr
-        + '. In accordance with the Housing Policy' + gateCite + ', a tenant who is not in good standing '
-        + 'may have maintenance and renovation priority — and any future unit allocation — affected. '
-        + 'Arrears must be addressed either by paying the balance in full or by entering into an approved '
-        + 'repayment arrangement with the Housing Department' + arrCite + '. Please contact the Housing '
-        + 'office as soon as possible to make arrangements.');
-    }
-    gap(2);
-  }
-
-  // Closing.
-  paragraph('If you have any questions about this request, please contact the ' + short
-    + ' Housing office.', 9);
-  gap(3);
   paragraph('Sincerely,', 9);
   gap(4);
   pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9.5); pdf.setTextColor(20);
@@ -3293,6 +3330,14 @@ function _ntfRenderEditorHtml(eventKey) {
       +   'Always sends to the <strong>nation Finance email</strong> configured in Settings &rarr; Nation '
       +   '(silent skip if none is set). Use the CC checkboxes below to also notify housing staff.'
       + '</div>';
+  } else if (cfg.recipientType === 'letter') {
+    primaryBlock +=
+        '<div class="ntf-recipients-fixed">'
+      +   'This is a <strong>generated letter (PDF)</strong>, not an email — staff download it and it is '
+      +   'filed to the tenant&#39;s documents. <strong>Subject</strong> is the letter title and '
+      +   '<strong>Body</strong> is the letter wording; the date, recipient address, greeting and '
+      +   'signature are added automatically. Recipient / CC roles below do not apply.'
+      + '</div>';
   } else if (cfg.recipientType === 'rfq_contractor') {
     primaryBlock +=
         '<div class="ntf-recipients-fixed">'
@@ -3340,7 +3385,7 @@ function _ntfRenderEditorHtml(eventKey) {
     +   '</div>'
     + '</div>'
     + '<div class="ntf-field">'
-    +   '<label class="ntf-label">Recipients' + (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance'
+    +   '<label class="ntf-label">Recipients' + (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance' || cfg.recipientType === 'letter'
           ? ''
           : ' <span class="ntf-label-hint">(active staff in any ticked role)</span>') + '</label>'
     +   primaryBlock
@@ -3722,7 +3767,7 @@ function _ntfReadEditorState() {
       if (cb.checked) ccRoles.push(cb.getAttribute('data-ntf-cc-role'));
     });
   }
-  var isImplicitRecipient = cfg && (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'rfq_contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance');
+  var isImplicitRecipient = cfg && (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'rfq_contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance' || cfg.recipientType === 'letter');
   if (!isImplicitRecipient && !roles.length) {
     showToast('Pick at least one recipient role', {type:'info'});
     return null;
