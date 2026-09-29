@@ -150,6 +150,20 @@ Deno.serve(async (req) => {
 
     const admin = createClient(SUPABASE_URL, SERVICE_KEY)
 
+    // Sender gate: intake emails are FORWARDED by a registered employee, so the
+    // sender must be an active staff member of THIS nation. Drop anything else
+    // (the address is public). Note: the From header is spoofable, so this is a
+    // strong spam filter, not absolute auth -- the Cloudflare<->function shared
+    // secret is the real gate; triage-first means nothing auto-files regardless.
+    // Escaped ilike (unescaped % / _ would wildcard-match a staff address).
+    if (!fromEmail) return json({ ok: true, dropped: 'no_sender' })
+    const { data: staffRows } = await admin.from('staff')
+      .select('id').ilike('email', likeLit(fromEmail)).eq('is_active', true).limit(1)
+    if (!staffRows || !staffRows.length) {
+      console.log('[email-intake] dropped - sender not active staff: ' + fromEmail)
+      return json({ ok: true, dropped: 'sender_not_staff' })
+    }
+
     // Dedupe on Message-ID (the unique partial index also guards this).
     if (messageId) {
       const { data: dup } = await admin.from('email_intake').select('id').eq('message_id', messageId).limit(1)

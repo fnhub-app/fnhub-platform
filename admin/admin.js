@@ -897,6 +897,22 @@
       +   '<p class="sub" style="margin:10px 0 0;font-size:11px;"><b>Verify it end-to-end:</b> use <b>Overview &rarr; Enter as Platform Support</b>, then on the nation\'s app go to <b>Settings &rarr; Notifications &rarr; &ldquo;Send test email&rdquo;</b> &mdash; one click sends a branded test to your address through the nation\'s real pipeline, and failures show the server\'s actual error. (The nation project must have the current Edge Functions deployed.)</p>'
       + '</div>';
 
+    // Email Intake (forward-to-file) per-nation setup checklist. Read-only doc.
+    var iaAddr = esc(n.subdomain) + '@fnhub.app';
+    var pEmailIntake =
+        '<div class="card"><h3>Email Intake &mdash; setup</h3>'
+      +   '<p class="sub" style="margin:2px 0 10px;">Staff forward an email to a nation address; it lands in the app under <b>Operations &rarr; Email Intake</b>, where they file it to a unit/tenant (attachments + body go to the unit&rsquo;s documents). One shared Cloudflare Email Worker (<code>housing-email-intake</code>) routes <code>&lt;nation&gt;@fnhub.app</code> to each nation&rsquo;s database via the platform registry. Do these once per nation:</p>'
+      +   '<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">'
+      +     '<li><b>Table</b> &mdash; run the <code>email_intake</code> migration (Fleet migration page). Fleet-wide, so usually already done.</li>'
+      +     '<li><b>Edge function</b> &mdash; <code>email-intake</code> deploys to every nation via CI (with <code>--no-verify-jwt</code>). No action needed.</li>'
+      +     '<li><b>Secret</b> &mdash; on <b>this nation&rsquo;s Supabase project</b> (Settings &rarr; Edge Functions &rarr; Secrets) set <code>EMAIL_INTAKE_SECRET</code> to the <b>same shared value</b> configured on the Cloudflare worker.</li>'
+      +     '<li><b>Cloudflare routing</b> &mdash; Cloudflare &rarr; <b>fnhub.app</b> &rarr; Email &rarr; Email Routing &rarr; Routing rules &rarr; add pattern <code>' + esc(n.subdomain) + '</code> &rarr; action <b>Send to a Worker</b> &rarr; <code>housing-email-intake</code>. Staff then forward to <code>' + iaAddr + '</code>.</li>'
+      +     '<li><b>App address</b> &mdash; in the nation app, <b>Settings &rarr; Nation &rarr; Email Intake Address</b> = <code>' + iaAddr + '</code> (this is the default).</li>'
+      +     '<li><b>Test</b> &mdash; forward an email to <code>' + iaAddr + '</code>, then check <b>Operations &rarr; Email Intake</b>.</li>'
+      +   '</ol>'
+      +   '<p class="sub" style="margin:10px 0 0;font-size:11px;"><b>Sender gate:</b> only emails whose sender is an <b>active staff member of this nation</b> create a row &mdash; anything else is dropped (the address is public). Staff forward from their own work address. <b>Do NOT</b> enable Cloudflare Email Routing on the nation&rsquo;s own mail domain (e.g. a Microsoft 365 domain) &mdash; it hijacks the MX and breaks that mail. Use <code>' + iaAddr + '</code>, or have the mail admin auto-forward a friendly address to it. The <code>EMAIL_INTAKE_SECRET</code> must match exactly on the Cloudflare worker and on every nation&rsquo;s Supabase project.</p>'
+      + '</div>';
+
     var pNotes =
         '<div class="card"><h3>Notes</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Internal log for this nation (calls, decisions, follow-ups). Visible to platform admins only.</p>'
@@ -985,11 +1001,11 @@
       +   '<div class="nic-strip-tile"><div class="l">Outstanding</div><div class="v" id="cn-sum-inv" style="color:var(--muted);">&mdash;</div></div>'
       + '</div>'
       + '<div class="nic-tabs">'
-      +   tab('overview', 'Overview', true) + tab('supabase', 'Config') + tab('email', 'Email Config') + tab('agreement', 'Agreement')
+      +   tab('overview', 'Overview', true) + tab('supabase', 'Config') + tab('email', 'Email Config') + tab('emailintake', 'Email Intake') + tab('agreement', 'Agreement')
       +   tab('billing', 'Billing') + tab('invoices', 'Invoices') + tab('notes', 'Notes') + tab('documents', 'Documents')
       + '</div>'
       + '<div class="nic-body">'
-      +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail)
+      +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail) + panel('emailintake', pEmailIntake)
       +   panel('agreement', pAgreement) + panel('billing', pBilling) + panel('invoices', pInvoices)
       +   panel('notes', pNotes) + panel('documents', pDocuments)
       + '</div>'
