@@ -89,9 +89,9 @@ function renderEmailIntakeList() {
     var nAsg = all.filter(function(m){ return m.status==='assigned'; }).length;
     var nDis = all.filter(function(m){ return m.status==='dismissed'; }).length;
     function card(label, val) {
-      return '<div class="card" style="padding:12px 16px;min-width:120px;">'
-        + '<div style="font-size:22px;font-weight:600;color:var(--text);">' + val + '</div>'
-        + '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;">' + label + '</div></div>';
+      return '<div class="card" style="flex:0 0 150px;box-sizing:border-box;padding:14px 16px;">'
+        + '<div style="font-size:24px;font-weight:700;color:var(--text);line-height:1.1;">' + val + '</div>'
+        + '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-top:3px;">' + label + '</div></div>';
     }
     kpi.innerHTML = card('Needs filing', nNew) + card('Filed', nAsg) + card('Dismissed', nDis);
   }
