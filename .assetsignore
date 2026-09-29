@@ -19,6 +19,9 @@ supabase
 # admin project's output dir is set to `admin`, this root exclusion doesn't touch
 # the admin deploy -- it only keeps admin/ out of the nation deploy.
 admin
+# Cloudflare Email Routing worker -- deployed as its OWN separate Worker
+# (Email Workers), never part of the nation site's public assets.
+cloudflare-email-worker
 *.md
 *.sql
 *.ps1

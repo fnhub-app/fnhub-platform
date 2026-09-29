@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<title>{NATION_SHORT} Housing — Email Intake</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="shared.css"/>
+<script>try{var _t=sessionStorage.getItem("clfn_theme_css");if(_t)document.documentElement.style.cssText+=";"+_t;}catch(e){}</script>
+
+<link rel="stylesheet" href="housing.css"/>
+
+<script src="shared.js"></script>
+<script src="shared-config.js"></script>
+<script src="shared-auth.js"></script>
+<script src="shared-ui.js"></script>
+<script src="approval-authority.js"></script>
+<script src="shared-data.js"></script>
+<script src="notifications.js"></script>
+<script src="shared-contract.js"></script>
+<script src="scoring.js"></script>
+<script src="housing-views.js"></script>
+<script src="housing-settings.js"></script>
+<script src="housing-modals.js"></script>
+<script src="shared-sow.js"></script>
+<script src="housing-modals-sow.js"></script>
+<script src="housing-app.js"></script>
+<script src="housing-init.js"></script>
+<script src="ai-assistant.js"></script>
+
+<style>body{ opacity:0; transition:opacity .15s ease; }</style>
+</head>
+<body>
+
+<div id="app_header_host"></div>
+
+<div class="app-wrapper" id="appWrapper">
+  <div class="content-area">
+    <div id="mailView" class="page-view-wide">
+
+      <div class="page-back-row">
+        <button onclick="history.back()" class="back-btn-yellow">&#8592; Back</button>
+      </div>
+
+      <div class="page-header-bar">
+        <div class="phb-title">
+          <h1>Email Intake</h1>
+          <p>Forwarded emails waiting to be filed to a unit or tenant</p>
+        </div>
+        <div class="phb-actions">
+          <button class="btn btn-ghost" onclick="if(typeof loadEmailIntake==='function')loadEmailIntake();">&#8635; Refresh</button>
+        </div>
+      </div>
+
+      <!-- KPI strip -->
+      <div id="mail_kpi_strip" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+      <!-- Filters -->
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px;align-items:center;">
+        <input id="mail_filter_q" type="text" class="tic-input" style="max-width:260px;"
+          placeholder="Search sender / subject…"
+          oninput="window._mailQ=this.value;renderEmailIntakeList()"/>
+        <select id="mail_filter_status" class="tic-input" style="max-width:180px;"
+          onchange="window._mailStatus=this.value;renderEmailIntakeList()">
+          <option value="new">Needs filing</option>
+          <option value="assigned">Filed</option>
+          <option value="dismissed">Dismissed</option>
+          <option value="">All</option>
+        </select>
+      </div>
+
+      <div class="card" style="overflow:hidden;">
+        <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:13px;">
+            <thead>
+              <tr style="text-align:left;border-bottom:1px solid var(--border);color:var(--muted);">
+                <th style="padding:10px 12px;">From</th>
+                <th style="padding:10px 12px;">Subject</th>
+                <th style="padding:10px 12px;">Received</th>
+                <th style="padding:10px 12px;">Files</th>
+                <th style="padding:10px 12px;">Suggested match</th>
+                <th style="padding:10px 12px;">Status</th>
+                <th style="padding:10px 12px;"></th>
+              </tr>
+            </thead>
+            <tbody id="mail_tbody">
+              <tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /mailView -->
+  </div>
+</div>
+
+<!-- Triage modal host -->
+<div id="mail_modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:center;justify-content:center;padding:16px;"></div>
+
+<!-- Toast host (shared) -->
+<div id="toast_host" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
+
+<script src="mail-init.js"></script>
+</body>
+</html>

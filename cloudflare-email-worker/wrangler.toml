@@ -1,0 +1,25 @@
+# Cloudflare Email Worker — Housing email intake.
+# Deploy from THIS folder:  npm install && npx wrangler deploy
+# This is a separate Worker from the nation site and the admin panel.
+
+name = "housing-email-intake"
+main = "worker.js"
+compatibility_date = "2024-11-01"
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+# Non-secret config. The Supabase Edge Function URL for this nation's project.
+EMAIL_INTAKE_URL = "https://fkhzrbalumzeripzolph.supabase.co/functions/v1/email-intake"
+# Optional: forward the original email here if the intake POST fails (so nothing is lost).
+# FORWARD_ON_FAIL = "housing@clfn.on.ca"
+# Optional per-attachment cap in bytes (default 8 MB).
+# MAX_ATTACHMENT_BYTES = "8388608"
+
+# Secret (do NOT put in [vars]) — set with:
+#   npx wrangler secret put EMAIL_INTAKE_SECRET
+# It must EQUAL the same secret configured on the Supabase Edge Function.
+
+# After `wrangler deploy`, wire the address in the dashboard:
+#   Cloudflare account → the domain → Email → Email Routing → Routing rules
+#   → add/route the intake address (e.g. files@clfn.on.ca) → action "Send to a Worker"
+#   → pick "housing-email-intake".

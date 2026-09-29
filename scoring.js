@@ -624,7 +624,8 @@ function renderNationPanel(){
     mapping:      'Mapping (Unit Location & Photo)',
     ai_assistant: 'AI Assistant (Chat + Draft Notes)',
     inspections:  'Inspections (Unit Condition Reports)',
-    projects:     'Capital Projects (Lots & Builds)'
+    projects:     'Capital Projects (Lots & Builds)',
+    email_intake: 'Email Intake (Forward-to-File)'
   };
   var humanize = function(name){
     if(MODULE_LABELS[name]) return MODULE_LABELS[name];

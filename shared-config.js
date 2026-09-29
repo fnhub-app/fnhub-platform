@@ -776,8 +776,8 @@ window.isSuperUser = function() {
 // housing_settings (key: 'module_enablement').
 window.CLFN_MODULES = {
   CORE: ['applications', 'inventory', 'tenants', 'worklist'],
-  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true },
-  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true },
+  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true },
+  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true },
 
   isEnabled: function(mod) {
     if(this.CORE.indexOf(mod) !== -1) return true;
