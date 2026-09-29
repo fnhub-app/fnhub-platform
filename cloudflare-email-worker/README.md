@@ -1,64 +1,74 @@
-# Housing Email Intake — Cloudflare Email Worker
+# Housing Email Intake — Cloudflare Email Worker (generic, multi-nation)
 
-Forward an email to a routed address (e.g. `files@clfn.on.ca`); this Worker
-parses it and hands it to the Supabase `email-intake` Edge Function, which
-stores the body + attachments and creates one **triage** row in `email_intake`.
-Staff then assign it to a unit / tenant in the app. **Nothing is auto-filed** —
-triage-first by design.
+Staff forward an email to `<nation>@fnhub.app` (e.g. `clfn@fnhub.app`); this
+Worker parses it, resolves WHICH nation from the recipient's local part, looks
+that nation's Supabase project up in the platform registry, and hands the email
+to that nation's `email-intake` Edge Function, which stores it and creates one
+**triage** row. Staff assign it to a unit / tenant in the app. **Nothing is
+auto-filed** — triage-first by design.
+
+**One generic worker serves every nation** — a nation enrolled in the registry
+works automatically, no per-nation worker or code change.
 
 ```
-Forwarded email
-   → Cloudflare Email Routing (files@clfn.on.ca)
-      → this Email Worker (parses MIME, base64s attachments)
-         → POST https://<project>.supabase.co/functions/v1/email-intake  (x-intake-secret)
-            → stores body + attachments in Storage, inserts an email_intake row
-               → staff triage + assign in the app → filed to the unit's documents
+Forwarded email  ->  Cloudflare Email Routing (<nation>@fnhub.app)
+  -> this Email Worker (parses MIME; resolves nation; looks up nations_public)
+     -> POST https://<that nation>.supabase.co/functions/v1/email-intake  (x-intake-secret)
+        -> stores body + attachments, inserts an email_intake row
+           -> staff triage + assign in the app -> filed to the unit's documents
 ```
 
 ## One-time setup
 
-**1. Create the table** — run `supabase/migrations/20260929_email_intake.sql`
-in the Supabase SQL Editor.
+**1. Create the table (fleet-wide)** — run the `email_intake` migration on every
+nation (the admin fleet-migration page, or each SQL Editor).
 
-**2. Deploy the Edge Function** — `supabase/functions/email-intake/`. Paste it
-into the Supabase Dashboard (Edge Functions) or `supabase functions deploy
-email-intake`. Then set its secrets (Project Settings → Edge Functions →
-Secrets):
-- `EMAIL_INTAKE_SECRET` — a long random string you generate (shared with the Worker).
-- `STORAGE_BUCKET` — optional; defaults to `housing-files`.
-- (`SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are provided automatically.)
+**2. Deploy the Edge Function (fleet-wide)** — `supabase/functions/email-intake/`
+deploys to every nation via the `deploy-supabase-functions.yml` workflow (it is
+in the `--no-verify-jwt` list, since it authenticates with its own secret).
 
-**3. Deploy this Worker** — from this folder:
+**3. Set the shared secret on EVERY nation** — Supabase → each project → Project
+Settings → Edge Functions → Secrets → `EMAIL_INTAKE_SECRET` = the SAME value on
+all nations. (Only nations you turn intake on for strictly need it.)
+
+**4. Deploy this Worker** — from this folder `npm install && npx wrangler deploy`
+(or paste `worker.js` into the dashboard Email Worker editor). Set the secret to
+the SAME shared value:
 ```bash
-npm install
-# set the shared secret to the SAME value as step 2:
 npx wrangler secret put EMAIL_INTAKE_SECRET
-npx wrangler deploy
 ```
-Confirm `EMAIL_INTAKE_URL` in `wrangler.toml` points at this nation's Supabase
-project.
 
-**4. Route the address** — in the Cloudflare dashboard for the domain:
-Email → **Email Routing** → enable it (Cloudflare walks you through the MX/DNS
-records) → **Routing rules** → add the intake address (e.g. `files@clfn.on.ca`)
-→ action **Send to a Worker** → pick **housing-email-intake**.
+**5. Route the address(es)** — Cloudflare → **fnhub.app** → Email → **Email
+Routing** → enable it (auto-adds the MX/TXT records) → **Routing rules** →
+**Create routing rule** → pattern = the nation subdomain (e.g. `clfn`) → action
+**Send to a Worker** → `housing-email-intake`. The local part must equal the
+nation subdomain. (A catch-all rule to the worker also works and covers every
+nation with one rule.)
 
-Optionally set `FORWARD_ON_FAIL` (a real mailbox) in `wrangler.toml` so a failed
-intake POST re-forwards the original email instead of dropping it.
+Do **NOT** enable Email Routing on a nation's own mail domain (e.g. `clfn.on.ca`)
+if it uses Microsoft 365 / Google — it would take over the MX and break that
+mail. Use `<nation>@fnhub.app`, or have the mail admin auto-forward a friendly
+address to it.
+
+## Per-nation config in the app
+
+Each nation's forward-to address is shown to staff on the Email Intake page and
+is editable in **Settings → Nation → Email Intake Address** (`intake_email`,
+default `<nation>@fnhub.app`). The app only displays/stores it; the matching
+Cloudflare routing rule is still set here.
 
 ## Test
 
-Forward any email (with an attachment) to the routed address. Within a few
-seconds a row should appear in `email_intake` (status `new`) with the body and
-attachments in Storage under `email-intake/<id>/`, plus any suggested unit/tenant
-matches. It then shows up in the app's triage queue for filing.
+Forward an email (with an attachment) to `clfn@fnhub.app`. Within a few seconds a
+row appears in that nation's `email_intake` (status `new`) and in the app under
+**Operations → Email Intake**, showing "Forwarded by <employee>".
 
 ## Notes
 
-- The Worker is a **separate** Cloudflare Worker from the nation site and the
-  admin panel. It is excluded from the nation site's public assets via
-  `.assetsignore`.
-- Attachments are capped (default 8 MB each, 15 max). Oversized or odd parts are
+- Separate Cloudflare Worker from the nation sites + admin panel; excluded from
+  the nation site's public assets via `.assetsignore`.
+- Attachments are capped (default 8 MB each, 15 max); oversized/odd parts are
   skipped, never the whole email.
-- Dedupe is on the email `Message-ID` (a unique index on `email_intake`), so a
-  double-delivery won't create two rows.
+- Dedupe is on the email `Message-ID` (a unique index on `email_intake`).
+- The registry anon key embedded in `worker.js` is the publishable key (ships to
+  every browser) — safe to embed.

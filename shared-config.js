@@ -43,6 +43,7 @@ window.NATIONS_DIRECTORY = window.NATIONS_DIRECTORY || {
     portal_base:   '',
     email_domain:  '',
     finance_email: '',
+    intake_email:  '',
     modules_licensed: null
   },
   // CLFN — a normal nation now (carries its own branding); no longer the default.
@@ -63,6 +64,7 @@ window.NATIONS_DIRECTORY = window.NATIONS_DIRECTORY || {
     email_domain:  'clfn.on.ca',          // staff email domain gate (@<domain> checks)
     housing_email: 'housing@clfn.on.ca',  // the nation's housing dept mailbox (AP/manager defaults)
     finance_email: 'finance@clfn.on.ca',  // the nation's finance mailbox (rent start/stop notices)
+    intake_email:  'clfn@fnhub.app',      // address staff forward emails to (Email Intake); routed in Cloudflare
     // Landlord mailing block for generated agreements/leases (kept in config,
     // not as literals in the generators — see the CLFN hard rule).
     landlord_committee: 'Housing Committee',
@@ -380,6 +382,7 @@ window._mapNationRow = function(r){
     email_domain:  r.email_domain || '',
     housing_email: r.housing_email || '',
     finance_email: r.finance_email || '',
+    intake_email:  r.intake_email  || '',
     // Per-nation email delivery config from the registry, when present. Never
     // inherits another nation's mailbox/provider (OCAP): absent -> the app's
     // email_config falls back to the nation's own housing_email or empty.
@@ -477,7 +480,7 @@ window.CLFN_CONFIG_LOADED = true;
             if (String(rows[ri].subdomain || '').toLowerCase() !== mySub) continue;
             var fresh = window._mapNationRow(rows[ri]);
             if (!fresh) break;
-            ['display_name', 'short', 'primary_color', 'logo', 'email_domain', 'housing_email', 'finance_email', 'email'].forEach(function(k){
+            ['display_name', 'short', 'primary_color', 'logo', 'email_domain', 'housing_email', 'finance_email', 'intake_email', 'email'].forEach(function(k){
               window._NATION[k] = fresh[k];
             });
             var NC = window.NATION_CONFIG;
@@ -490,6 +493,7 @@ window.CLFN_CONFIG_LOADED = true;
               NC.email_domain  = fresh.email_domain  || '';
               NC.housing_email = fresh.housing_email || '';
               NC.finance_email = fresh.finance_email || '';
+              NC.intake_email  = fresh.intake_email  || '';
               var em = (fresh.email && typeof fresh.email === 'object') ? fresh.email : {};
               NC.email_config = {
                 provider:  em.provider  || 'graph',
@@ -896,6 +900,7 @@ window.NATION_CONFIG = window.NATION_CONFIG || (function(){
     email_domain:  n.email_domain  || '',
     housing_email: n.housing_email || '',
     finance_email: n.finance_email || '',
+    intake_email:  n.intake_email  || '',
     landlord_committee: n.landlord_committee || 'Housing Committee',
     mailing_po_box:     n.mailing_po_box     || '',
     mailing_postal:     n.mailing_postal     || '',
@@ -1091,6 +1096,17 @@ window.nationEmailDomain = function nationEmailDomain(){
 window.nationFinanceEmail = function nationFinanceEmail(){
   var nc = window.NATION_CONFIG || {};
   return (nc.finance_email || nc.housing_email || '');
+};
+
+// The address staff forward emails to for the Email Intake feature. Prefers the
+// configured intake_email; otherwise derives <nation-id>@fnhub.app from the
+// nation's registry id (matches the generic Cloudflare Email Worker routing).
+// Never a CLFN literal (OCAP) — each nation sets/overrides its own.
+window.nationIntakeEmail = function nationIntakeEmail(){
+  var nc = window.NATION_CONFIG || {};
+  if (nc.intake_email) return nc.intake_email;
+  var id = (nc.id && nc.id !== 'default') ? String(nc.id).toLowerCase() : '';
+  return id ? (id + '@fnhub.app') : '';
 };
 
 // Single accessor for the nation's registry id (the NATIONS_DIRECTORY key,

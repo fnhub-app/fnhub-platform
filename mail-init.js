@@ -420,6 +420,16 @@ window.dismissEmailIntake = dismissEmailIntake;
     var view = document.getElementById('mailView');
     if (view) view.style.display = 'flex';
 
+    // Show the address staff forward to (from nation config).
+    try {
+      var _addr = (typeof nationIntakeEmail === 'function') ? nationIntakeEmail() : '';
+      var _abEl = document.getElementById('mail_intake_addr');
+      if (_abEl && _addr) {
+        _abEl.innerHTML = '📧 Staff: forward emails to <strong>' + _mailEsc(_addr) + '</strong> to file them to a unit or tenant here.';
+        _abEl.style.display = '';
+      }
+    } catch(e) {}
+
     await _mailLoadUnits();
     await _mailLoadStaff();
     await loadEmailIntake();

@@ -571,6 +571,11 @@ function renderNationPanel(){
       +         '<label style="'+lblStyle+'">Main Phone</label>'
       +         '<input id="nation_input_phone" type="tel" value="'+escapeHtml(cfg.phone?formatPhone(cfg.phone):'')+'" style="'+inputStyle+'" placeholder="(705)-555-0100" oninput="fmtPhone(this)"/>'
       +       '</div>'
+      +       '<div>'
+      +         '<label style="'+lblStyle+'">Email Intake Address</label>'
+      +         '<input id="nation_input_intake_email" type="email" value="'+escapeHtml(cfg.intake_email||'')+'" style="'+inputStyle+'" placeholder="clfn@fnhub.app"/>'
+      +         '<div class="js-lbl-sm" style="margin-top:4px;">Staff forward emails here to file them to a unit/tenant (Operations &rarr; Email Intake). A matching Cloudflare Email Routing rule to the housing-email-intake worker must exist.</div>'
+      +       '</div>'
       +     '</div>'
       +   '</div>'
 
@@ -974,6 +979,7 @@ function saveNationSettings() {
     website:         v('nation_input_website'),
     phone:           v('nation_input_phone'),
     email:           emailVal,
+    intake_email:    v('nation_input_intake_email'),
     socials:         socials,
     idle_timeout_minutes: idleMin
   };

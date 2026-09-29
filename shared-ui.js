@@ -876,7 +876,7 @@ function applyNationOverrides() {
     // Logo lives in _appSettings.theme.logo (managed by _applyTheme), NOT here —
     // applyNationOverrides only owns nation identity, contact info, and labels.
     ['display_name', 'name', 'short',
-     'mailing_address', 'website', 'phone', 'email'].forEach(function(k){
+     'mailing_address', 'website', 'phone', 'email', 'intake_email'].forEach(function(k){
       if (parsed[k]) window.NATION_CONFIG[k] = parsed[k];
     });
     if (parsed.role_labels && typeof parsed.role_labels === 'object') {

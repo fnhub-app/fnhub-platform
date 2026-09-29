@@ -1,25 +1,34 @@
-# Cloudflare Email Worker — Housing email intake.
+# Cloudflare Email Worker — Housing email intake (generic, multi-nation).
 # Deploy from THIS folder:  npm install && npx wrangler deploy
-# This is a separate Worker from the nation site and the admin panel.
+# (Or paste worker.js into the Cloudflare dashboard Email Worker editor.)
+# This is a separate Worker from the nation sites and the admin panel.
 
 name = "housing-email-intake"
 main = "worker.js"
 compatibility_date = "2024-11-01"
 compatibility_flags = ["nodejs_compat"]
 
+# No per-nation URL here: the worker reads the nation from the recipient
+# (<nation>@fnhub.app) and looks its Supabase project up in the platform
+# registry (nations_public). One worker serves every nation.
+
 [vars]
-# Non-secret config. The Supabase Edge Function URL for this nation's project.
-EMAIL_INTAKE_URL = "https://fkhzrbalumzeripzolph.supabase.co/functions/v1/email-intake"
-# Optional: forward the original email here if the intake POST fails (so nothing is lost).
+# Optional overrides for the platform registry (defaults are baked into
+# worker.js and are public/publishable):
+# PLATFORM_REGISTRY_URL  = "https://dnaxulsdetlnpupegoiq.supabase.co"
+# PLATFORM_REGISTRY_ANON = "<publishable anon key>"
+# Optional: forward the original email here if the intake POST fails.
 # FORWARD_ON_FAIL = "housing@clfn.on.ca"
 # Optional per-attachment cap in bytes (default 8 MB).
 # MAX_ATTACHMENT_BYTES = "8388608"
 
 # Secret (do NOT put in [vars]) — set with:
 #   npx wrangler secret put EMAIL_INTAKE_SECRET
-# It must EQUAL the same secret configured on the Supabase Edge Function.
+# It must EQUAL the EMAIL_INTAKE_SECRET set on EVERY nation's email-intake
+# Edge Function (one shared value across the fleet).
 
-# After `wrangler deploy`, wire the address in the dashboard:
-#   Cloudflare account → the domain → Email → Email Routing → Routing rules
-#   → add/route the intake address (e.g. files@clfn.on.ca) → action "Send to a Worker"
-#   → pick "housing-email-intake".
+# After deploy, route the address(es) in the dashboard:
+#   Cloudflare account → fnhub.app → Email → Email Routing → Routing rules
+#   → Create routing rule → pattern = the nation subdomain (e.g. "clfn")
+#   → action "Send to a Worker" → housing-email-intake.
+# The recipient local part IS the nation subdomain (clfn@fnhub.app → "clfn").
