@@ -1868,15 +1868,23 @@ body.is-sow-only .modal-overlay { visibility: visible; }
    lines — a clean icon strip, closer to the MyChart reference this pattern
    is modeled on. Higher specificity (2 classes) beats the plain .tic-strip
    column-count media queries above regardless of source order. */
-.tic-strip.is-scrolled {
-  grid-template-columns: repeat(6, 1fr);
-  gap: 0; background: transparent;
+/* Only shrink the strip on phone/tablet widths, where the reclaimed vertical
+   space matters. On desktop there's ample height, and the expand-on-scroll-up
+   layout shift just reads as a flash (esp. on the Documents tab while previews
+   load) — so above this breakpoint .is-scrolled toggles but has no visual
+   effect. Scoped to the MODAL .tic-strip only; the dashboard KPI strip and
+   list-page headers use their own selectors (shared.css) and are unaffected. */
+@media (max-width: 900px) {
+  .tic-strip.is-scrolled {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 0; background: transparent;
+  }
+  #sowModal .tic-strip.is-scrolled { grid-template-columns: repeat(4, 1fr); }
+  .tic-strip.is-scrolled .tic-strip-tile { padding: 6px 2px; text-align: center; }
+  .tic-strip.is-scrolled .tic-strip-lbl,
+  .tic-strip.is-scrolled .tic-strip-val  { display: none; }
+  .tic-strip.is-scrolled .tic-strip-icon { display: block; }
 }
-#sowModal .tic-strip.is-scrolled { grid-template-columns: repeat(4, 1fr); }
-.tic-strip.is-scrolled .tic-strip-tile { padding: 6px 2px; text-align: center; }
-.tic-strip.is-scrolled .tic-strip-lbl,
-.tic-strip.is-scrolled .tic-strip-val  { display: none; }
-.tic-strip.is-scrolled .tic-strip-icon { display: block; }
 
 .tic-tabs                 { display: flex; gap: 0; border-bottom: 1px solid var(--border); padding: 0 20px; background: var(--surface); overflow-x: auto; flex-shrink: 0; }
 .tic-tab                  { background: none; border: none; padding: 12px 16px; cursor: pointer; font-family: var(--sans); font-size: 13px; font-weight: 600; color: var(--muted); border-bottom: 2px solid transparent; white-space: nowrap; }
