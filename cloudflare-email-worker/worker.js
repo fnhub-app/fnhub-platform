@@ -63,19 +63,20 @@ export default {
   async email(message, env, ctx) {
     const forwardOnFail = async () => { if (env.FORWARD_ON_FAIL) { try { await message.forward(env.FORWARD_ON_FAIL); } catch (_) {} } };
 
-    // Which nation? The recipient local part is the nation subdomain
-    // (clfn@fnhub.app -> "clfn"). Strip any +tag.
+    // Which nation? The recipient local part is treated as the nation subdomain
+    // (clfn@fnhub.app -> "clfn"). Strip any +tag. If it doesn't match a nation,
+    // fall back to EMAIL_INTAKE_URL (a configured default project) so a friendly
+    // generic address like files@fnhub.app still works for a single nation.
     const to = String(message.to || '').toLowerCase();
     const nation = to.split('@')[0].replace(/\+.*$/, '').trim();
-    let intakeUrl;
+    let intakeUrl = null;
     try {
       intakeUrl = await resolveIntakeUrl(nation, env);
     } catch (e) {
       console.log('[email-worker] registry lookup failed: ' + (e && e.message));
-      await forwardOnFail();
-      return;
     }
-    if (!intakeUrl) { console.log('[email-worker] no nation for recipient "' + to + '"'); await forwardOnFail(); return; }
+    if (!intakeUrl && env.EMAIL_INTAKE_URL) intakeUrl = env.EMAIL_INTAKE_URL;
+    if (!intakeUrl) { console.log('[email-worker] no nation for recipient "' + to + '" and no EMAIL_INTAKE_URL fallback'); await forwardOnFail(); return; }
 
     try {
       const raw = await new Response(message.raw).arrayBuffer();
