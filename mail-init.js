@@ -60,6 +60,19 @@ function _mailForwardedBy(row) {
   return staffName || (row && (row.from_name || row.from_email)) || 'Unknown';
 }
 
+// The tenant assigned to a unit (for showing WHO the suggested unit belongs to,
+// not just its address). '' when the unit is vacant / not found.
+function _mailUnitTenant(unitId) {
+  if (!unitId) return '';
+  var u = (window.housingUnits || []).filter(function(x){ return String(x.id) === String(unitId); })[0];
+  return (u && u.assignedName) ? u.assignedName : '';
+}
+// Friendly unit label: "<address> — <tenant>" (tenant appended when housed).
+function _mailUnitLabel(unitId, addr) {
+  var t = _mailUnitTenant(unitId);
+  return (addr || unitId || '') + (t ? ' — ' + t : '');
+}
+
 async function loadEmailIntake() {
   var tb = document.getElementById('mail_tbody');
   if (tb) tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:40px;color:var(--muted);">Loading…</td></tr>';
@@ -144,10 +157,16 @@ async function openMailTriage(id) {
 
   var suggHtml = sugg.length
     ? sugg.map(function(s){
-        var label = _mailEsc(s.label || '') + (s.reason ? ' — ' + _mailEsc(s.reason) : '');
+        // Lead with the tenant name (who the unit belongs to), then the address,
+        // then the match reason — so staff recognize the person, not just a street.
+        var tenant = _mailUnitTenant(s.unitId) || (s.type === 'tenant' ? (s.label || '') : '');
+        var addr = s.label || '';
+        var head = tenant ? (tenant + (addr && addr !== tenant ? ' · ' + addr : '')) : addr;
+        var label = '<b>' + _mailEsc(head) + '</b>' + (s.reason ? ' <span style="color:var(--muted);">— ' + _mailEsc(s.reason) + '</span>' : '');
         var uid = _mailEsc(s.unitId || '');
+        var pickLabel = _mailEsc(_mailUnitLabel(s.unitId, s.label).replace(/\x27/g,"\\x27"));
         return uid
-          ? '<button type="button" class="btn btn-ghost" style="font-size:12px;margin:0 6px 6px 0;" onclick="_mailPickSuggestion(\'' + uid + '\',\'' + _mailEsc((s.label||'').replace(/\x27/g,"\\x27")) + '\')">' + label + '</button>'
+          ? '<button type="button" class="btn btn-ghost" style="font-size:12px;margin:0 6px 6px 0;text-align:left;" onclick="_mailPickSuggestion(\'' + uid + '\',\'' + pickLabel + '\')">' + label + '</button>'
           : '<span style="display:inline-block;font-size:12px;color:var(--muted);margin:0 6px 6px 0;padding:4px 0;">' + label + ' (name only — pick the unit below)</span>';
       }).join('')
     : '<span style="font-size:12px;color:var(--muted);">No automatic match — pick the unit below.</span>';
@@ -225,7 +244,10 @@ async function openMailTriage(id) {
   if (isNew) {
     var unitItems = (window.housingUnits || [])
       .filter(function(u){ return !u.archived; })
-      .map(function(u){ return { id: u.id, label: ((u.num||'') + (u.num&&u.street?' ':'') + (u.street||'')) || u.id }; })
+      .map(function(u){
+        var addr = ((u.num||'') + (u.num&&u.street?' ':'') + (u.street||'')) || u.id;
+        return { id: u.id, label: addr + (u.assignedName ? ' — ' + u.assignedName : '') };
+      })
       .sort(function(a,b){ return a.label.localeCompare(b.label); });
     var wrap = document.getElementById('mail_unit_wrap');
     if (wrap && typeof clfnSearchSelect === 'function') {
@@ -235,9 +257,11 @@ async function openMailTriage(id) {
         onChange: function(id2, label){ window._mailUnitSS._selectedId = id2; window._mailUnitSS._selectedLabel = label; }
       });
       // Pre-select the top suggested unit, if any.
-      var firstUnit = (sugg.filter(function(s){ return s.unitId; })[0] || {}).unitId;
+      var firstSugg = sugg.filter(function(s){ return s.unitId; })[0];
+      var firstUnit = firstSugg && firstSugg.unitId;
       if (firstUnit && window._mailUnitSS && typeof window._mailUnitSS.setValue === 'function') {
-        try { window._mailUnitSS.setValue(firstUnit); window._mailUnitSS._selectedId = firstUnit; } catch(e) {}
+        var firstLabel = _mailUnitLabel(firstUnit, firstSugg.label);
+        try { window._mailUnitSS.setValue(firstUnit, firstLabel); window._mailUnitSS._selectedId = firstUnit; window._mailUnitSS._selectedLabel = firstLabel; } catch(e) {}
       }
     }
   }
