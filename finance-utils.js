@@ -27,7 +27,45 @@ function fmt(n){ return formatCurrency(n); }
 function today(){return new Date().toISOString().slice(0,10);}
 function tenantName(t){return t.first+' '+t.last;}
 function tenantNameHtml(t){return escapeHtml(tenantName(t));}
-function getTenant(id){return getData().tenants.find(function(t){return t.id===id;})||null;}
+// Person identity. The tenant-sync trigger inserts a new tenants row per
+// assignment and never matches by name, so one person can hold several rows;
+// merged_into points a duplicate at its canonical row (see migration
+// 20260624_tenants_merged_into.sql). These helpers roll every surface up under
+// the canonical person. Child-row tenantIds are canonicalized in memory at load
+// (_finCanonicalizeTenantRefs), so most per-tenant filters already aggregate
+// correctly; these cover the tenant-object lookups and list/picker displays.
+
+// Follow the merged_into chain to the canonical (person) tenant id. Cycle- and
+// self-loop-guarded; returns the input id unchanged if it's canonical/unknown.
+function finCanonTenantId(id){
+  if (!id) return id;
+  var list = getData().tenants || [];
+  var byId = {}; list.forEach(function(t){ if (t && t.id) byId[t.id] = t; });
+  var seen = {}, cur = id;
+  for (var i = 0; i < 25 && cur && !seen[cur]; i++){
+    seen[cur] = 1;
+    var t = byId[cur];
+    if (!t || !t.mergedInto) return cur;
+    cur = t.mergedInto;
+  }
+  return cur;
+}
+// Tenants to SHOW in lists, pickers and counts: canonical persons only (rows
+// merged into another person are hidden; their data rolls up under the keeper).
+function finVisibleTenants(){
+  return (getData().tenants || []).filter(function(t){ return t && !t.mergedInto; });
+}
+// Resolve a tenant object, following a merged id to its canonical person so a
+// child row (or an old deep link) keyed to a merged-away id still finds them.
+function getTenant(id){
+  var list = getData().tenants || [];
+  var cid = finCanonTenantId(id);
+  var found = null;
+  for (var i = 0; i < list.length; i++){ if (list[i].id === cid){ found = list[i]; break; } }
+  if (found) return found;
+  for (var j = 0; j < list.length; j++){ if (list[j].id === id){ return list[j]; } }
+  return null;
+}
 function methodLabel(m){
   var map={cash:'Cash',debit:'Debit',credit:'Credit Card',etransfer:'E-Transfer','online-banking':'Online Banking',cheque:'Cheque',auto:'Auto Payment',eft:'EFT (Auto)',payroll:'Payroll Deduction'};
   return map[m]||m||'';

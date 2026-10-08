@@ -1,6 +1,11 @@
 // NOTE: runAutoEngine (the unreachable monthly auto-engine, ~160 lines incl. its
 // dead in-memory audit pushes) was deleted in the audit cleanup.
 function renderTenantProfile(tid) {
+  // Resolve a merged duplicate to the canonical person, then use that id for
+  // every lookup below — child rows and balances are all keyed to the canonical
+  // id after _finCanonicalizeTenantRefs, so a merged-id deep link still opens
+  // the full, rolled-up profile instead of an empty one.
+  if (typeof finCanonTenantId === 'function') tid = finCanonTenantId(tid);
   var t = getTenant(tid);
   if (!t) return;
   var d = getData();

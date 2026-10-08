@@ -106,13 +106,23 @@ function finHomeSearch(query) {
 
   if (activeTab === 'all' || activeTab === 'tenants') {
     var limit = activeTab === 'all' ? 4 : 8;
+    var _seenTen = {};
     (d.tenants||[]).filter(function(t){
-      return !t.archived && (
-        tenantName(t).toLowerCase().includes(q) ||
+      if (t.archived || t.mergedInto) return false;   // skip rows merged into a canonical person
+      var hit = tenantName(t).toLowerCase().includes(q) ||
         (t.unit||'').toLowerCase().includes(q) ||
         (t.phone||'').toLowerCase().includes(q) ||
-        (t.email||'').toLowerCase().includes(q)
-      );
+        (t.email||'').toLowerCase().includes(q);
+      if (!hit) return false;
+      // One line per person. The tenant-sync trigger inserts a fresh row per
+      // assignment and never matches by name, so one person accumulates
+      // several identical rows; collapse them by normalized name + unit so the
+      // dropdown shows the person once (the newest row wins, load order).
+      var pk = (typeof normNameKey === 'function' ? normNameKey(tenantName(t)) : tenantName(t).toLowerCase())
+             + '|' + (t.unit||'').toLowerCase().trim();
+      if (_seenTen[pk]) return false;
+      _seenTen[pk] = true;
+      return true;
     }).slice(0, limit).forEach(function(t){
       results.push({type:'tenant', id:t.id, iconCls:'type-tenant', iconTxt:'T',
         title:tenantNameHtml(t), sub:escapeHtml(t.unit||'')+(t.type?' · '+escapeHtml(t.type.replace(/-/g,' ')):''),

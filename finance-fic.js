@@ -374,6 +374,10 @@
 
   // ── Full render ───────────────────────────────────────────────────────────
   function _renderFic(tid) {
+    // Resolve a merged duplicate to the canonical person so every per-tenant
+    // filter below (ledger, loans, arrangements) rolls up under one record —
+    // child rows are keyed to the canonical id after _finCanonicalizeTenantRefs.
+    if (typeof finCanonTenantId === 'function') tid = finCanonTenantId(tid);
     var t    = typeof getTenant === 'function' ? getTenant(tid) : null;
     var name = t
       ? (typeof tenantName === 'function' ? tenantName(t) : (t.full_name || 'Tenant'))

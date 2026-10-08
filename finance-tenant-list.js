@@ -68,7 +68,9 @@ function renderTenantList() {
   if (!panel) return;
   panel.style.display = 'block';
   var d = getData();
-  var all = (d.tenants||[]).slice().sort(function(a,b){
+  // Canonical persons only — rows merged into another person are hidden; their
+  // ledger/loans/arrears roll up under the keeper (see _finCanonicalizeTenantRefs).
+  var all = (d.tenants||[]).filter(function(t){ return !t.mergedInto; }).slice().sort(function(a,b){
     return tenantName(a).localeCompare(tenantName(b));
   });
 

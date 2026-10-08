@@ -9,6 +9,7 @@ function showRunStatementsModal() {
   var d = getData();
   var totals = calcAllTotals(d);
   var tenants = (d.tenants || []).filter(function(t){
+    if (t.mergedInto) return false;   // never bill a merged-away duplicate (it still carries its own rent)
     var st = t.status || 'active';
     return t.active !== false && st !== 'former' && st !== 'deceased';
   }).slice().sort(function(a,b){ return tenantName(a).localeCompare(tenantName(b)); });
@@ -178,6 +179,7 @@ function runBatchAccounting(dryRun) {
   var monthEnd = year+'-'+String(mon).padStart(2,'0')+'-'+String(monthEndDate.getDate()).padStart(2,'0');
 
   var activeTenants = (d.tenants||[]).filter(function(t){
+    if (t.mergedInto) return false;   // never bill a merged-away duplicate
     var st = t.status||'active';
     return t.active !== false && st !== 'former' && st !== 'deceased';
   });

@@ -169,7 +169,12 @@ function _rentLedgerToRow(e){
   }
   else if (Number(e.charge||0) > 0) { amt = Number(e.charge); etype = 'adjustment_debit'; }
   else if (Number(e.payment||0) > 0) { amt = -Number(e.payment); etype = 'adjustment_credit'; }
-  var tenantId = e.tenantId && e.tenantId !== '' ? e.tenantId : null;
+  // _rawTenantId is the original DB pointer preserved when a merged duplicate
+  // was canonicalized in memory (_finCanonicalizeTenantRefs). Persist it, not
+  // the canonical id, so a merge never silently repoints the row (it stays
+  // reversible). Canonical rows have no _rawTenantId and use tenantId as before.
+  var _etid = e._rawTenantId || e.tenantId;
+  var tenantId = _etid && _etid !== '' ? _etid : null;
   var entryDate = e.date || new Date().toISOString().slice(0,10);
   var row = {
     id: e.id, nation_id: _NATION(),
@@ -227,6 +232,9 @@ function _tenantToRow(t){
     current_unit_id: t.currentUnitId || null,  // FK to housing_units.id (text)
     status: t.status || 'active', archived: !!t.archived,
     notes: t.notes || null,
+    // Preserve the person-merge pointer on edit (finance never sets it; the
+    // housing-side merge tooling / SQL does). '' -> null keeps a canonical row.
+    merged_into: t.mergedInto || null,
 
     // Personal (added F3A)
     date_of_birth:   t.dob || null,
@@ -299,6 +307,13 @@ function _tenantFromRow(r){
     currentUnitId: r.current_unit_id || '',
     active: (r.status || 'active') === 'active',
 
+    // Person identity. The tenant-sync trigger inserts a new row per
+    // assignment and never matches by name, so one person accumulates
+    // several rows; merged_into points a duplicate at its canonical row
+    // (NULL/'' = canonical). Finance surfaces skip merged-away rows so a
+    // person shows once. See migration 20260624_tenants_merged_into.sql.
+    mergedInto: r.merged_into || '',
+
     createdBy: r.created_by, updatedBy: r.updated_by
   };
 }
@@ -306,7 +321,7 @@ function _tenantFromRow(r){
 function _loanToRow(l){
   return {
     id: l.id, nation_id: _NATION(),
-    tenant_id: l.tenantId,
+    tenant_id: l._rawTenantId || l.tenantId,  // preserve DB pointer across a person-merge
     loan_number: l.ref || null,
     principal: Number(l.principal||0),
     interest_rate: Number(l.rate||0),
@@ -368,7 +383,7 @@ function _loanPaymentFromRow(r){
 function _arrangementToRow(a){
   return {
     id: a.id, nation_id: _NATION(),
-    tenant_id: a.tenantId,
+    tenant_id: a._rawTenantId || a.tenantId,  // preserve DB pointer across a person-merge
     total_owing: Number(a.totalOwing||0),
     payment_amount: Number(a.monthlyPayment||0),
     frequency: 'monthly',
@@ -444,7 +459,7 @@ function _collectionToRow(c){
   if (c.agency) notes = 'Agency: ' + c.agency + (notes ? '\n' + notes : '');
   return {
     id: c.id, nation_id: _NATION(),
-    tenant_id: c.tenantId,
+    tenant_id: c._rawTenantId || c.tenantId,  // preserve DB pointer across a person-merge
     opened_date: c.openedDate || c.dateFlagged || c.date || today(),
     closed_date: c.closedDate || (c.status === 'resolved' ? today() : null),
     stage: stage,
@@ -488,7 +503,8 @@ function _journalToRow(j){
   var status = j.status || 'posted';
   var groupRef = j.ref || '';
   var encodedRef = status + '|' + groupRef;
-  var tenantId = j.tenantId && j.tenantId !== '' ? j.tenantId : null;
+  var _jtid = j._rawTenantId || j.tenantId;  // preserve DB pointer across a person-merge
+  var tenantId = _jtid && _jtid !== '' ? _jtid : null;
   var entryDate = j.date || new Date().toISOString().slice(0,10);
   return {
     id: j.id, nation_id: _NATION(),
@@ -594,6 +610,48 @@ function _finDeriveVoidedOriginals(store){
   } catch(e) { console.warn('[finance] void derivation failed:', e); }
 }
 
+// Roll duplicate-person records up under their canonical tenant. The sync
+// trigger makes one person several tenants rows; merged_into points each
+// duplicate at the canonical row. We rewrite every child row's tenantId to the
+// canonical id IN MEMORY so all per-tenant filters/aggregations (ledger, loans,
+// arrears, profile, dashboard) sum under one person. The ORIGINAL id is kept on
+// row._rawTenantId and written back by the toRow mappers, so persistence never
+// repoints the DB and the merge stays reversible (merged_into can be cleared to
+// un-merge). Runs once post-hydration and BEFORE _finBackfillDerivedFields, so
+// loan/arr payments (which derive tenantId from their parent there) inherit the
+// canonical id automatically. Idempotent: a row already canonical is skipped.
+function _finCanonicalizeTenantRefs(store){
+  try {
+    var byId = {}; (store.tenants || []).forEach(function(t){ if (t && t.id) byId[t.id] = t; });
+    // Any merge pointers at all? If not, skip the whole pass.
+    var hasMerge = (store.tenants || []).some(function(t){ return t && t.mergedInto; });
+    if (!hasMerge) return;
+    function canon(id){
+      var seen = {}, cur = id;
+      for (var i = 0; i < 25 && cur && !seen[cur]; i++){
+        seen[cur] = 1;
+        var t = byId[cur];
+        if (!t || !t.mergedInto) return cur;
+        cur = t.mergedInto;
+      }
+      return cur;
+    }
+    // Tables that carry a direct tenant_id from the DB. loanPayments/arrPayments
+    // are intentionally omitted — they derive tenantId from their parent in the
+    // next pass, and never persist a tenant_id column.
+    ['rentLedger','loanList','arrangements','collections','journalEntries'].forEach(function(key){
+      (store[key] || []).forEach(function(row){
+        if (!row || !row.tenantId) return;
+        var c = canon(row.tenantId);
+        if (c && c !== row.tenantId){
+          if (row._rawTenantId == null) row._rawTenantId = row.tenantId;  // preserve DB pointer
+          row.tenantId = c;
+        }
+      });
+    });
+  } catch(e){ console.warn('[finance] tenant canonicalize failed:', e); }
+}
+
 // Derive client-side fields the tables don't store, right after hydration:
 // - loan/arrangement payments reload with tenantId:'' ("derived via lookup at
 //   render", said the mapper comment — but no lookup existed anywhere), which
@@ -642,6 +700,7 @@ async function _bootLoadFinanceData(){
     });
     await Promise.all(fetches);
     _memStore = Object.assign(_emptyStore(), results);
+    _finCanonicalizeTenantRefs(_memStore);   // roll merged-duplicate persons up (before payment derive)
     _finDeriveVoidedOriginals(_memStore);
     _finBackfillDerivedFields(_memStore);
     if (window.CLFN_DEBUG) console.log('[finance] hydrated:',

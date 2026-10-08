@@ -22,7 +22,9 @@ function closeModal(id){
 
 function populateModalSelects(id){
   var d=getData();
-  var opts=d.tenants.map(function(t){return '<option value="'+t.id+'">'+tenantNameHtml(t)+' - '+escapeHtml(t.unit||'')+'</option>';}).join('');
+  // Canonical persons only — never offer a merged-away duplicate as a charge target.
+  var _tens=(typeof finVisibleTenants==='function')?finVisibleTenants():(d.tenants||[]).filter(function(t){return !t.mergedInto;});
+  var opts=_tens.map(function(t){return '<option value="'+t.id+'">'+tenantNameHtml(t)+' - '+escapeHtml(t.unit||'')+'</option>';}).join('');
   var selMap={'modalNewInvoice':'inv-tenant','modalRentPayment':'rp-tenant','modalNewLoan':'ln-tenant','modalUtilityCharge':'uc-tenant','modalUtilityPayment':'up-tenant','modalJournalEntry':'je-tenant','modalNewArrangement':'na-tenant','modalFlagCollections':'col-tenant'};
   var selId=selMap[id];
   if(selId){var el=document.getElementById(selId);if(el)el.innerHTML=opts;}
@@ -37,7 +39,9 @@ function populateModalSelects(id){
 
 function initTenantSelects(){
   var d=getData();
-  var opts=d.tenants.map(function(t){return '<option value="'+t.id+'">'+tenantNameHtml(t)+' - '+escapeHtml(t.unit||'')+'</option>';}).join('');
+  // Canonical persons only — a merged-away duplicate must not be selectable.
+  var _tens=(typeof finVisibleTenants==='function')?finVisibleTenants():(d.tenants||[]).filter(function(t){return !t.mergedInto;});
+  var opts=_tens.map(function(t){return '<option value="'+t.id+'">'+tenantNameHtml(t)+' - '+escapeHtml(t.unit||'')+'</option>';}).join('');
   ['rentTenantSelect','stmtTenantSelect','loanSchedTenantSelect'].forEach(function(sid){
     var el=document.getElementById(sid);
     if(!el)return;
@@ -90,6 +94,7 @@ function tenantPickerSearch(key, q){
       + '</div>';
   }
   var matches = d.tenants.filter(function(t){
+    if (t.mergedInto) return false;   // never offer a merged-away duplicate
     if (!ql) return true;
     return tenantName(t).toLowerCase().includes(ql)
       || (t.unit||'').toLowerCase().includes(ql)

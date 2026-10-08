@@ -666,6 +666,7 @@ function renderBatchList() {
   var months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
   var month = months[now.getMonth()]; var year = now.getFullYear();
   var pending = d.tenants.filter(function(t){
+    if (t.mergedInto) return false;   // merged-away duplicate — the keeper is billed instead
     var alreadyInvoiced = d.rentLedger.some(function(r){
       return r.tenantId===t.id&&r.type==='invoice'&&r.date.slice(0,7)===(year+'-'+String(now.getMonth()+1).padStart(2,'0'))&&r.status!=='reversed';
     });

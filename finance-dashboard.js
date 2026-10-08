@@ -1,6 +1,9 @@
 function calcAllTotals(d){
   var result={};
-  d.tenants.forEach(function(t){result[t.id]={rent:0,loan:0,arrangement:0};});
+  // Only canonical persons get a balance bucket; a row merged into another
+  // person has had its ledger/loans canonicalized onto the keeper, so it would
+  // otherwise show as a phantom $0 "clear" account.
+  d.tenants.forEach(function(t){if(t.mergedInto)return;result[t.id]={rent:0,loan:0,arrangement:0};});
   d.rentLedger.forEach(function(r){if(result[r.tenantId]&&!finIsVoided(r))result[r.tenantId].rent+=r.charge-r.payment;});
 
   d.loanList.forEach(function(ln){
@@ -264,8 +267,9 @@ function renderDashboard(){
   if (typeof renderFinanceWorklist === 'function') renderFinanceWorklist();
   var d=getData();
   var totals=calcAllTotals(d);
+  var visTenants=(typeof finVisibleTenants==='function')?finVisibleTenants():d.tenants.filter(function(t){return !t.mergedInto;});
   var tR=0,tL=0,tA=0,colCount=0,clearCount=0;
-  d.tenants.forEach(function(t){
+  visTenants.forEach(function(t){
     var v=totals[t.id]||{};tR+=v.rent||0;tL+=v.loan||0;tA+=v.arrangement||0;
     if((v.rent||0)+(v.loan||0)+(v.arrangement||0)<=0) clearCount++;
   });
@@ -275,7 +279,7 @@ function renderDashboard(){
   if (statsEl) statsEl.innerHTML=
     kpiCard('Total Owing',    fmt(grand),                       'All ledgers — click to view', grand>0?'danger':'', "showKpiDrilldown('total')")+
     kpiCard('Rent Arrears',   fmt(tR),                          'Click to view by tenant',     tR>0?'danger':'',   "showKpiDrilldown('rent')")+
-    kpiCard('Accounts Clear', clearCount,                       'of '+d.tenants.length+' tenants', 'success',      "showKpiDrilldown('clear')")+
+    kpiCard('Accounts Clear', clearCount,                       'of '+visTenants.length+' tenants', 'success',      "showKpiDrilldown('clear')")+
     kpiCard('Collections',    colCount+' file'+(colCount!==1?'s':''), 'Active',                colCount>0?'danger':'', "showPage('collections')");
 }
 
@@ -286,7 +290,7 @@ function showKpiDrilldown(type) {
 
   if (type === 'total') {
     title = 'Total Owing — All Accounts';
-    var items = d.tenants.map(function(t) {
+    var items = (typeof finVisibleTenants==='function'?finVisibleTenants():d.tenants).map(function(t) {
       var v = totals[t.id] || {};
       var loanBal = 0;
       d.loanList.filter(function(l){ return l.tenantId===t.id && l.status==='approved'; }).forEach(function(l){
@@ -318,7 +322,7 @@ function showKpiDrilldown(type) {
 
   } else if (type === 'rent') {
     title = 'Rent Arrears';
-    var rentItems = d.tenants.map(function(t) {
+    var rentItems = (typeof finVisibleTenants==='function'?finVisibleTenants():d.tenants).map(function(t) {
       var rent = totals[t.id] ? (totals[t.id].rent||0) : 0;
       var pmts = (d.rentLedger||[]).filter(function(r){ return r.tenantId===t.id && r.type==='payment' && r.status!=='reversed'; });
       var lastPmt = pmts.length ? pmts.slice().sort(function(a,b){ return b.date.localeCompare(a.date); })[0].date : null;
@@ -343,7 +347,7 @@ function showKpiDrilldown(type) {
 
   } else if (type === 'clear') {
     title = 'Accounts in Good Standing';
-    var clearItems = d.tenants.filter(function(t){
+    var clearItems = (typeof finVisibleTenants==='function'?finVisibleTenants():d.tenants).filter(function(t){
       var v = totals[t.id]||{};
       var st = t.status||'active';
       return (v.rent||0)+(v.loan||0)+(v.arrangement||0) <= 0 && t.active!==false && st!=='former' && st!=='deceased';

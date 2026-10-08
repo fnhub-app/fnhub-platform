@@ -1,6 +1,8 @@
 function initTxnFilters() {
   var d = getData();
-  var opts = d.tenants.map(function(t){return '<option value="'+t.id+'">'+tenantName(t)+' - '+t.unit+'</option>';}).join('');
+  // Canonical persons only — merged-away duplicates roll up under the keeper.
+  var _tens = (typeof finVisibleTenants==='function')?finVisibleTenants():(d.tenants||[]).filter(function(t){return !t.mergedInto;});
+  var opts = _tens.map(function(t){return '<option value="'+t.id+'">'+tenantName(t)+' - '+t.unit+'</option>';}).join('');
   var sel = document.getElementById('txn-filter-tenant');
   if (sel && sel.options.length < 2) sel.innerHTML = '<option value="all">All Tenants</option>'+opts;
 }
