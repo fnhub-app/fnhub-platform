@@ -45,10 +45,6 @@
     { g: 'One-time setup (once per client)', d: 'One-time setup — Small', p: 3500, q: 1 },
     { g: 'One-time setup (once per client)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
     { g: 'One-time setup (once per client)', d: 'One-time setup — Large', p: 9500, q: 1 },
-    // Setup with the 50% discount (one-year term, prepaid) -- the only discount that exists
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Small (50% discount)', p: 1750, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Mid-size (50% discount)', p: 3000, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Large (50% discount)', p: 4750, q: 1 },
     // Add-on
     { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 95, q: 1 },
     // Additional services (hourly; written authorization required)
@@ -67,7 +63,7 @@
     phone: '705-960-5076',
     email: 'hello@homelandhomes.ca'
   };
-  // Past-due interest rate per the agreement (Section 7.5): 1% per month.
+  // Past-due interest rate per the agreement (Section 7.4): 1% per month.
   var INTEREST_MONTHLY = 0.01;
   // YYYY-MM-DD for today + n days (browser Date is available here).
   function _dPlus(n){ return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
@@ -1440,11 +1436,9 @@
     'The Nation will pay the subscription fees, one-time setup fee, and any selected add-on fees stated in Schedule A (the "Fees"). All amounts are in Canadian dollars and exclusive of applicable taxes, if any.',
     '###7.2 Billing',
     'Unless Schedule A states otherwise, subscription Fees are invoiced annually in advance, with billing aligned to the April-March fiscal year where the Nation requests it. Monthly billing, where selected, is charged at the monthly rate stated in Schedule A. Invoices are payable within thirty (30) days.',
-    '###7.3 Setup discount',
-    "Where the Nation signs a one-year term and pays the first year's subscription in advance, the one-time setup fee is reduced by fifty percent (50%), as reflected in Schedule A.",
-    '###7.4 Fee changes',
+    '###7.3 Fee changes',
     'Fees are fixed for the Initial Term. The Provider may adjust Fees effective at a Renewal Term by giving at least sixty (60) days\' written notice before renewal; the Nation may decline renewal in accordance with Section 8.',
-    '###7.5 Late amounts',
+    '###7.4 Late amounts',
     'Amounts more than thirty (30) days overdue may bear interest at 1% per month (12.68% annually). The Provider will not suspend the Nation\'s access for non-payment without first giving at least thirty (30) days\' written notice specifically referencing suspension, and will not delete Customer Data as a consequence of non-payment except in accordance with Section 4.6 following termination.',
     '##8. Term and Termination',
     '###8.1 Term',
@@ -1499,13 +1493,12 @@
     '-[ ] 600+ / Tribal Council - custom: annual per quote; monthly per quote; setup per quote.',
     '###Billing and options',
     'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (+10% rate above)',
-    'Setup discount: [ ] One-year term with first year prepaid - setup fee reduced 50% to $______ (Section 7.3)',
     'Optional add-on: [ ] AI Staff Assistant - $95/month. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
     'Email delivery method (Schedule D): [ ] Nation\'s own Microsoft 365 tenant (requires the Nation\'s Microsoft administrator to grant application consent during setup)     [ ] Provider-managed transactional email service (Resend or SendGrid - United States; see Schedule D)',
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
     '###Term and contacts',
     'Initial Term: [ ] One (1) year from the Effective Date     [ ] Other: ______________',
-    'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, inspections, capital projects, finance, Chief & Council dashboard, tenant/applicant portal.',
+    'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, inspections, capital projects, finance, leadership reports for Chief & Council, tenant/applicant portal.',
     'Nation\'s primary contact for notices: name ____________________ email ____________________',
     'Provider contact for notices: Kevin Proctor - hello@homelandhomes.ca',
     '##Schedule B - Setup Services (Scope)',
@@ -2079,7 +2072,7 @@
     window._nicCarryIds = owing.map(function(x){ return x.id; });
     setMsg('cn-inv-msg', 'Carried ' + _money(total) + ' forward as a line. It will be billed when you create this invoice.', 'ok');
   };
-  // Generate a past-due interest charge (Section 7.5: 1%/month) and add it as a
+  // Generate a past-due interest charge (Section 7.4: 1%/month) and add it as a
   // line item. Interest is assessed as of the payment date if recorded, else
   // today. Applies only when more than 30 days past the due date. Idempotent:
   // any prior interest line is recomputed, not stacked.
@@ -2091,7 +2084,7 @@
     var asOf = inv.paid_date || _dPlus(0);
     var days = Math.floor((Date.parse(asOf) - Date.parse(inv.due_date)) / 86400000);
     if (days <= 30){
-      dlgAlert('As of ' + asOf + ', this invoice is ' + (days < 0 ? Math.abs(days) + ' day(s) before the due date' : days + ' day(s) past due') + '. Per Section 7.5, interest applies only to amounts more than 30 days overdue.', { title: 'No interest added' });
+      dlgAlert('As of ' + asOf + ', this invoice is ' + (days < 0 ? Math.abs(days) + ' day(s) before the due date' : days + ' day(s) past due') + '. Per Section 7.4, interest applies only to amounts more than 30 days overdue.', { title: 'No interest added' });
       return;
     }
     // Base = existing non-interest lines; interest accrues on the pre-tax,
@@ -2109,7 +2102,7 @@
     var interest = Math.round(principal * INTEREST_MONTHLY * months * 100) / 100;
     if (interest <= 0){ dlgAlert('Computed interest is $0.00 — nothing to add.'); return; }
     if (!(await dlgConfirm('Invoice ' + inv.number + ' is ' + days + ' days past the due date (' + inv.due_date + '), assessed as of ' + asOf + '.\n\nInterest at 1%/month (12.68%/yr) on ' + _money(principal) + ' = ' + _money(interest) + '.\n\nAdd this as a line item?', { title: 'Add past-due interest', okText: 'Add interest' }))) return;
-    var line = { description: 'Interest — ' + days + ' days past due at 1%/month (Section 7.5), assessed ' + asOf, qty: 1, unit_price: interest, interest: true };
+    var line = { description: 'Interest — ' + days + ' days past due at 1%/month (Section 7.4), assessed ' + asOf, qty: 1, unit_price: interest, interest: true };
     var lines = base.concat([line]);
     var subtotal = Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
     var taxRate = Number(inv.tax_rate) || 0;
