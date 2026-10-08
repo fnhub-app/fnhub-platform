@@ -109,6 +109,10 @@ function voidCurrentInvoice() {
 var GL_ACCOUNTS = {
   'rent':           {code:'4100', name:'Rent Revenue',              ledger:'rent',        type:'invoice'},
   'service':        {code:'4200', name:'Service / Admin Fee',       ledger:'rent',        type:'service'},
+  // Charge-back for tenant-caused damage/vandalism. Posts to the rent ledger
+  // like service/utility (type falls through to entry_type adjustment_debit in
+  // _rentLedgerToRow, so it round-trips); the GL code rides the ref + desc.
+  'vandalism':      {code:'4250', name:'Damage / Vandalism Recovery', ledger:'rent',      type:'vandalism'},
   'loan-principal': {code:'1220', name:'Loan Receivable',           ledger:'loans',       type:'loan-charge'},
   'loan-interest':  {code:'4300', name:'Interest Revenue',          ledger:'loans',       type:'loan-interest'},
   'arrangement':    {code:'1210', name:'Arrangement Receivable',    ledger:'arrangement', type:'arr-charge'},
@@ -200,6 +204,8 @@ function onInvGLChange() {
     if (descEl) descEl.value = month+' '+year+' Arrangement Payment'+(arr?' \u2014 '+arr.ref:'');
   } else if (gl === 'service') {
     if (descEl) descEl.value = 'Service Charge'+(t?' \u2014 '+tenantName(t):'');
+  } else if (gl === 'vandalism') {
+    if (descEl) descEl.value = 'Unit Vandalism / Damage'+(t&&t.unit?' \u2014 '+t.unit:(t?' \u2014 '+tenantName(t):''));
   } else if (gl === 'utility-hydro') {
     if (descEl) descEl.value = month+' '+year+' Hydro Charge'+(t?' \u2014 '+t.unit:'');
   } else if (gl === 'utility-gas') {
@@ -213,6 +219,7 @@ function onInvGLChange() {
       '<span style="color:var(--muted);">'+
       (gl==='rent'?'Posts to rent ledger. Appears in Period Summary and Reconciliation reports as Rent Revenue.':
        gl==='service'?'Service or admin fee. Posts to rent ledger under Service GL. Separate line in reports.':
+       gl==='vandalism'?'Charge-back for tenant-caused damage or vandalism. Posts to the rent ledger under the Damage/Vandalism GL (4250). Shows as a separate line in reports.':
        gl==='loan-principal'?'Posts charge against the selected loan. Reduces loan outstanding balance when paid.':
        gl==='loan-interest'?'Interest charge posts to Interest Revenue GL (4300). Reported separately from principal.':
        gl==='arrangement'?'Posts against the selected payment arrangement ledger.':
