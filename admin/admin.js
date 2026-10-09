@@ -1363,7 +1363,7 @@
     '##1. Definitions',
     '"Customer Data" means all data, records, documents, images and other content submitted to or generated within the Platform by or for the Nation, including personal information of the Nation\'s members, applicants, tenants, staff and contractors.',
     '"Platform" means the Provider\'s hosted housing-management software, including its staff application, tenant/applicant portal, and all modules listed in Schedule A, together with associated documentation.',
-    '"Order Form" means Schedule A to this Agreement, which records the subscription tier, fees, term and options selected by the Nation.',
+    '"Order Form" means Schedule A to this Agreement, which records the subscription band, fees, term and options selected by the Nation.',
     '"Users" means individuals authorized by the Nation to access the Platform, including staff, leadership, consultants (subject to Section 2.4), and members using the tenant/applicant portal.',
     '"Setup Services" means the one-time onboarding services described in Schedule B.',
     '"Subscription Term" means the Initial Term and each Renewal Term described in Section 8.',
@@ -1420,9 +1420,9 @@
     '###7.1 Fees',
     'The Nation will pay the subscription fees, one-time setup fee, and any selected add-on fees stated in Schedule A (the "Fees"). All amounts are in Canadian dollars and exclusive of applicable taxes, if any.',
     '###7.2 Billing',
-    'Unless Schedule A states otherwise, subscription Fees are invoiced annually in advance, with billing aligned to the April-March fiscal year where the Nation requests it. Monthly billing, where selected, is charged at the monthly rate stated in Schedule A. Invoices are payable within thirty (30) days.',
-    '###7.3 Setup discount',
-    "Where the Nation signs a one-year term and pays the first year's subscription in advance, the one-time setup fee is reduced by fifty percent (50%), as reflected in Schedule A.",
+    'Unless Schedule A states otherwise, subscription Fees are invoiced annually in advance, with annual billing aligned to the April-March fiscal year. Monthly billing, where selected, is charged at the monthly rate stated in Schedule A. Invoices are payable within thirty (30) days.',
+    '###7.3 Setup fee payment; no discounts',
+    "The one-time setup fee is a fixed price for the scope in Schedule B. The Nation may pay it up front or spread it across its first year's invoices at no extra cost (no interest or fee), as selected in Schedule A. Setup work outside that scope is quoted separately in writing and is never charged automatically. Subscription Fees are always charged at the published rate in Schedule A; no discounts apply.",
     '###7.4 Fee changes',
     'Fees are fixed for the Initial Term. The Provider may adjust Fees effective at a Renewal Term by giving at least sixty (60) days\' written notice before renewal; the Nation may decline renewal in accordance with Section 8.',
     '###7.5 Late amounts',
@@ -1472,16 +1472,12 @@
     'Name: Kevin Proctor     Title: Founder, Home Land Homes',
     '{{PROVIDER_CONTACT}}',
     '##Schedule A - Order Form',
-    'Select one tier and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
-    '###Subscription tiers',
-    '-[ ] Small - up to 100 homes: $5,400/year ($450/mo) or $495/month; one-time setup $3,500.',
-    '-[ ] Mid-size - 101-300 homes: $9,540/year ($795/mo) or $875/month; one-time setup $6,000.',
-    '-[ ] Large - 301-600 homes: $15,000/year ($1,250/mo) or $1,375/month; one-time setup $9,500.',
-    '-[ ] 600+ / Tribal Council - custom: annual per quote; monthly per quote; setup per quote.',
+    'Select one band and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date; they are fixed for the term the Nation signs (Section 7.4).',
+    '{{SCHEDULE_A_PRICES}}',
     '###Billing and options',
-    'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (+10% rate above)',
-    'Setup discount: [ ] One-year term with first year prepaid - setup fee reduced 50% to $______ (Section 7.3)',
-    'Optional add-on: [ ] AI Staff Assistant - $95/month. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
+    'Billing option selected: [ ] Annual (invoiced annually in advance, aligned to the April-March fiscal year)     [ ] Monthly (monthly-billing rate above)',
+    'Setup fee payment (Section 7.3): [ ] Paid up front     [ ] Spread across the first year\'s invoices (no interest or fee)',
+    'Optional add-on: [ ] AI Staff Assistant - {{AI_ADDON_PRICES}}. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
     'Email delivery method (Schedule D): [ ] Nation\'s own Microsoft 365 tenant (requires the Nation\'s Microsoft administrator to grant application consent during setup)     [ ] Provider-managed transactional email service (Resend or SendGrid - United States; see Schedule D)',
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
     '###Term and contacts',
@@ -1496,7 +1492,7 @@
     '-Email notification setup using the delivery method selected in Schedule A. Where the Nation\'s own Microsoft 365 tenant is selected, the Nation is responsible for having its Microsoft administrator grant the required application consent; if that consent is not obtained within thirty (30) days of the Effective Date, the parties will proceed with the transactional email service option (Schedule D) so go-live is not delayed.',
     '-Migration of the Nation\'s current unit, tenant and application/waitlist records from up to three (3) source files or systems supplied in reasonably usable condition (spreadsheets, exports, or organized paper records).',
     '-Migration method: where AI tools assist with data mapping, they are used on column structure and synthetic sample data only (Section 4.3); the Nation\'s actual records are transformed and loaded by the Provider directly onto the Nation\'s infrastructure in Canada and are never submitted to AI systems.',
-    '-Live remote training: two (2) sessions (Small tier), four (4) sessions (Mid-size tier), or six (6) sessions (Large tier), each up to 90 minutes, recorded for the Nation\'s reuse.',
+    '-Live remote training: two (2) sessions (Small group), four (4) sessions (Mid-size group), or six (6) sessions (Large group), each up to 90 minutes, recorded for the Nation\'s reuse.',
     '-Go-live support for sixty (60) days following the training period.',
     '###Not included (quoted as flat line items in Schedule A before signature, if requested)',
     '-Entry or cleanup of extensive historical/archival records beyond current state.',
@@ -1567,6 +1563,8 @@
       .replace(/\{\{NATION\}\}/g, nationName)
       .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
       .replace(/\{\{DATE\}\}/g, _fmtDateLong())
+      .replace(/\{\{SCHEDULE_A_PRICES\}\}/g, window.HLH_PRICING.scheduleALines().join('\n'))
+      .replace(/\{\{AI_ADDON_PRICES\}\}/g, window.HLH_PRICING.aiAddonText())
       .replace(/\{\{PROVIDER_CONTACT\}\}/g, PROVIDER.name + ' - ' + PROVIDER.addr1 + ', ' + PROVIDER.addr2 + '   ·   ' + PROVIDER.phone + '   ·   ' + PROVIDER.email);
     tpl.split('\n').forEach(function(raw){
       var line = raw;
