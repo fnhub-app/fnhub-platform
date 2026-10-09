@@ -26,38 +26,14 @@
     ['projects','Capital Projects']
   ];
 
-  // Home Land Homes fee schedule for the invoice builder. EXACT prices -- do not
-  // alter. Revised 2026-09-05 to match the schedule published on
-  // homelandhomes.ca. g=group, d=line description, p=unit price (CAD),
-  // q=default qty; hours=qty is entered in hours (unit is per-hour);
-  // custom=price is free-entry. NOTE: never edit the d strings — saved
-  // nation_billing rows re-select their line item by exact-description match.
-  var FEE_SCHEDULE = [
-    // Subscription -- billed annually in advance
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Small (up to 100 homes), annual', p: 5400, q: 1 },
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size (101-300 homes), annual', p: 9540, q: 1 },
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Large (301-600 homes), annual', p: 15000, q: 1 },
-    // Subscription -- monthly (higher rate, already includes +10%)
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Small (up to 100 homes), monthly', p: 495, q: 1 },
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size (101-300 homes), monthly', p: 875, q: 1 },
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Large (301-600 homes), monthly', p: 1375, q: 1 },
-    // One-time setup (once per client)
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Small', p: 3500, q: 1 },
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Large', p: 9500, q: 1 },
-    // Setup with the 50% discount (one-year term, prepaid) -- the only discount that exists
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Small (50% discount)', p: 1750, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Mid-size (50% discount)', p: 3000, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Large (50% discount)', p: 4750, q: 1 },
-    // Add-on
-    { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 95, q: 1 },
-    // Additional services (hourly; written authorization required)
-    { g: 'Additional services (hourly, written authorization)', d: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)', p: 150, q: 1, hours: true },
-    { g: 'Additional services (hourly, written authorization)', d: 'Travel time (per hour, max 8 hrs/travel day)', p: 75, q: 1, hours: true },
-    // Custom / at cost (free-entry amount)
-    { g: 'Custom / at cost (enter amount)', d: 'Subscription — 600+ / Tribal Council (custom per quote)', p: 0, q: 1, custom: true },
-    { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
-  ];
+  // Home Land Homes fee schedule for the invoice builder + recurring-billing
+  // picker. Prices live ONLY in admin-pricing.js (window.HLH_PRICING, loaded
+  // first by index.html) -- edit them there, never here. Item shape:
+  // g=group, d=line description, p=unit price (CAD), q=default qty;
+  // hours=qty is entered in hours (unit is per-hour); custom=price is
+  // free-entry. NOTE: never edit the d strings — saved nation_billing rows
+  // re-select their line item by exact-description match.
+  var FEE_SCHEDULE = window.HLH_PRICING.feeSchedule();
 
   // Provider (Home Land Homes) details -- printed on invoices.
   var PROVIDER = {
@@ -935,11 +911,16 @@
       +   '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">'
       +     '<div style="font-weight:700;font-size:13px;margin-bottom:8px;">New invoice</div>'
       +     '<div id="cn-inv-carry" style="display:none;background:var(--accent-light);border:1px solid #fde68a;border-radius:9px;padding:9px 11px;margin-bottom:10px;"></div>'
+      +     '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:4px;">'
+      +       '<div style="width:150px;"><label>Residential homes</label><input id="cn-inv-homes" type="number" min="1" step="1" placeholder="e.g. 140"/></div>'
+      +       '<button class="btn sm ghost" type="button" data-act="inv-find-band">Find band</button>'
+      +     '</div>'
+      +     '<div class="msg" id="cn-inv-band"></div>'
       +     '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">'
       +       '<div style="flex:1;min-width:230px;"><label>Fee schedule</label>' + _feeScheduleSelectHtml() + '</div>'
       +       '<button class="btn sm" type="button" data-act="inv-add-catalog">Add selected &darr;</button>'
       +     '</div>'
-      +     '<p class="sub" style="margin:0 0 8px;font-size:11px;">Pick a fee-schedule item and Add, or use &ldquo;+ Add line&rdquo; for a free-form line. For hourly items, enter the number of hours in <b>Qty</b> (0.25 precision); for custom / at-cost items, fill in the amount.</p>'
+      +     '<p class="sub" style="margin:0 0 8px;font-size:11px;">Pick a fee-schedule item and Add, or use &ldquo;+ Add line&rdquo; for a free-form line. Count <b>residential</b> homes only for the band (band offices, community buildings and commercial space don&rsquo;t count). <b>Legacy</b> lines are only for a nation still inside a term signed before 2026-10-09 &mdash; never for a new signing or renewal. For hourly items, enter the number of hours in <b>Qty</b> (0.25 precision); for custom / at-cost items, fill in the amount.</p>'
       +     '<div id="cn-inv-lines"></div>'
       +     '<button class="btn sm ghost" type="button" data-act="inv-add-line" style="margin-top:2px;">+ Add blank line</button>'
       +     '<div style="' + g2 + 'margin-top:12px;">'
@@ -1931,6 +1912,26 @@
     var it = FEE_SCHEDULE[parseInt(sel.value, 10)]; if (!it) return;
     window.invAddLine({ d: it.d, q: (it.q != null ? it.q : 1), p: it.custom ? '' : it.p });
   };
+  // Band finder: residential homes -> published band (admin-pricing.js), and
+  // preselect that band's annual line in the catalog. Display only -- it never
+  // touches an existing schedule or invoice.
+  window.invFindBand = function(){
+    var P = window.HLH_PRICING;
+    var raw = (document.getElementById('cn-inv-homes') || {}).value;
+    var b = P.bandForHomes(raw === '' ? NaN : raw);
+    if (!b){ setMsg('cn-inv-band', 'Enter a whole number of residential homes (1 or more).'); return; }
+    var sel = document.getElementById('cn-inv-catalog'), idx = -1;
+    FEE_SCHEDULE.forEach(function(it, i){
+      if (idx !== -1 || it.legacy) return;
+      if (b.custom ? /^Subscription — 600\+/.test(it.d) : (it.band === b.key && /annual$/.test(it.d))) idx = i;
+    });
+    if (sel && idx !== -1) sel.value = String(idx);
+    if (b.custom){ setMsg('cn-inv-band', 'xl (600+ homes): no published price — quote it manually (Tribal Council / group pricing).', 'ok'); return; }
+    var g = P.GROUPS[b.group];
+    setMsg('cn-inv-band', b.key + ' (' + b.min + '-' + b.max + ' homes, ' + g.label + ' group): '
+      + P.money(b.annual) + '/yr annual billing or ' + P.money(b.monthly) + '/mo monthly billing; setup '
+      + P.money(g.setup) + '; AI add-on ' + P.money(g.ai) + '/mo.', 'ok');
+  };
   // Discount helper: percent-of-base or fixed dollars, clamped to [0, base].
   // Returns the rounded dollar amount taken off. Used by manual invoices, the
   // interest recompute, and recurring-billing generation so the three paths
@@ -2480,6 +2481,7 @@
       case 'copy-text':     window.copyTextBtn(el); break;
       case 'inv-add-line':  window.invAddLine(); break;
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
+      case 'inv-find-band': window.invFindBand(); break;
       case 'inv-del-line':  { var lr = el.closest && el.closest('.inv-line'); if (lr) lr.remove(); break; }
       case 'inv-create':    window.createNationInvoice(el.getAttribute('data-sub') || '', id); break;
       case 'inv-status':    window.setInvoiceStatus(el.getAttribute('data-id') || '', el.getAttribute('data-status') || '', el.getAttribute('data-sub') || ''); break;
