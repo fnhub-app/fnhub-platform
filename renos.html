@@ -934,6 +934,28 @@ function initRenosPage() {
   if (deepSow && typeof openSowModal === 'function') {
     var deepPn = params.get('pn') || null;
     setTimeout(function(){ openSowModal(deepSow, deepPn); }, 100);
+    // Optional &action= hint from a Maintenance Request email button. This ONLY
+    // pre-selects a tab in the (already role-gated) modal so the signed-in
+    // approver lands on the right section — it never performs the action itself.
+    var deepAction = params.get('action');
+    if (deepAction) {
+      setTimeout(function(){
+        try {
+          if (typeof setSowTab === 'function') {
+            if (deepAction === 'notes') setSowTab('notes');
+            else if (deepAction === 'approve' || deepAction === 'decline') setSowTab('sigs');
+          }
+          if (typeof showToast === 'function') {
+            var msg = deepAction === 'decline'
+                  ? 'Review the request. To decline it, use the "✖ Cancel Request" button in the footer.'
+                  : deepAction === 'notes'
+                  ? 'Add your notes in the Notes & Terms section.'
+                  : 'Review the request, then sign off in the Signatures section to approve it.';
+            showToast(msg, { type: 'info' });
+          }
+        } catch(e){ console.warn('[RENOS] sow action hint failed:', e); }
+      }, 550);
+    }
   }
 }
 function updateRenosHeader() {

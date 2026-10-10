@@ -97,14 +97,25 @@ var EMAIL_EVENT_REGISTRY = [
     defaultRecipientRoles: ['housing_manager'],
     defaultCcRoles:        [],
     wired:                 true,
-    placeholders:          ['unitAddress','totalCost','condition','contractor','nationShort','appLink'],
+    placeholders:          ['unitAddress','projectNumber','totalCost','condition','contractor','scopeOfWork','nationShort','reviewLink','approveLink','declineLink','notesLink','appLink'],
     defaults: {
       subject:  '{nationShort} Housing — New Maintenance Request: {unitAddress}',
-      bodyHtml: '<p>A new Maintenance Request has been submitted for <strong>{unitAddress}</strong> and requires your review.</p>'
+      bodyHtml: '<p>A new Maintenance Request (<strong>{projectNumber}</strong>) has been submitted for <strong>{unitAddress}</strong> and requires your review.</p>'
               + '<p>Total cost: <strong>{totalCost}</strong></p>'
               + '<p>Condition: <strong>{condition}</strong></p>'
               + '<p>Contractor: <strong>{contractor}</strong></p>'
-              + '<p style="margin:22px 0 4px;"><a href="{appLink}" style="{brandBtnStyle}">Open {nationShort} Housing &rarr;</a></p>'
+              + '<div style="margin:16px 0 2px;font-weight:700;">Scope of work</div>'
+              + '{scopeOfWork}'
+              + '<p style="margin:22px 0 8px;font-weight:700;">Review &amp; respond</p>'
+              + '<p style="margin:0 0 6px;">'
+              +   '<a href="{approveLink}" style="{brandBtnStyle}">&#10003; Review &amp; Approve &rarr;</a>'
+              + '</p>'
+              + '<p style="margin:0;">'
+              +   '<a href="{declineLink}" style="{ghostBtnStyle}">&#10007; Decline</a>'
+              +   '&nbsp;&nbsp;'
+              +   '<a href="{notesLink}" style="{ghostBtnStyle}">&#9998; Add Notes</a>'
+              + '</p>'
+              + '<p style="font-size:12px;color:#6b7280;margin:14px 0 0;line-height:1.5;">For security, these buttons just open this request in the {nationShort} Housing app. You still need to sign in, and approving or declining is limited to authorized staff &mdash; so nothing happens from this email alone, even if it is forwarded.</p>'
     }
   },
   {
@@ -593,6 +604,55 @@ function _brandBtnStyle() {
 }
 window._brandBtnStyle = _brandBtnStyle;
 
+// Secondary (Decline / Add-Notes) button style for emails — a neutral outline
+// so the brand fill stays reserved for the single primary action. The greys are
+// generic UI chrome, not nation identity (the primary button is the only brand
+// surface, via _brandBtnStyle).
+function _brandBtnGhostStyle() {
+  return 'display:inline-block;background:#ffffff;color:#374151;text-decoration:none;font-weight:600;font-size:14px;padding:10px 18px;border:1px solid #d1d5db;border-radius:8px;';
+}
+window._brandBtnGhostStyle = _brandBtnGhostStyle;
+
+// Deep link to a specific Maintenance Request in the authenticated app. This is
+// a plain navigation URL — it carries NO capability/token and performs NO
+// action on its own. Approving / declining / note-taking all happen INSIDE the
+// app after the recipient signs in, where the Supabase session + the SOW
+// modal's approval-authority checks (HM/ED) gate every action. So an email that
+// is forwarded or link-prefetched can at most open the app's login screen.
+// `action` is a fixed hint ('approve'|'decline'|'notes') that only pre-selects
+// a tab in the modal; it never authorizes anything.
+function _emailMrLink(unitId, pn, action) {
+  var origin = (typeof window !== 'undefined' && window.location && window.location.origin) ? window.location.origin : '';
+  var url = origin + '/renos.html?sow=' + encodeURIComponent(unitId || '');
+  if (pn)     url += '&pn=' + encodeURIComponent(pn);
+  if (action) url += '&action=' + encodeURIComponent(action);
+  return url;
+}
+
+// Build the escaped scope-of-work fragment for a SOW email. Work-item text is
+// user-entered, so EVERY value is run through _ntfEsc; only the structural tags
+// (ul/li/strong/span) are trusted — _substitutePlaceholders injects token values
+// raw into the HTML, so pre-escaping here is what keeps the email injection-safe.
+function _emailScopeHtml(sow) {
+  var items = ((sow && sow.items) || []).filter(function(it){ return it && (it.description || it.category); });
+  if (items.length) {
+    var rows = items.map(function(it){
+      var cat  = it.category ? '<strong>' + _ntfEsc(it.category) + '</strong>' : '';
+      var desc = it.description ? _ntfEsc(it.description) : '';
+      var sep  = (cat && desc) ? ' &mdash; ' : '';
+      var costVal = (it.cost != null && it.cost !== '')
+        ? (typeof formatCurrency === 'function' ? formatCurrency(parseFloat(it.cost) || 0) : String(it.cost))
+        : '';
+      var cost = costVal ? ' <span style="color:#6b7280;">(' + _ntfEsc(costVal) + ')</span>' : '';
+      return '<li style="margin:3px 0;">' + cat + sep + desc + cost + '</li>';
+    }).join('');
+    return '<ul style="margin:6px 0 0;padding-left:20px;color:#111827;">' + rows + '</ul>';
+  }
+  var free = (sow && (sow.scope || sow.description)) || '';
+  if (free) return '<p style="margin:6px 0 0;">' + _ntfEsc(String(free)) + '</p>';
+  return '<p style="margin:6px 0 0;color:#6b7280;">No scope items recorded yet.</p>';
+}
+
 function _renderEmailTemplate(eventKey, tokens) {
   var cfg = _emailEventConfig(eventKey);
   if (!cfg) {
@@ -649,13 +709,24 @@ function _emailTokensForSow(sow, unitId) {
     if (u) addr = ((u.num || '') + ' ' + (u.street || '')).trim();
   }
   if (!addr) addr = unitId || '—';
+  var pn = (sow && sow.project_number) || '';
   return {
-    unitAddress: addr,
-    totalCost:   (sow && sow.totalCost)  || '—',
-    condition:   (sow && sow.condition)  || '—',
-    contractor:  (sow && sow.contractor) || '—',
-    nationShort: _emailNationShort(),
-    appLink:     _emailAppLink()
+    unitAddress:   addr,
+    totalCost:     (sow && sow.totalCost)  || '—',
+    condition:     (sow && sow.condition)  || '—',
+    contractor:    (sow && sow.contractor) || '—',
+    projectNumber: pn || '—',
+    // Pre-escaped scope-of-work list (see _emailScopeHtml) — injection-safe.
+    scopeOfWork:   _emailScopeHtml(sow),
+    // Deep links into the authenticated app for this specific request. No token,
+    // no capability — the app enforces sign-in + HM/ED approval authority.
+    reviewLink:    _emailMrLink(unitId, pn, null),
+    approveLink:   _emailMrLink(unitId, pn, 'approve'),
+    declineLink:   _emailMrLink(unitId, pn, 'decline'),
+    notesLink:     _emailMrLink(unitId, pn, 'notes'),
+    ghostBtnStyle: _brandBtnGhostStyle(),
+    nationShort:   _emailNationShort(),
+    appLink:       _emailAppLink()
   };
 }
 
