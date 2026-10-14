@@ -362,6 +362,8 @@
       + '</div>'
       + '</div>';
     wireAddNation();
+    // Fill each nation's "Sold by" line (reseller.js loads the reseller data).
+    if (typeof window.rsDecorateNations === 'function') window.rsDecorateNations();
   }
 
   // Human byte formatter for the admin panel (mirrors the nation app's _duFmtBytes).
@@ -425,7 +427,8 @@
             : 'no project &middot; $0')
         + '</div>';
       return '<tr>'
-        + '<td><b>' + esc(n.display_name) + '</b><div style="font-size:11px;color:var(--muted);">' + esc(n.subdomain) + '.fnhub.app</div></td>'
+        + '<td><b>' + esc(n.display_name) + '</b><div style="font-size:11px;color:var(--muted);">' + esc(n.subdomain) + '.fnhub.app</div>'
+        +   '<div data-sold-sub="' + esc(n.subdomain) + '" style="font-size:11px;color:var(--muted);margin-top:2px;"></div></td>'
         + '<td><span class="pill ' + esc(st) + '">' + esc(st) + '</span></td>'
         + '<td style="font-size:11px;color:var(--muted);">' + esc(mods.join(', ') || '—') + '</td>'
         + '<td style="font-size:12px;">' + usageCell(u) + costLine + '</td>'
@@ -799,6 +802,7 @@
     renderNationBilling(n.subdomain);
     renderSupportKey(n.subdomain);
     loadNicSummary(n.subdomain);
+    if (typeof window.renderNationSeller === 'function') window.renderNationSeller(n);   // Overview -> Sold by (reseller.js)
   };
 
   function configureView(n){
@@ -857,7 +861,8 @@
               ? '<button class="btn sm ghost" type="button" data-act="status" data-status="active" data-id="' + esc(n.id) + '">Resume this nation</button>'
               : '<button class="btn sm danger" type="button" data-act="status" data-status="suspended" data-id="' + esc(n.id) + '">Suspend this nation</button>')
       +   '</div>'
-      + '</div>';
+      + '</div>'
+      + '<div class="card" id="cn-seller"><h3>Sold by</h3><p class="sub">Loading…</p></div>';
 
     var pSupabase =
         '<div class="card"><h3>Supabase project</h3>'
