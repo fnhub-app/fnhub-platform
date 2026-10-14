@@ -76,6 +76,26 @@
     + '#rs-root .crumb{background:none;border:none;color:#1d4ed8;font-weight:700;font-size:13px;padding:0;cursor:pointer;font-family:inherit;margin-top:14px}'
     + '#rs-root .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}'
     + '#rs-root .btns .btn{margin-top:0}'
+    + '#rs-root .rs-parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}'
+    + '@media(max-width:640px){#rs-root .rs-parties{grid-template-columns:1fr}}'
+    + '#rs-root .rs-party{border:1px solid var(--line);border-radius:10px;padding:4px 14px 14px;background:var(--bg)}'
+    + '#rs-root .rs-party-h{font-size:11px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-top:10px}'
+    + '#rs-root .rs-sigbox{height:74px;border:1px dashed var(--hair);border-radius:9px;background:var(--surface);display:flex;align-items:center;justify-content:center;overflow:hidden}'
+    + '#rs-root .rs-sigbox img{max-height:66px;max-width:100%}'
+    + '.rs-typed{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:700;font-size:28px;color:#14204a}'
+    + '.rs-sign-ov{position:fixed;inset:0;background:rgba(17,17,16,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}'
+    + '.rs-sign{background:var(--surface);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);max-width:560px;width:100%;overflow:hidden}'
+    + '.rs-sign-hd{background:var(--ink);color:#fff;padding:12px 18px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}'
+    + '.rs-sign-hd .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}'
+    + '.rs-sign-bd{padding:14px 18px}'
+    + '.rs-sign-tabs{display:flex;gap:6px;margin:12px 0 8px}'
+    + '.rs-sign-tabs button{border:1px solid var(--hair);background:var(--surface);border-radius:8px;padding:6px 14px;font:inherit;font-size:13px;font-weight:700;cursor:pointer;color:var(--muted)}'
+    + '.rs-sign-tabs button.on{background:var(--accent);border-color:var(--accent);color:var(--ink)}'
+    + '#rs-sign-canvas{width:100%;height:auto;aspect-ratio:900/260;border:1px solid var(--hair);border-radius:10px;background:#fff;touch-action:none;display:block}'
+    + '.rs-sign-hint{font-size:11px;color:var(--muted);margin-top:4px}.rs-sign-hint a{color:#1d4ed8;font-weight:700}'
+    + '.rs-sign-prev{margin-top:8px;height:70px;border:1px solid var(--hair);border-radius:10px;background:#fff;display:flex;align-items:center;justify-content:center;font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:700;font-size:30px;color:#14204a}'
+    + '.rs-sign .chk{display:flex;gap:8px;align-items:flex-start;font-size:12px;font-weight:600;margin-top:12px;line-height:1.4}.rs-sign .chk input{width:auto;margin-top:2px}'
+    + '.rs-sign-ft{display:flex;justify-content:flex-end;gap:8px;padding:4px 18px 16px}.rs-sign-ft .btn{margin-top:0}'
     + '.pill.draft,.pill.submitted,.pill.none{background:#f4f4f0;color:#696960}'
     + '.pill.signed,.pill.issued,.pill.terminating{background:#fffbeb;color:#7a5c00;border:1px solid #fde68a}'
     + '.pill.registered,.pill.paid{background:#dcfce7;color:#166534}'
@@ -153,6 +173,9 @@
       S.loaded = true; S.missing = false;
       try { S.expenses = await getJson('/reseller_expenses?select=*&order=approved_date'); S.v2missing = false; }
       catch (e2){ S.expenses = []; S.v2missing = true; }
+      // reseller_v3.sql adds the signature columns; select=* shows whether they exist.
+      if (S.agreements.length) S.v3missing = !('owner_signature' in S.agreements[0]);
+      else { try { await getJson('/reseller_agreements?select=owner_signature&limit=1'); S.v3missing = false; } catch (e3){ S.v3missing = true; } }
     } catch (e){
       S.loaded = false;
       S.missing = /platform_owner|reseller|relation|schema cache|does not exist/i.test(String(e && e.message || e)) || e.status === 404;
@@ -216,7 +239,10 @@
         + btn('Retry', 'rs-refresh') + '</div>';
       return;
     }
-    var v2 = S.v2missing ? '<div class="warn" style="margin-top:14px;"><b>One more database step:</b> run <code>supabase/platform/reseller_v2.sql</code> on the platform project to turn on exclusivity, extensions and marketing-expense tracking.</div>' : '';
+    var todo = [];
+    if (S.v2missing) todo.push('<code>supabase/platform/reseller_v2.sql</code> (exclusivity, extensions, marketing expenses)');
+    if (S.v3missing) todo.push('<code>supabase/platform/reseller_v3.sql</code> (signing in the panel)');
+    var v2 = todo.length ? '<div class="warn" style="margin-top:14px;"><b>Database step needed:</b> run ' + todo.join(' and ') + ' on the platform project, in that order.</div>' : '';
     if (S.view === 'reseller') root.innerHTML = v2 + resellerView(S.id);
     else if (S.view === 'agreement') { root.innerHTML = v2 + agreementView(S.id); if (S.stmt) drawStatement(); }
     else root.innerHTML = v2 + homeView();
@@ -432,16 +458,21 @@
       + (draft ? '<div class="btns">' + btn('Save terms', 'rs-agr-save', ' data-id="' + esc(id) + '"') + msgBox('rs-a-msg') + '</div>' : '')
       + '</div>';
 
+    var party = function(who, label){
+      var sigv = a[who + '_signature'], signed = !!sigv;
+      return '<div class="rs-party"><div class="rs-party-h">' + label + '</div>'
+        + fld('Signatory', 'rs-a-' + who + '_sign_name', a[who + '_sign_name'], { dis: !draft || signed })
+        + fld('Title', 'rs-a-' + who + '_sign_title', a[who + '_sign_title'], { dis: !draft || signed, ph: who === 'reseller' ? 'e.g. Owner' : '' })
+        + '<label>Signature</label><div class="rs-sigbox">' + sigPreview(sigv) + '</div>'
+        + fld('Date signed', 'rs-a-' + who + '_signed_date', a[who + '_signed_date'], { type: 'date', dis: !draft || signed, hint: signed ? 'Set when signed in the panel.' : 'For a paper or outside e-signature, enter the date it was signed.' })
+        + (draft && !S.v3missing ? '<div class="btns">' + (signed
+            ? btn('Remove signature', 'rs-sign-clear', ' data-id="' + esc(id) + '" data-who="' + who + '"', 'ghost')
+            : btn('✍ Sign in the panel', 'rs-sign-open', ' data-id="' + esc(id) + '" data-who="' + who + '"')) + '</div>' : '')
+        + '</div>';
+    };
     var sig = '<div class="card"><h3>Signatures &amp; completion</h3>'
       + (miss.length && draft ? '<div class="warn"><b>Still needed before signing:</b><br>' + miss.map(esc).join('<br>') + '</div>' : '')
-      + '<div class="rs-grid3">'
-      +   fld('Owner signatory', 'rs-a-owner_sign_name', a.owner_sign_name, { dis: !draft })
-      +   fld('Owner title', 'rs-a-owner_sign_title', a.owner_sign_title, { dis: !draft })
-      +   fld('Owner signed', 'rs-a-owner_signed_date', a.owner_signed_date, { type: 'date', dis: !draft })
-      +   fld('Reseller signatory', 'rs-a-reseller_sign_name', a.reseller_sign_name, { dis: !draft })
-      +   fld('Reseller title', 'rs-a-reseller_sign_title', a.reseller_sign_title, { dis: !draft })
-      +   fld('Reseller signed', 'rs-a-reseller_signed_date', a.reseller_signed_date, { type: 'date', dis: !draft })
-      + '</div>'
+      + '<div class="rs-parties">' + party('owner', 'Owner') + party('reseller', 'Reseller') + '</div>'
       + (a.owner_snapshot ? '<p class="note">As signed: <b>Owner</b> ' + esc(K().partyRecital(a.owner_snapshot)) + '. <b>Reseller</b> ' + esc(K().partyRecital(a.reseller_snapshot)) + '.</p>' : '')
       + '<div class="btns">'
       +   btn('📄 Generate contract PDF', 'rs-agr-pdf', ' data-id="' + esc(id) + '"', draft ? 'ghost' : '')
@@ -449,13 +480,98 @@
       +   (draft ? btn('Delete draft', 'rs-agr-del', ' data-id="' + esc(id) + '"', 'danger') : '')
       +   msgBox('rs-a-sig-msg')
       + '</div>'
-      + '<p class="note">Generate the PDF to sign (draft copies carry the "not legal advice" notice). Once both parties have signed, enter the dates and <b>Activate</b>: this freezes both parties\' details and starts commission statements.</p>'
+      + '<p class="note">Each party can <b>sign in the panel</b> (draw or type; the reseller signs on this device), or sign the generated PDF on paper or with an outside e-signature tool and you enter the date. The signatures are stamped onto the contract PDF. Changing the terms after anyone has signed clears both signatures. When both have signed, <b>Activate</b> to freeze both parties\' details and start commission statements.</p>'
       + '</div>';
 
     return '<button class="crumb" type="button" data-act="rs-open-reseller" data-id="' + esc(a.reseller_id) + '">&larr; ' + esc(r.legal_name || 'Reseller') + '</button>'
       + '<h1 style="margin-top:8px;">' + esc(a.agreement_number) + ' &middot; ' + esc(r.legal_name || '') + '</h1>'
       + terms + sig
       + (draft ? '' : termCard(a) + customersCard(a) + (S.v2missing ? '' : expensesCard(a)) + statementsCard(a));
+  }
+
+  function sigPreview(v){
+    if (!v) return '<span class="empty">Not signed in the panel</span>';
+    if (String(v).indexOf('typed:') === 0) return '<span class="rs-typed">' + esc(String(v).slice(6)) + '</span>';
+    return '<img alt="Signature" src="' + esc(v) + '"/>';
+  }
+
+  // ---- In-panel e-signature (s.17.9) -------------------------------------------
+  // Draw or Type, like the housing app's signature pads. The value is a PNG data
+  // URL (drawn) or 'typed:<name>', saved on the agreement with today's date.
+  var _pad = null;
+  window.rsOpenSign = function(id, who){
+    var a = agreement(id); if (!a) return;
+    var name = v('rs-a-' + who + '_sign_name'), title = v('rs-a-' + who + '_sign_title');
+    if (!name){ K().setMsg('rs-a-sig-msg', 'Enter the ' + who + ' signatory name first.'); return; }
+    var party = who === 'owner' ? (S.owner || {}).legal_name : (reseller(a.reseller_id) || {}).legal_name;
+    var ov = document.createElement('div'); ov.className = 'rs-sign-ov'; ov.id = 'rs-sign-ov';
+    ov.innerHTML = '<div class="rs-sign">'
+      + '<div class="rs-sign-hd"><span class="dot"></span>Sign ' + esc(a.agreement_number) + ' as ' + (who === 'owner' ? 'Owner' : 'Reseller') + '</div>'
+      + '<div class="rs-sign-bd">'
+      +   '<div style="font-size:13px;"><b>' + esc(name) + '</b>' + (title ? ', ' + esc(title) : '') + (party && party !== name ? ' &middot; for ' + esc(party) : '') + '</div>'
+      +   '<div class="rs-sign-tabs"><button type="button" class="on" data-act="rs-sign-mode" data-mode="draw">Draw</button><button type="button" data-act="rs-sign-mode" data-mode="type">Type</button></div>'
+      +   '<div id="rs-sign-draw"><canvas id="rs-sign-canvas" width="900" height="260"></canvas>'
+      +     '<div class="rs-sign-hint">Sign with a finger, stylus or mouse. <a href="#" data-act="rs-sign-reset">Clear</a></div></div>'
+      +   '<div id="rs-sign-type" style="display:none;"><input id="rs-sign-typed" value="' + esc(name) + '"/><div class="rs-sign-prev" id="rs-sign-prev">' + esc(name) + '</div></div>'
+      +   '<label class="chk"><input type="checkbox" id="rs-sign-consent"/> I have reviewed Agreement ' + esc(a.agreement_number) + ' and agree that this electronic signature is my signature on it (s.17.9).</label>'
+      +   '<div class="dlg-err" id="rs-sign-err" style="color:var(--danger);font-size:12px;min-height:14px;margin-top:6px;"></div>'
+      + '</div>'
+      + '<div class="rs-sign-ft">' + btn('Cancel', 'rs-sign-cancel', '', 'ghost') + btn('Apply signature', 'rs-sign-apply', ' data-id="' + esc(id) + '" data-who="' + who + '"') + '</div>'
+      + '</div>';
+    document.body.appendChild(ov);
+    _pad = { mode: 'draw', ink: false };
+    var cv = document.getElementById('rs-sign-canvas'), ctx = cv.getContext('2d'), drawing = false, last = null;
+    ctx.lineWidth = 4.2; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = '#14204a';
+    function pt(e){ var r = cv.getBoundingClientRect(); return { x: (e.clientX - r.left) * cv.width / r.width, y: (e.clientY - r.top) * cv.height / r.height }; }
+    cv.addEventListener('pointerdown', function(e){ e.preventDefault(); drawing = true; last = pt(e); try { cv.setPointerCapture(e.pointerId); } catch (x){} ctx.beginPath(); ctx.arc(last.x, last.y, 1.8, 0, 7); ctx.fillStyle = '#14204a'; ctx.fill(); _pad.ink = true; });
+    cv.addEventListener('pointermove', function(e){ if (!drawing) return; e.preventDefault(); var p = pt(e); ctx.beginPath(); ctx.moveTo(last.x, last.y); ctx.lineTo(p.x, p.y); ctx.stroke(); last = p; _pad.ink = true; });
+    ['pointerup', 'pointercancel', 'pointerleave'].forEach(function(t){ cv.addEventListener(t, function(){ drawing = false; }); });
+    document.getElementById('rs-sign-typed').addEventListener('input', function(){ document.getElementById('rs-sign-prev').textContent = this.value; });
+  };
+  function closeSign(){ var ov = document.getElementById('rs-sign-ov'); if (ov) ov.parentNode.removeChild(ov); _pad = null; }
+  // Crop the drawn signature to its ink so it sits well on the signature line.
+  function croppedSignature(cv){
+    var ctx = cv.getContext('2d'), d = ctx.getImageData(0, 0, cv.width, cv.height).data, x0 = cv.width, y0 = cv.height, x1 = -1, y1 = -1;
+    for (var yy = 0; yy < cv.height; yy += 2) for (var xx = 0; xx < cv.width; xx += 2){ if (d[(yy * cv.width + xx) * 4 + 3] > 20){ if (xx < x0) x0 = xx; if (xx > x1) x1 = xx; if (yy < y0) y0 = yy; if (yy > y1) y1 = yy; } }
+    if (x1 < 0) return '';
+    var pad = 10; x0 = Math.max(0, x0 - pad); y0 = Math.max(0, y0 - pad); x1 = Math.min(cv.width, x1 + pad); y1 = Math.min(cv.height, y1 + pad);
+    // Keep the 62:17 box aspect used on the PDF so the signature isn't stretched.
+    var w = x1 - x0, h = y1 - y0, want = 62 / 17;
+    if (w / h < want){ var nw = h * want; x0 = Math.max(0, x0 - (nw - w) / 2); w = Math.min(cv.width - x0, nw); }
+    else { var nh = w / want; y0 = Math.max(0, y0 - (nh - h) / 2); h = Math.min(cv.height - y0, nh); }
+    var out = document.createElement('canvas'); out.width = Math.round(w); out.height = Math.round(h);
+    out.getContext('2d').drawImage(cv, x0, y0, w, h, 0, 0, out.width, out.height);
+    return out.toDataURL('image/png');
+  }
+  window.rsApplySign = async function(id, who){
+    var err = document.getElementById('rs-sign-err');
+    if (!c('rs-sign-consent')){ err.textContent = 'Tick the consent box to sign.'; return; }
+    var val;
+    if (_pad.mode === 'type'){ var tn = v('rs-sign-typed'); if (!tn){ err.textContent = 'Type the name to sign.'; return; } val = 'typed:' + tn; }
+    else { if (!_pad.ink){ err.textContent = 'Draw a signature first.'; return; } val = croppedSignature(document.getElementById('rs-sign-canvas')); }
+    // Save the current form with the signature so it binds to these exact terms.
+    var b = collectAgreementForm();
+    b[who + '_signature'] = val; b[who + '_signed_date'] = today();
+    try { await patchAgreement(id, b); } catch (e){ err.textContent = /signature/.test(e.message) ? 'Run supabase/platform/reseller_v3.sql on the platform project first.' : 'Could not save: ' + e.message; return; }
+    closeSign();
+    await K().audit('reseller_agreement_signed', agreement(id).agreement_number, who + ' ' + (b[who + '_sign_name'] || '') + (val.indexOf('typed:') === 0 ? ' (typed)' : ' (drawn)'));
+    window.renderResellers();
+    K().setMsg('rs-a-sig-msg', (who === 'owner' ? 'Owner' : 'Reseller') + ' signature applied.', 'ok');
+  };
+  window.rsClearSign = async function(id, who){
+    var a = agreement(id); if (!a) return;
+    if (!await K().dlgConfirm('Remove the ' + who + ' signature from ' + a.agreement_number + '?', { title: 'Remove signature', okText: 'Remove' })) return;
+    var b = {}; b[who + '_signature'] = null; b[who + '_signed_date'] = null;
+    try { await patchAgreement(id, b); } catch (e){ K().setMsg('rs-a-sig-msg', 'Could not save: ' + e.message); return; }
+    await K().audit('reseller_agreement_signature_removed', a.agreement_number, who);
+    window.renderResellers();
+  };
+  // Terms a signature binds to: changing any of these after signing clears it.
+  var SIGNED_TERMS = ['effective_date','commission_rate','payment_days','initial_term_months','renewal_term_months','nonrenewal_notice_days',
+    'termination_notice_days','cure_days','nonsolicit_months','confidentiality_years','liability_months','governing_law','discount_authority',
+    'pricing_note','exclusive','exclusivity_months','exclusivity_territory','expense_claim_days'];
+  function termsChanged(a, b){
+    return SIGNED_TERMS.some(function(k){ return k in b && String(a[k] == null ? '' : a[k]) !== String(b[k] == null ? '' : b[k]); });
   }
 
   function collectAgreementForm(){
@@ -485,7 +601,12 @@
     return row;
   }
   window.rsSaveAgreement = async function(id){
-    try { await patchAgreement(id, collectAgreementForm()); }
+    var a = agreement(id), b = collectAgreementForm();
+    if (a && (a.owner_signature || a.reseller_signature) && termsChanged(a, b)){
+      if (!await K().dlgConfirm('The agreement has been signed. Changing its terms clears both signatures, and both parties must sign again.', { title: 'Terms changed after signing', okText: 'Change & clear signatures' })) return;
+      b.owner_signature = null; b.reseller_signature = null; b.owner_signed_date = null; b.reseller_signed_date = null;
+    }
+    try { await patchAgreement(id, b); }
     catch (e){ K().setMsg('rs-a-msg', 'Could not save: ' + e.message); K().setMsg('rs-a-sig-msg', 'Could not save: ' + e.message); return; }
     await K().audit('reseller_agreement_saved', agreement(id).agreement_number, '');
     window.renderResellers();
@@ -1204,23 +1325,18 @@
       '17.9 Counterparts and electronic signature. This Agreement may be signed in counterparts and by electronic signature, each an original.',
       '##18. Signatures',
       'Each person signing below represents that they are authorized to bind the Party for whom they sign.',
-      '',
-      '###' + K().partyName(o).replace(/"/g, '') + ' (Owner)',
-      'Signature: ______________________________',
-      'Name: ' + (a.owner_sign_name || '____________________') + '     Title: ' + (a.owner_sign_title || '____________________') + '     Date: ' + (a.owner_signed_date ? fmtLong(a.owner_signed_date) : '______________'),
-      '',
-      '###' + K().partyName(r).replace(/"/g, '') + ' (Reseller)',
-      'Signature: ______________________________',
-      'Name: ' + (a.reseller_sign_name || '____________________') + '     Title: ' + (a.reseller_sign_title || '____________________') + '     Date: ' + (a.reseller_signed_date ? fmtLong(a.reseller_signed_date) : '______________'),
-      (r.gst_hst_registered && r.gst_hst_number ? 'Reseller GST/HST number: ' + r.gst_hst_number : ''),
+      '@SIG|owner',
+      '@SIG|reseller',
       '##Schedule A - Net Revenue and Commission: Worked Example',
       'Illustrative only, using sample numbers for one Reseller Customer in one month (CAD).',
-      '-Subscription Fees collected (Gross Revenue): ' + fmt2(exGross),
-      '-Less: hosting and infrastructure attributable to the Customer: (' + fmt2(exHost) + ')',
-      '-Less: payment-processing and bank fees: (' + fmt2(exProc) + ')',
-      '-Less: taxes, refunds, chargebacks, and credits: (0.00)',
-      '-Net Revenue: ' + fmt2(exNet),
-      '-Commission at ' + rate + '% of Net Revenue: ' + fmt2(exCom),
+      '|*Line|*Amount (CAD)',
+      '|Subscription Fees collected (Gross Revenue)|' + fmt2(exGross),
+      '|Less: hosting and infrastructure attributable to the Customer|(' + fmt2(exHost) + ')',
+      '|Less: payment-processing and bank fees|(' + fmt2(exProc) + ')',
+      '|Less: taxes, refunds, chargebacks, and credits|(0.00)',
+      '|*Net Revenue|*' + fmt2(exNet),
+      '|*Commission at ' + rate + '% of Net Revenue|*' + fmt2(exCom),
+      '',
       'The Owner\'s direct support and implementation labor is not deducted. Actual figures depend on real costs and amounts collected.');
     return L.filter(function(x){ return x !== ''; }).join('\n').replace(/\n###/g, '\n\n###');
   }
@@ -1228,11 +1344,27 @@
     var a = agreement(id); if (!a) return;
     if (a.status === 'draft'){ var f = collectAgreementForm(); a = Object.assign({}, a, f); }
     K().setMsg('rs-a-sig-msg', 'Generating…', 'ok');
-    K().ensureJsPdf(function(){
+    K().ensureJsPdf(async function(){
       try {
-        var doc = K().renderMarkerPdf(resellerContractText(a), 'Reseller Commission Agreement ' + a.agreement_number, function(h){ return h.indexOf('18. Signatures') === 0 || h.indexOf('Schedule A') === 0; });
-        var r = reseller(a.reseller_id) || {};
-        openPdf(doc, a.agreement_number + '_' + String(r.legal_name || 'reseller').replace(/[^a-z0-9]+/gi, '_') + (a.status === 'draft' ? '_DRAFT' : '') + '.pdf', 'rs-a-sig-msg');
+        var o = a.owner_snapshot || S.owner || {}, r = a.reseller_snapshot || reseller(a.reseller_id) || {};
+        var nm = function(p){ return K().partyName(p).replace(/"/g, ''); };
+        var doc = K().renderMarkerPdf(resellerContractText(a), {
+          headerTitle: 'Reseller Commission Agreement', headerSubtitle: 'Agreement No. ' + a.agreement_number,
+          partyName: o.operating_as || o.legal_name, partyLine: K().fmtPartyAddress(o),
+          partyContact: [o.phone, o.email].filter(Boolean).join('  |  '),
+          logo: await K().loadLogoDataUrl(), draft: a.status === 'draft',
+          footerLeft: 'Reseller Commission Agreement ' + a.agreement_number + ' - Confidential',
+          breakBefore: function(h){ return h.indexOf('18. Signatures') === 0 || h.indexOf('Schedule A') === 0; },
+          sigs: {
+            owner:    { label: 'Owner', party: nm(o), name: a.owner_sign_name, title: a.owner_sign_title,
+                        date: a.owner_signed_date ? fmtLong(a.owner_signed_date) : '', image: a.owner_signature },
+            reseller: { label: 'Reseller', party: nm(r), name: a.reseller_sign_name, title: a.reseller_sign_title,
+                        date: a.reseller_signed_date ? fmtLong(a.reseller_signed_date) : '', image: a.reseller_signature,
+                        extra: r.gst_hst_registered && r.gst_hst_number ? ['GST/HST registration number: ' + r.gst_hst_number] : [] }
+          }
+        });
+        var rr = reseller(a.reseller_id) || {};
+        openPdf(doc, a.agreement_number + '_' + String(rr.legal_name || 'reseller').replace(/[^a-z0-9]+/gi, '_') + (a.status === 'draft' ? '_DRAFT' : '') + '.pdf', 'rs-a-sig-msg');
         K().audit('reseller_agreement_pdf', a.agreement_number, a.status);
       } catch (e){ K().setMsg('rs-a-sig-msg', 'Could not generate: ' + String(e && e.message || e)); }
     }, function(){ K().setMsg('rs-a-sig-msg', 'Could not load the PDF generator (offline?).'); });
@@ -1332,6 +1464,15 @@
       case 'rs-exp-reject':       window.rsRejectExpense(id); break;
       case 'rs-exp-del':          window.rsDeleteExpense(id); break;
       case 'rs-agr-extend':       window.rsExtendAgreement(id); break;
+      case 'rs-sign-open':        window.rsOpenSign(id, el.getAttribute('data-who')); break;
+      case 'rs-sign-apply':       window.rsApplySign(id, el.getAttribute('data-who')); break;
+      case 'rs-sign-clear':       window.rsClearSign(id, el.getAttribute('data-who')); break;
+      case 'rs-sign-cancel':      closeSign(); break;
+      case 'rs-sign-reset':       e.preventDefault(); (function(){ var cv = document.getElementById('rs-sign-canvas'); if (cv){ cv.getContext('2d').clearRect(0, 0, cv.width, cv.height); if (_pad) _pad.ink = false; } })(); break;
+      case 'rs-sign-mode':        (function(){ var m = el.getAttribute('data-mode'); if (!_pad) return; _pad.mode = m;
+                                    document.getElementById('rs-sign-draw').style.display = m === 'draw' ? '' : 'none';
+                                    document.getElementById('rs-sign-type').style.display = m === 'type' ? '' : 'none';
+                                    Array.prototype.forEach.call(document.querySelectorAll('.rs-sign-tabs button'), function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === m); }); })(); break;
       case 'rs-agr-pricing-reset': e.preventDefault(); (function(){ var t = document.getElementById('rs-a-pricing_note'); if (t && !t.disabled) t.value = K().feeScheduleSummary(); })(); break;
     }
   });
