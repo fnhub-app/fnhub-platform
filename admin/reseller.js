@@ -25,7 +25,7 @@
   function r2(n){ return Math.round((Number(n) || 0) * 100) / 100; }
   function today(){ return new Date().toISOString().slice(0, 10); }
 
-  var S = { loaded: false, missing: false, owner: null, resellers: [], agreements: [], customers: [], statements: [],
+  var S = { loaded: false, missing: false, v2missing: false, owner: null, resellers: [], agreements: [], customers: [], statements: [], expenses: [],
             view: 'home', id: '', stmt: null };
 
   // ---- Date helpers (YYYY-MM-DD strings, UTC) ---------------------------------
@@ -151,6 +151,8 @@
       ]);
       S.owner = res[0][0] || null; S.resellers = res[1]; S.agreements = res[2]; S.customers = res[3]; S.statements = res[4];
       S.loaded = true; S.missing = false;
+      try { S.expenses = await getJson('/reseller_expenses?select=*&order=approved_date'); S.v2missing = false; }
+      catch (e2){ S.expenses = []; S.v2missing = true; }
     } catch (e){
       S.loaded = false;
       S.missing = /platform_owner|reseller|relation|schema cache|does not exist/i.test(String(e && e.message || e)) || e.status === 404;
@@ -161,6 +163,7 @@
   function agreement(id){ return S.agreements.filter(function(x){ return x.id === id; })[0] || null; }
   function agrCustomers(aid){ return S.customers.filter(function(x){ return x.agreement_id === aid; }); }
   function agrStatements(aid){ return S.statements.filter(function(x){ return x.agreement_id === aid; }); }
+  function agrExpenses(aid){ return S.expenses.filter(function(x){ return x.agreement_id === aid; }); }
   function nationBySub(sub){ return (K().nations() || []).filter(function(x){ return x.subdomain === sub; })[0] || null; }
 
   // ---- Agreement status + term math (s.10) -----------------------------------
@@ -180,6 +183,14 @@
   }
   // Last day Commission can accrue: the termination effective date, if any.
   function commissionEnd(a){ return a.terminated_date || null; }
+  // Exclusivity Period (s.3.5): effective date + exclusivity_months, cut short
+  // by termination. Null for non-exclusive agreements.
+  function exclusivityEnd(a){
+    if (!a.exclusive || !a.effective_date) return null;
+    var end = addDays(addMonths(a.effective_date, a.exclusivity_months || 12), -1);
+    return a.terminated_date && a.terminated_date < end ? a.terminated_date : end;
+  }
+  function exclusiveNow(a){ var e = exclusivityEnd(a); return !!(e && a.status !== 'draft' && a.effective_date <= today() && e >= today()); }
 
   // Months a statement is owed for: effective month .. last completed month
   // (capped at the termination month).
@@ -205,9 +216,10 @@
         + btn('Retry', 'rs-refresh') + '</div>';
       return;
     }
-    if (S.view === 'reseller') root.innerHTML = resellerView(S.id);
-    else if (S.view === 'agreement') { root.innerHTML = agreementView(S.id); if (S.stmt) drawStatement(); }
-    else root.innerHTML = homeView();
+    var v2 = S.v2missing ? '<div class="warn" style="margin-top:14px;"><b>One more database step:</b> run <code>supabase/platform/reseller_v2.sql</code> on the platform project to turn on exclusivity, extensions and marketing-expense tracking.</div>' : '';
+    if (S.view === 'reseller') root.innerHTML = v2 + resellerView(S.id);
+    else if (S.view === 'agreement') { root.innerHTML = v2 + agreementView(S.id); if (S.stmt) drawStatement(); }
+    else root.innerHTML = v2 + homeView();
   };
   function go(view, id){ S.view = view; S.id = id || ''; S.stmt = null; window.renderResellers(); try { window.scrollTo(0, 0); } catch(e){} }
 
@@ -345,15 +357,22 @@
     var r = reseller(rid); if (!r) return;
     var open = S.agreements.filter(function(a){ return a.reseller_id === rid && ['draft', 'active', 'signed', 'terminating'].indexOf(agrState(a)) !== -1; });
     if (open.length && !await K().dlgConfirm('This reseller already has an open agreement (' + open[0].agreement_number + '). Create another one?', { title: 'New agreement', okText: 'Create' })) return;
+    // s.3.4: while another reseller holds exclusivity, the Owner can't appoint a second reseller in that territory.
+    var held = S.agreements.filter(function(a){ return a.reseller_id !== rid && exclusiveNow(a); })[0];
+    if (held){
+      var hr = reseller(held.reseller_id);
+      if (!await K().dlgConfirm((hr ? hr.legal_name : 'Another reseller') + ' holds exclusivity in ' + (held.exclusivity_territory || 'its territory') + ' until ' + fmtLong(exclusivityEnd(held)) + ' (' + held.agreement_number + ', s.3.4).\n\nAppointing another reseller in that territory before then would breach it. Create a draft anyway?', { title: 'Exclusivity in force', okText: 'Create draft' })) return;
+    }
     var o = S.owner || {};
     // The contract's default values (its bracketed [defaults]); editable while draft.
     var b = { reseller_id: rid, agreement_number: nextAgreementNumber(), status: 'draft', effective_date: today(),
       commission_rate: 33, initial_term_months: 12, renewal_term_months: 12, nonrenewal_notice_days: 60, termination_notice_days: 60,
       cure_days: 30, payment_days: 30, nonsolicit_months: 12, confidentiality_years: 3, liability_months: 12,
-      governing_law: 'Ontario', discount_authority: 'never',
+      governing_law: 'Ontario', discount_authority: 'never', pricing_note: K().feeScheduleSummary(),
       owner_sign_name: o.signatory_name || o.legal_name || null, owner_sign_title: o.signatory_title || null,
       reseller_sign_name: r.contact_name || (r.entity_type === 'individual' ? r.legal_name : null), reseller_sign_title: r.contact_title || null,
       created_by: K().jwtEmail() };
+    if (!S.v2missing) Object.assign(b, { exclusive: true, exclusivity_months: 12, exclusivity_territory: 'Canada', expense_claim_days: 60 });
     var res = await K().api('POST', '/reseller_agreements', b, 'return=representation');
     if (!res.ok){ K().setMsg('rs-r-msg', 'Could not create: ' + (await res.text()).slice(0, 200)); return; }
     var row = (await res.json())[0]; S.agreements.push(row);
@@ -371,6 +390,7 @@
     if (!r.street || !r.city) m.push('Reseller address');
     if (!a.effective_date) m.push('Effective date');
     if (!a.pricing_note) m.push('Pricing summary (s.6, "what a customer nation pays")');
+    if (a.exclusive && !a.exclusivity_territory) m.push('Exclusive territory (s.3.4)');
     if (!a.owner_sign_name || !a.owner_sign_title) m.push('Owner signatory name + title');
     if (!a.reseller_sign_name) m.push('Reseller signatory name');
     return m;
@@ -401,8 +421,13 @@
       +   sel('Governing law (s.17.1)', 'rs-a-governing_law', a.governing_law || 'Ontario', provs, { dis: !draft })
       +   sel('Discount authority (s.6.3)', 'rs-a-discount_authority', a.discount_authority || 'never',
             [['never', 'Never - no discounts or non-standard terms'], ['with_approval', 'Only with the Owner\'s prior written approval']], { dis: !draft, full: true })
-      +   fld('Pricing summary (s.6.1)', 'rs-a-pricing_note', a.pricing_note, { area: true, full: true, dis: !draft,
-            ph: 'e.g. Per the Owner\'s published fee schedule: Small $5,400/yr, Mid-size $9,540/yr, Large $15,000/yr (or monthly at +10%); one-time setup by size.' })
+      +   (S.v2missing ? '' :
+            sel('Exclusivity (s.3)', 'rs-a-exclusive', a.exclusive === false ? 'no' : 'yes', [['yes', 'Exclusive for the Exclusivity Period'], ['no', 'Non-exclusive']], { dis: !draft })
+          + fld('Exclusivity period, months (s.3.5)', 'rs-a-exclusivity_months', a.exclusivity_months == null ? 12 : a.exclusivity_months, { type: 'number', min: 1, dis: !draft })
+          + fld('Exclusive territory (s.3.4)', 'rs-a-exclusivity_territory', a.exclusivity_territory == null ? 'Canada' : a.exclusivity_territory, { dis: !draft, ph: 'e.g. Canada, or Ontario' })
+          + fld('Expense claims due within, days (s.9.8)', 'rs-a-expense_claim_days', a.expense_claim_days == null ? 60 : a.expense_claim_days, { type: 'number', min: 1, dis: !draft }))
+      +   fld('Pricing summary (s.6.1)', 'rs-a-pricing_note', (draft && !a.pricing_note) ? K().feeScheduleSummary() : a.pricing_note, { area: true, full: true, dis: !draft,
+            hint: 'Defaults to the current fee schedule (the same catalog the invoices use).' + (draft ? ' ' + '<a href="#" data-act="rs-agr-pricing-reset" style="color:#1d4ed8;font-weight:600;">Reset to the current fee schedule</a>' : '') })
       + '</div>'
       + (draft ? '<div class="btns">' + btn('Save terms', 'rs-agr-save', ' data-id="' + esc(id) + '"') + msgBox('rs-a-msg') + '</div>' : '')
       + '</div>';
@@ -430,7 +455,7 @@
     return '<button class="crumb" type="button" data-act="rs-open-reseller" data-id="' + esc(a.reseller_id) + '">&larr; ' + esc(r.legal_name || 'Reseller') + '</button>'
       + '<h1 style="margin-top:8px;">' + esc(a.agreement_number) + ' &middot; ' + esc(r.legal_name || '') + '</h1>'
       + terms + sig
-      + (draft ? '' : termCard(a) + customersCard(a) + statementsCard(a));
+      + (draft ? '' : termCard(a) + customersCard(a) + (S.v2missing ? '' : expensesCard(a)) + statementsCard(a));
   }
 
   function collectAgreementForm(){
@@ -443,6 +468,12 @@
     if (!b.discount_authority) b.discount_authority = 'never';
     if (b.initial_term_months < 1) b.initial_term_months = 12;
     if (b.renewal_term_months < 1) b.renewal_term_months = 12;
+    if (!S.v2missing){
+      b.exclusive = v('rs-a-exclusive') !== 'no';
+      b.exclusivity_months = n('rs-a-exclusivity_months') || 12;
+      b.exclusivity_territory = v('rs-a-exclusivity_territory') || 'Canada';
+      b.expense_claim_days = n('rs-a-expense_claim_days') || 60;
+    }
     return b;
   }
   async function patchAgreement(id, b){
@@ -467,10 +498,12 @@
     if (!b.owner_signed_date || !b.reseller_signed_date) miss.push('Both signature dates');
     if (miss.length){ K().setMsg('rs-a-sig-msg', 'Before activating: ' + miss.join('; ') + '.'); return; }
     var r = reseller(a.reseller_id);
-    if (!await K().dlgConfirm('Activate ' + a.agreement_number + ' with ' + r.legal_name + ', effective ' + fmtLong(b.effective_date) + '?\n\nThis locks the terms and freezes both parties\' details as signed.', { title: 'Activate agreement', okText: 'Activate' })) return;
+    var prevA = a.extends_agreement_id ? agreement(a.extends_agreement_id) : null;
+    if (!await K().dlgConfirm('Activate ' + a.agreement_number + ' with ' + r.legal_name + ', effective ' + fmtLong(b.effective_date) + '?\n\nThis locks the terms and freezes both parties\' details as signed.'
+      + (prevA && !prevA.terminated_date ? '\n\nThis is an extension: ' + prevA.agreement_number + ' ends ' + fmtLong(addDays(b.effective_date, -1)) + ' and its registered customers carry over.' : ''), { title: 'Activate agreement', okText: 'Activate' })) return;
     var strip = function(p){ var o = Object.assign({}, p); delete o.id; delete o.notes; delete o.created_at; delete o.updated_at; delete o.created_by; delete o.updated_by; return o; };
     b.status = 'active'; b.owner_snapshot = strip(S.owner); b.reseller_snapshot = strip(r);
-    try { await patchAgreement(id, b); } catch (e){ K().setMsg('rs-a-sig-msg', 'Could not activate: ' + e.message); return; }
+    try { var act = await patchAgreement(id, b); await supersedePrior(act); } catch (e){ K().setMsg('rs-a-sig-msg', 'Could not activate: ' + e.message); return; }
     await K().audit('reseller_agreement_activated', a.agreement_number, r.legal_name + ' effective ' + b.effective_date);
     window.renderResellers();
   };
@@ -492,16 +525,31 @@
       + row('Effective date', esc(fmtLong(a.effective_date)))
       + (t ? row('Current term', 'Term ' + t.no + ': ' + esc(fmtLong(t.start)) + ' to ' + esc(fmtLong(t.end))) : '')
       + (t && !a.terminated_date ? row('Non-renewal notice due by', esc(fmtLong(t.nonrenewalBy)) + (t.nonrenewalBy < today() ? ' <span class="pill overdue">passed - renews</span>' : '')) : '');
+    var xEnd = exclusivityEnd(a), ext = S.agreements.filter(function(x){ return x.extends_agreement_id === a.id; })[0];
+    if (a.exclusive === false) body += row('Exclusivity (s.3)', 'Non-exclusive');
+    else if (xEnd){
+      var soon = !a.terminated_date && xEnd >= today() && xEnd <= addDays(today(), 60);
+      body += row('Exclusivity (s.3.5)', (xEnd >= today()
+          ? 'Exclusive in ' + esc(a.exclusivity_territory || '') + ' until <b>' + esc(fmtLong(xEnd)) + '</b>' + (soon && !ext ? ' ' + pill('overdue', 'ends soon') : '')
+          : 'Ended ' + esc(fmtLong(xEnd)) + ' &mdash; non-exclusive for the rest of the term')
+        + (ext ? '<div style="font-size:11px;color:var(--muted);">Extension: ' + esc(ext.agreement_number) + ' (' + esc(STATE_LABEL[agrState(ext)]) + ')</div>' : ''));
+    }
+    var prior = a.extends_agreement_id ? agreement(a.extends_agreement_id) : null;
+    if (prior) body += row('Extends', esc(prior.agreement_number) + ' (exclusivity extension, s.3.5)');
     if (a.terminated_date){
       var tail = addMonths(a.terminated_date, a.nonsolicit_months || 0), conf = addMonths(a.terminated_date, (a.confidentiality_years || 0) * 12);
-      body += row('Ending', esc(({ convenience: 'For convenience (s.10.2)', cause: 'For cause (s.10.3)', nonrenewal: 'Non-renewal (s.10.1)' })[a.termination_type] || a.termination_type || ''))
+      body += row('Ending', esc(({ convenience: 'For convenience (s.10.2)', cause: 'For cause (s.10.3)', nonrenewal: 'Non-renewal (s.10.1)', superseded: 'Replaced by an extension agreement (s.3.5)' })[a.termination_type] || a.termination_type || ''))
         + row('Notice given', esc(fmtLong(a.termination_notice_date)))
         + row('Termination effective', '<b>' + esc(fmtLong(a.terminated_date)) + '</b> &mdash; Commission stops accruing (s.10.4)')
-        + row('Non-solicitation ends (s.14)', esc(fmtLong(tail)) + (tail >= today() ? ' ' + pill('issued', 'in force') : ''))
-        + row('Confidentiality ends (s.13.5)', esc(fmtLong(conf)))
+        + (a.termination_type === 'superseded' ? '' :
+            row('Non-solicitation ends (s.14)', esc(fmtLong(tail)) + (tail >= today() ? ' ' + pill('issued', 'in force') : ''))
+          + row('Confidentiality ends (s.13.5)', esc(fmtLong(conf))))
         + (a.termination_reason ? row('Reason / notes', esc(a.termination_reason)) : '');
     }
     body += '</tbody></table>';
+    var canExtend = !S.v2missing && a.exclusive !== false && !a.terminated_date && !ext && xEnd && xEnd >= today();
+    var extBtn = canExtend ? '<div class="btns">' + btn('Extend exclusivity (new agreement)', 'rs-agr-extend', ' data-id="' + esc(a.id) + '"')
+      + '<span class="note" style="margin:0;">Extensions are 1 year at a time and need a new agreement signed by both parties (s.3.5).</span></div>' : '';
     var form = a.terminated_date
       ? '<div class="btns">' + btn('Undo termination', 'rs-term-undo', ' data-id="' + esc(a.id) + '"', 'ghost') + msgBox('rs-t-msg') + '</div>'
       : '<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:700;font-size:13px;">Record a termination or non-renewal notice</summary>'
@@ -512,8 +560,48 @@
         +   fld('Reason / notes', 'rs-t-reason', '', { area: true, full: true })
         + '</div>'
         + '<div class="btns">' + btn('Record termination', 'rs-term-save', ' data-id="' + esc(a.id) + '"', 'danger') + msgBox('rs-t-msg') + '</div></details>';
-    return '<div class="card"><h3>Term &amp; termination</h3>' + body + form + '</div>';
+    return '<div class="card"><h3>Term, exclusivity &amp; termination</h3>' + body + extBtn + form + '</div>';
   }
+  // s.3.5: exclusivity is extended only by a NEW agreement signed by both
+  // parties. The draft copies the current terms, starts the day after the
+  // current Exclusivity Period, and runs a fresh 12-month exclusivity.
+  window.rsExtendAgreement = async function(id){
+    var a = agreement(id); if (!a) return;
+    var xEnd = exclusivityEnd(a), start = addDays(xEnd, 1);
+    if (!await K().dlgConfirm('Create extension agreement for ' + (reseller(a.reseller_id) || {}).legal_name + '?\n\nIt copies the current terms and starts ' + fmtLong(start) + ' with a new 12-month Exclusivity Period. It takes effect only when both parties sign it and you activate it. On activation, ' + a.agreement_number + ' ends the day before and its registered customers carry over.', { title: 'Extend exclusivity', okText: 'Create draft' })) return;
+    var o = S.owner || {}, r = reseller(a.reseller_id) || {};
+    var keep = ['reseller_id','commission_rate','initial_term_months','renewal_term_months','nonrenewal_notice_days','termination_notice_days','cure_days','payment_days',
+      'nonsolicit_months','confidentiality_years','liability_months','governing_law','discount_authority','exclusive','exclusivity_territory','expense_claim_days'];
+    var b = {}; keep.forEach(function(k){ b[k] = a[k]; });
+    Object.assign(b, { agreement_number: nextAgreementNumber(), status: 'draft', effective_date: start, exclusivity_months: 12, extends_agreement_id: a.id,
+      pricing_note: K().feeScheduleSummary(), owner_sign_name: o.signatory_name || o.legal_name || null, owner_sign_title: o.signatory_title || null,
+      reseller_sign_name: a.reseller_sign_name || r.contact_name || null, reseller_sign_title: a.reseller_sign_title || r.contact_title || null, created_by: K().jwtEmail() });
+    var res = await K().api('POST', '/reseller_agreements', b, 'return=representation');
+    if (!res.ok){ K().setMsg('rs-t-msg', 'Could not create: ' + (await res.text()).slice(0, 200)); return; }
+    var row = (await res.json())[0]; S.agreements.push(row);
+    await K().audit('reseller_agreement_extension_drafted', row.agreement_number, 'extends ' + a.agreement_number);
+    go('agreement', row.id);
+  };
+  // On activating an extension: end the agreement it replaces the day before,
+  // and carry its registered customers across (commission continues under the
+  // new agreement from its effective date; no month is counted twice because
+  // each agreement only counts collections inside its own dates).
+  async function supersedePrior(a){
+    var prev = a.extends_agreement_id ? agreement(a.extends_agreement_id) : null;
+    if (!prev || prev.terminated_date) return;
+    await patchAgreement(prev.id, { status: 'terminated', termination_type: 'superseded', termination_notice_date: today(),
+      terminated_date: addDays(a.effective_date, -1), termination_reason: 'Replaced by ' + a.agreement_number + ' (exclusivity extension)' });
+    var carry = agrCustomers(prev.id).filter(function(cu){ return cu.status === 'registered'; }).map(function(cu){
+      return { agreement_id: a.id, prospect_name: cu.prospect_name, subdomain: cu.subdomain, status: 'registered', submitted_date: cu.submitted_date,
+        decision_date: today(), notes: 'Carried over from ' + prev.agreement_number, created_by: K().jwtEmail() };
+    });
+    if (carry.length){
+      var r = await K().api('POST', '/reseller_customers', carry, 'return=representation');
+      if (r.ok) S.customers = S.customers.concat(await r.json());
+    }
+    await K().audit('reseller_agreement_superseded', prev.agreement_number, 'by ' + a.agreement_number + ', ' + carry.length + ' customers carried');
+  }
+
   function calcTermEffective(){
     var a = agreement(S.id); if (!a) return;
     var type = v('rs-t-type'), notice = v('rs-t-notice'), out = document.getElementById('rs-t-effective');
@@ -629,6 +717,98 @@
     window.renderResellers();
   };
 
+  // ---- Approved marketing expenses (s.9.7-9.8) -------------------------------
+  var EXP_CATS = [['trade_show', 'Trade show / conference'], ['travel', 'Travel'], ['admin', 'Administrative'], ['promo', 'Promotional materials'], ['other', 'Other']];
+  function expCat(k){ for (var i = 0; i < EXP_CATS.length; i++){ if (EXP_CATS[i][0] === k) return EXP_CATS[i][1]; } return k || ''; }
+  function expensesCard(a){
+    var list = agrExpenses(a.id);
+    var tot = { approved: 0, claimed: 0, paid: 0 };
+    var rows = list.length ? list.map(function(x){
+      if (x.status !== 'rejected') tot.approved += Number(x.approved_max) || 0;
+      if (x.status === 'claimed') tot.claimed += Number(x.reimbursable) || 0;
+      if (x.status === 'reimbursed') tot.paid += Number(x.reimbursable) || 0;
+      var acts = '';
+      if (x.status === 'approved') acts = btn('Record claim', 'rs-exp-claim', ' data-id="' + esc(x.id) + '"') + btn('Reject', 'rs-exp-reject', ' data-id="' + esc(x.id) + '"', 'ghost');
+      if (x.status === 'claimed' && !x.statement_month) acts = btn('Edit claim', 'rs-exp-claim', ' data-id="' + esc(x.id) + '"', 'ghost');
+      if ((x.status === 'approved' || x.status === 'rejected' || (x.status === 'claimed' && !x.statement_month))) acts += btn('✕', 'rs-exp-del', ' data-id="' + esc(x.id) + '" title="Remove"', 'ghost');
+      var over = x.amount != null && Number(x.amount) > Number(x.approved_max);
+      return '<tr><td><b>' + esc(x.description) + '</b><div style="font-size:11px;color:var(--muted);">' + esc(expCat(x.category))
+        + ' &middot; approved ' + esc(x.approved_date) + (x.approved_by ? ' by ' + esc(x.approved_by) : '') + (x.approval_ref ? ' (' + esc(x.approval_ref) + ')' : '') + '</div></td>'
+        + '<td class="num">' + money(x.approved_max) + '</td>'
+        + '<td class="num">' + (x.amount != null ? money(x.amount) + (over ? '<div style="font-size:10px;color:var(--danger);">capped at approval</div>' : '') : '—')
+        +   (x.incurred_date ? '<div style="font-size:10px;color:var(--muted);">incurred ' + esc(x.incurred_date) + (x.receipts ? '' : ' &middot; <span style="color:var(--danger);">no receipts</span>') + '</div>' : '') + '</td>'
+        + '<td>' + pill(x.status === 'reimbursed' ? 'paid' : x.status === 'claimed' ? 'issued' : x.status === 'rejected' ? 'declined' : 'submitted', x.status)
+        +   (x.statement_month ? '<div style="font-size:10px;color:var(--muted);">on ' + esc(fmtMonth(x.statement_month)) + ' statement</div>' : '') + '</td>'
+        + '<td><div class="row-actions">' + acts + '</div></td></tr>';
+    }).join('') : '<tr><td colspan="5" class="empty">No marketing expenses approved yet.</td></tr>';
+    var locked = a.terminated_date && a.terminated_date < addDays(today(), -(a.expense_claim_days || 60));
+    return '<div class="card"><h3>Marketing expenses (s.9.7)</h3>'
+      + '<p class="sub" style="margin:0;">Trade shows, travel and admin costs are reimbursed only when the Owner approved them <b>in writing before</b> they were spent, up to the approved maximum. The reseller claims with receipts within ' + (a.expense_claim_days || 60) + ' days, and claims are paid with the next monthly statement at cost. They are not commission and are never clawed back.</p>'
+      + '<div class="tbl-wrap"><table><thead><tr><th>Expense</th><th class="num">Approved max</th><th class="num">Claimed</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<p class="note">Approved (open): ' + money(tot.approved) + ' &middot; claimed, awaiting statement: ' + money(tot.claimed) + ' &middot; reimbursed: ' + money(tot.paid) + '</p>'
+      + (locked ? '' :
+        '<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:700;font-size:13px;">+ Record a written pre-approval</summary><div class="rs-grid">'
+        + sel('Category', 'rs-x-category', 'trade_show', EXP_CATS)
+        + fld('Description', 'rs-x-description', '', { ph: 'e.g. AFN housing conference booth, Winnipeg' })
+        + fld('Approval date', 'rs-x-approved_date', today(), { type: 'date', hint: 'Date the Owner approved it in writing, before the spend.' })
+        + fld('Approved maximum ($)', 'rs-x-approved_max', '', { type: 'number', step: '0.01', min: 0 })
+        + fld('Approved by', 'rs-x-approved_by', (S.owner || {}).signatory_name || '')
+        + fld('Approval reference', 'rs-x-approval_ref', '', { ph: 'e.g. email of 2026-10-02' })
+        + '</div><div class="btns">' + btn('Record approval', 'rs-exp-add', ' data-id="' + esc(a.id) + '"') + msgBox('rs-x-msg') + '</div></details>')
+      + '</div>';
+  }
+  async function patchExpense(id, b){
+    b.updated_at = new Date().toISOString();
+    var r = await K().api('PATCH', '/reseller_expenses?id=eq.' + encodeURIComponent(id), b, 'return=representation');
+    if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+    var row = (await r.json())[0]; S.expenses = S.expenses.map(function(x){ return x.id === id ? row : x; }); return row;
+  }
+  window.rsAddExpense = async function(aid){
+    var b = { agreement_id: aid, category: v('rs-x-category') || 'other', description: v('rs-x-description'), approved_date: v('rs-x-approved_date'),
+      approved_max: r2(v('rs-x-approved_max')), approved_by: v('rs-x-approved_by') || null, approval_ref: v('rs-x-approval_ref') || null,
+      status: 'approved', receipts: false, created_by: K().jwtEmail() };
+    if (!b.description || !b.approved_date || !(b.approved_max > 0)){ K().setMsg('rs-x-msg', 'Description, approval date and an approved maximum are required.'); return; }
+    var r = await K().api('POST', '/reseller_expenses', b, 'return=representation');
+    if (!r.ok){ K().setMsg('rs-x-msg', 'Could not save: ' + (await r.text()).slice(0, 200)); return; }
+    S.expenses.push((await r.json())[0]);
+    await K().audit('reseller_expense_approved', agreement(aid).agreement_number, b.description + ' up to ' + money(b.approved_max));
+    window.renderResellers();
+  };
+  window.rsClaimExpense = async function(id){
+    var x = S.expenses.filter(function(e){ return e.id === id; })[0]; if (!x) return;
+    var a = agreement(x.agreement_id);
+    var f = await K().dlgForm('Record claim: ' + x.description, [
+      { key: 'incurred_date', label: 'Date incurred', inputType: 'date', defaultValue: x.incurred_date || today(), validate: function(d){ return !d ? 'Required' : (d < x.approved_date ? 'Incurred before the written approval: not reimbursable (s.9.7).' : ''); } },
+      { key: 'amount', label: 'Amount claimed (receipted, at cost)', inputType: 'number', step: '0.01', defaultValue: x.amount == null ? '' : x.amount, validate: function(v2){ return Number(v2) > 0 ? '' : 'Enter the amount'; } },
+      { key: 'receipts', label: 'Itemized receipts received? (yes / no)', defaultValue: x.receipts ? 'yes' : 'yes' }
+    ], { okText: 'Save claim', message: 'Approved maximum: ' + money(x.approved_max) + '. Anything above it is not reimbursed.' });
+    if (!f) return;
+    var amt = r2(f.amount), receipts = /^y/i.test(f.receipts || '');
+    if (!receipts && !await K().dlgConfirm('No receipts: s.9.8 requires itemized receipts. Save the claim anyway? It will be flagged.', { title: 'Missing receipts', okText: 'Save' })) return;
+    var lateBy = addDays(f.incurred_date, a.expense_claim_days || 60) < today();
+    if (lateBy && !await K().dlgConfirm('This claim is past the ' + (a.expense_claim_days || 60) + '-day claim window (s.9.8). Accept it anyway?', { title: 'Late claim', okText: 'Accept' })) return;
+    try { await patchExpense(id, { incurred_date: f.incurred_date, amount: amt, reimbursable: Math.min(amt, Number(x.approved_max) || 0), receipts: receipts, status: 'claimed' }); }
+    catch (e){ await K().dlgAlert('Could not save: ' + e.message); return; }
+    await K().audit('reseller_expense_claimed', a.agreement_number, x.description + ' ' + money(amt));
+    window.renderResellers();
+  };
+  window.rsRejectExpense = async function(id){
+    var x = S.expenses.filter(function(e){ return e.id === id; })[0]; if (!x) return;
+    if (!await K().dlgConfirm('Mark "' + x.description + '" as rejected / cancelled?', { title: 'Reject expense', okText: 'Reject' })) return;
+    try { await patchExpense(id, { status: 'rejected' }); } catch (e){ await K().dlgAlert('Could not save: ' + e.message); return; }
+    await K().audit('reseller_expense_rejected', agreement(x.agreement_id).agreement_number, x.description);
+    window.renderResellers();
+  };
+  window.rsDeleteExpense = async function(id){
+    var x = S.expenses.filter(function(e){ return e.id === id; })[0]; if (!x) return;
+    if (!await K().dlgConfirm('Remove "' + x.description + '"?', { title: 'Remove expense', okText: 'Remove' })) return;
+    var r = await K().api('DELETE', '/reseller_expenses?id=eq.' + encodeURIComponent(id), null, 'return=minimal');
+    if (!r.ok){ await K().dlgAlert('Could not remove: ' + (await r.text()).slice(0, 200)); return; }
+    S.expenses = S.expenses.filter(function(e){ return e.id !== id; });
+    await K().audit('reseller_expense_removed', agreement(x.agreement_id).agreement_number, x.description);
+    window.renderResellers();
+  };
+
   // ---- Statements (ss.7-9, Schedule A) ---------------------------------------
   function statementsCard(a){
     var months = statementMonths(a).slice().reverse();
@@ -702,8 +882,11 @@
     });
     // Carry an unrecovered negative balance from the previous statement (s.9.2).
     var prev = agrStatements(a.id).filter(function(s){ return s.period_month < m && s.status !== 'draft'; }).sort(function(x, y){ return x.period_month < y.period_month ? 1 : -1; })[0];
-    var carry = prev && Number(prev.amount_due) < 0 ? r2(-Number(prev.amount_due)) : 0;
-    return { agreement_id: a.id, period_month: m, lines: lines, commission_rate: Number(a.commission_rate),
+    var carry = prev ? r2(Math.max(0, (Number(prev.clawback) || 0) - (Number(prev.commission) || 0))) : 0;
+    // Claimed, approved marketing expenses not yet on an issued statement (s.9.8).
+    var exps = agrExpenses(a.id).filter(function(x){ return x.status === 'claimed' && (!x.statement_month || x.statement_month === m) && (!x.incurred_date || x.incurred_date <= monthEnd(m)); })
+      .map(function(x){ return { id: x.id, description: x.description, category: x.category, incurred_date: x.incurred_date, amount: Number(x.reimbursable) || 0 }; });
+    return { agreement_id: a.id, period_month: m, lines: lines, expenses: exps, commission_rate: Number(a.commission_rate),
       clawback: carry, clawback_note: carry ? 'Carried from ' + fmtMonth(prev.period_month) : '', status: 'draft', due_date: stmtDueDate(a, m), notes: '' };
   }
 
@@ -715,7 +898,12 @@
       gross += Number(l.gross) || 0; ded += (Number(l.gross) || 0) - l.net; net += l.net; com += l.commission;
     });
     st.gross_revenue = r2(gross); st.deductions = r2(ded); st.net_revenue = r2(net); st.commission = r2(com);
-    st.amount_due = r2(com - (Number(st.clawback) || 0));
+    // Clawback offsets Commission only (s.9.2); any excess carries to next month.
+    // Approved expense reimbursements are added on top and are never offset (s.9.8).
+    var comNet = r2(com - (Number(st.clawback) || 0));
+    st.carry = r2(Math.max(0, -comNet));
+    st.expenses_total = r2((st.expenses || []).reduce(function(t, x){ return t + (Number(x.amount) || 0); }, 0));
+    st.amount_due = r2(Math.max(0, comNet) + st.expenses_total);
     return st;
   }
 
@@ -739,7 +927,7 @@
         + cell(i, 'gross') + cell(i, 'hosting') + cell(i, 'processing') + cell(i, 'taxes') + cell(i, 'refunds')
         + '<td class="num" data-out="net-' + i + '">' + money(l.net) + '</td><td class="num" data-out="com-' + i + '"><b>' + money(l.commission) + '</b></td></tr>';
     }).join('') : '<tr><td colspan="8" class="empty">No registered, nation-linked customers on this agreement, so nothing is owed this month.</td></tr>';
-    var hst = r.gst_hst_registered && st.amount_due > 0 ? r2(st.amount_due * (Number(r.hst_rate) || 0) / 100) : 0;
+    var hst = commissionHst(st, r);
     host.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--accent);">'
       + '<h3 style="margin:0 0 4px;">Statement &middot; ' + esc(fmtMonth(st.period_month)) + ' ' + pill(st.status) + '</h3>'
       + '<p class="note" style="margin-top:0;">Gross = recurring Subscription Fees collected (incl. tax), taken from invoices paid this month. Setup, consulting, travel and interest are excluded (s.7.3). Hosting is pre-filled from the nation\'s estimated platform cost. Check every figure before issuing.</p>'
@@ -750,10 +938,15 @@
       +   fld('Payment due', 'rs-s-due_date', st.due_date, { type: 'date', dis: !draft })
       +   fld('Notes', 'rs-s-notes', st.notes, { area: true, full: true, dis: !draft })
       + '</div>'
+      + ((st.expenses || []).length
+          ? '<div style="margin-top:14px;font-weight:700;font-size:13px;">Approved marketing expenses reimbursed (s.9.8)</div><table><tbody>'
+            + st.expenses.map(function(x){ return '<tr><td>' + esc(x.description) + ' <span style="font-size:11px;color:var(--muted);">' + esc(expCat(x.category)) + (x.incurred_date ? ', ' + esc(x.incurred_date) : '') + '</span></td><td class="num">' + money(x.amount) + '</td></tr>'; }).join('')
+            + '</tbody></table>' : '')
       + '<table style="max-width:420px;margin-left:auto;"><tbody>'
       +   '<tr><td>Net revenue</td><td class="num" id="rs-s-net">' + money(st.net_revenue) + '</td></tr>'
       +   '<tr><td>Commission</td><td class="num" id="rs-s-com">' + money(st.commission) + '</td></tr>'
       +   '<tr><td>Less clawback / offset</td><td class="num" id="rs-s-claw">' + (Number(st.clawback) ? '-' : '') + money(st.clawback) + '</td></tr>'
+      +   '<tr><td>Plus approved expenses</td><td class="num" id="rs-s-exp">' + money(st.expenses_total) + '</td></tr>'
       +   '<tr><td><b>Amount due to reseller</b></td><td class="num"><b id="rs-s-due">' + money(st.amount_due) + '</b></td></tr>'
       + '</tbody></table>'
       + '<p class="note" id="rs-s-hint">' + dueHint(st, r, hst) + '</p>'
@@ -767,10 +960,16 @@
       +   msgBox('rs-s-msg')
       + '</div></div>';
   }
+  // HST applies to the Commission the reseller invoices (s.9.4), not to at-cost reimbursements.
+  function commissionPart(st){ return r2(Math.max(0, (Number(st.commission) || 0) - (Number(st.clawback) || 0))); }
+  function commissionHst(st, r){ var c = commissionPart(st); return r.gst_hst_registered && c > 0 ? r2(c * (Number(r.hst_rate) || 0) / 100) : 0; }
   function dueHint(st, r, hst){
-    if (st.amount_due < 0) return 'Commission doesn\'t cover the clawback. The remaining ' + money(-st.amount_due) + ' is carried into next month\'s statement (s.9.2).';
-    if (hst > 0) return r.legal_name + ' is GST/HST-registered: their invoice should be ' + money(st.amount_due) + ' + HST ' + money(hst) + ' = <b>' + money(st.amount_due + hst) + '</b> (s.9.4).';
-    return 'The reseller invoices the Owner for this amount (s.9.4).' + (r.payment_details ? ' Pay by: ' + esc(r.payment_details) + '.' : '');
+    var out = [];
+    if (st.carry > 0) out.push('Commission doesn\'t cover the clawback. The remaining ' + money(st.carry) + ' carries into next month\'s statement (s.9.2).');
+    if (hst > 0) out.push(r.legal_name + ' is GST/HST-registered: their invoice should be commission ' + money(commissionPart(st)) + ' + HST ' + money(hst)
+      + (st.expenses_total ? ' + expenses at cost ' + money(st.expenses_total) : '') + ' = <b>' + money(st.amount_due + hst) + '</b> (s.9.4).');
+    else out.push('The reseller invoices the Owner for this amount (s.9.4).' + (r.payment_details ? ' Pay by: ' + esc(r.payment_details) + '.' : ''));
+    return out.join(' ');
   }
   function readStatementForm(){
     var st = S.stmt; if (!st || st.status !== 'draft') return;
@@ -789,9 +988,9 @@
       if (ne) ne.textContent = money(l.net); if (ce) ce.innerHTML = '<b>' + money(l.commission) + '</b>';
     });
     var set = function(id, t){ var e = document.getElementById(id); if (e) e.textContent = t; };
-    set('rs-s-net', money(st.net_revenue)); set('rs-s-com', money(st.commission)); set('rs-s-claw', (st.clawback ? '-' : '') + money(st.clawback)); set('rs-s-due', money(st.amount_due));
+    set('rs-s-exp', money(st.expenses_total)); set('rs-s-net', money(st.net_revenue)); set('rs-s-com', money(st.commission)); set('rs-s-claw', (st.clawback ? '-' : '') + money(st.clawback)); set('rs-s-due', money(st.amount_due));
     var a = agreement(st.agreement_id), r = reseller(a.reseller_id) || {};
-    var hst = r.gst_hst_registered && st.amount_due > 0 ? r2(st.amount_due * (Number(r.hst_rate) || 0) / 100) : 0;
+    var hst = commissionHst(st, r);
     var h = document.getElementById('rs-s-hint'); if (h) h.innerHTML = dueHint(st, r, hst);
   }
   async function persistStatement(extra){
@@ -800,6 +999,7 @@
       net_revenue: st.net_revenue, commission_rate: st.commission_rate, commission: st.commission, clawback: st.clawback, clawback_note: st.clawback_note || null,
       amount_due: st.amount_due, status: st.status, due_date: st.due_date, issued_date: st.issued_date || null, paid_date: st.paid_date || null,
       payment_ref: st.payment_ref || null, reseller_invoice_number: st.reseller_invoice_number || null, notes: st.notes || null, updated_at: new Date().toISOString() };
+    if (!S.v2missing){ b.expenses = st.expenses || []; b.expenses_total = st.expenses_total || 0; }
     Object.assign(b, extra || {});
     var r;
     if (st.id) r = await K().api('PATCH', '/reseller_statements?id=eq.' + encodeURIComponent(st.id), b, 'return=representation');
@@ -807,8 +1007,12 @@
     if (!r.ok) throw new Error((await r.text()).slice(0, 200));
     var row = (await r.json())[0];
     S.statements = S.statements.filter(function(x){ return x.id !== row.id; }).concat([row]);
-    S.stmt = JSON.parse(JSON.stringify(row));
+    S.stmt = calcStatement(JSON.parse(JSON.stringify(row)));
     return row;
+  }
+  // Keep each reimbursed expense tied to the statement that pays it.
+  async function syncStatementExpenses(st, fields){
+    for (var i = 0; i < (st.expenses || []).length; i++){ await patchExpense(st.expenses[i].id, Object.assign({}, fields)); }
   }
   async function stmtAction(fn, okMsg, auditAction){
     try { await fn(); } catch (e){ K().setMsg('rs-s-msg', 'Could not save: ' + e.message); return; }
@@ -821,9 +1025,9 @@
   window.rsStatementIssue = async function(){
     readStatementForm();
     if (!await K().dlgConfirm('Issue the ' + fmtMonth(S.stmt.period_month) + ' statement? Amount due: ' + money(S.stmt.amount_due) + '.\n\nIssued statements are locked. Use "Back to draft" to correct one.', { title: 'Issue statement', okText: 'Issue' })) return;
-    return stmtAction(function(){ S.stmt.status = 'issued'; S.stmt.issued_date = today(); return persistStatement(); }, 'Statement issued. Generate the PDF to send to the reseller.', 'reseller_statement_issued');
+    return stmtAction(async function(){ S.stmt.status = 'issued'; S.stmt.issued_date = today(); await persistStatement(); await syncStatementExpenses(S.stmt, { statement_month: S.stmt.period_month }); }, 'Statement issued. Generate the PDF to send to the reseller.', 'reseller_statement_issued');
   };
-  window.rsStatementUnissue = function(){ return stmtAction(function(){ S.stmt.status = 'draft'; S.stmt.issued_date = null; return persistStatement(); }, 'Back to draft.', 'reseller_statement_reopened'); };
+  window.rsStatementUnissue = function(){ return stmtAction(async function(){ S.stmt.status = 'draft'; S.stmt.issued_date = null; await persistStatement(); await syncStatementExpenses(S.stmt, { statement_month: null }); }, 'Back to draft.', 'reseller_statement_reopened'); };
   window.rsStatementPay = async function(){
     var st = S.stmt;
     var f = await K().dlgForm('Record commission payment', [
@@ -832,9 +1036,9 @@
       { key: 'reseller_invoice_number', label: 'Reseller\'s invoice number (s.9.4)', defaultValue: st.reseller_invoice_number || '' }
     ], { okText: 'Mark paid', message: 'Amount due: ' + money(st.amount_due) });
     if (!f) return;
-    return stmtAction(function(){ Object.assign(S.stmt, f, { status: 'paid' }); return persistStatement(); }, 'Payment recorded.', 'reseller_statement_paid');
+    return stmtAction(async function(){ Object.assign(S.stmt, f, { status: 'paid' }); await persistStatement(); await syncStatementExpenses(S.stmt, { status: 'reimbursed' }); }, 'Payment recorded.', 'reseller_statement_paid');
   };
-  window.rsStatementUnpay = function(){ return stmtAction(function(){ Object.assign(S.stmt, { status: 'issued', paid_date: null, payment_ref: null }); return persistStatement(); }, 'Payment cleared.', 'reseller_statement_unpaid'); };
+  window.rsStatementUnpay = function(){ return stmtAction(async function(){ Object.assign(S.stmt, { status: 'issued', paid_date: null, payment_ref: null }); await persistStatement(); await syncStatementExpenses(S.stmt, { status: 'claimed' }); }, 'Payment cleared.', 'reseller_statement_unpaid'); };
   window.rsStatementRebuild = async function(){
     var st = S.stmt, a = agreement(st.agreement_id);
     if (!await K().dlgConfirm('Rebuild this draft from the current invoices? Your manual edits to the figures will be replaced.', { title: 'Rebuild statement', okText: 'Rebuild' })) return;
@@ -866,6 +1070,10 @@
     var oName = o.legal_name || '[OWNER LEGAL NAME]', rName = r.legal_name || '[RESELLER LEGAL NAME]';
     var product = o.product_name ? 'marketed as "' + o.product_name + '" ' : '';
     var rate = Number(a.commission_rate), law = a.governing_law || 'Ontario';
+    var excl = a.exclusive === true, terr = a.exclusivity_territory || 'Canada', xMonths = a.exclusivity_months || 12;
+    var xEndTxt = a.effective_date ? ' (ending ' + fmtLong(addDays(addMonths(a.effective_date, xMonths), -1)) + ')' : '';
+    var claimDays = a.expense_claim_days || 60;
+    var prior = a.extends_agreement_id ? agreement(a.extends_agreement_id) : null;
     var eff = a.effective_date ? fmtLong(a.effective_date) : '____________________';
     var exGross = 1000, exHost = 120, exProc = 30, exNet = exGross - exHost - exProc, exCom = r2(exNet * rate / 100);
     var fmt2 = function(x){ return Number(x).toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','); };
@@ -893,11 +1101,19 @@
       '-"Confidential Information" has the meaning in Section 13.',
       '-"Effective Date" means the date stated in Section 1.',
       '-"Term" has the meaning in Section 10.',
+      excl ? '-"Exclusivity Period" and "Territory" have the meanings in Section 3.' : '',
+      '-"Approved Marketing Expenses" has the meaning in Section 9.7.',
       '##3. Appointment and Scope',
-      '3.1 Non-exclusive appointment. The Owner appoints the Reseller as a non-exclusive reseller to market and refer the Platform, and the Reseller accepts.',
+      excl
+        ? '3.1 Exclusive appointment. The Owner appoints the Reseller as its exclusive reseller to market and refer the Platform in ' + terr + ' (the "Territory") for the Exclusivity Period in Section 3.5, and as a non-exclusive reseller after that, and the Reseller accepts.'
+        : '3.1 Non-exclusive appointment. The Owner appoints the Reseller as a non-exclusive reseller to market and refer the Platform, and the Reseller accepts.',
       '3.2 Sell-only role. The Reseller\'s role is limited to sourcing and referring prospective Customers. The Owner contracts directly with each Customer and is solely responsible for onboarding, implementation, training, and support.',
       '3.3 No authority to bind. The Reseller has no authority to enter into agreements for the Owner, set or change prices, grant discounts, make commitments or warranties, or otherwise bind the Owner, and will not represent that it has such authority.',
-      '3.4 Owner retains freedom. Nothing limits the Owner from marketing or selling the Platform directly, or through other resellers, to any person. There is no territory restriction and no exclusivity.',
+      excl
+        ? '3.4 Exclusivity. During the Exclusivity Period, the Owner will not appoint any other reseller, agent, or referral partner to market or refer the Platform in the Territory. The Owner nevertheless remains free to market and sell the Platform directly, and to serve any organization that was already a Customer, or already in discussions with the Owner, before the Reseller submitted it under Section 7. After the Exclusivity Period ends, nothing limits the Owner from marketing or selling the Platform directly, or through other resellers, to any person.'
+        : '3.4 Owner retains freedom. Nothing limits the Owner from marketing or selling the Platform directly, or through other resellers, to any person. There is no territory restriction and no exclusivity.',
+      excl ? '3.5 Exclusivity Period and extension. Exclusivity runs for ' + periodWords(xMonths) + ' from the Effective Date' + xEndTxt + ' (the "Exclusivity Period"). It may be extended for one further 1-year period at a time, but only by a new written agreement signed by both the Owner and the Reseller before the Exclusivity Period ends. Exclusivity never renews automatically: if it is not extended, this Agreement continues on a non-exclusive basis for the rest of the Term (Section 10), and renewal of the Term under Section 10.1 does not renew exclusivity.' : '',
+      prior ? '3.6 Extension of prior agreement. This Agreement extends the Reseller\'s exclusivity under Reseller Commission Agreement No. ' + prior.agreement_number + ', which ends on the day before the Effective Date. Reseller Customers registered under that agreement continue as Reseller Customers under this Agreement, and Commission on them is calculated under this Agreement from the Effective Date.' : '',
       '##4. Reseller\'s Responsibilities',
       'The Reseller will:',
       '-4.1 Market and promote the Platform lawfully, ethically, and accurately, using only marketing materials and claims approved by the Owner in writing.',
@@ -914,6 +1130,7 @@
       '-5.4 Onboard, implement, train, and support each Customer.',
       '-5.5 Provide the Reseller with approved sales and marketing materials.',
       '-5.6 Register Reseller Customers and provide monthly Commission statements under Sections 7-9.',
+      '-5.7 Reimburse Approved Marketing Expenses under Sections 9.7-9.8.',
       '##6. Pricing and Customer Subscription Agreements',
       '6.1 Owner sets pricing. The Owner sets, and may change at any time in its discretion, all pricing for the Platform, including any flat subscription fee or per-module licensing.' + (a.pricing_note ? ' For reference only, the Owner\'s pricing at the Effective Date is: ' + a.pricing_note : ''),
       '6.2 Owner is the contracting party. Each Customer contracts directly with the Owner. The Reseller is not a party to any Customer Subscription Agreement.',
@@ -939,6 +1156,8 @@
       '9.4 Taxes. The Reseller is responsible for its own taxes. The Reseller will invoice the Owner for Commission and add GST/HST if the Reseller is registered.',
       '9.5 Records and audit. The Owner will keep reasonable records supporting its statements. No more than once per year, on reasonable notice, the Reseller (or its representative) may review those records solely to verify Commission.',
       '9.6 Currency. All amounts are in Canadian dollars (CAD).',
+      '9.7 Marketing expenses. The Owner will reimburse the Reseller\'s reasonable out-of-pocket marketing expenses - trade show and conference fees, booth and display costs, approved promotional materials, travel (transportation, accommodation, and meals), and reasonable administrative expenses - but only where the Owner has approved the specific expense in writing (email is sufficient) before it is incurred ("Approved Marketing Expenses"). Each approval will describe the activity and a maximum amount. The Owner is not obliged to reimburse any expense that was not approved in advance, or any amount above the approved maximum.',
+      '9.8 Claims and payment of expenses. The Reseller will claim Approved Marketing Expenses with itemized receipts within ' + claimDays + ' days after they are incurred. The Owner will reimburse approved, receipted amounts at cost, with no markup, together with the next monthly statement under Section 9.1. Reimbursements are not Commission, are not calculated on Net Revenue, and are not subject to clawback or offset under Section 9.2. Approved Marketing Expenses incurred before termination remain reimbursable if claimed within this period.',
       '##10. Term and Termination',
       '10.1 Term. This Agreement begins on the Effective Date and continues for ' + periodWords(a.initial_term_months) + ' (the "Initial Term"), then renews for successive ' + periodWords(a.renewal_term_months) + ' periods unless either Party gives notice of non-renewal at least ' + a.nonrenewal_notice_days + ' days before the end of the then-current term (together, the "Term").',
       '10.2 Termination for convenience. Either Party may terminate on ' + a.termination_notice_days + ' days\' written notice.',
@@ -966,7 +1185,7 @@
       '14.2 Non-solicitation of personnel. During the same period, the Reseller will not solicit for employment any of the Owner\'s staff or contractors involved in the Platform.',
       '14.3 No non-competition. For clarity, this Agreement contains no non-competition restriction. The Reseller may market and sell other products and services, provided it does not breach Sections 11-13 or this Section 14 and does not use the Owner\'s Confidential Information or Marks to do so.',
       '##15. Independent Contractor',
-      'The Reseller is an independent contractor. Nothing in this Agreement creates an employment, partnership, joint-venture, or agency relationship, and neither Party may bind the other. The Reseller is responsible for its own taxes, expenses, tools, and personnel, and is not entitled to any employee benefits.',
+      'The Reseller is an independent contractor. Nothing in this Agreement creates an employment, partnership, joint-venture, or agency relationship, and neither Party may bind the other. The Reseller is responsible for its own taxes, expenses (other than Approved Marketing Expenses under Section 9.7), tools, and personnel, and is not entitled to any employee benefits.',
       '##16. Warranties, Indemnification, and Limitation of Liability',
       '16.1 Mutual warranties. Each Party warrants that it has authority to enter into this Agreement and will comply with laws applicable to its performance.',
       '16.2 Reseller indemnity. The Reseller will defend and indemnify the Owner against claims arising from the Reseller\'s misrepresentations, unauthorized commitments, or breach of this Agreement.',
@@ -1057,11 +1276,11 @@
         var tot = function(lab, val, b){ t(lab, W - M - 100, y, { size: b ? 11 : 10, align: 'right', style: b ? 'bold' : 'normal' }); t(val, W - M, y, { size: b ? 11 : 10, align: 'right', style: b ? 'bold' : 'normal' }); y += b ? 18 : 15; };
         tot('Net revenue', money(st.net_revenue)); tot('Commission', money(st.commission));
         if (Number(st.clawback)) tot('Less clawback / offset' + (st.clawback_note ? ' (' + st.clawback_note + ')' : ''), '-' + money(st.clawback));
-        tot(st.amount_due < 0 ? 'Carried forward to next statement' : 'Amount due to Reseller', money(st.amount_due), true);
-        if (r.gst_hst_registered && st.amount_due > 0){
-          var hst = r2(st.amount_due * (Number(r.hst_rate) || 0) / 100);
-          tot('Plus HST ' + Number(r.hst_rate) + '% (on Reseller\'s invoice)', money(hst)); tot('Reseller invoice total', money(st.amount_due + hst), true);
-        }
+        if (st.carry > 0) tot('Clawback carried to next statement', money(st.carry));
+        (st.expenses || []).forEach(function(x){ tot('Approved expense: ' + String(x.description).slice(0, 46), money(x.amount)); });
+        tot('Amount due to Reseller', money(st.amount_due), true);
+        var hst = commissionHst(st, r);
+        if (hst > 0){ tot('Plus HST ' + Number(r.hst_rate) + '% on commission (Reseller\'s invoice)', money(hst)); tot('Reseller invoice total', money(st.amount_due + hst), true); }
         if (st.status === 'paid'){ y += 4; t('PAID ' + (st.paid_date || '') + (st.payment_ref ? '  ·  ref ' + st.payment_ref : '') + (st.reseller_invoice_number ? '  ·  Reseller invoice ' + st.reseller_invoice_number : ''), W - M, y, { style: 'bold', size: 10, align: 'right', color: [21, 128, 61] }); y += 16; }
         if (st.notes){ y += 6; t('Notes', M, y, { style: 'bold', size: 9, color: [120, 120, 120] }); y += 13; doc.splitTextToSize(String(st.notes), W - M * 2).forEach(function(ln){ t(ln, M, y, { size: 9.5 }); y += 12; }); }
         if (y > H - 90){ doc.addPage(); y = M; }
@@ -1108,6 +1327,12 @@
       case 'rs-stmt-rebuild':     window.rsStatementRebuild(); break;
       case 'rs-stmt-del':         window.rsStatementDelete(); break;
       case 'rs-stmt-pdf':         window.rsStatementPdf(); break;
+      case 'rs-exp-add':          window.rsAddExpense(id); break;
+      case 'rs-exp-claim':        window.rsClaimExpense(id); break;
+      case 'rs-exp-reject':       window.rsRejectExpense(id); break;
+      case 'rs-exp-del':          window.rsDeleteExpense(id); break;
+      case 'rs-agr-extend':       window.rsExtendAgreement(id); break;
+      case 'rs-agr-pricing-reset': e.preventDefault(); (function(){ var t = document.getElementById('rs-a-pricing_note'); if (t && !t.disabled) t.value = K().feeScheduleSummary(); })(); break;
     }
   });
   document.addEventListener('input', function(e){

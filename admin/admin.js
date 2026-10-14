@@ -59,6 +59,34 @@
     { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
   ];
 
+  // Contract prices come from FEE_SCHEDULE (never retyped), so the subscription
+  // agreement's Schedule A and the reseller pricing summary always match the
+  // invoice catalog. Lookups are by exact description.
+  function feePrice(desc){
+    for (var i = 0; i < FEE_SCHEDULE.length; i++){ if (FEE_SCHEDULE[i].d === desc) return FEE_SCHEDULE[i].p; }
+    throw new Error('Fee schedule item missing: ' + desc);
+  }
+  function feeFmt(n){ n = Number(n) || 0; return '$' + (n % 1 ? n.toFixed(2) : String(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+  var FEE_SIZES = { Small: 'Small (up to 100 homes)', 'Mid-size': 'Mid-size (101-300 homes)', Large: 'Large (301-600 homes)' };
+  // "$5,400/year ($450/mo) or $495/month; one-time setup $3,500"
+  function feeTierText(size){
+    var yr = feePrice('Subscription — ' + FEE_SIZES[size] + ', annual');
+    return feeFmt(yr) + '/year (' + feeFmt(Math.round(yr / 12 * 100) / 100) + '/mo) or '
+      + feeFmt(feePrice('Subscription — ' + FEE_SIZES[size] + ', monthly')) + '/month; one-time setup '
+      + feeFmt(feePrice('One-time setup — ' + size));
+  }
+  // One-paragraph summary of the published pricing (reseller agreement s.6.1 default).
+  function feeScheduleSummary(){
+    var sz = ['Small', 'Mid-size', 'Large'];
+    return "Per the Owner's published fee schedule (CAD, plus applicable taxes): "
+      + sz.map(function(k){ return FEE_SIZES[k] + ' ' + feeTierText(k); }).join('; ')
+      + '; 600+ homes / Tribal Council by quote. The setup fee is reduced 50% for a one-year term with the first year prepaid. '
+      + 'AI Staff Assistant add-on ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month. '
+      + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
+      + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
+      + 'Only recurring subscription and add-on fees earn Commission (Section 7.3).';
+  }
+
   // Provider (Home Land Homes) details -- printed on invoices.
   var PROVIDER = {
     name:  'Home Land Homes',
@@ -1497,14 +1525,14 @@
     '##Schedule A - Order Form',
     'Select one tier and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
     '###Subscription tiers',
-    '-[ ] Small - up to 100 homes: $5,400/year ($450/mo) or $495/month; one-time setup $3,500.',
-    '-[ ] Mid-size - 101-300 homes: $9,540/year ($795/mo) or $875/month; one-time setup $6,000.',
-    '-[ ] Large - 301-600 homes: $15,000/year ($1,250/mo) or $1,375/month; one-time setup $9,500.',
+    '-[ ] Small - up to 100 homes: {{FEE_SMALL}}.',
+    '-[ ] Mid-size - 101-300 homes: {{FEE_MID}}.',
+    '-[ ] Large - 301-600 homes: {{FEE_LARGE}}.',
     '-[ ] 600+ / Tribal Council - custom: annual per quote; monthly per quote; setup per quote.',
     '###Billing and options',
     'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (+10% rate above)',
     'Setup discount: [ ] One-year term with first year prepaid - setup fee reduced 50% to $______ (Section 7.3)',
-    'Optional add-on: [ ] AI Staff Assistant - $95/month. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
+    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}/month. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
     'Email delivery method (Schedule D): [ ] Nation\'s own Microsoft 365 tenant (requires the Nation\'s Microsoft administrator to grant application consent during setup)     [ ] Provider-managed transactional email service (Resend or SendGrid - United States; see Schedule D)',
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
     '###Term and contacts',
@@ -1527,9 +1555,9 @@
     '-On-site (in-community) training and related travel.',
     'The Provider will not invoice setup amounts beyond those stated in Schedule A (Section 5). If source data turns out to be materially worse than represented, the parties will discuss scope in good faith, but any additional fee requires the Nation\'s written agreement.',
     '###Additional services and travel (hourly)',
-    '-Work outside the included scope that the Nation requests in writing - for example extended data cleanup or entry of historical records, additional training sessions, custom reports, or consulting - is billed at $150 per hour, in fifteen (15) minute increments. The Provider will give a written estimate before starting, and will not exceed the estimate without the Nation\'s written approval.',
+    '-Work outside the included scope that the Nation requests in writing - for example extended data cleanup or entry of historical records, additional training sessions, custom reports, or consulting - is billed at {{FEE_HOURLY}} per hour, in fifteen (15) minute increments. The Provider will give a written estimate before starting, and will not exceed the estimate without the Nation\'s written approval.',
     '-Where the Nation requests on-site work, travel expenses (transportation, accommodation, meals and incidentals) are billed at the rates in the National Joint Council (NJC) Travel Directive in effect at the time of travel, at cost, with no markup.',
-    '-Time spent in travel is billed at fifty percent (50%) of the hourly rate ($75 per hour), to a maximum of eight (8) hours of travel time per travel day.',
+    '-Time spent in travel is billed at fifty percent (50%) of the hourly rate ({{FEE_TRAVEL_HR}} per hour), to a maximum of eight (8) hours of travel time per travel day.',
     '##Schedule C - Support and Service Levels',
     '###Support',
     '-Email support at hello@homelandhomes.ca, business hours 9:00-17:00 Eastern, Monday to Friday excluding statutory holidays.',
@@ -1673,6 +1701,12 @@
       .replace(/\{\{PROVIDER_SIGNATORY\}\}/g, o.signatory_name || o.legal_name || '____________________')
       .replace(/\{\{PROVIDER_TITLE\}\}/g, (o.signatory_title || '____________________') + (o.operating_as ? ', ' + o.operating_as : ''))
       .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
+      .replace(/\{\{FEE_SMALL\}\}/g, feeTierText('Small'))
+      .replace(/\{\{FEE_MID\}\}/g, feeTierText('Mid-size'))
+      .replace(/\{\{FEE_LARGE\}\}/g, feeTierText('Large'))
+      .replace(/\{\{FEE_AI\}\}/g, feeFmt(feePrice('AI Staff Assistant (per month)')))
+      .replace(/\{\{FEE_HOURLY\}\}/g, feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')))
+      .replace(/\{\{FEE_TRAVEL_HR\}\}/g, feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')))
       .replace(/\{\{NATION\}\}/g, nationName)
       .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
       .replace(/\{\{DATE\}\}/g, _fmtDateLong())
@@ -2566,7 +2600,8 @@
     dlgAlert: dlgAlert, dlgConfirm: dlgConfirm, dlgPrompt: dlgPrompt, dlgForm: dlgForm,
     estCost: estCost, jwtEmail: jwtEmail, nations: function(){ return _nations; },
     ENTITY_TYPES: ENTITY_TYPES, PROVINCES: PROVINCES, provinceName: provinceName,
-    fmtPartyAddress: fmtPartyAddress, partyName: partyName, partyRecital: partyRecital
+    fmtPartyAddress: fmtPartyAddress, partyName: partyName, partyRecital: partyRecital,
+    feeScheduleSummary: feeScheduleSummary
   };
 
   // ---- Boot ------------------------------------------------------------------
