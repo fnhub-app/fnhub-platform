@@ -6700,6 +6700,21 @@ function _wlCollectSows(ctx) {
   return sowItems;
 }
 
+// Count + combined value of a unit's ACTIVE maintenance requests (not archived/
+// cancelled/completed). Used to reconcile a worklist card — which is titled by
+// the unit address but shows a single request's total — against a unit that has
+// more than one request. Mirrors the SOW picker's "active" definition.
+function _wlUnitSowSummary(uid) {
+  var list = (typeof getUnitSowList === 'function') ? getUnitSowList(uid) : [];
+  var count = 0, total = 0;
+  list.forEach(function(sw) {
+    if (!sw || sw.archived || sw.cancelled || sw.approval_status === 'completed') return;
+    count++;
+    total += (typeof sw.amount === 'number' ? sw.amount : (parseFloat(String(sw.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0));
+  });
+  return { count: count, total: total };
+}
+
 // ── 2b. Field Employee: approved work orders to execute ──────────────────
 // Maintenance crew queue — SOWs that HM/ED have approved and that aren't yet
 // completed, i.e. the work the crew can go do now and then mark complete.
@@ -7305,8 +7320,14 @@ function renderWorklist() {
       var openCall = 'if(typeof openSowModal===\'function\'){openSowModal(\'' + _uidJs + '\');}else{window.location.href=\'renos.html?sow=' + encodeURIComponent(s.uid) + '\';}';
       var approveCall = 'event.stopPropagation();if(typeof _wlApproveSow===\'function\'){_wlApproveSow(\'' + _uidJs + '\',\'' + _pnJs + '\');}else{' + openCall + '}';
       var badge = sowStatusBadge({approval_status: s.status}, {variant:'worklist'});
+      // "Request total" (not just "Total") because the card is titled by the unit
+      // address — this is THIS request's value, not the unit's. When the unit has
+      // more than one active request, add a line reconciling to the unit total.
+      var _metas = [{k:'Project',v:s.pn||'—'},{k:'Request total',v:s.amount?_money(s.amount):''},{k:'Contractor',v:s.contractor},{k:'Work items',v:s.itemCount||''}];
+      var _us = _wlUnitSowSummary(s.uid);
+      if (_us && _us.count > 1) _metas.push({k:'On this unit', v: _us.count + ' requests · ' + _money(_us.total) + ' total'});
       return wlCard({ title:s.addr, pill:{text:badge.label}, open:openCall,
-        metas:[{k:'Project',v:s.pn||'—'},{k:'Total',v:s.amount?_money(s.amount):''},{k:'Contractor',v:s.contractor},{k:'Work items',v:s.itemCount||''}],
+        metas:_metas,
         actions:[{text:(s.status==='hm_approved'?'Final Approve':'Approve'),onclick:approveCall}] });
     }).join('');
     var _sowTotal = (typeof sowItems._total === 'number') ? sowItems._total : sowItems.length;
