@@ -315,7 +315,7 @@
       +   tile('Est. monthly cost', _money(totCost))
       + '</div>'
       + '<div class="nic-tabs">'
-      +   tab('nations', 'Nations', true) + tab('provision', 'Provision') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('admins', 'Administrators')
+      +   tab('nations', 'Nations', true) + tab('provision', 'Provision') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
       + '</div>'
       + '<div class="nic-body">'
       +   panel('nations',   nationsCard(nations, usageBySub), true)
@@ -328,6 +328,8 @@
               + foldCard('Support login setup — the "Enter" button', 'Per-nation signing keys for platform support sessions', supportLoginSetupCard()), false)
       +   panel('addnation', addNationCard(), false)
       +   panel('migrations', migrationsCard(nations), false)
+      // Resellers renders lazily (reseller.js) the first time its tab opens.
+      +   panel('resellers', '<div id="rs-root"><p class="sub" style="margin-top:14px;">Loading…</p></div>', false)
       +   panel('admins',    adminsCard(admins, meEmail), false)
       + '</div>'
       + '</div>';
@@ -1018,6 +1020,7 @@
   window.nicTab = function(name){
     Array.prototype.forEach.call(document.querySelectorAll('.nic-tab'), function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
     Array.prototype.forEach.call(document.querySelectorAll('.nic-panel'), function(p){ p.classList.toggle('active', p.getAttribute('data-panel') === name); });
+    if (name === 'resellers' && typeof window.renderResellers === 'function') window.renderResellers();
   };
 
   window.saveNationConfig = async function(id){
@@ -1367,11 +1370,11 @@
   // The agreement, marker-formatted. Placeholders: {{NATION}} {{ADDRESS}} {{DATE}}.
   // Markers:  >disclaimer  #title  %subtitle  ##section  ###clause  -bullet  (blank)=gap
   var AGREEMENT_TPL = [
-    '>TEMPLATE - This agreement was prepared as a working draft and is not legal advice. Have it reviewed by a lawyer (ideally one experienced with First Nations clients) before first use, and update the Provider party details upon incorporation.',
+    '>TEMPLATE - This agreement was prepared as a working draft and is not legal advice. Have it reviewed by a lawyer (ideally one experienced with First Nations clients) before first use. The Provider party details are filled in from Platform Admin > Resellers > Owner.',
     '#SOFTWARE SUBSCRIPTION AGREEMENT',
     '%Home Land Homes - Housing Management Platform',
     'This Software Subscription Agreement (the "Agreement") is made as of the date of last signature below (the "Effective Date") between:',
-    'Kevin Proctor, operating as "Home Land Homes" (the "Provider"), and',
+    '{{PROVIDER_PARTY}} (the "Provider"), and',
     '{{NATION}}, a First Nation with administrative offices at {{ADDRESS}} (the "Nation").',
     '##Background',
     '-The Nation operates a housing department that manages homes, applications, tenancies, maintenance, capital projects and related finances for its members.',
@@ -1475,6 +1478,7 @@
     '-Entire agreement. This Agreement (including its Schedules) is the entire agreement between the parties regarding its subject matter and supersedes prior discussions.',
     '-Amendment. Amendments must be in writing and signed by both parties.',
     '-Assignment. Neither party may assign this Agreement without the other\'s written consent, except the Provider may assign it to a corporation it forms to carry on the Home Land Homes business, or in connection with a merger or sale of that business, with written notice to the Nation; the Nation may terminate within sixty (60) days of such notice if the assignee is unacceptable to it, acting reasonably, with a pro-rata refund of prepaid Fees.',
+    '-Resellers and referral partners. The Provider may market the Platform through independent resellers or referral partners. Any such reseller is not a party to this Agreement, has no authority to bind the Provider, set or change prices, grant discounts or make commitments or warranties on its behalf, and has no access to Customer Data. The Nation contracts only with the Provider, and only this Agreement (and written amendments signed by the Provider) governs the Nation\'s subscription.',
     '-Subcontracting. The Provider may use the subprocessors and third-party systems listed in Schedule D to deliver the Platform and remains responsible for them. The Provider will give the Nation at least thirty (30) days\' written notice before adding or replacing a subprocessor that will process Customer Data; if the Nation reasonably objects on data-protection grounds and no resolution is found, the Nation may terminate the affected feature or this Agreement with a pro-rata refund of prepaid Fees.',
     '-Force majeure. Neither party is liable for delay or failure caused by events beyond its reasonable control, provided it uses reasonable efforts to mitigate.',
     '-Notices. Notices must be in writing and delivered to the contacts listed in Schedule A (email is sufficient, with confirmation of receipt for termination or breach notices).',
@@ -1486,9 +1490,9 @@
     'Signature: ______________________________     Date: ____________________',
     'Name: ______________________________     Title: ____________________',
     'Band Council Resolution No. (if applicable): ____________________',
-    '###FOR THE PROVIDER: Kevin Proctor, operating as Home Land Homes',
+    '###FOR THE PROVIDER: {{PROVIDER_SIGN_HEAD}}',
     'Signature: ______________________________     Date: ____________________',
-    'Name: Kevin Proctor     Title: Founder, Home Land Homes',
+    'Name: {{PROVIDER_SIGNATORY}}     Title: {{PROVIDER_TITLE}}',
     '{{PROVIDER_CONTACT}}',
     '##Schedule A - Order Form',
     'Select one tier and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
@@ -1507,7 +1511,7 @@
     'Initial Term: [ ] One (1) year from the Effective Date     [ ] Other: ______________',
     'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, inspections, capital projects, finance, Chief & Council dashboard, tenant/applicant portal.',
     'Nation\'s primary contact for notices: name ____________________ email ____________________',
-    'Provider contact for notices: Kevin Proctor - hello@homelandhomes.ca',
+    'Provider contact for notices: {{PROVIDER_NOTICE}}',
     '##Schedule B - Setup Services (Scope)',
     '###Included in the setup fee',
     '-Provisioning of the Nation\'s dedicated workspace, database, subdomain and branding.',
@@ -1560,7 +1564,9 @@
     return mo[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
   }
 
-  function buildAgreementPdf(nationName, address){
+  // Render a marker-formatted template (see AGREEMENT_TPL) to a jsPDF doc.
+  // breakBefore(heading) -> true starts that ## heading on a new page.
+  function renderMarkerPdf(tpl, footerLabel, breakBefore){
     var jsPDF = window.jspdf.jsPDF;
     var doc = new jsPDF({ unit: 'pt', format: 'letter' });
     var M = 56, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
@@ -1582,11 +1588,6 @@
       }
       y += (o.after == null ? 6 : o.after);
     }
-    var tpl = AGREEMENT_TPL
-      .replace(/\{\{NATION\}\}/g, nationName)
-      .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
-      .replace(/\{\{DATE\}\}/g, _fmtDateLong())
-      .replace(/\{\{PROVIDER_CONTACT\}\}/g, PROVIDER.name + ' - ' + PROVIDER.addr1 + ', ' + PROVIDER.addr2 + '   ·   ' + PROVIDER.phone + '   ·   ' + PROVIDER.email);
     tpl.split('\n').forEach(function(raw){
       var line = raw;
       if (line === '') { y += 4; return; }
@@ -1599,7 +1600,7 @@
       if (line.slice(0, 3) === '###') { ensure(30); block(line.slice(3), { style: 'bold', size: 10.5, after: 3 }); return; }
       if (line.slice(0, 2) === '##') {
         var htext = line.slice(2);
-        if (htext.indexOf('Schedule ') === 0 || htext.indexOf('17. Execution') === 0) { doc.addPage(); y = M; }
+        if (breakBefore && breakBefore(htext)) { doc.addPage(); y = M; }
         else { ensure(40); y += 6; }
         block(htext, { style: 'bold', size: 12.5, after: 5 });
         return;
@@ -1612,10 +1613,73 @@
     for (var p = 1; p <= pages; p++){
       doc.setPage(p);
       doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
-      doc.text('Home Land Homes - Software Subscription Agreement', M, H - 26);
+      doc.text(footerLabel, M, H - 26);
       doc.text('Page ' + p + ' of ' + pages, W - M, H - 26, { align: 'right' });
     }
     return doc;
+  }
+
+  // ---- Owner (software owner / "Provider") ---------------------------------
+  // One record in platform_owner (supabase/platform/reseller.sql), edited in
+  // Resellers -> Owner. It names the Provider on the subscription agreement and
+  // the Owner on reseller agreements, so a change of owner (e.g. incorporation)
+  // flows to every newly generated contract.
+  var ENTITY_TYPES = [
+    ['individual', 'Individual'], ['sole_prop', 'Sole proprietorship'], ['corporation', 'Corporation'],
+    ['partnership', 'Partnership'], ['first_nation', 'First Nation'], ['nonprofit', 'Non-profit corporation'], ['other', 'Other organization']
+  ];
+  var PROVINCES = [
+    ['AB','Alberta'],['BC','British Columbia'],['MB','Manitoba'],['NB','New Brunswick'],['NL','Newfoundland and Labrador'],
+    ['NS','Nova Scotia'],['NT','Northwest Territories'],['NU','Nunavut'],['ON','Ontario'],['PE','Prince Edward Island'],
+    ['QC','Quebec'],['SK','Saskatchewan'],['YT','Yukon']
+  ];
+  function provinceName(code){ for (var i = 0; i < PROVINCES.length; i++){ if (PROVINCES[i][0] === code) return PROVINCES[i][1]; } return code || ''; }
+  function fmtPartyAddress(p){
+    if (!p) return '';
+    var cityLine = [p.city, [provinceName(p.province), p.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    return [p.street, cityLine, p.country].filter(Boolean).join(', ');
+  }
+  // Display name: legal name plus trade name ("X, operating as \"Y\"").
+  function partyName(p){ return p ? (p.legal_name || '') + (p.operating_as ? ', operating as "' + p.operating_as + '"' : '') : ''; }
+  // Full contract recital: name + entity description + address.
+  function partyRecital(p){
+    if (!p) return '';
+    var t = p.entity_type || 'individual', j = p.jurisdiction ? ' under the laws of ' + p.jurisdiction : '';
+    var kind = ({ individual: 'an individual', sole_prop: 'a sole proprietorship', corporation: 'a corporation incorporated' + (j || ''),
+      partnership: 'a partnership formed' + (j || ''), first_nation: 'a First Nation', nonprofit: 'a non-profit corporation incorporated' + (j || ''),
+      other: 'an organization' })[t] || 'an organization';
+    if (t === 'corporation' && !j) kind = 'a corporation';
+    if (t === 'nonprofit' && !j) kind = 'a non-profit corporation';
+    if (t === 'partnership' && !j) kind = 'a partnership';
+    var addr = fmtPartyAddress(p);
+    var where = t === 'individual' ? ' with an address at ' : ' with its principal office at ';
+    return p.legal_name + ', ' + kind + (p.operating_as ? ' operating as "' + p.operating_as + '"' : '') + (addr ? where + addr : '');
+  }
+  async function loadOwner(){
+    try {
+      var r = await api('GET', '/platform_owner?id=eq.1&select=*');
+      if (!r.ok) return null;
+      var rows = await r.json(); return (rows && rows[0]) || null;
+    } catch (e){ return null; }
+  }
+
+  function buildAgreementPdf(nationName, address, owner){
+    // Provider details come from the Owner record; the fallbacks keep the
+    // agreement generating if reseller.sql hasn't been run yet.
+    var o = owner || { legal_name: 'Kevin Proctor', operating_as: PROVIDER.name, signatory_name: 'Kevin Proctor', signatory_title: 'Founder', email: PROVIDER.email };
+    var tpl = AGREEMENT_TPL
+      .replace(/\{\{PROVIDER_PARTY\}\}/g, owner ? partyRecital(o) : partyName(o))
+      .replace(/\{\{PROVIDER_SIGN_HEAD\}\}/g, partyName(o).replace(/"/g, ''))
+      .replace(/\{\{PROVIDER_SIGNATORY\}\}/g, o.signatory_name || o.legal_name || '____________________')
+      .replace(/\{\{PROVIDER_TITLE\}\}/g, (o.signatory_title || '____________________') + (o.operating_as ? ', ' + o.operating_as : ''))
+      .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
+      .replace(/\{\{NATION\}\}/g, nationName)
+      .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
+      .replace(/\{\{DATE\}\}/g, _fmtDateLong())
+      .replace(/\{\{PROVIDER_CONTACT\}\}/g, PROVIDER.name + ' - ' + PROVIDER.addr1 + ', ' + PROVIDER.addr2 + '   ·   ' + PROVIDER.phone + '   ·   ' + PROVIDER.email);
+    return renderMarkerPdf(tpl, 'Home Land Homes - Software Subscription Agreement', function(h){
+      return h.indexOf('Schedule ') === 0 || h.indexOf('17. Execution') === 0;
+    });
   }
 
   // Persist the nation's mailing/office address to the registry row. The field
@@ -1658,7 +1722,7 @@
             if (pr.ok) n.office_address = addr;
           } catch (_e){ /* keep generating even if the save fails */ }
         }
-        var doc = buildAgreementPdf(name, addr);
+        var doc = buildAgreementPdf(name, addr, await loadOwner());
         var safe = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
         var fname = 'Subscription-Agreement-' + safe + '.pdf';
         var blob = doc.output('blob');
@@ -2493,6 +2557,17 @@
       case 'inv-interest':  window.invAddInterest(el.getAttribute('data-id') || '', el.getAttribute('data-sub') || ''); break;
     }
   });
+
+  // Helpers shared with reseller.js (loaded after this file). The panel's
+  // internals stay closure-private; this is the deliberate, minimal surface.
+  window._adminKit = {
+    api: api, esc: esc, audit: audit, money: _money, setMsg: setMsg,
+    setMsgWithView: setMsgWithView, ensureJsPdf: ensureJsPdf, renderMarkerPdf: renderMarkerPdf,
+    dlgAlert: dlgAlert, dlgConfirm: dlgConfirm, dlgPrompt: dlgPrompt, dlgForm: dlgForm,
+    estCost: estCost, jwtEmail: jwtEmail, nations: function(){ return _nations; },
+    ENTITY_TYPES: ENTITY_TYPES, PROVINCES: PROVINCES, provinceName: provinceName,
+    fmtPartyAddress: fmtPartyAddress, partyName: partyName, partyRecital: partyRecital
+  };
 
   // ---- Boot ------------------------------------------------------------------
   function parseHash(){ var h = (location.hash||'').replace(/^#/,''); if (!h) return null; var o={}; h.split('&').forEach(function(kv){ var p=kv.split('='); if (p[0]) o[decodeURIComponent(p[0])] = decodeURIComponent(p[1]||''); }); return o; }
