@@ -226,7 +226,7 @@ function openUnitEditModal(unitId){
   window._editingUnitId    = unitId;
   window._currentDetailUnitId = unitId; // back-compat: udpNewSow(), renos.html, file-panel sync all key off this
   var set = function(id,val){ var el=document.getElementById(id); if(el) el.value=(val===null||val===undefined||val==='nan')?'':String(val); };
-  set('ue_street',u.street); set('ue_num',u.num);
+  set('ue_street',u.street); set('ue_num',u.num); set('ue_lot_number', u.lotNumber);
   set('ue_bathrooms',u.bathrooms); set('ue_type',u.type); set('ue_foundation',u.foundation);
   ueTypeChanged('ue');         // swap room options + show building name before setting bedrooms
   set('ue_bedrooms',u.bedrooms);
@@ -721,6 +721,9 @@ function saveUnitEdit(){
     }
   }
   u.street=get('ue_street')||u.street; u.num=get('ue_num')||u.num;
+  // Lot # rides the data jsonb blob (sbSaveUnit data: u / sbLoadUnits row.data
+  // spread), same as gasProvider/assignmentType — no column, no migration.
+  u.lotNumber = get('ue_lot_number') || null;
   u.bedrooms=parseInt(get('ue_bedrooms'))||u.bedrooms;
   u.bathrooms=get('ue_bathrooms'); u.type=get('ue_type'); u.foundation=get('ue_foundation');
   u.buildingName = get('ue_building_name') || null;
