@@ -173,6 +173,7 @@
       S.loaded = true; S.missing = false;
       try { S.expenses = await getJson('/reseller_expenses?select=*&order=approved_date'); S.v2missing = false; }
       catch (e2){ S.expenses = []; S.v2missing = true; }
+      S.v4missing = (K().nations() || []).length ? !('sold_by' in K().nations()[0]) : false;
       // reseller_v3.sql adds the signature columns; select=* shows whether they exist.
       if (S.agreements.length) S.v3missing = !('owner_signature' in S.agreements[0]);
       else { try { await getJson('/reseller_agreements?select=owner_signature&limit=1'); S.v3missing = false; } catch (e3){ S.v3missing = true; } }
@@ -240,12 +241,13 @@
       return;
     }
     var todo = [];
+    if (S.v4missing) todo.push('<code>supabase/platform/reseller_v4.sql</code> (record who sold each nation)');
     if (S.v2missing) todo.push('<code>supabase/platform/reseller_v2.sql</code> (exclusivity, extensions, marketing expenses)');
     if (S.v3missing) todo.push('<code>supabase/platform/reseller_v3.sql</code> (signing in the panel)');
     var v2 = todo.length ? '<div class="warn" style="margin-top:14px;"><b>Database step needed:</b> run ' + todo.join(' and ') + ' on the platform project, in that order.</div>' : '';
     if (S.view === 'reseller') root.innerHTML = v2 + resellerView(S.id);
     else if (S.view === 'agreement') { root.innerHTML = v2 + agreementView(S.id); if (S.stmt) drawStatement(); }
-    else root.innerHTML = v2 + homeView();
+    else { root.innerHTML = v2 + homeView(); fillSalesReport(); }
   };
   function go(view, id){ S.view = view; S.id = id || ''; S.stmt = null; window.renderResellers(); try { window.scrollTo(0, 0); } catch(e){} }
 
@@ -279,6 +281,7 @@
       + kpi('Active agreements', activeAgr.length) + kpi('Registered customers', regCust.length)
       + kpi('Commission owing', money(owing)) + kpi('Statements overdue', overdue ? '<span style="color:var(--danger);">' + overdue + '</span>' : '0')
       + '</div>'
+      + '<div class="card" id="rs-sales"><h3>Sales by seller</h3><p class="sub">Loading…</p></div>'
       + '<div class="card"><h3>Owner <span>' + btn('↻ Refresh', 'rs-refresh', '', 'ghost') + '</span></h3>'
       +   '<p class="sub" style="margin:0;">The party that owns the software: the <b>Owner</b> in every reseller agreement and the <b>Provider</b> on the nation subscription agreement. If ownership moves to a business entity, update it here. New contracts use the new details; activated reseller agreements keep the details they were signed with.</p>'
       +   partyFields('rs-o-', o, false)
@@ -1426,6 +1429,152 @@
     }, function(){ K().setMsg('rs-s-msg', 'Could not load the PDF generator (offline?).'); });
   };
 
+  // ---- Who sold each nation (reporting + accounting) -------------------------
+  // A nation is sold either by the Owner directly (nations.sold_by = 'owner',
+  // no commission) or by a reseller. The reseller link IS the registered
+  // reseller_customers row for the subdomain (commission statements are built
+  // from it), so linking here and linking from the agreement are the same thing.
+  async function ensureLoaded(){ if (!S.loaded) await load(); return S.loaded; }
+  function nationRow(sub){ return (K().nations() || []).filter(function(x){ return x.subdomain === sub; })[0] || null; }
+  function sellerOf(sub){
+    var link = S.customers.filter(function(cu){ return cu.subdomain === sub && cu.status === 'registered'; })[0];
+    if (link){ var a = agreement(link.agreement_id); return { type: 'reseller', link: link, agreement: a, reseller: a ? reseller(a.reseller_id) : null }; }
+    var n = nationRow(sub);
+    if (n && n.sold_by === 'owner') return { type: 'owner' };
+    return null;
+  }
+  function ownerLabel(){ var o = S.owner || {}; return (o.operating_as || o.legal_name || 'Owner') + ' (direct sale)'; }
+  function sellerLabel(sl){
+    if (!sl) return '';
+    if (sl.type === 'owner') return ownerLabel();
+    return ((sl.reseller || {}).legal_name || 'Reseller') + (sl.agreement ? ' · ' + sl.agreement.agreement_number : '');
+  }
+
+  window.renderNationSeller = async function(n){
+    var host = document.getElementById('cn-seller'); if (!host || !n) return;
+    if (!(await ensureLoaded())){
+      host.innerHTML = '<h3>Sold by</h3><p class="sub">Reseller tables aren\'t set up yet: run <code>supabase/platform/reseller.sql</code> on the platform project.</p>'; return;
+    }
+    var sl = sellerOf(n.subdomain);
+    var cur = sl ? (sl.type === 'owner' ? 'owner' : sl.link.agreement_id) : '';
+    var open = S.agreements.filter(function(a){ var st = agrState(a); return st === 'active' || st === 'signed' || st === 'terminating'; });
+    if (sl && sl.type === 'reseller' && open.indexOf(sl.agreement) === -1 && sl.agreement) open.push(sl.agreement);
+    var opts = [['', '— Not recorded —'], ['owner', ownerLabel()]].concat(open.map(function(a){
+      var r = reseller(a.reseller_id) || {}; return [a.id, 'Reseller: ' + (r.legal_name || '') + ' · ' + a.agreement_number + (agrState(a) !== 'active' ? ' (' + STATE_LABEL[agrState(a)] + ')' : '')];
+    }));
+    var pend = S.customers.filter(function(cu){ return cu.subdomain === n.subdomain && cu.status === 'submitted'; });
+    host.innerHTML = '<h3>Sold by</h3>'
+      + '<p class="sub" style="margin:2px 0 8px;">Who made this sale, for reporting and accounting. A reseller sale registers this nation as that reseller\'s customer, so it earns commission on the monthly statements (s.7). A direct Owner sale earns no commission.</p>'
+      + '<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;">'
+      +   '<div><label for="cn-seller-sel">Seller</label><select id="cn-seller-sel">' + opts.map(function(o){ return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div>'
+      +   '<div><label for="cn-seller-date">Sale date</label><input id="cn-seller-date" type="date" value="' + esc(n.sold_date || (sl && sl.link ? sl.link.submitted_date : '') || '') + '"/></div>'
+      + '</div>'
+      + (pend.length ? '<p class="sub" style="margin:6px 0 0;font-size:12px;">Lead submitted by ' + pend.map(function(cu){ var a = agreement(cu.agreement_id), r = a ? reseller(a.reseller_id) : null; return esc((r ? r.legal_name : '?') + ' on ' + cu.submitted_date); }).join(', ') + ' &mdash; not yet registered.</p>' : '')
+      + (!open.length ? '<p class="sub" style="margin:6px 0 0;font-size:12px;">No active reseller agreements. Add one in <b>Resellers</b>.</p>' : '')
+      + '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">'
+      +   '<button class="btn sm" type="button" data-act="rs-seller-save" data-id="' + esc(n.subdomain) + '">Save seller</button>'
+      +   '<div class="msg" id="cn-seller-msg" style="margin:0;"></div>'
+      + '</div>';
+  };
+
+  window.rsSaveNationSeller = async function(sub){
+    var n = nationRow(sub); if (!n) return;
+    var choice = v('cn-seller-sel'), date = v('cn-seller-date') || null;
+    var links = S.customers.filter(function(cu){ return cu.subdomain === sub && cu.status !== 'declined'; });
+    var stamp = function(cu, why){ return (cu.notes ? cu.notes + ' | ' : '') + why + ' ' + today(); };
+    var decline = async function(list, why){
+      for (var i = 0; i < list.length; i++){
+        var r = await K().api('PATCH', '/reseller_customers?id=eq.' + encodeURIComponent(list[i].id), { status: 'declined', decision_date: today(), notes: stamp(list[i], why) }, 'return=representation');
+        if (!r.ok) throw new Error((await r.text()).slice(0, 200));
+        var row = (await r.json())[0]; S.customers = S.customers.map(function(x){ return x.id === row.id ? row : x; });
+      }
+    };
+    try {
+      if (choice !== 'owner' && choice !== ''){
+        var a = agreement(choice), rs = a ? reseller(a.reseller_id) : null;
+        var others = links.filter(function(cu){ return cu.agreement_id !== choice; });
+        if (others.length){
+          var oa = agreement(others[0].agreement_id), orr = oa ? reseller(oa.reseller_id) : null;
+          if (!await K().dlgConfirm(n.display_name + ' is already linked to ' + (orr ? orr.legal_name : 'another reseller') + ' (' + (oa ? oa.agreement_number : '?') + ', submitted ' + others[0].submitted_date + ').\n\nUnder s.7.4 the first reseller to submit a prospect gets it. Move it to ' + (rs ? rs.legal_name : 'this reseller') + '? The other link is closed and earns no further commission.', { title: 'Change reseller', okText: 'Move' })) return;
+          await decline(others, 'Reassigned to ' + (a ? a.agreement_number : 'another agreement') + ' from the nation dashboard');
+        }
+        var mine = links.filter(function(cu){ return cu.agreement_id === choice; })[0], res;
+        if (mine) res = await K().api('PATCH', '/reseller_customers?id=eq.' + encodeURIComponent(mine.id), { status: 'registered', decision_date: mine.decision_date || today() }, 'return=representation');
+        else res = await K().api('POST', '/reseller_customers', { agreement_id: choice, prospect_name: n.display_name, subdomain: sub, status: 'registered',
+          submitted_date: date || today(), decision_date: today(), notes: 'Linked from the nation dashboard', created_by: K().jwtEmail() }, 'return=representation');
+        if (!res.ok) throw new Error((await res.text()).slice(0, 200));
+        var row = (await res.json())[0];
+        S.customers = S.customers.filter(function(x){ return x.id !== row.id; }).concat([row]);
+      } else {
+        var reg = links.filter(function(cu){ return cu.status === 'registered'; });
+        if (links.length){
+          var la = agreement(links[0].agreement_id), lr = la ? reseller(la.reseller_id) : null;
+          if (!await K().dlgConfirm(n.display_name + ' is linked to ' + (lr ? lr.legal_name : 'a reseller') + ' (' + (la ? la.agreement_number : '?') + ').\n\n' + (choice === 'owner' ? 'Record it as a direct Owner sale instead?' : 'Clear the seller?') + (reg.length ? ' Commission stops from now on; statements already issued are unchanged.' : ''), { title: 'Change seller', okText: 'Confirm' })) return;
+          await decline(links, choice === 'owner' ? 'Reassigned to Owner (direct sale)' : 'Seller cleared');
+        }
+      }
+    } catch (e){ K().setMsg('cn-seller-msg', 'Could not save: ' + e.message); return; }
+    var sold = choice === 'owner' ? 'owner' : (choice ? 'reseller' : null), warn = '';
+    if (!S.v4missing){
+      var nr = await K().api('PATCH', '/nations?subdomain=eq.' + encodeURIComponent(sub), { sold_by: sold, sold_date: date }, 'return=minimal');
+      if (nr.ok){ n.sold_by = sold; n.sold_date = date; }
+      else warn = ' (run supabase/platform/reseller_v4.sql to also store the Owner/sale date)';
+    } else if (choice === 'owner') warn = ' Run supabase/platform/reseller_v4.sql to record direct Owner sales.';
+    await K().audit('nation_seller_set', sub, sellerLabel(sellerOf(sub)) || 'not recorded');
+    await window.renderNationSeller(n);
+    K().setMsg('cn-seller-msg', 'Seller saved' + (choice ? ': ' + sellerLabel(sellerOf(sub)) : '') + '.' + warn, warn ? 'err' : 'ok');
+  };
+
+  // "Sold by" line under each nation in the Nations list.
+  window.rsDecorateNations = async function(){
+    var els = document.querySelectorAll('[data-sold-sub]'); if (!els.length) return;
+    if (!(await ensureLoaded())) return;
+    Array.prototype.forEach.call(els, function(el){
+      var sl = sellerOf(el.getAttribute('data-sold-sub'));
+      el.innerHTML = sl ? 'Sold by: ' + esc(sellerLabel(sl)) : '<i>Seller not recorded</i>';
+    });
+  };
+
+  // Sales by seller (Resellers home): nations + money per seller, last 12 months.
+  async function fillSalesReport(){
+    var host = document.getElementById('rs-sales'); if (!host) return;
+    var since = addMonths(monthStart(today()), -11), invs = [];
+    try { invs = await getJson('/nation_invoices?select=subdomain,line_items,subtotal,discount,tax,total,amount_paid,paid_date,status&status=neq.void&paid_date=gte.' + since); }
+    catch (e){ invs = []; }
+    var groups = {}, order = [];
+    function g(key, label){ if (!groups[key]){ groups[key] = { label: label, nations: [], collected: 0, recurring: 0, paid: 0, owing: 0 }; order.push(key); } return groups[key]; }
+    g('owner', ownerLabel());
+    S.resellers.forEach(function(r){ g('r:' + r.id, r.legal_name); });
+    (K().nations() || []).forEach(function(n){
+      var sl = sellerOf(n.subdomain);
+      var grp = !sl ? g('none', 'Seller not recorded') : sl.type === 'owner' ? groups.owner : g('r:' + (sl.reseller ? sl.reseller.id : '?'), sl.reseller ? sl.reseller.legal_name : 'Reseller');
+      grp.nations.push(n.display_name);
+      invs.filter(function(i){ return i.subdomain === n.subdomain; }).forEach(function(i){
+        grp.collected += Number(i.amount_paid) || 0;
+        var rc = invoiceCollected(i); if (rc) grp.recurring += rc.collected;
+      });
+    });
+    S.statements.forEach(function(st){
+      var a = agreement(st.agreement_id); if (!a) return;
+      var grp = groups['r:' + a.reseller_id]; if (!grp) return;
+      if (st.status === 'paid') grp.paid += Number(st.amount_due) || 0; else if (st.status === 'issued') grp.owing += Number(st.amount_due) || 0;
+    });
+    var tot = { n: 0, c: 0, r: 0, p: 0, o: 0 };
+    var rows = order.filter(function(k){ return k !== 'none' || groups.none.nations.length; }).map(function(k){
+      var x = groups[k], isRes = k.indexOf('r:') === 0;
+      tot.n += x.nations.length; tot.c += x.collected; tot.r += x.recurring; tot.p += x.paid; tot.o += x.owing;
+      return '<tr><td><b>' + esc(x.label) + '</b><div style="font-size:11px;color:var(--muted);">' + (x.nations.length ? esc(x.nations.join(', ')) : 'no nations yet') + '</div></td>'
+        + '<td class="num">' + x.nations.length + '</td><td class="num">' + money(x.collected) + '</td><td class="num">' + money(x.recurring) + '</td>'
+        + '<td class="num">' + (isRes ? money(x.paid) : '—') + '</td><td class="num">' + (isRes ? money(x.owing) : '—') + '</td></tr>';
+    }).join('');
+    host.innerHTML = '<h3>Sales by seller</h3>'
+      + '<p class="sub" style="margin:0;">Every nation by who sold it, with invoice payments received in the last 12 months (since ' + esc(fmtMonth(since)) + '). Record the seller on each nation\'s <b>Dashboard &rarr; Overview &rarr; Sold by</b>.</p>'
+      + '<div class="tbl-wrap"><table><thead><tr><th>Seller</th><th class="num">Nations</th><th class="num">Collected</th><th class="num">Recurring</th><th class="num">Commission paid</th><th class="num">Commission owing</th></tr></thead><tbody>' + rows
+      + '<tr><td><b>Total</b></td><td class="num"><b>' + tot.n + '</b></td><td class="num"><b>' + money(tot.c) + '</b></td><td class="num"><b>' + money(tot.r) + '</b></td><td class="num"><b>' + money(tot.p) + '</b></td><td class="num"><b>' + money(tot.o) + '</b></td></tr>'
+      + '</tbody></table></div>'
+      + '<p class="note">"Collected" is all invoice payments; "Recurring" is the subscription and add-on share that earns commission. A payment counts in the month of the invoice\'s last payment date.</p>';
+  }
+
   // ---- Events (data-act; the panel CSP blocks inline handlers) ---------------
   document.addEventListener('click', function(e){
     var el = e.target && e.target.closest ? e.target.closest('[data-act^="rs-"]') : null;
@@ -1464,6 +1613,7 @@
       case 'rs-exp-reject':       window.rsRejectExpense(id); break;
       case 'rs-exp-del':          window.rsDeleteExpense(id); break;
       case 'rs-agr-extend':       window.rsExtendAgreement(id); break;
+      case 'rs-seller-save':      window.rsSaveNationSeller(id); break;
       case 'rs-sign-open':        window.rsOpenSign(id, el.getAttribute('data-who')); break;
       case 'rs-sign-apply':       window.rsApplySign(id, el.getAttribute('data-who')); break;
       case 'rs-sign-clear':       window.rsClearSign(id, el.getAttribute('data-who')); break;
