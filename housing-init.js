@@ -484,16 +484,35 @@ function renderScorecardActions(app) {
     return true;
   });
 
+  // Scoring gate: a scored application cannot be APPROVED until the two staff
+  // scoring screens (Housing Needs step 9 + Tenancy History step 10) have been
+  // completed. Strip the approve/recommend actions and offer a "Complete
+  // scoring" button instead; Return / Decline stay available.
+  var _scoredType = (app.appType === 'new_housing' || app.appType === 'transfer_request');
+  var _scoringIncomplete = _scoredType && !isFileUpdate && !app.scoringStaffCompleted;
+  var _hadApproveAction = false;
+  if (_scoringIncomplete) {
+    var _approveActs = { mgr_approved:1, hm_approved:1, ed_approved:1 };
+    _hadApproveAction = actions.some(function(a){ return _approveActs[a.action]; });
+    actions = actions.filter(function(a){ return !_approveActs[a.action]; });
+  }
+
   var canAssignSecondary = status === 'assigned' && APPROVAL_AUTHORITY.can('assignUnit', role);
 
-  if(!actions.length && !canAssignSecondary) { bar.style.display = 'none'; return; }
+  if(!actions.length && !canAssignSecondary && !_hadApproveAction) { bar.style.display = 'none'; return; }
 
   bar.style.display = 'block';
-  btns.innerHTML = actions.map(function(a) {
+  var _scHtml = '';
+  if (_scoringIncomplete && _hadApproveAction) {
+    _scHtml += '<div style="font-size:13px;color:var(--warn-amber-text);background:var(--warn-amber-bg);border:1px solid var(--warn-amber-border);border-radius:8px;padding:10px 14px;margin-bottom:10px;">⚠️ The <strong>Housing Needs</strong> and <strong>Tenancy History</strong> scoring screens must be completed before this application can be approved.</div>'
+      + '<button class="btn btn-primary" style="font-size:13px;margin-right:8px;margin-bottom:6px;" onclick="if(typeof completeScoringScreens===\'function\')completeScoringScreens(\'' + app.id + '\');">📋 Complete scoring screens →</button>';
+  }
+  _scHtml += actions.map(function(a) {
     return '<button class="btn ' + a.cls + '" style="font-size:13px;" '
       + 'onclick="openApprovalModal(\'' + a.action + '\',\'' + (a.confirmLabel||a.label) + '\',' + (a.needsNotes?'true':'false') + ')">'
       + a.label + '</button>';
   }).join('');
+  btns.innerHTML = _scHtml;
 
   // Secondary unit assign button — available once primary unit is assigned
   if (canAssignSecondary) {

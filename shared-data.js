@@ -9475,6 +9475,9 @@ function showScorecard(app){
     return;
   }
   window._currentScorecardApp=app;
+  // Clear the scoring-completion floating bar if we're arriving back here (saved
+  // or otherwise) so it never lingers over the scorecard.
+  if(typeof window._removeScoringGateBar==='function') window._removeScoringGateBar();
   hideAllViews('scorecardView');
   var _scv=document.getElementById('scorecardView');if(!_scv)return;
   _scv.style.display='flex';
