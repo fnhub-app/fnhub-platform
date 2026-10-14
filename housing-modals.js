@@ -239,6 +239,7 @@ function openUnitEditModal(unitId){
   set('ue_acct_number', u.acctNumber);
   set('ue_hydro_meter', u.hydro_meter_number);
   set('ue_gas_meter',   u.gas_meter_number);
+  set('ue_gas_provider', u.gasProvider);
   ueFunderChanged();
   set('ue_constructionCost', (u.constructionCost != null ? u.constructionCost : (u.construction_cost != null ? u.construction_cost : '')));
   set('ue_rent', (u.monthlyRent != null ? u.monthlyRent : (u.monthly_rent != null ? u.monthly_rent : '')));
@@ -735,6 +736,9 @@ function saveUnitEdit(){
   u.acctNumber=get('ue_acct_number');
   u.hydro_meter_number = get('ue_hydro_meter') || null;
   u.gas_meter_number   = get('ue_gas_meter')   || null;
+  // Gas provider (Union Gas / Enbridge) rides the data jsonb blob via sbSaveUnit
+  // (data: u) and round-trips through sbLoadUnits' row.data spread — no column.
+  u.gasProvider        = get('ue_gas_provider') || null;
   var cmhcRaw = get('ue_cmhc_value');
   u.cmhcValue = (u.funder === 'CMHC_95' && cmhcRaw !== '') ? (Math.round(Number(cmhcRaw) * 100) / 100) : null;
   var ccRaw = get('ue_constructionCost');
