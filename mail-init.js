@@ -215,7 +215,7 @@ async function openMailTriage(id) {
       ? ('<div style="border-top:1px solid var(--border);padding-top:14px;">'
         +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Suggested match</div>'
         +   '<div style="margin-bottom:10px;">' + suggHtml + '</div>'
-        +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">File to unit</div>'
+        +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">File to a unit or applicant</div>'
         +   '<div id="mail_unit_wrap"></div>'
         +   '<div style="margin-top:10px;"><label style="font-size:11px;color:var(--muted);">Note (optional)</label>'
         +     '<textarea id="mail_assign_note" rows="2" class="tic-input" style="width:100%;box-sizing:border-box;" placeholder="Why / what this is…"></textarea></div>'
@@ -224,7 +224,7 @@ async function openMailTriage(id) {
         +   '<button type="button" class="btn btn-ghost" onclick="dismissEmailIntake()">Dismiss</button>'
         +   '<div style="display:flex;gap:8px;">'
         +     '<button type="button" class="btn btn-ghost" onclick="closeMailTriage()">Cancel</button>'
-        +     '<button type="button" class="btn btn-primary" onclick="assignEmailIntake()">File to unit &rarr;</button>'
+        +     '<button type="button" class="btn btn-primary" onclick="assignEmailIntake()">File &rarr;</button>'
         +   '</div>'
         + '</div>')
       : ('<div style="border-top:1px solid var(--border);padding-top:14px;font-size:12.5px;color:var(--muted);">'
@@ -242,18 +242,33 @@ async function openMailTriage(id) {
   modal.style.display = 'flex';
 
   if (isNew) {
+    // Targets you can file an email to: a UNIT (by address, or by its tenant's
+    // name) OR an APPLICANT (by name) who may not be housed yet. Applicant ids
+    // are prefixed 'app:' so assignEmailIntake can route them to the
+    // application's document library instead of a unit's. _mailPickIndex maps a
+    // picker id back to its target so the kind survives the combobox round-trip.
+    window._mailPickIndex = {};
     var unitItems = (window.housingUnits || [])
       .filter(function(u){ return !u.archived; })
       .map(function(u){
         var addr = ((u.num||'') + (u.num&&u.street?' ':'') + (u.street||'')) || u.id;
-        return { id: u.id, label: addr + (u.assignedName ? ' — ' + u.assignedName : '') };
-      })
-      .sort(function(a,b){ return a.label.localeCompare(b.label); });
+        window._mailPickIndex[String(u.id)] = { kind:'unit', unitId:String(u.id), name:(u.assignedName||'') };
+        return { id: String(u.id), label: addr + (u.assignedName ? ' — ' + u.assignedName : '') };
+      });
+    var appItems = (window.applications || [])
+      .filter(function(a){ return a && !a.archived; })
+      .map(function(a){
+        var nm = (((a.fn||'') + ' ' + (a.ln||'')).trim()) || String(a.id);
+        var pid = 'app:' + a.id;
+        window._mailPickIndex[pid] = { kind:'application', appId:String(a.id), name:nm };
+        return { id: pid, label: nm + ' — Applicant' };
+      });
+    var pickItems = unitItems.concat(appItems).sort(function(a,b){ return a.label.localeCompare(b.label); });
     var wrap = document.getElementById('mail_unit_wrap');
     if (wrap && typeof clfnSearchSelect === 'function') {
       window._mailUnitSS = clfnSearchSelect({
-        wrap: wrap, items: unitItems, value: '',
-        placeholder: 'Search address…',
+        wrap: wrap, items: pickItems, value: '',
+        placeholder: 'Search address or name…',
         onChange: function(id2, label){ window._mailUnitSS._selectedId = id2; window._mailUnitSS._selectedLabel = label; }
       });
       // Pre-select the top suggested unit, if any.
@@ -319,57 +334,71 @@ async function assignEmailIntake() {
   var id = window._mailActiveId;
   var row = (window._emailIntake || []).filter(function(m){ return m.id === id; })[0];
   if (!row) return;
-  var unitId = (window._mailUnitSS && window._mailUnitSS._selectedId) || '';
-  if (!unitId) { if (typeof showToast === 'function') showToast('Pick a unit to file this email to.', { type: 'info' }); return; }
+  var sel = (window._mailUnitSS && window._mailUnitSS._selectedId) || '';
+  var tgt = (window._mailPickIndex || {})[sel];
+  if (!sel || !tgt) { if (typeof showToast === 'function') showToast('Pick a unit or applicant to file this email to.', { type: 'info' }); return; }
 
-  var unit = (window.housingUnits || []).filter(function(u){ return String(u.id) === String(unitId); })[0] || {};
-  var tenantName = unit.assignedName || (window._mailUnitSS && window._mailUnitSS._selectedLabel) || '';
+  // Resolve the filing target: a UNIT's document library (entity 'tenant' + unit
+  // id) or an APPLICANT's application library (entity 'application' + app id).
+  // Same one-object/many-entities meta pattern either way (no re-upload) — the
+  // objects already live in Storage under email-intake/<id>/.
+  var entityType, entityId, targetName, matchedUnitId;
+  if (tgt.kind === 'application') {
+    entityType = 'application';
+    entityId = tgt.appId;
+    targetName = tgt.name || (window._mailUnitSS && window._mailUnitSS._selectedLabel) || '';
+    matchedUnitId = null;
+  } else {
+    var unit = (window.housingUnits || []).filter(function(u){ return String(u.id) === String(tgt.unitId); })[0] || {};
+    entityType = 'tenant';
+    entityId = tgt.unitId;
+    targetName = unit.assignedName || tgt.name || (window._mailUnitSS && window._mailUnitSS._selectedLabel) || '';
+    matchedUnitId = String(tgt.unitId);
+  }
+
   var note = (document.getElementById('mail_assign_note') || {}).value || '';
   var actor = (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff';
 
-  if (typeof showToast === 'function') showToast('Filing to unit…', { type: 'info' });
+  if (typeof showToast === 'function') showToast('Filing…', { type: 'info' });
 
   var filed = [];
   try {
-    // File each attachment to the unit's document library (entity 'tenant' +
-    // unit id). The objects already live in Storage under email-intake/<id>/,
-    // so we only record the file-meta rows -- no re-upload (same one-object,
-    // many-entities pattern fileContractPdf uses).
     var atts = Array.isArray(row.attachments) ? row.attachments : [];
     for (var i = 0; i < atts.length; i++) {
       var a = atts[i];
       if (!a || !a.path) continue;
       if (typeof sbSaveFileMeta === 'function') {
-        await sbSaveFileMeta('tenant', String(unitId), a.path, a.name || ('attachment-' + (i+1)), a.size || 0, a.contentType || 'application/octet-stream');
+        await sbSaveFileMeta(entityType, String(entityId), a.path, a.name || ('attachment-' + (i+1)), a.size || 0, a.contentType || 'application/octet-stream');
         filed.push(a.path);
       }
     }
-    // File the email body too, so the message itself is on the unit file.
+    // File the email body too, so the message itself lands on the file.
     if (row.body_path && typeof sbSaveFileMeta === 'function') {
       var isHtml = /\.html$/i.test(row.body_path);
       var bodyName = 'Email - ' + String(row.subject || 'message').slice(0, 80) + (isHtml ? '.html' : '.txt');
-      await sbSaveFileMeta('tenant', String(unitId), row.body_path, bodyName, 0, isHtml ? 'text/html' : 'text/plain');
+      await sbSaveFileMeta(entityType, String(entityId), row.body_path, bodyName, 0, isHtml ? 'text/html' : 'text/plain');
       filed.push(row.body_path);
     }
 
     await _mailPatchRow(id, {
-      status: 'assigned', matched_unit_id: String(unitId), matched_tenant_name: tenantName || null,
+      status: 'assigned', matched_unit_id: matchedUnitId, matched_tenant_name: targetName || null,
       filed_paths: filed, assigned_by: actor, assigned_at: new Date().toISOString(), assign_notes: note || null
     });
 
     if (typeof auditEntry === 'function') {
-      auditEntry(String(unitId), 'email_filed',
+      auditEntry(String(entityId), 'email_filed',
         'Filed forwarded email "' + (row.subject || '(no subject)') + '" forwarded by ' + _mailForwardedBy(row)
+        + ' to ' + (tgt.kind === 'application' ? ('applicant ' + (targetName || entityId)) : ('unit ' + (targetName || entityId)))
         + (filed.length ? ' (' + filed.length + ' file(s))' : '') + (note ? ' — ' + note : ''), actor);
     }
 
     // Reflect locally + refresh.
-    row.status = 'assigned'; row.matched_unit_id = String(unitId); row.matched_tenant_name = tenantName; row.filed_paths = filed;
-    if (typeof showToast === 'function') showToast('Filed to ' + (tenantName || unit.num + ' ' + unit.street || 'unit') + ' — see the unit\'s Documents.', { type: 'info' });
+    row.status = 'assigned'; row.matched_unit_id = matchedUnitId; row.matched_tenant_name = targetName; row.filed_paths = filed;
+    if (typeof showToast === 'function') showToast('Filed to ' + (targetName || entityId) + ' — see ' + (tgt.kind === 'application' ? 'the application' : 'the unit') + '\'s Documents.', { type: 'info' });
     closeMailTriage();
     renderEmailIntakeList();
     // Keep the unit doc library fresh if it's mounted anywhere on this page.
-    if (typeof udpRenderFilePreviews === 'function') { try { udpRenderFilePreviews(String(unitId)); } catch(e) {} }
+    if (tgt.kind === 'unit' && typeof udpRenderFilePreviews === 'function') { try { udpRenderFilePreviews(String(entityId)); } catch(e) {} }
   } catch(e) {
     console.warn('[mail] assign failed:', e);
     if (typeof showToast === 'function') showToast('Could not file the email: ' + ((e && e.message) || e), { type: 'error' });
