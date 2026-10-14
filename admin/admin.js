@@ -1514,14 +1514,8 @@
     '-Counterparts. This Agreement may be signed in counterparts, including electronically.',
     '##17. Execution',
     'IN WITNESS WHEREOF, the parties have executed this Agreement by their duly authorized representatives as of the Effective Date. Each signatory confirms that they are authorized to bind the party for which they sign. Where the Nation\'s governance processes require it, the Nation\'s signature may be supported by a Band Council Resolution referenced below.',
-    '###FOR THE NATION: {{NATION}}',
-    'Signature: ______________________________     Date: ____________________',
-    'Name: ______________________________     Title: ____________________',
-    'Band Council Resolution No. (if applicable): ____________________',
-    '###FOR THE PROVIDER: {{PROVIDER_SIGN_HEAD}}',
-    'Signature: ______________________________     Date: ____________________',
-    'Name: {{PROVIDER_SIGNATORY}}     Title: {{PROVIDER_TITLE}}',
-    '{{PROVIDER_CONTACT}}',
+    '@SIG|nation',
+    '@SIG|provider',
     '##Schedule A - Order Form',
     'Select one tier and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
     '###Subscription tiers',
@@ -1592,59 +1586,211 @@
     return mo[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
   }
 
-  // Render a marker-formatted template (see AGREEMENT_TPL) to a jsPDF doc.
-  // breakBefore(heading) -> true starts that ## heading on a new page.
-  function renderMarkerPdf(tpl, footerLabel, breakBefore){
-    var jsPDF = window.jspdf.jsPDF;
-    var doc = new jsPDF({ unit: 'pt', format: 'letter' });
-    var M = 56, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
-    var maxW = W - M * 2, y = M;
-    function ensure(h){ if (y + h > H - M - 20) { doc.addPage(); y = M; } }
-    function block(text, o){
-      o = o || {};
-      doc.setFont('helvetica', o.style || 'normal');
-      doc.setFontSize(o.size || 10);
-      if (o.color) doc.setTextColor(o.color[0], o.color[1], o.color[2]); else doc.setTextColor(20, 20, 20);
-      var indent = o.indent || 0;
-      var lines = doc.splitTextToSize(text, maxW - indent);
-      var lh = (o.size || 10) * 1.32;
-      for (var i = 0; i < lines.length; i++){
-        ensure(lh);
-        if (o.align === 'center') doc.text(lines[i], W / 2, y, { align: 'center' });
-        else doc.text(lines[i], M + indent, y);
-        y += lh;
+  // ---- Contract PDF renderer ---------------------------------------------------
+  // Lays out a marker-formatted contract (AGREEMENT_TPL here; the reseller
+  // agreement in reseller.js) in the same house style as the housing app's
+  // contracts (notifications.js _makePdfDoc + _renderBlocksToPdf): A4, a header
+  // band on every page (logo, party name + address left; document title +
+  // reference right) over an accent rule, numbered clauses with a hanging
+  // number gutter and run-in bold clause titles, proper signature blocks, and a
+  // "Page X of Y" footer.
+  //
+  // Markers:  #title  %subtitle  >notice  ##section  ###sub-heading  -bullet
+  //           (blank)=gap  @SIG|key  -> signature block from o.sigs[key]
+  // Inline:   "1.2 Title. text" gets a number gutter + bold title;
+  //           '-"Term" means' bolds the defined term; "[ ]" draws a checkbox.
+  // o: { headerTitle, headerSubtitle, partyName, partyLine, partyContact, logo
+  //      (PNG data URL), footerLeft, draft (DRAFT watermark), breakBefore(h),
+  //      sigs: { key: { label, party, name, title, date, image, extra[] } } }
+  function renderMarkerPdf(tpl, o){
+    o = o || {};
+    var doc = new window.jspdf.jsPDF({ unit: 'mm', format: 'a4', compress: true });
+    var W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight();
+    var mL = 18, mR = 18, mT = 31, mB = 20, cW = W - mL - mR, y = mT;
+    var INK = [24, 24, 22], BODY = [40, 40, 38], MUTED = [118, 118, 110], ACCENT = [248, 228, 26];
+    var SZ = 9.5, LH = 4.6, BOX = '\u0001';
+    function font(style, size, col){ doc.setFont('helvetica', style || 'normal'); doc.setFontSize(size || SZ); var cc = col || BODY; doc.setTextColor(cc[0], cc[1], cc[2]); }
+    function header(){
+      if (o.draft){ // faint diagonal watermark, drawn first so text sits on top
+        doc.setFont('helvetica', 'bold'); doc.setFontSize(96); doc.setTextColor(241, 240, 234);
+        doc.text('DRAFT', W / 2 - 52, H / 2 + 40, { angle: 45 });
       }
-      y += (o.after == null ? 6 : o.after);
+      var tx = mL;
+      if (o.logo){ try { doc.addImage(o.logo, 'PNG', mL, 8, 12, 12); tx = mL + 15; } catch (e){} }
+      font('bold', 8.5, INK); doc.text(String(o.partyName || '').toUpperCase(), tx, 12);
+      font('normal', 7, MUTED);
+      if (o.partyLine) doc.text(String(o.partyLine), tx, 16);
+      if (o.partyContact) doc.text(String(o.partyContact), tx, 19.5);
+      font('bold', 9, INK); doc.text(String(o.headerTitle || ''), W - mR, 12, { align: 'right' });
+      font('normal', 7, MUTED); if (o.headerSubtitle) doc.text(String(o.headerSubtitle), W - mR, 16, { align: 'right' });
+      doc.setDrawColor(ACCENT[0], ACCENT[1], ACCENT[2]); doc.setLineWidth(0.7); doc.line(mL, 24, W - mR, 24);
     }
-    tpl.split('\n').forEach(function(raw){
-      var line = raw;
-      if (line === '') { y += 4; return; }
-      if (line.charAt(0) === '>') { // disclaimer
-        y += 2; block(line.slice(1), { style: 'italic', size: 9, color: [140, 90, 0], after: 10 });
-        ensure(1); doc.setDrawColor(220); doc.line(M, y - 4, W - M, y - 4); y += 6; return;
+    function newPage(){ doc.addPage(); header(); y = mT; }
+    // Width WITHOUT kerning: jsPDF's getTextWidth applies kerning pairs ("Te",
+    // "y,") but text() draws unkerned glyphs, so kerned widths make words
+    // overrun the following space ("Territory.The").
+    function tw(str){ return doc.getStringUnitWidth(str, { kerning: {} }) * doc.internal.getFontSize() / doc.internal.scaleFactor; }
+    function ensure(h){ if (y + h > H - mB) newPage(); }
+
+    // Rich-text wrap: segments [{t, b}] -> lines of tokens with widths.
+    function wrap(segs, width, size){
+      var lines = [{ toks: [], w: 0 }];
+      segs.forEach(function(sg){
+        String(sg.t).replace(/\[ \]/g, BOX).split(/(\s+)/).forEach(function(p){
+          if (!p) return;
+          var sp = /^\s+$/.test(p);
+          doc.setFont('helvetica', sg.b ? 'bold' : 'normal'); doc.setFontSize(size);
+          var w = p === BOX ? 3.6 : tw(sp ? ' ' : p);
+          var cur = lines[lines.length - 1];
+          if (sp){ if (cur.toks.length) { cur.toks.push({ sp: true, w: w }); cur.w += w; } return; }
+          if (cur.w + w > width && cur.toks.length){
+            while (cur.toks.length && cur.toks[cur.toks.length - 1].sp){ cur.w -= cur.toks.pop().w; }
+            cur = { toks: [], w: 0 }; lines.push(cur);
+          }
+          cur.toks.push({ t: p, b: sg.b, w: w }); cur.w += w;
+        });
+      });
+      var last = lines[lines.length - 1];
+      while (last.toks.length && last.toks[last.toks.length - 1].sp){ last.w -= last.toks.pop().w; }
+      return lines;
+    }
+    // Draw wrapped lines at x; justify all but the last line (book-style body).
+    function draw(lines, x, width, size, col, justify){
+      lines.forEach(function(ln, i){
+        ensure(LH);
+        var spaces = ln.toks.filter(function(t){ return t.sp; }).length;
+        var extra = (justify && i < lines.length - 1 && spaces) ? (width - ln.w) / spaces : 0;
+        var cx = x, by = y + 3.4;
+        ln.toks.forEach(function(tk){
+          if (tk.sp){ cx += tk.w + extra; return; }
+          if (tk.t === BOX){ doc.setDrawColor(90); doc.setLineWidth(0.25); doc.rect(cx + 0.2, by - 2.7, 2.9, 2.9); cx += tk.w; return; }
+          font(tk.b ? 'bold' : 'normal', size, col); doc.text(tk.t, cx, by); cx += tk.w;
+        });
+        y += LH;
+      });
+    }
+    function para(segs, o2){
+      o2 = o2 || {};
+      var x = mL + (o2.indent || 0), w = cW - (o2.indent || 0);
+      var lines = wrap(segs, w, o2.size || SZ);
+      if (o2.keep) ensure(Math.min(lines.length, 3) * LH);
+      if (o2.gutter){ ensure(LH); font(o2.gutterBold ? 'bold' : 'normal', o2.size || SZ, o2.gutterBold ? INK : BODY); doc.text(o2.gutter, mL + (o2.gutterX || 0), y + 3.4); }
+      draw(lines, x, w, o2.size || SZ, o2.col, o2.justify !== false);
+      y += o2.after == null ? 1.8 : o2.after;
+    }
+    // "3.1 Title. rest" -> [{bold title}, {rest}]; plain otherwise.
+    function runIn(text){
+      var m = /^([A-Z][^.,;:]{1,60}\.)\s+(.*)$/.exec(text);
+      if (m && m[1].split(/\s+/).length <= 7) return [{ t: m[1] + ' ', b: true }, { t: m[2] }];
+      return [{ t: text }];
+    }
+    function sigBlock(s){
+      s = s || {};
+      ensure(48); y += 2;
+      font('bold', 7.5, MUTED); doc.text(String(s.label || '').toUpperCase(), mL, y + 3);
+      font('bold', 10.5, INK); doc.text(doc.splitTextToSize(String(s.party || ''), cW)[0] || '', mL, y + 8.5);
+      y += 12;
+      var sigW = 92, colX = mL + sigW + 10, colW = W - mR - colX;
+      // Signature (drawn image, typed name, or a blank line to sign on paper)
+      var img = s.image || '';
+      if (img.indexOf('data:image/') === 0){ try { doc.addImage(img, 'PNG', mL + 2, y, 62, 17); } catch (e){} }
+      else if (img.indexOf('typed:') === 0){ doc.setFont('times', 'bolditalic'); doc.setFontSize(22); doc.setTextColor(20, 30, 70); doc.text(img.slice(6), mL + 3, y + 13); }
+      doc.setDrawColor(150); doc.setLineWidth(0.3); doc.line(mL, y + 18, mL + sigW, y + 18);
+      font('normal', 7, MUTED); doc.text('Signature' + (img.indexOf('data:image/') === 0 || img.indexOf('typed:') === 0 ? '  (signed electronically)' : ''), mL, y + 21.5);
+      font('normal', 9.5, INK); if (s.date) doc.text(String(s.date), colX, y + 16.5);
+      doc.line(colX, y + 18, colX + colW, y + 18); font('normal', 7, MUTED); doc.text('Date', colX, y + 21.5);
+      y += 27;
+      font('normal', 9.5, INK); if (s.name) doc.text(String(s.name), mL, y + 4);
+      if (s.title) doc.text(doc.splitTextToSize(String(s.title), colW)[0], colX, y + 4);
+      doc.line(mL, y + 5.5, mL + sigW, y + 5.5); doc.line(colX, y + 5.5, colX + colW, y + 5.5);
+      font('normal', 7, MUTED); doc.text('Name', mL, y + 9); doc.text('Title', colX, y + 9);
+      y += 13;
+      (s.extra || []).forEach(function(line){ ensure(9); font('normal', 9, BODY); doc.text(String(line), mL, y + 4); y += 7; });
+      y += 4;
+    }
+
+    header();
+    var prevTable = false;
+    String(tpl).split('\n').forEach(function(line){
+      if (prevTable && line.charAt(0) !== '|') y += 3;    // breathing room under a table
+      prevTable = line.charAt(0) === '|';
+      if (line === '') { y += 2.5; return; }
+      if (line.indexOf('@SIG|') === 0) { sigBlock((o.sigs || {})[line.slice(5)]); return; }
+      if (line.charAt(0) === '>') {                         // notice box
+        font('italic', 8.5, [110, 82, 0]);
+        var nl = doc.splitTextToSize(line.slice(1), cW - 10);
+        var bh = nl.length * 4 + 5; ensure(bh + 4);
+        doc.setFillColor(255, 251, 222); doc.rect(mL, y, cW, bh, 'F');
+        doc.setFillColor(ACCENT[0], ACCENT[1], ACCENT[2]); doc.rect(mL, y, 1.4, bh, 'F');
+        doc.text(nl, mL + 5, y + 4.6); y += bh + 5; return;
       }
-      if (line.slice(0, 1) === '#' && line.slice(0, 2) !== '##') { block(line.slice(1), { style: 'bold', size: 16, align: 'center', after: 3 }); return; }
-      if (line.charAt(0) === '%') { block(line.slice(1), { size: 11, align: 'center', color: [90, 90, 90], after: 12 }); return; }
-      if (line.slice(0, 3) === '###') { ensure(30); block(line.slice(3), { style: 'bold', size: 10.5, after: 3 }); return; }
-      if (line.slice(0, 2) === '##') {
-        var htext = line.slice(2);
-        if (breakBefore && breakBefore(htext)) { doc.addPage(); y = M; }
-        else { ensure(40); y += 6; }
-        block(htext, { style: 'bold', size: 12.5, after: 5 });
-        return;
+      if (line.charAt(0) === '#' && line.charAt(1) !== '#') { // document title
+        ensure(16); y += 2; font('bold', 17, INK);
+        doc.splitTextToSize(line.slice(1), cW).forEach(function(t){ doc.text(t, W / 2, y + 6, { align: 'center' }); y += 7.5; });
+        y += 1; return;
       }
-      if (line.charAt(0) === '-') { block('•  ' + line.slice(1), { size: 10, indent: 14, after: 5 }); return; }
-      block(line, { size: 10 });
+      if (line.charAt(0) === '%') {                         // subtitle under the title
+        font('normal', 10, MUTED); doc.text(line.slice(1), W / 2, y + 3.5, { align: 'center' });
+        y += 7; doc.setDrawColor(215); doc.setLineWidth(0.2); doc.line(W / 2 - 30, y, W / 2 + 30, y); y += 7; return;
+      }
+      if (line.slice(0, 3) === '###') {                     // sub-heading
+        var h3 = line.slice(3), m3 = /^(\d+(?:\.\d+)+)\s+(.*)$/.exec(h3);
+        ensure(13); y += 1.5; font('bold', 10, INK);
+        if (m3){ doc.text(m3[1], mL, y + 3.6); doc.text(doc.splitTextToSize(m3[2], cW - 11), mL + 11, y + 3.6); }
+        else doc.text(doc.splitTextToSize(h3, cW), mL, y + 3.6);
+        y += 6.4; return;
+      }
+      if (line.slice(0, 2) === '##') {                      // section heading
+        var h2 = line.slice(2);
+        if (o.breakBefore && o.breakBefore(h2) && y > mT + 1) newPage(); else { ensure(22); y += 4; }
+        var m2 = /^(\d+)\.\s+(.*)$/.exec(h2);
+        font('bold', 12, INK);
+        if (m2){ doc.text(m2[1] + '.', mL, y + 4.4); doc.text(m2[2].toUpperCase(), mL + 11, y + 4.4); }
+        else doc.text(h2.toUpperCase(), mL, y + 4.4);
+        y += 6.2; doc.setDrawColor(222); doc.setLineWidth(0.25); doc.line(mL, y, W - mR, y); y += 3.6; return;
+      }
+      if (line.charAt(0) === '-') {                         // bullet / numbered item / checkbox
+        var b = line.slice(1), mb = /^(\d+(?:\.\d+)+)\s+(.*)$/.exec(b), md = /^("[^"]+")(.*)$/.exec(b);
+        if (/^\[ \]/.test(b)) { para([{ t: b }], { indent: 6, after: 1.4, justify: false }); return; }
+        if (mb) { para(runIn(mb[2]), { indent: 11, gutter: mb[1], gutterX: 0, after: 1.4 }); return; }
+        if (md) { para([{ t: md[1], b: true }, { t: md[2] }], { indent: 6, gutter: '•', gutterX: 1.5, after: 1.4 }); return; }
+        para([{ t: b }], { indent: 6, gutter: '•', gutterX: 1.5, after: 1.4 }); return;
+      }
+      if (line.charAt(0) === '|') {                         // two-column table row: |label|amount ('*' = bold)
+        var cells = line.slice(1).split('|'), lab = cells[0] || '', val = cells[1] || '';
+        var bold = lab.charAt(0) === '*'; lab = lab.replace(/^\*/, ''); val = val.replace(/^\*/, '');
+        font(bold ? 'bold' : 'normal', 9.5, bold ? INK : BODY);
+        var ll = doc.splitTextToSize(lab, cW - 45), rh = ll.length * LH + 2.2; ensure(rh);
+        if (bold && /amount/i.test(val)) { doc.setFillColor(245, 245, 240); doc.rect(mL, y, cW, rh, 'F'); }
+        doc.text(ll, mL + 2, y + 3.6); doc.text(val, W - mR - 2, y + 3.6, { align: 'right' });
+        y += rh; doc.setDrawColor(228); doc.setLineWidth(0.2); doc.line(mL, y, W - mR, y); return;
+      }
+      var mc = /^(\d+(?:\.\d+)+)\s+(.*)$/.exec(line);       // numbered clause with run-in title
+      if (mc) { para(runIn(mc[2]), { indent: 11, gutter: mc[1], keep: true }); return; }
+      var mdp = /^("[^"]+")(\s+(?:means|has|includes)\b.*)$/.exec(line); // definition paragraph: bold the term
+      if (mdp) { para([{ t: mdp[1], b: true }, { t: mdp[2] }], {}); return; }
+      para([{ t: line }], {});
     });
-    // Footer: brand + page x of y.
+
     var pages = doc.internal.getNumberOfPages();
     for (var p = 1; p <= pages; p++){
       doc.setPage(p);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
-      doc.text(footerLabel, M, H - 26);
-      doc.text('Page ' + p + ' of ' + pages, W - M, H - 26, { align: 'right' });
+      doc.setDrawColor(205); doc.setLineWidth(0.2); doc.line(mL, H - 13, W - mR, H - 13);
+      font('normal', 7.5, [140, 140, 134]);
+      if (o.footerLeft) doc.text(String(o.footerLeft), mL, H - 8);
+      doc.text('Page ' + p + ' of ' + pages, W - mR, H - 8, { align: 'right' });
     }
     return doc;
+  }
+  // The FN Hub app icon as a PNG data URL for contract headers (cached).
+  var _logoData = null;
+  async function loadLogoDataUrl(){
+    if (_logoData !== null) return _logoData;
+    try {
+      var blob = await (await fetch('icon-192.png')).blob();
+      _logoData = await new Promise(function(res){ var fr = new FileReader(); fr.onload = function(){ res(String(fr.result || '')); }; fr.onerror = function(){ res(''); }; fr.readAsDataURL(blob); });
+    } catch (e){ _logoData = ''; }
+    return _logoData;
   }
 
   // ---- Owner (software owner / "Provider") ---------------------------------
@@ -1691,15 +1837,12 @@
     } catch (e){ return null; }
   }
 
-  function buildAgreementPdf(nationName, address, owner){
+  function buildAgreementPdf(nationName, address, owner, logo){
     // Provider details come from the Owner record; the fallbacks keep the
     // agreement generating if reseller.sql hasn't been run yet.
     var o = owner || { legal_name: 'Kevin Proctor', operating_as: PROVIDER.name, signatory_name: 'Kevin Proctor', signatory_title: 'Founder', email: PROVIDER.email };
     var tpl = AGREEMENT_TPL
       .replace(/\{\{PROVIDER_PARTY\}\}/g, owner ? partyRecital(o) : partyName(o))
-      .replace(/\{\{PROVIDER_SIGN_HEAD\}\}/g, partyName(o).replace(/"/g, ''))
-      .replace(/\{\{PROVIDER_SIGNATORY\}\}/g, o.signatory_name || o.legal_name || '____________________')
-      .replace(/\{\{PROVIDER_TITLE\}\}/g, (o.signatory_title || '____________________') + (o.operating_as ? ', ' + o.operating_as : ''))
       .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
       .replace(/\{\{FEE_SMALL\}\}/g, feeTierText('Small'))
       .replace(/\{\{FEE_MID\}\}/g, feeTierText('Mid-size'))
@@ -1709,12 +1852,22 @@
       .replace(/\{\{FEE_TRAVEL_HR\}\}/g, feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')))
       .replace(/\{\{NATION\}\}/g, nationName)
       .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
-      .replace(/\{\{DATE\}\}/g, _fmtDateLong())
-      .replace(/\{\{PROVIDER_CONTACT\}\}/g, PROVIDER.name + ' - ' + PROVIDER.addr1 + ', ' + PROVIDER.addr2 + '   ·   ' + PROVIDER.phone + '   ·   ' + PROVIDER.email);
-    return renderMarkerPdf(tpl, 'Home Land Homes - Software Subscription Agreement', function(h){
-      return h.indexOf('Schedule ') === 0 || h.indexOf('17. Execution') === 0;
+      .replace(/\{\{DATE\}\}/g, _fmtDateLong());
+    var prov = partyName(o).replace(/"/g, '');
+    return renderMarkerPdf(tpl, {
+      headerTitle: 'Software Subscription Agreement', headerSubtitle: nationName,
+      partyName: o.operating_as || o.legal_name, partyLine: owner ? fmtPartyAddress(o) : (PROVIDER.addr1 + ', ' + PROVIDER.addr2),
+      partyContact: [o.phone || PROVIDER.phone, o.email || PROVIDER.email].filter(Boolean).join('  |  '),
+      logo: logo, footerLeft: 'Software Subscription Agreement - ' + nationName + ' - Confidential',
+      breakBefore: function(h){ return h.indexOf('Schedule ') === 0 || h.indexOf('17. Execution') === 0; },
+      sigs: {
+        nation:   { label: 'For the Nation', party: nationName, extra: ['Band Council Resolution No. (if applicable): ____________________'] },
+        provider: { label: 'For the Provider', party: prov, name: o.signatory_name || o.legal_name || '',
+                    title: (o.signatory_title || '') + (o.operating_as && o.signatory_title ? ', ' + o.operating_as : '') }
+      }
     });
   }
+
 
   // Persist the nation's mailing/office address to the registry row. The field
   // lives on the Agreement tab but had no save path before -- editing it (or
@@ -1756,7 +1909,7 @@
             if (pr.ok) n.office_address = addr;
           } catch (_e){ /* keep generating even if the save fails */ }
         }
-        var doc = buildAgreementPdf(name, addr, await loadOwner());
+        var doc = buildAgreementPdf(name, addr, await loadOwner(), await loadLogoDataUrl());
         var safe = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
         var fname = 'Subscription-Agreement-' + safe + '.pdf';
         var blob = doc.output('blob');
@@ -2596,7 +2749,7 @@
   // internals stay closure-private; this is the deliberate, minimal surface.
   window._adminKit = {
     api: api, esc: esc, audit: audit, money: _money, setMsg: setMsg,
-    setMsgWithView: setMsgWithView, ensureJsPdf: ensureJsPdf, renderMarkerPdf: renderMarkerPdf,
+    setMsgWithView: setMsgWithView, ensureJsPdf: ensureJsPdf, renderMarkerPdf: renderMarkerPdf, loadLogoDataUrl: loadLogoDataUrl,
     dlgAlert: dlgAlert, dlgConfirm: dlgConfirm, dlgPrompt: dlgPrompt, dlgForm: dlgForm,
     estCost: estCost, jwtEmail: jwtEmail, nations: function(){ return _nations; },
     ENTITY_TYPES: ENTITY_TYPES, PROVINCES: PROVINCES, provinceName: provinceName,
