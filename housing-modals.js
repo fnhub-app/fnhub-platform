@@ -640,20 +640,51 @@ function ueUpdateBudgetRouting() {
   var hmBlock   = document.getElementById('ue_sig_hm_block');
   var edBlock   = document.getElementById('ue_sig_ed_block');
 
-  if(!totalCost) {
+  // Existing approval state on the unit. A unit can be "Awaiting ED Decision"
+  // in the worklist because the HM DEFERRED to the ED, or because an ED
+  // signature was initiated — independent of the current SOW cost. Route on
+  // that state too: otherwise an under-limit deferral (or a request since
+  // completed/cancelled, leaving a $0 total) hides the ED block entirely, so
+  // the ED opens the card from the worklist and finds no way to record their
+  // decision. Mirrors _wlCollectUnitApprovals in shared-data.js.
+  var _u = (typeof getAllUnits === 'function')
+    ? (getAllUnits().find(function(x){ return x && x.id === uid; }) || {})
+    : {};
+  var hasHmState = !!_u.unitHmSig;
+  var hmDeferred = !!(_u.unitHmSig && _u.unitHmSig.decision === 'deferred');
+  var hasEdState = !!_u.unitEdSig;
+  var edPending  = hmDeferred || hasEdState;
+
+  var overBudget = totalCost > limit;
+  var showEd = overBudget || edPending;
+  var showHm = overBudget || hasHmState || showEd || totalCost > 0;
+
+  if(!totalCost && !showHm && !showEd) {
     if(indicator) indicator.style.display = 'none';
     if(hmBlock) hmBlock.style.display = 'none';
     if(edBlock) edBlock.style.display = 'none';
     return;
   }
 
-  var overBudget = totalCost > limit;
   var fmtCost  = formatCurrency(totalCost);
   var fmtLimit = formatCurrency(limit);
 
   if(indicator) {
     indicator.style.display = 'block';
-    if(overBudget) {
+    if(!totalCost && edPending) {
+      // No active-request cost to route on, but an ED decision is still
+      // outstanding (HM deferred, or ED sign-off pending on a request that
+      // has since closed). Show a neutral prompt instead of the cost banner.
+      indicator.style.background = 'var(--info-blue-bg)';
+      indicator.style.border = '1.5px solid var(--info-blue)';
+      indicator.style.color  = 'var(--info-blue)';
+      indicator.innerHTML = '<div class="flex-g8">'
+        +'<span style="font-size:16px;">📝</span>'
+        +'<div><strong>Executive Director Decision Outstanding</strong><br>'
+        +(hmDeferred ? 'The Housing Manager deferred this unit to the Executive Director.' : 'An Executive Director sign-off is pending on this unit.')+'<br>'
+        +'<span style="font-size:11px;">Record the decision in the Executive Director block below.</span></div>'
+        +'</div>';
+    } else if(overBudget) {
       indicator.style.background = 'var(--warn-amber-bg)';
       indicator.style.border = '1.5px solid var(--warn-amber-border)';
       indicator.style.color  = '#7a5c00';
@@ -676,9 +707,11 @@ function ueUpdateBudgetRouting() {
     }
   }
 
-  // Show appropriate approval block
-  if(hmBlock) hmBlock.style.display = 'block';
-  if(edBlock) edBlock.style.display = overBudget ? 'block' : 'none';
+  // Show appropriate approval block. The ED block shows whenever the unit is
+  // awaiting an ED decision (over budget OR HM-deferred OR ED sign-off
+  // pending), not only when the current request is over budget.
+  if(hmBlock) hmBlock.style.display = showHm ? 'block' : 'none';
+  if(edBlock) edBlock.style.display = showEd ? 'block' : 'none';
 }
 
 // ── Unit edit sig pads removed (no signature canvases in unit edit form) ──

@@ -490,6 +490,23 @@ function _idleLogout() {
   }
 }
 
+// Before bouncing an unauthenticated user to the login screen, remember a deep
+// link (e.g. the button in a Maintenance Request / RFQ / application email ->
+// a specific record) so auth-login.js (_loginDest) returns them there after
+// sign-in instead of the dashboard. Only a relative, same-origin app URL
+// carrying a known entity param is stored; _loginDest re-validates + expires it.
+window._stashLoginReturn = function(){
+  try {
+    var qs = window.location.search || '';
+    if (/[?&](sow|unit|rfq|openApp|openScorecard)=/.test(qs)) {
+      localStorage.setItem('clfn_login_return', JSON.stringify({
+        u: (window.location.pathname.replace(/^\//, '') + qs).slice(0, 500),
+        t: Date.now()
+      }));
+    }
+  } catch(e) {}
+};
+
 // Session/token-expiry teardown. When an authenticated Supabase call comes back
 // 401 and the token can't be refreshed, the session is dead and the user is
 // otherwise stranded on a page making failing calls. Mirror _idleLogout exactly
