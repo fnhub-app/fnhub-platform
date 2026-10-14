@@ -291,7 +291,7 @@ function openUnitEditModal(unitId){
   var atype=document.getElementById('ue_assignment_type'); if(atype) atype.value=u.assignmentType||'';
   var title=document.getElementById('ue_modal_title'); if(title) title.textContent=u.num+' '+u.street;
   // Hero subtitle + info strip (mirrors the TIC hero/strip layout)
-  var heroSub = [_roomBedLabel(u), (u.bathrooms&&u.bathrooms!=='nan')?u.bathrooms+' bath':'', _fmtUnitType(u.type)||''].filter(Boolean).join(' · ');
+  var heroSub = [_roomBedLabel(u), (u.bathrooms&&u.bathrooms!=='nan')?u.bathrooms+' bath':'', _fmtUnitType(u.type)||'', u.lotNumber?('Lot '+u.lotNumber):''].filter(Boolean).join(' · ');
   setText('ue_hero_sub', heroSub);
   var _ueStatusLabels = { vacant:'Vacant', occupied:'Occupied', reserved:'Reserved', condemned:'Condemned' };
   setText('ue_strip_status',    _ueStatusLabels[u.status] || (u.status || '—'));

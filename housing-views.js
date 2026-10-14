@@ -84,6 +84,14 @@ function _assignmentTypeBadge(u) {
   return '';
 }
 
+// Neutral "Lot <n>" indicator shown next to the address on Inventory (table +
+// cards). Display-only — the lot number lives on u.lotNumber (data jsonb blob)
+// and never touches the num/street address used for unit IDs or matching.
+function _lotBadge(u) {
+  if (!u || u.lotNumber == null || u.lotNumber === '') return '';
+  return '<span style="font-size:9px;font-weight:600;background:var(--bg);color:var(--muted);border:1px solid var(--border);padding:1px 5px;border-radius:6px;">Lot ' + escapeHtml(String(u.lotNumber)) + '</span>';
+}
+
 // ── List / Cards view toggle (Inventory, Match) ─────────────────────────────
 // Mirrors the worklist's List/Cards pattern (clfn_worklist_view in
 // shared-data.js renderWorklist) — persisted per device, defaults to List.
@@ -399,6 +407,7 @@ function renderInventoryView(){
       +'<td style="padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="openUnitEditModal(\''+uid+'\')">'+'<span style="text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:2px;">'+addr+'</span>'
       +(u.isElders?' <span style="font-size:9px;background:var(--warn-amber-bg);color:var(--warn-amber);border:1px solid var(--warn-amber-border);padding:1px 5px;border-radius:6px;">ELDERS UNIT</span>':'')
       +' '+_assignmentTypeBadge(u)
+      +(_lotBadge(u)?(' '+_lotBadge(u)):'')
       +'</td>'
       +'<td style="padding:9px 10px;text-align:center;font-size:13px;font-weight:700;color:var(--text);">'+u.bedrooms+'</td>'
       +'<td style="padding:9px 10px;text-align:center;font-size:12px;color:var(--muted);">'+bath+'</td>'
@@ -450,6 +459,7 @@ function renderInventoryView(){
     var badges = [];
     if(u.isElders) badges.push('<span style="font-size:9px;background:var(--warn-amber-bg);color:var(--warn-amber);border:1px solid var(--warn-amber-border);padding:1px 5px;border-radius:6px;">ELDERS UNIT</span>');
     if(_assignmentTypeBadge(u)) badges.push(_assignmentTypeBadge(u));
+    if(_lotBadge(u)) badges.push(_lotBadge(u));
     if(u.under_renovation) badges.push('<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:var(--warn-amber-bg);color:var(--warn-amber-text);">🔨 Reno</span>');
     var r = (u.monthlyRent != null && u.monthlyRent !== '') ? Number(u.monthlyRent) : null;
     var metas = [
