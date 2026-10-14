@@ -818,6 +818,18 @@ function openRenoBudget(unitId) {
   } catch(e) {}
   
   if (!token) {
+    // Preserve a Maintenance Request deep link (e.g. the Approve/Decline/Notes
+    // buttons in the notification email) so the user returns to THIS request
+    // after signing in, instead of landing on the dashboard. Consumed by
+    // auth-login.js. Only the relative path+query is stored (same-origin).
+    try {
+      if (/[?&]sow=/.test(window.location.search)) {
+        localStorage.setItem('clfn_login_return', JSON.stringify({
+          u: (window.location.pathname.replace(/^\//, '') + window.location.search).slice(0, 500),
+          t: Date.now()
+        }));
+      }
+    } catch(e) {}
     window.location.href = 'index.html';
     return;
   }
