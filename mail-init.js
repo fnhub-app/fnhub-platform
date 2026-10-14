@@ -293,13 +293,29 @@ function _mailPickSuggestion(unitId, label) {
 }
 window._mailPickSuggestion = _mailPickSuggestion;
 
-async function _mailViewFile(path) {
-  if (!path) return;
+// Open a stored object (email body or attachment) in a new tab via a 1-hour
+// signed URL. The signing fetch is async, and iOS Safari blocks a popup opened
+// after an await (the user gesture has lapsed) — so the tab must be opened on
+// the click itself. Callers that first await something (e.g. the attachment
+// confirm) open the tab synchronously and pass it in as `win`; we only navigate
+// it once the URL resolves. Called directly (no `win`), we open it here, still
+// inside the click handler.
+async function _mailViewFile(path, win) {
+  if (!path) { if (win) { try { win.close(); } catch(e) {} } return; }
+  var w = win || window.open('', '_blank');
   try {
     var url = (typeof sbGetSignedUrl === 'function') ? await sbGetSignedUrl(path) : '';
-    if (url) window.open(url, '_blank');
-    else if (typeof showToast === 'function') showToast('Could not open the file.', { type: 'error' });
-  } catch(e) { if (typeof showToast === 'function') showToast('Could not open the file.', { type: 'error' }); }
+    if (url) {
+      if (w) { try { w.location = url; } catch(e) { window.open(url, '_blank'); } }
+      else window.open(url, '_blank');
+    } else {
+      if (w) { try { w.close(); } catch(e) {} }
+      if (typeof showToast === 'function') showToast('Could not open the file.', { type: 'error' });
+    }
+  } catch(e) {
+    if (w) { try { w.close(); } catch(e2) {} }
+    if (typeof showToast === 'function') showToast('Could not open the file.', { type: 'error' });
+  }
 }
 window._mailViewFile = _mailViewFile;
 
@@ -309,6 +325,10 @@ window._mailViewFile = _mailViewFile;
 // plain text so it needs no warning; attachments are the risk surface.
 async function _mailOpenAttachment(path, name) {
   if (!path) return;
+  // Open the tab NOW, on the click, before any await — iOS Safari blocks a
+  // popup opened after the confirm + signed-URL fetch resolve. We navigate it
+  // once confirmed, or close it on cancel / failure.
+  var win = window.open('', '_blank');
   var msg = 'This file was received by email from an external, unverified sender'
     + (name ? ' (' + name + ')' : '') + '. Only open it if you trust the source, and scan it first. Continue?';
   var okToOpen = true;
@@ -317,7 +337,8 @@ async function _mailOpenAttachment(path, name) {
   } else {
     okToOpen = window.confirm(msg);
   }
-  if (okToOpen) _mailViewFile(path);
+  if (okToOpen) _mailViewFile(path, win);
+  else if (win) { try { win.close(); } catch(e) {} }
 }
 window._mailOpenAttachment = _mailOpenAttachment;
 
