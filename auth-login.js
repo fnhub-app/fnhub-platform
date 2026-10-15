@@ -22,16 +22,42 @@
 // sign-in instead of the default dashboard. Strictly validated to a same-origin
 // relative app page (no scheme, no //, no ..) and expired after 30 minutes, so
 // a stale or tampered value can never redirect off-site.
+// Validate a would-be post-login destination: a same-origin RELATIVE app page
+// only (no scheme, no protocol-relative //, no .. traversal). A stray literal
+// space is normalised to %20 first, because some mobile in-app browsers hand
+// back a decoded query string that would otherwise fail the \S check and get
+// silently dropped. Returns the safe URL or null.
+function _validReturn(u){
+  if (!u || typeof u !== 'string') return null;
+  u = u.replace(/ /g, '%20').trim();
+  if (/^[a-z0-9_-]+\.html(\?\S*)?$/i.test(u)
+      && u.indexOf('//') === -1 && u.indexOf('..') === -1) {
+    return u;
+  }
+  return null;
+}
 function _loginDest(){
+  // 1) Destination carried in THIS page's URL (?return=...). This survives even
+  //    when localStorage is unavailable or wiped (private mode, in-app webviews,
+  //    a stale cached deep-link page), as long as sign-in completes in the same
+  //    navigation — which is always true for the password path.
+  try {
+    var qp = new URLSearchParams(window.location.search || '');
+    var r = qp.get('return');
+    if (r) {
+      var fromUrl = _validReturn(decodeURIComponent(r));
+      if (fromUrl) { try { localStorage.removeItem('clfn_login_return'); } catch(e){} return fromUrl; }
+    }
+  } catch(e) {}
+  // 2) Destination stashed in localStorage by the deep-link guard.
   try {
     var raw = localStorage.getItem('clfn_login_return');
     localStorage.removeItem('clfn_login_return');
     if (raw) {
       var o = JSON.parse(raw);
-      if (o && typeof o.u === 'string' && (Date.now() - (o.t || 0)) < 30 * 60 * 1000
-          && /^[a-z0-9_-]+\.html(\?[^\s]*)?$/i.test(o.u)
-          && o.u.indexOf('//') === -1 && o.u.indexOf('..') === -1) {
-        return o.u;
+      if (o && (Date.now() - (o.t || 0)) < 30 * 60 * 1000) {
+        var v = _validReturn(o.u);
+        if (v) return v;
       }
     }
   } catch(e) {}

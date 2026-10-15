@@ -820,17 +820,23 @@ function openRenoBudget(unitId) {
   if (!token) {
     // Preserve a Maintenance Request deep link (e.g. the Approve/Decline/Notes
     // buttons in the notification email) so the user returns to THIS request
-    // after signing in, instead of landing on the dashboard. Consumed by
-    // auth-login.js. Only the relative path+query is stored (same-origin).
-    try {
-      if (/[?&]sow=/.test(window.location.search)) {
-        localStorage.setItem('clfn_login_return', JSON.stringify({
-          u: (window.location.pathname.replace(/^\//, '') + window.location.search).slice(0, 500),
-          t: Date.now()
-        }));
-      }
-    } catch(e) {}
-    window.location.href = 'index.html';
+    // after signing in, instead of landing on the dashboard. The shared helper
+    // stashes to localStorage AND returns an index.html?return=<dest> URL (the
+    // channel that survives in-app webviews / cleared storage); both are
+    // consumed + re-validated by auth-login.js (_loginDest). Inline fallback
+    // keeps the localStorage channel if the helper isn't loaded yet.
+    var _dest = (typeof _stashLoginReturn === 'function') ? _stashLoginReturn() : null;
+    if (!_dest) {
+      try {
+        if (/[?&]sow=/.test(window.location.search)) {
+          localStorage.setItem('clfn_login_return', JSON.stringify({
+            u: (window.location.pathname.replace(/^\//, '') + window.location.search).slice(0, 500),
+            t: Date.now()
+          }));
+        }
+      } catch(e) {}
+    }
+    window.location.href = _dest || 'index.html';
     return;
   }
 

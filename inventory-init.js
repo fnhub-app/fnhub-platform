@@ -1,7 +1,7 @@
 // ── inventory.html page init ──────────────────────────────────────────────────
 (async function initInventoryPage() {
   var token = sessionStorage.getItem('clfn_housing_token');
-  if (!token) { if(typeof _stashLoginReturn==='function')_stashLoginReturn(); window.location.href = 'index.html'; return; }
+  if (!token) { var _d = (typeof _stashLoginReturn==='function') && _stashLoginReturn(); window.location.href = _d || 'index.html'; return; }
   var savedRole  = sessionStorage.getItem('clfn_housing_role') || 'housing_employee_l1';
   var savedName  = sessionStorage.getItem('clfn_housing_name') || '';
   var savedEmail = sessionStorage.getItem('clfn_housing_email_session') || '';

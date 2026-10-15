@@ -31,7 +31,7 @@ var _rfqDocLib           = null; // DocLibrary instance for this RFQ
     savedName  = sessionStorage.getItem('clfn_housing_name')          || '';
     savedEmail = sessionStorage.getItem('clfn_housing_email_session') || '';
   } catch(e) {}
-  if (!token) { if(typeof _stashLoginReturn==='function')_stashLoginReturn(); window.location.href = 'index.html'; return; }
+  if (!token) { var _d = (typeof _stashLoginReturn==='function') && _stashLoginReturn(); window.location.href = _d || 'index.html'; return; }
 
   HOUSING_HEADERS['Authorization'] = 'Bearer ' + token;
   HOUSING_SESSION.accessToken = token;

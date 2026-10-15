@@ -495,16 +495,24 @@ function _idleLogout() {
 // a specific record) so auth-login.js (_loginDest) returns them there after
 // sign-in instead of the dashboard. Only a relative, same-origin app URL
 // carrying a known entity param is stored; _loginDest re-validates + expires it.
+//
+// Two channels, both consumed by _loginDest: (1) localStorage, and (2) the
+// RETURN value of this function -- an 'index.html?return=<dest>' URL the caller
+// navigates to. The URL channel survives even when localStorage is unavailable
+// or wiped (private mode, in-app webviews, a stale cached deep-link page),
+// because the destination rides the redirect itself through a same-tab login.
+// Returns null when there's no deep link to preserve (caller falls back to a
+// plain 'index.html').
 window._stashLoginReturn = function(){
   try {
     var qs = window.location.search || '';
     if (/[?&](sow|unit|rfq|openApp|openScorecard)=/.test(qs)) {
-      localStorage.setItem('clfn_login_return', JSON.stringify({
-        u: (window.location.pathname.replace(/^\//, '') + qs).slice(0, 500),
-        t: Date.now()
-      }));
+      var dest = (window.location.pathname.replace(/^\//, '') + qs).slice(0, 500);
+      localStorage.setItem('clfn_login_return', JSON.stringify({ u: dest, t: Date.now() }));
+      return 'index.html?return=' + encodeURIComponent(dest);
     }
   } catch(e) {}
+  return null;
 };
 
 // Session/token-expiry teardown. When an authenticated Supabase call comes back
