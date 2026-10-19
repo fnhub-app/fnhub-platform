@@ -347,6 +347,81 @@ function _syncWizardNavFlow(){
 }
 window._syncWizardNavFlow = _syncWizardNavFlow;
 
+// ── Scoring-completion flow (approval gate) ──────────────────────────────────
+// When an HM/ED opens a scored application to approve and the two staff scoring
+// screens (Housing Needs = step 9, Tenancy History = step 10) have not been
+// completed, the scorecard offers "Complete scoring screens". That opens the
+// application editor, jumps to step 9, and shows a floating save bar. Saving
+// recomputes the score and stamps scoringStaffCompleted WITHOUT changing the
+// approval status, then returns to the scorecard with the approve buttons
+// unlocked. See renderScorecardActions (housing-init.js).
+window.completeScoringScreens = function(appId){
+  window._scoringGateReturn = appId;
+  if (typeof window.openEditModal === 'function') window.openEditModal(appId);
+  // openEditModal lands on step 0; jump to Housing Needs once the form settles.
+  setTimeout(function(){ try { if (typeof goTo === 'function') goTo(9); } catch(e){ console.warn('[scoring gate] goTo(9) failed:', e); } }, 80);
+  _showScoringGateBar();
+};
+
+function _showScoringGateBar(){
+  _removeScoringGateBar();
+  var bar = document.createElement('div');
+  bar.id = '_scoring_gate_bar';
+  bar.style.cssText = 'position:fixed;left:50%;transform:translateX(-50%);bottom:20px;z-index:1200;background:var(--dark);color:var(--card);border:1px solid var(--border);border-radius:12px;padding:12px 16px;display:flex;align-items:center;gap:14px;max-width:94vw;';
+  bar.innerHTML = '<span style="font-size:13px;">Completing scoring for approval &mdash; fill <strong>Housing Needs</strong> and <strong>Tenancy History</strong>.</span>'
+    + '<button type="button" onclick="if(typeof _completeScoringAndReturn===\'function\')_completeScoringAndReturn();" style="background:var(--yellow);color:var(--dark);border:none;border-radius:8px;padding:8px 14px;font-size:13px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;">&#10003; Save scoring &amp; return</button>'
+    + '<button type="button" title="Dismiss" onclick="if(typeof _dismissScoringGateBar===\'function\')_dismissScoringGateBar();" style="background:none;border:none;color:var(--muted);font-size:18px;line-height:1;cursor:pointer;padding:2px 4px;">&#10005;</button>';
+  document.body.appendChild(bar);
+}
+window._dismissScoringGateBar = function(){ window._scoringGateReturn = null; _removeScoringGateBar(); };
+function _removeScoringGateBar(){
+  var ex = document.getElementById('_scoring_gate_bar');
+  if (ex && ex.parentNode) ex.parentNode.removeChild(ex);
+}
+window._removeScoringGateBar = _removeScoringGateBar;
+
+window._completeScoringAndReturn = function(){
+  var appId = window._scoringGateReturn;
+  if (!appId) return;
+  var list = (typeof applications !== 'undefined' && applications) ? applications : [];
+  var app = list.find(function(a){ return a.id === appId; });
+  if (!app) { if (typeof showToast === 'function') showToast('Application not found.', {type:'error'}); return; }
+  function gs(id){ var e = document.getElementById(id); return e ? e.value : ''; }
+  function gb(id){ var e = document.getElementById(id); return e ? !!e.checked : false; }
+  // Housing Needs (step 9)
+  app.urgentNeed          = gs('urgent_need') || 'none';
+  app.healthRisk          = gs('health_risk') || 'none';
+  app.personsOverStandard = parseInt(gs('persons_over_standard')) || 0;
+  app.loneParent          = gb('lone_parent');
+  app.elderInHousehold    = gb('elder_in_household');
+  app.householdDisability = gb('household_disability');
+  app.incomeStability     = gs('income_stability') || 'stable';
+  // Tenancy History (step 10)
+  app.noPriorTenancy      = (gs('no_prior_tenancy') || 'true') === 'true';
+  app.rentPaymentHistory  = gs('rent_payment_history') || 'no_history';
+  app.unitCondition       = gs('unit_condition') || 'no_history';
+  app.tenancyConduct      = gs('tenancy_conduct') || 'no_history';
+  // Recompute the score from the updated fields. The approval STATUS is left
+  // untouched — completing scoring must never bump the app back a stage.
+  if (typeof scoreApplicationLocally === 'function') {
+    try { var r = scoreApplicationLocally(app); if (r) { app.score = r.score; app.tier = r.tier; app.scoreBreakdown = r.breakdown; } }
+    catch(e){ console.warn('[scoring gate] rescore failed:', e); }
+  }
+  app.scoringStaffCompleted = true;
+  app.scoringCompletedBy = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION.email) || window.currentRole || 'staff';
+  app.scoringCompletedAt = new Date().toISOString();
+  window._scoringGateReturn = null;
+  _removeScoringGateBar();
+  var _after = function(){
+    if (typeof auditEntry === 'function') auditEntry(app.id, 'app_scoring_completed', 'Scoring screens completed — score ' + (app.score != null ? app.score : '—') + ' (' + (app.tier || '') + ')', (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION.email) || window.currentRole);
+    if (typeof showScorecard === 'function') showScorecard(app);
+    if (typeof showToast === 'function') showToast('Scoring completed — you can now approve this application.', {type:'info'});
+  };
+  if (typeof sbSaveApplication === 'function') {
+    sbSaveApplication(app).then(_after).catch(function(e){ console.warn('[scoring gate] save failed:', e); _after(); });
+  } else { _after(); }
+};
+
 // Internal-notes step is a side panel, not part of the wizard flow. We skip
 // the validation/auto-save/progress-bar machinery for it.
 function _isStaffSession(){
@@ -1177,6 +1252,15 @@ function saveApplicationRecord(opts){
     })(),
     tier:        isFileUpdate ? 'File Update' : scoreTier,
     scoreBreakdown: isFileUpdate ? {} : (window._lastScoreBreakdown || {}),
+    // Staff scoring screens (Housing Needs step 9 + Tenancy History step 10) are
+    // HM/ED-only, so a scored app created by a regular employee has NOT had them
+    // completed. The approval scorecard gates approval on this flag until an
+    // HM/ED completes them. File updates aren't scored, so they're always "done".
+    // Preserve a prior completion and never un-set it on a later edit.
+    scoringStaffCompleted: isFileUpdate ? true : (function(){
+      var _ex = applications.find(function(a){ return a.id === appId; });
+      return !!((_ex && _ex.scoringStaffCompleted) || _isHmOrEdRole());
+    })(),
 
     // ── Signatures (applicant + co-applicant + staff) ──
     sig: {

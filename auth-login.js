@@ -16,6 +16,54 @@
 
 'use strict';
 
+// Post-login destination. If a sub-page stashed a deep link before bouncing an
+// unauthenticated user here (e.g. the Maintenance Request approval email ->
+// renos.html?sow=...&action=approve), return to that exact request after
+// sign-in instead of the default dashboard. Strictly validated to a same-origin
+// relative app page (no scheme, no //, no ..) and expired after 30 minutes, so
+// a stale or tampered value can never redirect off-site.
+// Validate a would-be post-login destination: a same-origin RELATIVE app page
+// only (no scheme, no protocol-relative //, no .. traversal). A stray literal
+// space is normalised to %20 first, because some mobile in-app browsers hand
+// back a decoded query string that would otherwise fail the \S check and get
+// silently dropped. Returns the safe URL or null.
+function _validReturn(u){
+  if (!u || typeof u !== 'string') return null;
+  u = u.replace(/ /g, '%20').trim();
+  if (/^[a-z0-9_-]+\.html(\?\S*)?$/i.test(u)
+      && u.indexOf('//') === -1 && u.indexOf('..') === -1) {
+    return u;
+  }
+  return null;
+}
+function _loginDest(){
+  // 1) Destination carried in THIS page's URL (?return=...). This survives even
+  //    when localStorage is unavailable or wiped (private mode, in-app webviews,
+  //    a stale cached deep-link page), as long as sign-in completes in the same
+  //    navigation — which is always true for the password path.
+  try {
+    var qp = new URLSearchParams(window.location.search || '');
+    var r = qp.get('return');
+    if (r) {
+      var fromUrl = _validReturn(decodeURIComponent(r));
+      if (fromUrl) { try { localStorage.removeItem('clfn_login_return'); } catch(e){} return fromUrl; }
+    }
+  } catch(e) {}
+  // 2) Destination stashed in localStorage by the deep-link guard.
+  try {
+    var raw = localStorage.getItem('clfn_login_return');
+    localStorage.removeItem('clfn_login_return');
+    if (raw) {
+      var o = JSON.parse(raw);
+      if (o && (Date.now() - (o.t || 0)) < 30 * 60 * 1000) {
+        var v = _validReturn(o.u);
+        if (v) return v;
+      }
+    }
+  } catch(e) {}
+  return 'housing.html?view=home';
+}
+
 // ── "Remember me" persistence (cookie + localStorage) ─────────────────────────
 // Both mechanisms are written on save and read on load. Cookie is written
 // with `path=/;SameSite=Lax` so it's reachable from any path the app uses
@@ -308,7 +356,7 @@ async function completeMagicLinkSignIn(h) {
       sessionStorage.setItem('clfn_housing_email_session', HOUSING_SESSION.email || '');
     } catch (e) {}
 
-    window.location.href = 'housing.html?view=home';
+    window.location.href = _loginDest();
   } catch (e) {
     console.warn('[MAGIC LINK] completion failed:', e && e.message);
     try { sessionStorage.removeItem('clfn_housing_token'); } catch (ee) {}
@@ -403,7 +451,7 @@ async function submitNewPassword() {
     window._recoveryToken = null;
     try { history.replaceState(null, '', window.location.pathname + window.location.search); } catch(e) {}
 
-    window.location.href = 'housing.html?view=home';
+    window.location.href = _loginDest();
   } catch(e) {
     console.warn('[RESET PWD]', e);
     if (msgEl) { msgEl.textContent = e.message || 'Could not update password.'; msgEl.style.color = '#fca5a5'; msgEl.style.background = '#3b0a0a'; msgEl.style.display = ''; }
@@ -523,7 +571,7 @@ async function startSignIn() {
     } catch(e) {}
 
     // Hand off to the authenticated app — housing-init.js handles data load + home view render
-    window.location.href = 'housing.html?view=home';
+    window.location.href = _loginDest();
 
   } catch(e) {
     console.error('[HOUSING LOGIN]', e);
@@ -627,7 +675,7 @@ function initLoginPage() {
   var token = null;
   try { token = sessionStorage.getItem('clfn_housing_token'); } catch(e) {}
   if (token) {
-    window.location.href = 'housing.html?view=home';
+    window.location.href = _loginDest();
     return;
   }
 

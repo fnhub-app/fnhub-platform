@@ -226,7 +226,7 @@ function openUnitEditModal(unitId){
   window._editingUnitId    = unitId;
   window._currentDetailUnitId = unitId; // back-compat: udpNewSow(), renos.html, file-panel sync all key off this
   var set = function(id,val){ var el=document.getElementById(id); if(el) el.value=(val===null||val===undefined||val==='nan')?'':String(val); };
-  set('ue_street',u.street); set('ue_num',u.num);
+  set('ue_street',u.street); set('ue_num',u.num); set('ue_lot_number', u.lotNumber);
   set('ue_bathrooms',u.bathrooms); set('ue_type',u.type); set('ue_foundation',u.foundation);
   ueTypeChanged('ue');         // swap room options + show building name before setting bedrooms
   set('ue_bedrooms',u.bedrooms);
@@ -239,6 +239,7 @@ function openUnitEditModal(unitId){
   set('ue_acct_number', u.acctNumber);
   set('ue_hydro_meter', u.hydro_meter_number);
   set('ue_gas_meter',   u.gas_meter_number);
+  set('ue_gas_provider', u.gasProvider);
   ueFunderChanged();
   set('ue_constructionCost', (u.constructionCost != null ? u.constructionCost : (u.construction_cost != null ? u.construction_cost : '')));
   set('ue_rent', (u.monthlyRent != null ? u.monthlyRent : (u.monthly_rent != null ? u.monthly_rent : '')));
@@ -290,7 +291,7 @@ function openUnitEditModal(unitId){
   var atype=document.getElementById('ue_assignment_type'); if(atype) atype.value=u.assignmentType||'';
   var title=document.getElementById('ue_modal_title'); if(title) title.textContent=u.num+' '+u.street;
   // Hero subtitle + info strip (mirrors the TIC hero/strip layout)
-  var heroSub = [_roomBedLabel(u), (u.bathrooms&&u.bathrooms!=='nan')?u.bathrooms+' bath':'', _fmtUnitType(u.type)||''].filter(Boolean).join(' · ');
+  var heroSub = [_roomBedLabel(u), (u.bathrooms&&u.bathrooms!=='nan')?u.bathrooms+' bath':'', _fmtUnitType(u.type)||'', u.lotNumber?('Lot '+u.lotNumber):''].filter(Boolean).join(' · ');
   setText('ue_hero_sub', heroSub);
   var _ueStatusLabels = { vacant:'Vacant', occupied:'Occupied', reserved:'Reserved', condemned:'Condemned' };
   setText('ue_strip_status',    _ueStatusLabels[u.status] || (u.status || '—'));
@@ -639,20 +640,51 @@ function ueUpdateBudgetRouting() {
   var hmBlock   = document.getElementById('ue_sig_hm_block');
   var edBlock   = document.getElementById('ue_sig_ed_block');
 
-  if(!totalCost) {
+  // Existing approval state on the unit. A unit can be "Awaiting ED Decision"
+  // in the worklist because the HM DEFERRED to the ED, or because an ED
+  // signature was initiated — independent of the current SOW cost. Route on
+  // that state too: otherwise an under-limit deferral (or a request since
+  // completed/cancelled, leaving a $0 total) hides the ED block entirely, so
+  // the ED opens the card from the worklist and finds no way to record their
+  // decision. Mirrors _wlCollectUnitApprovals in shared-data.js.
+  var _u = (typeof getAllUnits === 'function')
+    ? (getAllUnits().find(function(x){ return x && x.id === uid; }) || {})
+    : {};
+  var hasHmState = !!_u.unitHmSig;
+  var hmDeferred = !!(_u.unitHmSig && _u.unitHmSig.decision === 'deferred');
+  var hasEdState = !!_u.unitEdSig;
+  var edPending  = hmDeferred || hasEdState;
+
+  var overBudget = totalCost > limit;
+  var showEd = overBudget || edPending;
+  var showHm = overBudget || hasHmState || showEd || totalCost > 0;
+
+  if(!totalCost && !showHm && !showEd) {
     if(indicator) indicator.style.display = 'none';
     if(hmBlock) hmBlock.style.display = 'none';
     if(edBlock) edBlock.style.display = 'none';
     return;
   }
 
-  var overBudget = totalCost > limit;
   var fmtCost  = formatCurrency(totalCost);
   var fmtLimit = formatCurrency(limit);
 
   if(indicator) {
     indicator.style.display = 'block';
-    if(overBudget) {
+    if(!totalCost && edPending) {
+      // No active-request cost to route on, but an ED decision is still
+      // outstanding (HM deferred, or ED sign-off pending on a request that
+      // has since closed). Show a neutral prompt instead of the cost banner.
+      indicator.style.background = 'var(--info-blue-bg)';
+      indicator.style.border = '1.5px solid var(--info-blue)';
+      indicator.style.color  = 'var(--info-blue)';
+      indicator.innerHTML = '<div class="flex-g8">'
+        +'<span style="font-size:16px;">📝</span>'
+        +'<div><strong>Executive Director Decision Outstanding</strong><br>'
+        +(hmDeferred ? 'The Housing Manager deferred this unit to the Executive Director.' : 'An Executive Director sign-off is pending on this unit.')+'<br>'
+        +'<span style="font-size:11px;">Record the decision in the Executive Director block below.</span></div>'
+        +'</div>';
+    } else if(overBudget) {
       indicator.style.background = 'var(--warn-amber-bg)';
       indicator.style.border = '1.5px solid var(--warn-amber-border)';
       indicator.style.color  = '#7a5c00';
@@ -675,9 +707,11 @@ function ueUpdateBudgetRouting() {
     }
   }
 
-  // Show appropriate approval block
-  if(hmBlock) hmBlock.style.display = 'block';
-  if(edBlock) edBlock.style.display = overBudget ? 'block' : 'none';
+  // Show appropriate approval block. The ED block shows whenever the unit is
+  // awaiting an ED decision (over budget OR HM-deferred OR ED sign-off
+  // pending), not only when the current request is over budget.
+  if(hmBlock) hmBlock.style.display = showHm ? 'block' : 'none';
+  if(edBlock) edBlock.style.display = showEd ? 'block' : 'none';
 }
 
 // ── Unit edit sig pads removed (no signature canvases in unit edit form) ──
@@ -720,6 +754,9 @@ function saveUnitEdit(){
     }
   }
   u.street=get('ue_street')||u.street; u.num=get('ue_num')||u.num;
+  // Lot # rides the data jsonb blob (sbSaveUnit data: u / sbLoadUnits row.data
+  // spread), same as gasProvider/assignmentType — no column, no migration.
+  u.lotNumber = get('ue_lot_number') || null;
   u.bedrooms=parseInt(get('ue_bedrooms'))||u.bedrooms;
   u.bathrooms=get('ue_bathrooms'); u.type=get('ue_type'); u.foundation=get('ue_foundation');
   u.buildingName = get('ue_building_name') || null;
@@ -735,6 +772,9 @@ function saveUnitEdit(){
   u.acctNumber=get('ue_acct_number');
   u.hydro_meter_number = get('ue_hydro_meter') || null;
   u.gas_meter_number   = get('ue_gas_meter')   || null;
+  // Gas provider (Union Gas / Enbridge) rides the data jsonb blob via sbSaveUnit
+  // (data: u) and round-trips through sbLoadUnits' row.data spread — no column.
+  u.gasProvider        = get('ue_gas_provider') || null;
   var cmhcRaw = get('ue_cmhc_value');
   u.cmhcValue = (u.funder === 'CMHC_95' && cmhcRaw !== '') ? (Math.round(Number(cmhcRaw) * 100) / 100) : null;
   var ccRaw = get('ue_constructionCost');

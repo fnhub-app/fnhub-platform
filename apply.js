@@ -45,11 +45,53 @@
   }
 
   function clearSession() {
+    _stopPortalIdle();
     localStorage.removeItem(LS_AT); localStorage.removeItem(LS_RT);
     // The verified registry number is personal data — never leave it behind
     // for the NEXT person on a shared device (band office kiosk, family
     // computer), where it would silently prefill their application.
     try { localStorage.removeItem('clfn_apply_band'); } catch (e) {}
+  }
+
+  // ---- Idle auto-logout (shared-device safety) ------------------------------
+  // The portal keeps the member's access + refresh token in localStorage, so on
+  // a shared device (band-office kiosk, family/community computer) an abandoned
+  // session would otherwise stay open until an explicit sign-out. Mirror the
+  // staff app's 15-minute inactivity sign-out (shared-auth.js IDLE_TIMEOUT_MS /
+  // _IDLE_EVENTS). Self-contained here because apply.js does not load the shared
+  // auth layer. Override window.PORTAL_IDLE_MS before this script to tune.
+  var PORTAL_IDLE_MS = window.PORTAL_IDLE_MS || 15 * 60 * 1000; // 15 min
+  var _portalIdleTimer = null, _portalIdleWired = false;
+  var _PORTAL_IDLE_EVENTS = ['mousemove', 'mousedown', 'keydown', 'touchstart', 'scroll', 'click'];
+  function _resetPortalIdle() {
+    if (!getAT()) return;                 // only arm while signed in
+    if (_portalIdleTimer) clearTimeout(_portalIdleTimer);
+    _portalIdleTimer = setTimeout(_portalIdleLogout, PORTAL_IDLE_MS);
+  }
+  function _startPortalIdle() {
+    if (!getAT()) return;
+    if (!_portalIdleWired) {
+      _portalIdleWired = true;
+      _PORTAL_IDLE_EVENTS.forEach(function (ev) {
+        try { window.addEventListener(ev, _resetPortalIdle, { passive: true }); }
+        catch (e) { window.addEventListener(ev, _resetPortalIdle); }
+      });
+      // Returning to a backgrounded tab re-checks the timer immediately.
+      try { document.addEventListener('visibilitychange', function () { if (!document.hidden) _resetPortalIdle(); }); } catch (e) {}
+    }
+    _resetPortalIdle();
+  }
+  function _stopPortalIdle() {
+    if (_portalIdleTimer) { clearTimeout(_portalIdleTimer); _portalIdleTimer = null; }
+  }
+  function _portalIdleLogout() {
+    _stopPortalIdle();
+    // Best-effort server-side logout — detached so it never blocks the redirect.
+    try { fetch(AUTH + '/logout', { method: 'POST', headers: authHeaders() }); } catch (e) {}
+    clearSession();
+    var out = document.getElementById('btn_out'); if (out) out.style.display = 'none';
+    showLogin();
+    setTimeout(function () { setMsg('lmsg', 'You were signed out after a period of inactivity. Please sign in again.', 'ok'); }, 0);
   }
 
   function authHeaders() { return { 'apikey': ANON, 'Authorization': 'Bearer ' + getAT(), 'Content-Type': 'application/json' }; }
@@ -256,6 +298,7 @@
   var _bandRequired = false;
 
   async function showDashboard() {
+    _startPortalIdle();   // arm the inactivity sign-out for this session
     app.innerHTML = '<div class="center"><p class="sub">Loading your applications…</p></div>';
     var res = await api('ping');
     if (!res.ok) {

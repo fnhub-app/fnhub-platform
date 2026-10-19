@@ -6076,20 +6076,28 @@ async function renderHousingUserTable(){
   try {
     var filter   = window._staffFilter === 'inactive' ? 'inactive' : 'active';
     var activeQ  = filter === 'inactive' ? 'eq.false' : 'eq.true';
-    var results = await Promise.all([
-      fetch(SUPABASE_URL+'/rest/v1/staff?select=*&is_active='+activeQ+'&order=name', {headers:HOUSING_HEADERS}),
-      fetch(SUPABASE_URL+'/rest/v1/housing_audit_log?action=eq.user_login&select=actor,created_at&order=created_at.desc&limit=500', {headers:HOUSING_HEADERS})
-    ]);
-    var r = results[0];
+    var r = await fetch(SUPABASE_URL+'/rest/v1/staff?select=*&is_active='+activeQ+'&order=name', {headers:HOUSING_HEADERS});
     var staff = await r.json();
-    var loginRows = results[1].ok ? await results[1].json() : [];
-    // Build email → most recent login timestamp from audit_log (fallback for users whose
-    // staff.last_login_at PATCH is blocked by RLS)
-    var _loginMap = {};
-    loginRows.forEach(function(row){
-      var actor = (row.actor||'').toLowerCase();
-      if (actor && !_loginMap[actor]) _loginMap[actor] = row.created_at;
-    });
+    // "Last Active" = each user's most recent audit entry of ANY action (not
+    // just user_login). A user_login row is written only on a FRESH browser
+    // session, and staff.last_login_at only on a credential sign-in (and can be
+    // RLS-blocked), so a staff member on a long-lived, auto-refreshing session
+    // keeps working -- writing ordinary audit rows -- without ever updating
+    // either, which made active users read as months idle. Query per-user (one
+    // newest row each) so the answer is reliable regardless of overall log
+    // volume, instead of a single capped recent scan that a few busy users can
+    // fill (dropping quieter users out of the window).
+    var _activeMap = {};
+    if (staff && staff.length) {
+      await Promise.all(staff.map(function(u){
+        var em = (u.email||'').toLowerCase();
+        if (!em) return null;
+        return fetch(SUPABASE_URL+'/rest/v1/housing_audit_log?actor=eq.'+encodeURIComponent(em)+'&select=created_at&order=created_at.desc&limit=1', {headers:HOUSING_HEADERS})
+          .then(function(resp){ return resp.ok ? resp.json() : []; })
+          .then(function(rows){ if (rows && rows.length && rows[0]) _activeMap[em] = rows[0].created_at; })
+          .catch(function(){ /* a single user's lookup failing must not blank the table */ });
+      }));
+    }
     if(!staff||!staff.length){
       var emptyMsg = filter === 'inactive' ? 'No deactivated staff.' : 'No staff found.';
       tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">'+emptyMsg+'</td></tr>';
@@ -6154,13 +6162,16 @@ async function renderHousingUserTable(){
             +'</div>';
         }
       }
-      // Last-login cell. Muted "Never" reads as a soft warning prompt for
-      // freshly-added staff who haven't signed in yet, without alarming
+      // Last-active cell: newest of this user's most recent audit activity and
+      // their stored last_login_at. Muted "Never" reads as a soft warning
+      // prompt for freshly-added staff with no activity yet, without alarming
       // colour. Tooltip carries the absolute timestamp for precise lookup.
-      var lastLogin = u.last_login_at || _loginMap[(u.email||'').toLowerCase()] || null;
+      var _em = (u.email||'').toLowerCase();
+      var lastActive = _activeMap[_em] || null;
+      if (u.last_login_at && (!lastActive || String(u.last_login_at) > String(lastActive))) lastActive = u.last_login_at;
       var lastLoginCell = '<td style="font-size:12px;color:var(--muted);"'
-        + (lastLogin ? ' title="'+escapeHtml(lastLogin)+'"' : '')
-        + '>'+escapeHtml(_fmtRelativeTime(lastLogin))+'</td>';
+        + (lastActive ? ' title="'+escapeHtml(lastActive)+'"' : '')
+        + '>'+escapeHtml(_fmtRelativeTime(lastActive))+'</td>';
       return '<tr>'
         +'<td class="std-row-avatar-cell"><div class="std-row-avatar">'+escapeHtml(initials)+'</div></td>'
         +'<td style="font-weight:600;">'+escapeHtml(u.name)
@@ -6698,6 +6709,21 @@ function _wlCollectSows(ctx) {
     sowItems._total = _fullCount;
   }
   return sowItems;
+}
+
+// Count + combined value of a unit's ACTIVE maintenance requests (not archived/
+// cancelled/completed). Used to reconcile a worklist card — which is titled by
+// the unit address but shows a single request's total — against a unit that has
+// more than one request. Mirrors the SOW picker's "active" definition.
+function _wlUnitSowSummary(uid) {
+  var list = (typeof getUnitSowList === 'function') ? getUnitSowList(uid) : [];
+  var count = 0, total = 0;
+  list.forEach(function(sw) {
+    if (!sw || sw.archived || sw.cancelled || sw.approval_status === 'completed') return;
+    count++;
+    total += (typeof sw.amount === 'number' ? sw.amount : (parseFloat(String(sw.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0));
+  });
+  return { count: count, total: total };
 }
 
 // ── 2b. Field Employee: approved work orders to execute ──────────────────
@@ -7305,8 +7331,14 @@ function renderWorklist() {
       var openCall = 'if(typeof openSowModal===\'function\'){openSowModal(\'' + _uidJs + '\');}else{window.location.href=\'renos.html?sow=' + encodeURIComponent(s.uid) + '\';}';
       var approveCall = 'event.stopPropagation();if(typeof _wlApproveSow===\'function\'){_wlApproveSow(\'' + _uidJs + '\',\'' + _pnJs + '\');}else{' + openCall + '}';
       var badge = sowStatusBadge({approval_status: s.status}, {variant:'worklist'});
+      // "Request total" (not just "Total") because the card is titled by the unit
+      // address — this is THIS request's value, not the unit's. When the unit has
+      // more than one active request, add a line reconciling to the unit total.
+      var _metas = [{k:'Project',v:s.pn||'—'},{k:'Request total',v:s.amount?_money(s.amount):''},{k:'Contractor',v:s.contractor},{k:'Work items',v:s.itemCount||''}];
+      var _us = _wlUnitSowSummary(s.uid);
+      if (_us && _us.count > 1) _metas.push({k:'On this unit', v: _us.count + ' requests · ' + _money(_us.total) + ' total'});
       return wlCard({ title:s.addr, pill:{text:badge.label}, open:openCall,
-        metas:[{k:'Project',v:s.pn||'—'},{k:'Total',v:s.amount?_money(s.amount):''},{k:'Contractor',v:s.contractor},{k:'Work items',v:s.itemCount||''}],
+        metas:_metas,
         actions:[{text:(s.status==='hm_approved'?'Final Approve':'Approve'),onclick:approveCall}] });
     }).join('');
     var _sowTotal = (typeof sowItems._total === 'number') ? sowItems._total : sowItems.length;
@@ -9454,6 +9486,9 @@ function showScorecard(app){
     return;
   }
   window._currentScorecardApp=app;
+  // Clear the scoring-completion floating bar if we're arriving back here (saved
+  // or otherwise) so it never lingers over the scorecard.
+  if(typeof window._removeScoringGateBar==='function') window._removeScoringGateBar();
   hideAllViews('scorecardView');
   var _scv=document.getElementById('scorecardView');if(!_scv)return;
   _scv.style.display='flex';

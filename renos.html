@@ -818,7 +818,25 @@ function openRenoBudget(unitId) {
   } catch(e) {}
   
   if (!token) {
-    window.location.href = 'index.html';
+    // Preserve a Maintenance Request deep link (e.g. the Approve/Decline/Notes
+    // buttons in the notification email) so the user returns to THIS request
+    // after signing in, instead of landing on the dashboard. The shared helper
+    // stashes to localStorage AND returns an index.html?return=<dest> URL (the
+    // channel that survives in-app webviews / cleared storage); both are
+    // consumed + re-validated by auth-login.js (_loginDest). Inline fallback
+    // keeps the localStorage channel if the helper isn't loaded yet.
+    var _dest = (typeof _stashLoginReturn === 'function') ? _stashLoginReturn() : null;
+    if (!_dest) {
+      try {
+        if (/[?&]sow=/.test(window.location.search)) {
+          localStorage.setItem('clfn_login_return', JSON.stringify({
+            u: (window.location.pathname.replace(/^\//, '') + window.location.search).slice(0, 500),
+            t: Date.now()
+          }));
+        }
+      } catch(e) {}
+    }
+    window.location.href = _dest || 'index.html';
     return;
   }
 
@@ -933,6 +951,9 @@ function initRenosPage() {
   var deepSow = params.get('sow');
   if (deepSow && typeof openSowModal === 'function') {
     var deepPn = params.get('pn') || null;
+    // The request opened here in place, so a dashboard notice about it would be
+    // redundant — drop the pending-notice breadcrumb the login guard stashed.
+    try { localStorage.removeItem('clfn_mr_notice'); } catch(e){}
     setTimeout(function(){ openSowModal(deepSow, deepPn); }, 100);
     // Optional &action= hint from a Maintenance Request email button. This ONLY
     // pre-selects a tab in the (already role-gated) modal so the signed-in

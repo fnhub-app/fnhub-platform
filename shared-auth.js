@@ -490,6 +490,45 @@ function _idleLogout() {
   }
 }
 
+// Before bouncing an unauthenticated user to the login screen, remember a deep
+// link (e.g. the button in a Maintenance Request / RFQ / application email ->
+// a specific record) so auth-login.js (_loginDest) returns them there after
+// sign-in instead of the dashboard. Only a relative, same-origin app URL
+// carrying a known entity param is stored; _loginDest re-validates + expires it.
+//
+// Two channels, both consumed by _loginDest: (1) localStorage, and (2) the
+// RETURN value of this function -- an 'index.html?return=<dest>' URL the caller
+// navigates to. The URL channel survives even when localStorage is unavailable
+// or wiped (private mode, in-app webviews, a stale cached deep-link page),
+// because the destination rides the redirect itself through a same-tab login.
+// Returns null when there's no deep link to preserve (caller falls back to a
+// plain 'index.html').
+window._stashLoginReturn = function(){
+  try {
+    var qs = window.location.search || '';
+    if (/[?&](sow|unit|rfq|openApp|openScorecard)=/.test(qs)) {
+      var dest = (window.location.pathname.replace(/^\//, '') + qs).slice(0, 500);
+      localStorage.setItem('clfn_login_return', JSON.stringify({ u: dest, t: Date.now() }));
+      // Also remember an MR deep link specifically. If the return navigation
+      // doesn't land the user back on the request (it drops to the dashboard),
+      // the landing page reads this to surface a notification about the request
+      // instead of a silent landing. Independent of clfn_login_return, which
+      // _loginDest consumes on the way back. Cleared by whichever page handles
+      // it (renos opens the MR, or housing.html shows the notice).
+      try {
+        var _p = new URLSearchParams(qs);
+        if (_p.get('sow')) {
+          localStorage.setItem('clfn_mr_notice', JSON.stringify({
+            sow: _p.get('sow'), pn: _p.get('pn') || '', action: _p.get('action') || '', t: Date.now()
+          }));
+        }
+      } catch(e) {}
+      return 'index.html?return=' + encodeURIComponent(dest);
+    }
+  } catch(e) {}
+  return null;
+};
+
 // Session/token-expiry teardown. When an authenticated Supabase call comes back
 // 401 and the token can't be refreshed, the session is dead and the user is
 // otherwise stranded on a page making failing calls. Mirror _idleLogout exactly

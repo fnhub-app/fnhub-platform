@@ -97,25 +97,19 @@ var EMAIL_EVENT_REGISTRY = [
     defaultRecipientRoles: ['housing_manager'],
     defaultCcRoles:        [],
     wired:                 true,
-    placeholders:          ['unitAddress','projectNumber','totalCost','condition','contractor','scopeOfWork','nationShort','reviewLink','approveLink','declineLink','notesLink','appLink'],
+    placeholders:          ['unitAddress','projectNumber','totalCost','condition','contractor','nationShort','appLink'],
+    // NOTE: the Scope of work list and the Approve / Decline / Add Notes buttons
+    // are NOT part of this editable body. They are appended in code by
+    // notifySowCreated() via _sowCreatedActionsHtml(), so they always appear in
+    // every Maintenance Request email even when a nation has saved a custom
+    // template override in Settings -> Notifications (a saved override would
+    // otherwise replace this body entirely and drop them).
     defaults: {
       subject:  '{nationShort} Housing — New Maintenance Request: {unitAddress}',
-      bodyHtml: '<p>A new Maintenance Request (<strong>{projectNumber}</strong>) has been submitted for <strong>{unitAddress}</strong> and requires your review.</p>'
+      bodyHtml: '<p>A new Maintenance Request (<strong>{projectNumber}</strong>) has been created for <strong>{unitAddress}</strong> and requires your review.</p>'
               + '<p>Total cost: <strong>{totalCost}</strong></p>'
               + '<p>Condition: <strong>{condition}</strong></p>'
               + '<p>Contractor: <strong>{contractor}</strong></p>'
-              + '<div style="margin:16px 0 2px;font-weight:700;">Scope of work</div>'
-              + '{scopeOfWork}'
-              + '<p style="margin:22px 0 8px;font-weight:700;">Review &amp; respond</p>'
-              + '<p style="margin:0 0 6px;">'
-              +   '<a href="{approveLink}" style="{brandBtnStyle}">&#10003; Review &amp; Approve &rarr;</a>'
-              + '</p>'
-              + '<p style="margin:0;">'
-              +   '<a href="{declineLink}" style="{ghostBtnStyle}">&#10007; Decline</a>'
-              +   '&nbsp;&nbsp;'
-              +   '<a href="{notesLink}" style="{ghostBtnStyle}">&#9998; Add Notes</a>'
-              + '</p>'
-              + '<p style="font-size:12px;color:#6b7280;margin:14px 0 0;line-height:1.5;">For security, these buttons just open this request in the {nationShort} Housing app. You still need to sign in, and approving or declining is limited to authorized staff &mdash; so nothing happens from this email alone, even if it is forwarded.</p>'
     }
   },
   {
@@ -918,6 +912,24 @@ async function _sendSerially(recipients, payloadBuilder, eventKey) {
 // Wired from saveSOW() in housing-modals-sow.js, only on the FIRST save
 // of a SOW (subsequent edits do not re-notify). Emails every active
 // staff member whose role is in the saved (or default) recipient list.
+// The Scope of work + Approve/Decline/Add-Notes section of the Maintenance
+// Request email. Built in code (not from the editable template) with resolved,
+// escaped values so it ALWAYS renders -- even when a nation has saved a custom
+// template override that would otherwise replace the whole body. The buttons are
+// plain deep links into the authenticated app (no token, no action performed);
+// see _emailMrLink and the renos.html ?sow=&action= handler.
+function _sowCreatedActionsHtml(sow, unitId) {
+  var pn = (sow && sow.project_number) || '';
+  var nshort = _emailNationShort();
+  return ''
+    + '<div style="margin:18px 0 2px;font-weight:700;">Scope of work</div>'
+    + _emailScopeHtml(sow)
+    + '<p style="margin:22px 0 8px;font-weight:700;">Review &amp; respond</p>'
+    + '<p style="margin:0 0 6px;"><a href="' + _emailMrLink(unitId, pn, 'approve') + '" style="' + _brandBtnStyle() + '">&#10003; Review &amp; Approve &rarr;</a></p>'
+    + '<p style="margin:0;"><a href="' + _emailMrLink(unitId, pn, 'decline') + '" style="' + _brandBtnGhostStyle() + '">&#10007; Decline</a>&nbsp;&nbsp;<a href="' + _emailMrLink(unitId, pn, 'notes') + '" style="' + _brandBtnGhostStyle() + '">&#9998; Add Notes</a></p>'
+    + '<p style="font-size:12px;color:#6b7280;margin:14px 0 0;line-height:1.5;">For security, these buttons just open this request in the ' + _ntfEsc(nshort) + ' Housing app. You still need to sign in, and approving or declining is limited to authorized staff &mdash; so nothing happens from this email alone, even if it is forwarded.</p>';
+}
+
 async function notifySowCreated(sow, unitId) {
   if (!sow) return;
   var eventKey = 'sow_created';
@@ -933,6 +945,10 @@ async function notifySowCreated(sow, unitId) {
   }
   var rendered = _renderEmailTemplate(eventKey, _emailTokensForSow(sow, unitId));
   if (!rendered) return;
+  // Always append the scope + review-actions block, regardless of whether the
+  // body came from the default or a saved template override (see the registry
+  // note on 'sow_created').
+  rendered.bodyHtml += _sowCreatedActionsHtml(sow, unitId);
 
   await _sendSerially(recipients, function(rcp){
     return {

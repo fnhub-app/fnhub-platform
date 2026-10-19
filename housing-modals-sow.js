@@ -815,7 +815,9 @@ function _openSowPicker(unitId, activeList) {
       + sorted.map(_card).join('')
     + '</div>'
     + '<div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'
-      + '<span style="font-size:11px;color:var(--muted);">' + sorted.length + ' active request' + (sorted.length !== 1 ? 's' : '') + '</span>'
+      + '<span style="font-size:11px;color:var(--muted);">' + sorted.length + ' active request' + (sorted.length !== 1 ? 's' : '')
+      +   (function(){ var t = sorted.reduce(function(acc,x){ return acc + (typeof x.amount === 'number' ? x.amount : (parseFloat(String(x.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0)); }, 0); return (t && sorted.length > 1) ? (' · ' + (typeof formatCurrency === 'function' ? formatCurrency(t) : ('$' + t)) + ' total') : ''; })()
+      + '</span>'
       + '<button id="sowPickerNew" style="background:none;border:1.5px solid var(--border);color:var(--text);padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;">+ New Request</button>'
     + '</div>'
     + '</div>';
