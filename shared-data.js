@@ -6076,20 +6076,28 @@ async function renderHousingUserTable(){
   try {
     var filter   = window._staffFilter === 'inactive' ? 'inactive' : 'active';
     var activeQ  = filter === 'inactive' ? 'eq.false' : 'eq.true';
-    var results = await Promise.all([
-      fetch(SUPABASE_URL+'/rest/v1/staff?select=*&is_active='+activeQ+'&order=name', {headers:HOUSING_HEADERS}),
-      fetch(SUPABASE_URL+'/rest/v1/housing_audit_log?action=eq.user_login&select=actor,created_at&order=created_at.desc&limit=500', {headers:HOUSING_HEADERS})
-    ]);
-    var r = results[0];
+    var r = await fetch(SUPABASE_URL+'/rest/v1/staff?select=*&is_active='+activeQ+'&order=name', {headers:HOUSING_HEADERS});
     var staff = await r.json();
-    var loginRows = results[1].ok ? await results[1].json() : [];
-    // Build email → most recent login timestamp from audit_log (fallback for users whose
-    // staff.last_login_at PATCH is blocked by RLS)
-    var _loginMap = {};
-    loginRows.forEach(function(row){
-      var actor = (row.actor||'').toLowerCase();
-      if (actor && !_loginMap[actor]) _loginMap[actor] = row.created_at;
-    });
+    // "Last Active" = each user's most recent audit entry of ANY action (not
+    // just user_login). A user_login row is written only on a FRESH browser
+    // session, and staff.last_login_at only on a credential sign-in (and can be
+    // RLS-blocked), so a staff member on a long-lived, auto-refreshing session
+    // keeps working -- writing ordinary audit rows -- without ever updating
+    // either, which made active users read as months idle. Query per-user (one
+    // newest row each) so the answer is reliable regardless of overall log
+    // volume, instead of a single capped recent scan that a few busy users can
+    // fill (dropping quieter users out of the window).
+    var _activeMap = {};
+    if (staff && staff.length) {
+      await Promise.all(staff.map(function(u){
+        var em = (u.email||'').toLowerCase();
+        if (!em) return null;
+        return fetch(SUPABASE_URL+'/rest/v1/housing_audit_log?actor=eq.'+encodeURIComponent(em)+'&select=created_at&order=created_at.desc&limit=1', {headers:HOUSING_HEADERS})
+          .then(function(resp){ return resp.ok ? resp.json() : []; })
+          .then(function(rows){ if (rows && rows.length && rows[0]) _activeMap[em] = rows[0].created_at; })
+          .catch(function(){ /* a single user's lookup failing must not blank the table */ });
+      }));
+    }
     if(!staff||!staff.length){
       var emptyMsg = filter === 'inactive' ? 'No deactivated staff.' : 'No staff found.';
       tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">'+emptyMsg+'</td></tr>';
@@ -6154,13 +6162,16 @@ async function renderHousingUserTable(){
             +'</div>';
         }
       }
-      // Last-login cell. Muted "Never" reads as a soft warning prompt for
-      // freshly-added staff who haven't signed in yet, without alarming
+      // Last-active cell: newest of this user's most recent audit activity and
+      // their stored last_login_at. Muted "Never" reads as a soft warning
+      // prompt for freshly-added staff with no activity yet, without alarming
       // colour. Tooltip carries the absolute timestamp for precise lookup.
-      var lastLogin = u.last_login_at || _loginMap[(u.email||'').toLowerCase()] || null;
+      var _em = (u.email||'').toLowerCase();
+      var lastActive = _activeMap[_em] || null;
+      if (u.last_login_at && (!lastActive || String(u.last_login_at) > String(lastActive))) lastActive = u.last_login_at;
       var lastLoginCell = '<td style="font-size:12px;color:var(--muted);"'
-        + (lastLogin ? ' title="'+escapeHtml(lastLogin)+'"' : '')
-        + '>'+escapeHtml(_fmtRelativeTime(lastLogin))+'</td>';
+        + (lastActive ? ' title="'+escapeHtml(lastActive)+'"' : '')
+        + '>'+escapeHtml(_fmtRelativeTime(lastActive))+'</td>';
       return '<tr>'
         +'<td class="std-row-avatar-cell"><div class="std-row-avatar">'+escapeHtml(initials)+'</div></td>'
         +'<td style="font-weight:600;">'+escapeHtml(u.name)
