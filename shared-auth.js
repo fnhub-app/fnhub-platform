@@ -509,6 +509,20 @@ window._stashLoginReturn = function(){
     if (/[?&](sow|unit|rfq|openApp|openScorecard)=/.test(qs)) {
       var dest = (window.location.pathname.replace(/^\//, '') + qs).slice(0, 500);
       localStorage.setItem('clfn_login_return', JSON.stringify({ u: dest, t: Date.now() }));
+      // Also remember an MR deep link specifically. If the return navigation
+      // doesn't land the user back on the request (it drops to the dashboard),
+      // the landing page reads this to surface a notification about the request
+      // instead of a silent landing. Independent of clfn_login_return, which
+      // _loginDest consumes on the way back. Cleared by whichever page handles
+      // it (renos opens the MR, or housing.html shows the notice).
+      try {
+        var _p = new URLSearchParams(qs);
+        if (_p.get('sow')) {
+          localStorage.setItem('clfn_mr_notice', JSON.stringify({
+            sow: _p.get('sow'), pn: _p.get('pn') || '', action: _p.get('action') || '', t: Date.now()
+          }));
+        }
+      } catch(e) {}
       return 'index.html?return=' + encodeURIComponent(dest);
     }
   } catch(e) {}

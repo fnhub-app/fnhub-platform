@@ -2769,6 +2769,59 @@ document.addEventListener('DOMContentLoaded', function(){
 // newApp, resolveHousingRole, etc. But only housing.html should run this
 // page-level boot. On inventory.html (and other sub-pages), the page's
 // own inline init block handles view dispatch against its own DOM —
+// ── Maintenance Request landing notice ───────────────────────────────────────
+// When a signed-out user follows an Approve / Decline / Notes button in a
+// Maintenance Request email, the login guard stashes a `clfn_mr_notice`
+// breadcrumb. If the return navigation brings them back to the request itself
+// (renos.html), that page clears the breadcrumb and this never fires. But when
+// they land on the dashboard instead, surface a notification about the request
+// — its project number, address and current status — so the landing is never
+// silent (the user came to act on something; tell them where it stands).
+// One-shot: the breadcrumb is consumed on read.
+function _maybeShowMrNotice() {
+  var raw;
+  try { raw = localStorage.getItem('clfn_mr_notice'); } catch(e) { return; }
+  if (!raw) return;
+  try { localStorage.removeItem('clfn_mr_notice'); } catch(e) {}
+  var notice; try { notice = JSON.parse(raw); } catch(e) { return; }
+  if (!notice || !notice.sow) return;
+  // Only a fresh breadcrumb (the user just followed the email link).
+  if (Date.now() - (notice.t || 0) > 30 * 60 * 1000) return;
+  if (typeof showToast !== 'function') return;
+
+  var uid = notice.sow, pn = notice.pn || '';
+  var list = (typeof getUnitSowList === 'function') ? getUnitSowList(uid) : [];
+  var sow = null;
+  if (pn) sow = list.filter(function(s){ return s && s.project_number === pn; })[0] || null;
+  if (!sow && list.length) sow = list[list.length - 1];
+  var units = (typeof housingUnits !== 'undefined' && housingUnits) ? housingUnits : [];
+  var u = units.filter(function(x){ return x && x.id === uid; })[0];
+  var addr = u ? (((u.num||'') + ' ' + (u.street||'')).trim() || uid) : uid;
+  var pnLabel = (sow && sow.project_number) || pn || '';
+  var head = 'Maintenance Request' + (pnLabel ? ' ' + pnLabel : '') + (addr ? ' at ' + addr : '');
+
+  if (!sow) {
+    showToast(head + ' — opened from your email. Find it under Renovations → Reno Approvals.', { type: 'info' });
+    return;
+  }
+  // Does an approval action still remain? Mirror the worklist's own gating so
+  // the message matches what the user will (or won't) find there.
+  var st = sow.approval_status || '';
+  var pending;
+  if (sow.cancelled) pending = false;
+  else if (st === 'completed' || st === 'ed_approved') pending = false;
+  else if (sow.system_approved) pending = false;
+  else if (st === 'hm_approved') pending = (typeof sowRequiresEdApproval === 'function' && sowRequiresEdApproval(sow));
+  else pending = true; // ''/draft/signed/submitted
+  var msg;
+  if (sow.cancelled)            msg = head + ' was cancelled — no action needed.';
+  else if (st === 'completed')  msg = head + ' is completed — no action needed.';
+  else if (sow.system_approved) msg = head + ' is System Approved (via RFQ) — no action needed.';
+  else if (!pending)            msg = head + ' is already approved — no action needed.';
+  else                          msg = head + ' is awaiting approval — see “Renovations Waiting Approval” in your worklist below.';
+  showToast(msg, { type: 'info' });
+}
+
 // letting this IIFE run there would call initHousingPage(), which reads
 // ?view= from the sub-page's URL and tries to render housing.html views
 // (dashView, employeeHomeView) on a DOM that doesn't contain them. That
@@ -2822,6 +2875,7 @@ document.addEventListener('DOMContentLoaded', function(){
       }
       await loadHousingData();
       initHousingPage();
+      if (typeof _maybeShowMrNotice === 'function') { try { _maybeShowMrNotice(); } catch(e){ console.warn('[boot] MR notice:', e); } }
       if (document.body) document.body.style.opacity = '1';
     } catch(e) {
       console.error('[HOUSING] init failed:', e.message, e.stack);

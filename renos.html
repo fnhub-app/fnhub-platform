@@ -951,6 +951,9 @@ function initRenosPage() {
   var deepSow = params.get('sow');
   if (deepSow && typeof openSowModal === 'function') {
     var deepPn = params.get('pn') || null;
+    // The request opened here in place, so a dashboard notice about it would be
+    // redundant — drop the pending-notice breadcrumb the login guard stashed.
+    try { localStorage.removeItem('clfn_mr_notice'); } catch(e){}
     setTimeout(function(){ openSowModal(deepSow, deepPn); }, 100);
     // Optional &action= hint from a Maintenance Request email button. This ONLY
     // pre-selects a tab in the (already role-gated) modal so the signed-in
