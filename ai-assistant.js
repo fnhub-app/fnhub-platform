@@ -682,6 +682,9 @@ document.addEventListener('DOMContentLoaded', function() {
 // and edit it, then saves it as a branded PDF back into that same library via
 // the ctx.saveFile() hook the DocLibrary provides.
 var _aiLetterCtx = null;
+// Last in-progress draft, snapshotted on close so an accidental/early close of
+// the SAME entity doesn't lose the drafted letter; cleared once saved.
+var _aiLetterDraft = null;
 var _AI_LETTER_PURPOSES = [
   'General correspondence',
   'Payment / arrears reminder',
@@ -742,7 +745,13 @@ function _aiLetterEnsureModal() {
     + '</div>'
     + '</div>';
   document.body.appendChild(wrap);
-  wrap.addEventListener('click', function(e){ if (e.target === wrap) _aiLetterClose(); });
+  // Close only on a genuine backdrop click. We require the mousedown to ALSO
+  // have started on the backdrop -- otherwise selecting text inside the letter
+  // body (mousedown in the textarea, mouseup drifting onto the backdrop) fires
+  // a "click" on the overlay and was closing the modal, discarding the draft.
+  var _downOnBackdrop = false;
+  wrap.addEventListener('mousedown', function(e){ _downOnBackdrop = (e.target === wrap); });
+  wrap.addEventListener('click', function(e){ if (e.target === wrap && _downOnBackdrop) _aiLetterClose(); });
 }
 
 window.aiWriteLetter = function(ctx) {
@@ -768,12 +777,39 @@ window.aiWriteLetter = function(ctx) {
       warn.style.display = '';
     } else { warn.style.display = 'none'; }
   }
+  // Recover an in-progress draft from a prior (possibly accidental) close of the
+  // SAME entity, so a half-written or drafted letter isn't lost.
+  var d = _aiLetterDraft;
+  if (d && d.entityType === _aiLetterCtx.entityType && String(d.entityId) === String(_aiLetterCtx.entityId)
+      && (Date.now() - (d.t || 0) < 60 * 60 * 1000) && (d.result || d.details)) {
+    if (rec && d.recipient) rec.value = d.recipient;
+    if (adr && d.address)   adr.value = d.address;
+    if (det) det.value = d.details || '';
+    var purp = document.getElementById('ai_letter_purpose'); if (purp && d.purpose) purp.value = d.purpose;
+    var tn   = document.getElementById('ai_letter_tone');    if (tn && d.tone) tn.value = d.tone;
+    if (res && d.result) { res.value = d.result; if (rw) rw.style.display = ''; }
+    if (st) st.textContent = 'Restored your in-progress draft.';
+  }
   modal.style.display = 'flex';
 };
 
-window._aiLetterClose = function() {
+window._aiLetterClose = function(skipSnapshot) {
   var m = document.getElementById('ai_letter_modal');
-  if (m) m.style.display = 'none';
+  if (!m) return;
+  // Snapshot the in-progress draft so reopening (same entity) can restore it.
+  if (!skipSnapshot) {
+    try {
+      var _g = function(id){ return (document.getElementById(id) || {}).value || ''; };
+      _aiLetterDraft = _aiLetterCtx ? {
+        entityType: _aiLetterCtx.entityType, entityId: _aiLetterCtx.entityId,
+        recipient: _g('ai_letter_recipient'), address: _g('ai_letter_address'),
+        purpose: _g('ai_letter_purpose'), tone: _g('ai_letter_tone'),
+        details: _g('ai_letter_details'), result: _g('ai_letter_result'),
+        t: Date.now()
+      } : _aiLetterDraft;
+    } catch(e) {}
+  }
+  m.style.display = 'none';
 };
 
 window._aiLetterGenerate = function() {
@@ -870,7 +906,8 @@ window._aiLetterSavePdf = function() {
   _aiLetterPdfBlob(text, purposeLabel).then(function(blob){
     _aiLetterCtx.saveFile(blob, fname, 'other');
     if (typeof showToast === 'function') showToast('Letter saved to documents.', {type:'info'});
-    _aiLetterClose();
+    _aiLetterDraft = null;         // saved -> nothing to recover
+    _aiLetterClose(true);          // skip the draft snapshot on a successful save
   }).catch(function(err){
     if (typeof showToast === 'function') showToast('Could not create the PDF: ' + (err && err.message ? err.message : err), {type:'error'});
   }).finally(function(){
