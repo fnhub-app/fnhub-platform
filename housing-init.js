@@ -2789,7 +2789,7 @@ function _maybeShowMrNotice() {
   if (Date.now() - (notice.t || 0) > 30 * 60 * 1000) return;
   if (typeof showToast !== 'function') return;
 
-  var uid = notice.sow, pn = notice.pn || '';
+  var uid = notice.sow, pn = notice.pn || '', action = notice.action || '';
   var list = (typeof getUnitSowList === 'function') ? getUnitSowList(uid) : [];
   var sow = null;
   if (pn) sow = list.filter(function(s){ return s && s.project_number === pn; })[0] || null;
@@ -2800,25 +2800,57 @@ function _maybeShowMrNotice() {
   var pnLabel = (sow && sow.project_number) || pn || '';
   var head = 'Maintenance Request' + (pnLabel ? ' ' + pnLabel : '') + (addr ? ' at ' + addr : '');
 
-  if (!sow) {
-    showToast(head + ' — opened from your email. Find it under Renovations → Reno Approvals.', { type: 'info' });
-    return;
-  }
-  // Does an approval action still remain? Mirror the worklist's own gating so
-  // the message matches what the user will (or won't) find there.
-  var st = sow.approval_status || '';
+  // Is there still an approval action to take?
+  var st = (sow && sow.approval_status) || '';
   var pending;
-  if (sow.cancelled) pending = false;
+  if (!sow || sow.cancelled) pending = false;
   else if (st === 'completed' || st === 'ed_approved') pending = false;
   else if (sow.system_approved) pending = false;
   else if (st === 'hm_approved') pending = (typeof sowRequiresEdApproval === 'function' && sowRequiresEdApproval(sow));
   else pending = true; // ''/draft/signed/submitted
+
+  // PREFERRED: open the request in place so the approver can act on it right
+  // here, independent of the worklist (which filters some requests out — e.g.
+  // ones with no itemized work — so pointing the user to the worklist was a
+  // dead end). Mirrors the renos.html deep-link handler; openSowModal is loaded
+  // on housing.html. No action is taken automatically — the approver still
+  // signs off in the modal (secure: the email link performs nothing by itself).
+  if (sow && typeof openSowModal === 'function') {
+    setTimeout(function(){ try { openSowModal(uid, pn || null); } catch(e){ console.warn('[MR notice] open failed:', e); } }, 150);
+    setTimeout(function(){
+      try {
+        if (pending && action && typeof setSowTab === 'function') {
+          if (action === 'notes') setSowTab('notes');
+          else if (action === 'approve' || action === 'decline') setSowTab('sigs');
+        }
+        var m;
+        if (!pending) {
+          m = sow.cancelled       ? head + ' was cancelled — no action needed.'
+            : st === 'completed'  ? head + ' is completed — no action needed.'
+            : sow.system_approved ? head + ' is System Approved (via RFQ) — no action needed.'
+            :                       head + ' is already approved — no action needed.';
+        } else {
+          m = action === 'decline'
+                ? head + ': review it, then use the “✖ Cancel Request” button in the footer to decline.'
+            : action === 'notes'
+                ? head + ': review it, then add your notes in the Notes & Terms section.'
+                : head + ': review it, then press “✓ Approve” in the footer to approve.';
+        }
+        if (typeof showToast === 'function') showToast(m, { type: 'info' });
+      } catch(e){}
+    }, 700);
+    return;
+  }
+
+  // FALLBACK (SOW modal unavailable on this page): a status-aware text notice.
+  if (typeof showToast !== 'function') return;
   var msg;
-  if (sow.cancelled)            msg = head + ' was cancelled — no action needed.';
+  if (!sow)                     msg = head + ' — opened from your email. Find it under Renovations → Reno Approvals.';
+  else if (sow.cancelled)       msg = head + ' was cancelled — no action needed.';
   else if (st === 'completed')  msg = head + ' is completed — no action needed.';
   else if (sow.system_approved) msg = head + ' is System Approved (via RFQ) — no action needed.';
   else if (!pending)            msg = head + ' is already approved — no action needed.';
-  else                          msg = head + ' is awaiting approval — see “Renovations Waiting Approval” in your worklist below.';
+  else                          msg = head + ' is awaiting approval — open it under Renovations → Reno Approvals to sign off.';
   showToast(msg, { type: 'info' });
 }
 
