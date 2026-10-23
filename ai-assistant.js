@@ -674,3 +674,200 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+// ── Write Letter with AI (Document Library) ──────────────────────────────────
+// Invoked by the "Write Letter with AI" button the DocLibrary renders when
+// opts.aiLetters is set (tenant & unit libraries). Drafts a professional
+// resident letter GROUNDED in the nation's housing policy, lets staff review
+// and edit it, then saves it as a branded PDF back into that same library via
+// the ctx.saveFile() hook the DocLibrary provides.
+var _aiLetterCtx = null;
+var _AI_LETTER_PURPOSES = [
+  'General correspondence',
+  'Payment / arrears reminder',
+  'Lease / occupancy matter',
+  'Maintenance / repair follow-up',
+  'Inspection notice or result',
+  'Policy clarification',
+  'Notice / warning',
+  'Welcome / move-in',
+  'Other'
+];
+
+function _aiPolicyText() {
+  var p = (window._appSettings && window._appSettings.housing_policy) || null;
+  if (p && typeof p === 'object') return String(p.text || '');
+  if (typeof p === 'string') return p;
+  return '';
+}
+
+function _aiLetterEnsureModal() {
+  if (document.getElementById('ai_letter_modal')) return;
+  if (!document.body) return;
+  var purposeOpts = _AI_LETTER_PURPOSES.map(function(p){ return '<option>' + p + '</option>'; }).join('');
+  var wrap = document.createElement('div');
+  wrap.id = 'ai_letter_modal';
+  wrap.style.cssText = 'display:none;position:fixed;inset:0;z-index:1300;background:rgba(0,0,0,.55);align-items:flex-start;justify-content:center;overflow-y:auto;padding:24px 14px;';
+  wrap.innerHTML =
+    '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;max-width:720px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto;">'
+    + '<div style="background:var(--dark);padding:14px 18px;border-bottom:2px solid var(--yellow);display:flex;align-items:center;justify-content:space-between;">'
+    +   '<div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--yellow);font-size:16px;">✦</span><span style="font-family:\'DM Serif Display\',serif;font-size:16px;color:#fff;">Write a Letter with AI</span></div>'
+    +   '<button type="button" onclick="_aiLetterClose()" style="background:none;border:1px solid #444;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;">✕</button>'
+    + '</div>'
+    + '<div style="padding:18px;max-height:calc(100vh - 160px);overflow-y:auto;">'
+    +   '<div id="ai_letter_policywarn" style="display:none;background:var(--warn-amber-bg);color:var(--warn-amber-text);border:1px solid var(--warn-amber-border);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;"></div>'
+    +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
+    +     '<div class="f"><label>Recipient name</label><input type="text" id="ai_letter_recipient" placeholder="Full name"/></div>'
+    +     '<div class="f"><label>Re: / Address</label><input type="text" id="ai_letter_address" placeholder="Unit address or subject"/></div>'
+    +     '<div class="f"><label>Purpose</label><select id="ai_letter_purpose">' + purposeOpts + '</select></div>'
+    +     '<div class="f"><label>Tone</label><select id="ai_letter_tone"><option value="professional">Professional</option><option value="warm">Warm / supportive</option><option value="firm">Firm</option></select></div>'
+    +   '</div>'
+    +   '<div class="f" style="margin-top:4px;"><label>What should the letter say? (the situation / details)</label>'
+    +     '<textarea id="ai_letter_details" rows="4" placeholder="Describe the situation and anything the letter must mention. The AI grounds the letter in the housing policy." style="width:100%;box-sizing:border-box;"></textarea></div>'
+    +   '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:4px;">'
+    +     '<button type="button" id="ai_letter_gen_btn" class="btn btn-primary btn-sm" onclick="_aiLetterGenerate()"><span style="color:var(--dark);">✦</span> Generate letter</button>'
+    +     '<span id="ai_letter_status" style="font-size:12px;color:var(--muted);"></span>'
+    +   '</div>'
+    +   '<div id="ai_letter_result_wrap" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">'
+    +     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
+    +       '<label style="font-size:12px;font-weight:700;color:var(--text);">Drafted letter &mdash; review &amp; edit</label>'
+    +       '<span style="font-size:11px;color:var(--muted);">Grounded in the housing policy</span>'
+    +     '</div>'
+    +     '<textarea id="ai_letter_result" rows="14" style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;"></textarea>'
+    +     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">'
+    +       '<button type="button" class="btn btn-ghost btn-sm" onclick="_aiLetterGenerate()">↻ Regenerate</button>'
+    +       '<button type="button" id="ai_letter_save_btn" class="btn btn-primary btn-sm" onclick="_aiLetterSavePdf()">📄 Save as PDF to documents</button>'
+    +     '</div>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+  document.body.appendChild(wrap);
+  wrap.addEventListener('click', function(e){ if (e.target === wrap) _aiLetterClose(); });
+}
+
+window.aiWriteLetter = function(ctx) {
+  if (window.CLFN_MODULES && !CLFN_MODULES.isEnabled('ai_assistant')) {
+    if (typeof showToast === 'function') showToast('AI Assistant is disabled for this nation.', {type:'error'});
+    return;
+  }
+  _aiLetterCtx = ctx || {};
+  _aiLetterEnsureModal();
+  var modal = document.getElementById('ai_letter_modal');
+  if (!modal) return;
+  // Prefill + reset.
+  var rec = document.getElementById('ai_letter_recipient'); if (rec) rec.value = _aiLetterCtx.recipientName || '';
+  var adr = document.getElementById('ai_letter_address');   if (adr) adr.value = _aiLetterCtx.address || '';
+  var det = document.getElementById('ai_letter_details');   if (det) det.value = '';
+  var res = document.getElementById('ai_letter_result');    if (res) res.value = '';
+  var rw  = document.getElementById('ai_letter_result_wrap');if (rw) rw.style.display = 'none';
+  var st  = document.getElementById('ai_letter_status');    if (st) st.textContent = '';
+  var warn = document.getElementById('ai_letter_policywarn');
+  if (warn) {
+    if (!_aiPolicyText().trim()) {
+      warn.textContent = 'No housing policy text is set yet, so the letter will not cite specific policy. Add it in Settings → Housing policy.';
+      warn.style.display = '';
+    } else { warn.style.display = 'none'; }
+  }
+  modal.style.display = 'flex';
+};
+
+window._aiLetterClose = function() {
+  var m = document.getElementById('ai_letter_modal');
+  if (m) m.style.display = 'none';
+};
+
+window._aiLetterGenerate = function() {
+  var recipient = (document.getElementById('ai_letter_recipient') || {}).value || '';
+  var address   = (document.getElementById('ai_letter_address')   || {}).value || '';
+  var purpose   = (document.getElementById('ai_letter_purpose')   || {}).value || 'General correspondence';
+  var tone      = (document.getElementById('ai_letter_tone')      || {}).value || 'professional';
+  var details   = (document.getElementById('ai_letter_details')   || {}).value || '';
+  if (!recipient.trim() && !details.trim()) {
+    if (typeof showToast === 'function') showToast('Add a recipient and/or describe what the letter should say.', {type:'error'});
+    return;
+  }
+  var btn = document.getElementById('ai_letter_gen_btn');
+  var st  = document.getElementById('ai_letter_status');
+  if (btn) btn.disabled = true;
+  if (st) st.textContent = 'Drafting…';
+  _aiCall({
+    type: 'letter',
+    message: 'Write the letter.',
+    context: {
+      nation:     (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || 'the First Nation',
+      recipient:  recipient.trim() || 'the resident',
+      address:    address.trim(),
+      purpose:    purpose,
+      tone:       tone,
+      details:    details.trim(),
+      sender:     ((window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || '') + ' Housing Department',
+      policyText: _aiPolicyText(),
+      role:       window._effectiveRole || window.currentRole || ''
+    },
+    history: []
+  }).then(function(data){
+    if (data.error) throw new Error(data.error);
+    var res = document.getElementById('ai_letter_result');
+    if (res) res.value = data.reply || '';
+    var rw = document.getElementById('ai_letter_result_wrap');
+    if (rw) rw.style.display = '';
+    if (res) res.focus();
+  }).catch(function(err){
+    if (typeof showToast === 'function') showToast('Letter draft failed: ' + err.message, {type:'error'});
+  }).finally(function(){
+    if (btn) btn.disabled = false;
+    if (st) st.textContent = '';
+  });
+};
+
+// Build a branded letter PDF (nation letterhead + date + body) and return a Blob.
+async function _aiLetterPdfBlob(letterText) {
+  var jsPDF = await window.loadJsPdf();
+  var doc = new jsPDF({ unit: 'pt', format: 'letter' });
+  var pageW = doc.internal.pageSize.getWidth();
+  var pageH = doc.internal.pageSize.getHeight();
+  var margin = 56;
+  var nation = (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || 'Housing';
+  var y = margin;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
+  doc.text(String(nation), margin, y);
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
+  y += 15; doc.text('Housing Department', margin, y);
+  y += 12; doc.setDrawColor(190); doc.setLineWidth(0.8); doc.line(margin, y, pageW - margin, y);
+  y += 20;
+  var today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+  doc.setFontSize(10); doc.text(today, pageW - margin, y, { align: 'right' });
+  y += 22;
+  doc.setFontSize(11);
+  var lineH = 15;
+  var lines = doc.splitTextToSize(String(letterText || '').replace(/\r\n/g, '\n'), pageW - margin * 2);
+  for (var i = 0; i < lines.length; i++) {
+    if (y > pageH - margin) { doc.addPage(); y = margin; }
+    doc.text(lines[i], margin, y);
+    y += lineH;
+  }
+  return doc.output('blob');
+}
+
+window._aiLetterSavePdf = function() {
+  var res = document.getElementById('ai_letter_result');
+  var text = res ? (res.value || '').trim() : '';
+  if (!text) { if (typeof showToast === 'function') showToast('Nothing to save yet.', {type:'error'}); return; }
+  if (!_aiLetterCtx || typeof _aiLetterCtx.saveFile !== 'function') {
+    if (typeof showToast === 'function') showToast('Cannot file the letter here.', {type:'error'}); return;
+  }
+  var btn = document.getElementById('ai_letter_save_btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  var purpose = ((document.getElementById('ai_letter_purpose') || {}).value || 'Letter')
+    .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'Letter';
+  var fname = 'Letter-' + purpose + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
+  _aiLetterPdfBlob(text).then(function(blob){
+    _aiLetterCtx.saveFile(blob, fname, 'other');
+    if (typeof showToast === 'function') showToast('Letter saved to documents.', {type:'info'});
+    _aiLetterClose();
+  }).catch(function(err){
+    if (typeof showToast === 'function') showToast('Could not create the PDF: ' + (err && err.message ? err.message : err), {type:'error'});
+  }).finally(function(){
+    if (btn) { btn.disabled = false; btn.innerHTML = '📄 Save as PDF to documents'; }
+  });
+};

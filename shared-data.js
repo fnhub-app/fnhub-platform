@@ -9247,6 +9247,10 @@ function udpRenderFilePreviews(unitId){
     getAuthToken:  function(){ return (window.HOUSING_HEADERS && window.HOUSING_HEADERS['Authorization'] || '').replace('Bearer ',''); },
     auditTable:    'housing_audit_log',
     getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
+    // Write Letter with AI — grounded in the housing policy (ai-assistant.js).
+    aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+    aiRecipientName: function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? (u.assignedName||'') : ''; },
+    aiAddress:       function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? ((u.num||'')+' '+(u.street||'')).trim() : String(unitId); },
     categories:    _HOUSING_TENANT_DOC_CATEGORIES
   });
 }
@@ -9590,6 +9594,10 @@ function openTenantFilesPanel(unitId){
         getAuthToken:  function(){ return (window.HOUSING_HEADERS && window.HOUSING_HEADERS['Authorization'] || '').replace('Bearer ',''); },
         auditTable:    'housing_audit_log',
         getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
+        // Write Letter with AI — grounded in the housing policy (ai-assistant.js).
+        aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+        aiRecipientName: function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? (u.assignedName||'') : ''; },
+        aiAddress:       function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? ((u.num||'')+' '+(u.street||'')).trim() : String(unitId); },
         categories:    _HOUSING_TENANT_DOC_CATEGORIES,
         // Soft-archive of tenant files (recoverable) — gated by the
         // archiveTenantFiles approval authority (Settings -> Approval Authority

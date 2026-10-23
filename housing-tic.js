@@ -2164,6 +2164,10 @@
           return (window.HOUSING_HEADERS && window.HOUSING_HEADERS['Authorization'] || '').replace('Bearer ','');
         },
         readOnly: _ticReadOnlyRole(),
+        // Write Letter with AI — grounded in the housing policy (ai-assistant.js).
+        aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+        aiRecipientName: (unit && (unit.assignedName || unit.assigned_name)) || '',
+        aiAddress:       (unit ? ((unit.num||'') + ' ' + (unit.street||'')).trim() : ''),
         categories: [
           { key:'id',          label:'ID',              icon:'🧾' },
           { key:'income',      label:'Income / Pay',    icon:'💰' },

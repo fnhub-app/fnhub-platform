@@ -1658,6 +1658,12 @@ window.DocLibrary = (function(){
               ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-arch-toggle>\uD83D\uDDC4 Archived ('+archivedFiles.length+')</button>'
               : '');
       }
+      // Optional "Write Letter with AI" action (opt-in per library via
+      // opts.aiLetters). Drafts a policy-grounded letter and files the PDF
+      // back into THIS library. Hidden when read-only or archived.
+      var aiLetterBtnHTML = (opts.aiLetters && !opts.readOnly && !inArchived)
+        ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-ailetter><span style="color:var(--yellow);">\u2726</span> Write Letter with AI</button>'
+        : '';
       var headerHTML =
         '<div class="std-table-hdr">' +
           '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
@@ -1666,7 +1672,10 @@ window.DocLibrary = (function(){
               (shownCount === totalCount ? totalCount + ' total' : shownCount + ' shown \u00B7 ' + totalCount + ' total') +
             '</span>' +
           '</div>' +
-          (archiveToggleHTML ? '<div>'+archiveToggleHTML+'</div>' : '') +
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
+            aiLetterBtnHTML +
+            (archiveToggleHTML || '') +
+          '</div>' +
         '</div>';
 
       // Upload area (skipped when readOnly or viewing the archived list)
@@ -1786,6 +1795,32 @@ window.DocLibrary = (function(){
       root.querySelectorAll('[data-dl-chip]').forEach(function(btn){
         btn.onclick = function(){ state.filter = btn.getAttribute('data-dl-chip'); render(); };
       });
+      // Write Letter with AI — hands the entity context to the app-level letter
+      // writer (ai-assistant.js) plus a saveFile() that reuses THIS library's
+      // own upload path (storage + metadata + refresh), so the drafted PDF lands
+      // here exactly like a manual upload.
+      var aiBtn = root.querySelector('[data-dl-ailetter]');
+      if (aiBtn) aiBtn.onclick = function(){
+        if (typeof window.aiWriteLetter !== 'function') {
+          if (typeof window.showToast === 'function') window.showToast('AI letter writer is unavailable on this page.', {type:'error'});
+          return;
+        }
+        window.aiWriteLetter({
+          entityType:    opts.entityType,
+          entityId:      opts.entityId,
+          recipientName: (typeof opts.aiRecipientName === 'function' ? opts.aiRecipientName() : opts.aiRecipientName) || '',
+          address:       (typeof opts.aiAddress === 'function' ? opts.aiAddress() : opts.aiAddress) || '',
+          saveFile: function(blob, filename, category){
+            try { if (category) state.uploadCategory = category; } catch(e){}
+            try {
+              var file = new File([blob], filename || ('Letter-' + Date.now() + '.pdf'), { type: 'application/pdf' });
+              _handleFiles([file]);
+            } catch(e){
+              if (typeof window.showToast === 'function') window.showToast('Could not file the letter: ' + (e && e.message ? e.message : e), {type:'error'});
+            }
+          }
+        });
+      };
       // Archived-view toggle
       var archToggle = root.querySelector('[data-dl-arch-toggle]');
       if (archToggle) archToggle.onclick = function(){ state.showArchived = !state.showArchived; state.filter = 'all'; render(); };

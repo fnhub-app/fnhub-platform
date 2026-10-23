@@ -493,6 +493,15 @@ serve(async (req) => {
       return json({ reply })
     }
 
+    // --- Letter mode: single call, no tools; drafts a resident letter grounded
+    // in the nation's housing policy (policy text passed in context). ---
+    if (type === 'letter') {
+      const data = await callClaude(buildSystem('letter', context), buildMessages(message, history))
+      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: ('letter: ' + (context?.purpose || '')).slice(0, 500), replyChars: reply.length, tables: [], turns: 1 })
+      return json({ reply })
+    }
+
     // --- Chat mode: tool-use loop with the read-only query_database tool ---
     const system = buildSystem('chat', context)
     const messages = buildMessages(message, history)
@@ -787,6 +796,36 @@ Application details:
 - Unit assigned: ${ctx?.unit || 'N/A'}
 
 Write 2-4 sentences. Be professional, clear, and compassionate. Reference specific details where relevant. Output ONLY the note text - no subject line, no greeting, no signature.`
+  }
+
+  if (type === 'letter') {
+    const nation    = ctx?.nation    || 'the First Nation'
+    const recipient = ctx?.recipient || 'the resident'
+    const address   = ctx?.address   || ''
+    const purpose   = ctx?.purpose   || 'general correspondence'
+    const tone      = ctx?.tone      || 'professional'
+    const details   = ctx?.details   || ''
+    const sender    = ctx?.sender    || (nation + ' Housing Department')
+    const policy    = String(ctx?.policyText || '').slice(0, 16000)
+    const policyBlock = policy
+      ? ('HOUSING POLICY (the authoritative policy of this nation - ground the letter in it and, where it applies, cite the relevant part in plain language; do NOT invent policy that is not stated here):\n"""\n' + policy + '\n"""')
+      : 'No housing policy text was provided for this nation. Write a correct, professional letter but do NOT cite specific policy clauses you cannot verify.'
+    return `You are a professional housing administrator writing an official letter on behalf of the ` + nation + ` Housing Department.
+
+Recipient: ` + recipient + (address ? ' (' + address + ')' : '') + `
+Purpose: ` + purpose + `
+Tone: ` + tone + `
+What the letter needs to say / the situation: ` + (details || '(use the purpose above)') + `
+
+` + policyBlock + `
+
+Rules:
+- Output ONLY the letter text. No preamble, no explanation, no markdown fences.
+- Do NOT include a letterhead, logo, or date line - those are added automatically when the letter is turned into a PDF. Begin with the recipient's name/address block, then the salutation.
+- Structure: recipient block; a "Dear ..." salutation; body paragraphs; a courteous closing ("Sincerely,"); then a signature block naming the ` + sender + `, ` + nation + `.
+- Be clear, respectful, and specific to the situation. Where the housing policy applies, reference it accurately in plain language (you may name the section/topic, but do not quote clauses that are not in the policy text above).
+- Do NOT fabricate facts, dates, dollar amounts, unit numbers, or names that were not provided.
+- For sensitive matters (arrears, warnings, eviction), stay firm but respectful, and set out the resident's options and the relevant policy steps.`
   }
 
   // Chat mode
