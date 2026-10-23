@@ -61,6 +61,11 @@ interface Window {
   CLFN_CONFIG_LOADED: boolean;
   CLFN_DEBUG: boolean;
 
+  // --- Misc shared-layer helpers referenced across the checked set ---
+  _stashLoginReturn: (...args: any[]) => any;   // shared-auth.js (deep-link return)
+  _removeScoringGateBar: (...args: any[]) => any; // housing-app.js scoring gate bar
+  aiWriteLetter: (...args: any[]) => any;        // ai-assistant.js (DocLibrary letter writer)
+
   // --- Nation identity / branding ---
   NATIONS_DIRECTORY: Record<string, NationConfig>;
   NATION_CONFIG: NationConfig;
