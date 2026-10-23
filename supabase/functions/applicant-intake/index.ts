@@ -311,6 +311,35 @@ serve(async (req) => {
       return json({ ok: true, enabled, band_required: !!prefix, closed_message: enabled ? undefined : PORTAL_CLOSED_MSG })
     }
 
+    // --- policy: PRE-LOGIN public read of the nation's housing policy (the
+    // text staff maintain in Settings, plus a short-lived signed URL to the
+    // official PDF). No PII, read-only; safe for the public policy.html page
+    // and the member portal. The housing_policy setting is a jsonb object
+    // { text, pdf_path, updated_at, updated_by }. ---
+    if (action === 'policy') {
+      const adminP = createClient(SUPABASE_URL, SERVICE_KEY)
+      const pol = await readNationSetting(adminP, 'housing_policy')
+      const text      = (pol && typeof pol === 'object') ? String((pol as any).text || '') : (typeof pol === 'string' ? pol : '')
+      const pdfPath   = (pol && typeof pol === 'object') ? String((pol as any).pdf_path || '') : ''
+      const updatedAt = (pol && typeof pol === 'object') ? String((pol as any).updated_at || '') : ''
+      let pdfUrl = ''
+      if (pdfPath) {
+        try {
+          const signRes = await fetch(SUPABASE_URL + '/storage/v1/object/sign/' + MRQ_BUCKET + '/' + pdfPath, {
+            method: 'POST',
+            headers: { 'Authorization': 'Bearer ' + SERVICE_KEY, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ expiresIn: 3600 }),
+          })
+          if (signRes.ok) {
+            const sd = await signRes.json()
+            const rel = sd && (sd.signedURL || sd.signedUrl)
+            if (rel) pdfUrl = SUPABASE_URL + '/storage/v1' + rel
+          }
+        } catch (_e) { /* PDF is optional */ }
+      }
+      return json({ ok: true, text, pdf_url: pdfUrl, updated_at: updatedAt })
+    }
+
     // --- request_link: PRE-LOGIN. Generate a magic link and email it through
     // the nation's OWN pipeline (not Supabase's default sender). No user JWT;
     // the client calls this with the anon key like any public endpoint. ---

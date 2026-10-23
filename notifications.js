@@ -3906,6 +3906,12 @@ async function renderConfigPanel() {
     : gcProvider === 'sendgrid' ? 'SendGrid'
     : (gc.from ? (gcProvider || 'Email service') : 'Not configured');
 
+  // Housing policy (jsonb { text, pdf_path, updated_at, updated_by }).
+  var _pol    = (window._appSettings && window._appSettings.housing_policy) || {};
+  var _polText = (_pol && typeof _pol === 'object') ? (_pol.text || '') : (typeof _pol === 'string' ? _pol : '');
+  var _polPdf  = (_pol && typeof _pol === 'object') ? (_pol.pdf_path || '') : '';
+  var _polUpd  = (_pol && typeof _pol === 'object') ? (_pol.updated_at || '') : '';
+
   // Project ref from the Supabase URL drives the deep-link to the
   // Edge Function secrets page. Falls back to the dashboard root if
   // we can't parse the project ref.
@@ -3996,6 +4002,33 @@ async function renderConfigPanel() {
     +     '</div>'
     +   '</div>'
     +   '<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:0 0 4px;">The nation’s 3-digit band membership number. When set, self-serve applicants must enter a 10-digit band (registry) number that <b>starts with these 3 digits</b> before they can submit — the first three digits of a registry number are always the band membership number. Leave blank to skip that verification.</div>'
+    + '</div>'
+
+    + '<div class="cfg-section">'
+    +   '<div class="cfg-section-title">Housing policy</div>'
+    +   '<div class="cfg-section-sub">The policy staff and the public read at <b>policy.html</b>, and the text the AI letter-writer quotes when drafting tenant letters. Paste the policy text and upload the official signed PDF.</div>'
+    +   '<div class="cfg-grid">'
+    +     '<div class="cfg-row" style="align-items:flex-start;">'
+    +       '<div class="cfg-label">Policy text</div>'
+    +       '<div class="cfg-value" style="flex-direction:column;align-items:stretch;gap:6px;">'
+    +         '<textarea id="cfg_policy_text" rows="10" placeholder="Paste the full housing policy text here..." style="width:100%;padding:10px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);font-family:DM Sans,sans-serif;background:var(--surface);line-height:1.5;resize:vertical;box-sizing:border-box;">' + _ntfEsc(_polText) + '</textarea>'
+    +       '</div>'
+    +     '</div>'
+    +     '<div class="cfg-row">'
+    +       '<div class="cfg-label">Official PDF</div>'
+    +       '<div class="cfg-value" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+    +         '<input type="file" id="cfg_policy_pdf" accept="application/pdf" style="font-size:12px;"/>'
+    +         (_polPdf ? '<span style="font-size:11px;color:var(--success);font-weight:700;">✓ PDF on file</span> <button type="button" class="btn btn-ghost btn-sm" onclick="viewHousingPolicyPdf()">View current</button>'
+                     : '<span style="font-size:11px;color:var(--muted);">No PDF uploaded yet</span>')
+    +       '</div>'
+    +     '</div>'
+    +   '</div>'
+    +   '<div style="display:flex;gap:8px;align-items:center;margin-top:10px;flex-wrap:wrap;">'
+    +     '<button type="button" class="btn btn-primary btn-sm" onclick="saveHousingPolicy()">Save policy</button>'
+    +     '<a href="policy.html" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">Open public page ↗</a>'
+    +     (_polUpd ? '<span style="font-size:11px;color:var(--muted);">Last updated ' + _ntfEsc(_polUpd) + '</span>' : '')
+    +   '</div>'
+    +   '<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:0 0 4px;">Published to the public at <b>policy.html</b> (linked from the sign-in screen and the member portal) and used by the AI letter-writer in tenant &amp; unit documents. ED only.</div>'
     + '</div>'
 
     + '<div class="cfg-section">'
@@ -4160,6 +4193,64 @@ function saveNationBandNumber() {
   });
 }
 window.saveNationBandNumber = saveNationBandNumber;
+
+// Housing policy — the text (and optional official PDF) staff maintain for the
+// public policy.html page, the member portal, and the AI letter-writer. Stored
+// in housing_settings.housing_policy as { text, pdf_path, updated_at,
+// updated_by }; the PDF lives at a fixed path in the nation's OWN bucket.
+var HOUSING_POLICY_PDF_PATH = 'policy/housing-policy.pdf';
+async function saveHousingPolicy() {
+  if (!_cfgEdGuard('Only the Executive Director can change the housing policy')) return;
+  var ta = document.getElementById('cfg_policy_text');
+  var fi = document.getElementById('cfg_policy_pdf');
+  var text = ta ? (ta.value || '').trim() : '';
+  var cur  = (window._appSettings && window._appSettings.housing_policy) || {};
+  var pdfPath = (cur && typeof cur === 'object') ? (cur.pdf_path || '') : '';
+  var file = (fi && fi.files && fi.files[0]) ? fi.files[0] : null;
+  if (file && file.type !== 'application/pdf' && !/\.pdf$/i.test(file.name || '')) {
+    showToast('Please choose a PDF file for the official policy', {type:'error'}); return;
+  }
+  if (!text && !pdfPath && !file) {
+    showToast('Add the policy text and/or upload a PDF before saving', {type:'error'}); return;
+  }
+  try {
+    if (file) {
+      if (typeof sbUploadFile !== 'function') { showToast('File upload is unavailable on this page', {type:'error'}); return; }
+      await sbUploadFile(HOUSING_POLICY_PDF_PATH, file);
+      pdfPath = HOUSING_POLICY_PDF_PATH;
+    }
+    var val = {
+      text:       text,
+      pdf_path:   pdfPath || '',
+      updated_at: new Date().toISOString().slice(0, 10),
+      updated_by: (window.HOUSING_SESSION && HOUSING_SESSION.email) || ''
+    };
+    var ok = await persistSetting('housing_policy', val, {
+      auditAction: 'housing_policy_save',
+      auditDetail: 'Housing policy updated' + (file ? ' (new PDF uploaded)' : ''),
+      okMsg:       'Housing policy saved'
+    });
+    if (ok && typeof renderConfigPanel === 'function') setTimeout(renderConfigPanel, 300);
+  } catch (e) {
+    showToast('Could not save the policy: ' + (e && e.message ? e.message : e), {type:'error'});
+  }
+}
+window.saveHousingPolicy = saveHousingPolicy;
+
+async function viewHousingPolicyPdf() {
+  var cur = (window._appSettings && window._appSettings.housing_policy) || {};
+  var pdfPath = (cur && typeof cur === 'object') ? (cur.pdf_path || '') : '';
+  if (!pdfPath) { showToast('No policy PDF on file', {type:'error'}); return; }
+  // Open the tab synchronously (preserves the click gesture on iOS Safari),
+  // then navigate it once the signed URL resolves.
+  var tab = window.open('', '_blank');
+  try {
+    var url = (typeof sbGetSignedUrl === 'function') ? await sbGetSignedUrl(pdfPath) : '';
+    if (url) { if (tab) tab.location = url; else window.location = url; }
+    else { if (tab) tab.close(); showToast('Could not open the policy PDF', {type:'error'}); }
+  } catch (e) { if (tab) tab.close(); showToast('Could not open the policy PDF', {type:'error'}); }
+}
+window.viewHousingPolicyPdf = viewHousingPolicyPdf;
 
 function saveEldersAgeMin() {
   if (!_cfgEdGuard('Only the Executive Director can change this setting')) return;

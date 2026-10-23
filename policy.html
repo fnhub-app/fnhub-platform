@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Housing Policy</title>
+<meta name="description" content="Read the housing policy."/>
+<style>
+  :root{
+    --accent:#eab308;
+    --bg:#f6f6f3; --surface:#ffffff; --ink:#1a1a1a; --muted:#6b7280;
+    --border:#e5e5e0; --head:#111418;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#14161a; --surface:#1c1f25; --ink:#eef0f3; --muted:#9aa3af;
+      --border:#2a2e36; --head:#0f1115;
+    }
+  }
+  *{box-sizing:border-box;}
+  html{-webkit-text-size-adjust:100%;}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"DM Sans",sans-serif;
+    line-height:1.6; -webkit-font-smoothing:antialiased;
+  }
+  .topbar{
+    background:var(--head); color:#fff; border-bottom:3px solid var(--accent);
+    padding:14px 16px;
+  }
+  .topbar-inner{max-width:820px;margin:0 auto;display:flex;align-items:center;gap:12px;}
+  .logo{width:36px;height:36px;border-radius:8px;background:var(--accent);color:#111;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:16px;overflow:hidden;flex-shrink:0;}
+  .logo img{width:100%;height:100%;object-fit:contain;}
+  .nation{font-size:13px;color:#cfd3da;letter-spacing:.02em;}
+  .nation strong{color:#fff;font-weight:700;}
+  main{max-width:820px;margin:0 auto;padding:28px 16px 64px;}
+  h1{font-size:28px;line-height:1.2;margin:8px 0 4px;letter-spacing:-.01em;}
+  .updated{color:var(--muted);font-size:13px;margin:0 0 20px;}
+  .actions{display:flex;gap:10px;flex-wrap:wrap;margin:0 0 24px;}
+  .btn{display:inline-flex;align-items:center;gap:7px;padding:10px 16px;border-radius:9px;
+    font-size:14px;font-weight:700;text-decoration:none;cursor:pointer;border:1.5px solid var(--border);
+    background:var(--surface);color:var(--ink);}
+  .btn-primary{background:var(--accent);border-color:var(--accent);color:#111;}
+  .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
+    padding:24px 22px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
+  .policy p{margin:0 0 14px;}
+  .policy p:last-child{margin-bottom:0;}
+  .policy h2{font-size:19px;margin:26px 0 10px;}
+  .policy h3{font-size:16px;margin:20px 0 8px;}
+  .state{color:var(--muted);font-size:15px;text-align:center;padding:40px 10px;}
+  .foot{max-width:820px;margin:0 auto;padding:0 16px 40px;color:var(--muted);font-size:12px;}
+  .foot a{color:var(--muted);}
+  a.home{color:#cfd3da;text-decoration:none;font-size:13px;margin-left:auto;}
+  a.home:hover{color:#fff;}
+</style>
+</head>
+<body>
+  <div class="topbar">
+    <div class="topbar-inner">
+      <div class="logo" id="brand_logo">H</div>
+      <div class="nation"><strong id="brand_name">Housing</strong><br>Housing Policy</div>
+      <a class="home" href="index.html">Staff sign in &rarr;</a>
+    </div>
+  </div>
+  <main>
+    <h1>Housing Policy</h1>
+    <p class="updated" id="updated" style="display:none;"></p>
+    <div class="actions" id="actions" style="display:none;">
+      <a class="btn btn-primary" id="pdf_btn" href="#" target="_blank" rel="noopener">&#128196; Download PDF</a>
+    </div>
+    <div class="card">
+      <div class="policy" id="policy"><div class="state">Loading the housing policy&hellip;</div></div>
+    </div>
+  </main>
+  <div class="foot">
+    This is the current housing policy. For questions, contact the Housing office.
+  </div>
+
+  <script src="shared-config.js"></script>
+  <script>
+  (function(){
+    'use strict';
+    var SB   = (window.SUPABASE_URL || '').replace(/\/$/, '');
+    var ANON = window.SUPABASE_ANON || '';
+    var NC   = window.NATION_CONFIG || {};
+
+    // Branding from the resolved nation (never hardcoded).
+    var nameEl = document.getElementById('brand_name');
+    var logoEl = document.getElementById('brand_logo');
+    var dn = NC.display_name || NC.short || 'Housing';
+    if (nameEl) nameEl.textContent = dn;
+    if (logoEl) {
+      if (NC.logo) { logoEl.innerHTML = '<img alt="" src="' + String(NC.logo).replace(/"/g,'&quot;') + '"/>'; }
+      else { logoEl.textContent = (dn.charAt(0) || 'H').toUpperCase(); }
+    }
+    if (NC.primary_color) {
+      try { document.documentElement.style.setProperty('--accent', NC.primary_color); } catch(e){}
+    }
+    try { document.title = dn + ' — Housing Policy'; } catch(e){}
+
+    function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
+      return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
+
+    // Render plain policy text safely: escape everything, treat blank lines as
+    // paragraph breaks and single newlines as line breaks. A line that is short
+    // and ends without a period and is followed by a blank line reads as a
+    // heading — but to stay safe and predictable we keep it simple: paragraphs
+    // and line breaks only.
+    function renderText(text){
+      var blocks = String(text).replace(/\r\n/g,'\n').split(/\n{2,}/);
+      return blocks.map(function(b){
+        var inner = esc(b.trim()).replace(/\n/g,'<br>');
+        return inner ? ('<p>' + inner + '</p>') : '';
+      }).join('');
+    }
+
+    function state(msg){
+      document.getElementById('policy').innerHTML = '<div class="state">' + esc(msg) + '</div>';
+    }
+
+    if (!SB || !ANON) { state('This page is not configured. Please contact the Housing office.'); return; }
+
+    fetch(SB + '/functions/v1/applicant-intake', {
+      method:'POST',
+      headers:{ 'apikey':ANON, 'Authorization':'Bearer ' + ANON, 'Content-Type':'application/json' },
+      body: JSON.stringify({ action:'policy' })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if (!d || !d.ok) { state('The housing policy is not available right now. Please contact the Housing office.'); return; }
+      var hasText = d.text && String(d.text).trim();
+      var hasPdf  = d.pdf_url && String(d.pdf_url).trim();
+      if (!hasText && !hasPdf) {
+        state('The housing policy has not been published yet. Please contact the Housing office.');
+        return;
+      }
+      if (hasText) {
+        document.getElementById('policy').innerHTML = renderText(d.text);
+      } else {
+        state('The housing policy is available as a PDF below.');
+      }
+      if (hasPdf) {
+        var pdfBtn = document.getElementById('pdf_btn');
+        pdfBtn.href = d.pdf_url;
+        document.getElementById('actions').style.display = '';
+      }
+      if (d.updated_at) {
+        var up = document.getElementById('updated');
+        up.textContent = 'Last updated ' + esc(d.updated_at);
+        up.style.display = '';
+      }
+    }).catch(function(){
+      state('The housing policy could not be loaded. Please check your connection and try again.');
+    });
+  })();
+  </script>
+</body>
+</html>

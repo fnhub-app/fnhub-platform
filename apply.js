@@ -159,7 +159,8 @@
       + '</div>'
       + '<div class="msg" id="lmsg"></div>'
       + '<button class="btn" id="lbtn" type="button">Email me a sign-in link</button>'
-      + '<div class="foot">Your information is kept private and reviewed only by the Housing office.</div>';
+      + '<div class="foot">Your information is kept private and reviewed only by the Housing office.</div>'
+      + '<div class="foot" style="margin-top:6px;"><a href="policy.html" style="color:var(--accent);text-decoration:underline;">Read the Housing Policy</a></div>';
     document.getElementById('lbtn').addEventListener('click', sendLink);
     document.getElementById('em').addEventListener('keydown', function (e) { if (e.key === 'Enter') sendLink(); });
     if (_loginBandRequired) _setBandRowVisible(true);   // instant, from cache
