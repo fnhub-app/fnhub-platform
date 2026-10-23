@@ -4028,7 +4028,7 @@ async function renderConfigPanel() {
     +     '<a href="policy.html" target="_blank" rel="noopener" class="btn btn-ghost btn-sm" style="text-decoration:none;">Open public page ↗</a>'
     +     (_polUpd ? '<span style="font-size:11px;color:var(--muted);">Last updated ' + _ntfEsc(_polUpd) + '</span>' : '')
     +   '</div>'
-    +   '<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:0 0 4px;">Published to the public at <b>policy.html</b> (linked from the sign-in screen and the member portal) and used by the AI letter-writer in tenant &amp; unit documents. ED only.</div>'
+    +   '<div style="font-size:11px;color:var(--muted);margin-top:8px;padding:0 0 4px;">Published to the public at <b>policy.html</b> (linked from the sign-in screen and the member portal) and used by the AI letter-writer in tenant &amp; unit documents. ED only.<br><b>Formatting:</b> the page auto-detects ALL-CAPS section titles, numbered clauses (1., 5.1, (a)) and bullet lists. For precise control you can use Markdown — <code>#&nbsp;Heading</code>, <code>##&nbsp;Sub-heading</code>, <code>-&nbsp;bullet</code>, <code>**bold**</code> — and leave a blank line between paragraphs.</div>'
     + '</div>'
 
     + '<div class="cfg-section">'

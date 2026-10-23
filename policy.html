@@ -44,10 +44,22 @@
   .btn-primary{background:var(--accent);border-color:var(--accent);color:#111;}
   .card{background:var(--surface);border:1px solid var(--border);border-radius:14px;
     padding:24px 22px;box-shadow:0 1px 2px rgba(0,0,0,.04);}
-  .policy p{margin:0 0 14px;}
-  .policy p:last-child{margin-bottom:0;}
-  .policy h2{font-size:19px;margin:26px 0 10px;}
-  .policy h3{font-size:16px;margin:20px 0 8px;}
+  .policy{font-size:15.5px;max-width:68ch;}
+  .policy > :first-child{margin-top:0;}
+  .policy > :last-child{margin-bottom:0;}
+  .policy p{margin:0 0 15px;}
+  .policy h2{font-size:21px;line-height:1.25;font-weight:800;margin:30px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--border);letter-spacing:-.01em;}
+  .policy h3{font-size:17px;line-height:1.3;font-weight:700;margin:24px 0 9px;}
+  .policy h4{font-size:15px;line-height:1.35;font-weight:700;margin:20px 0 7px;color:var(--muted);text-transform:uppercase;letter-spacing:.03em;}
+  .policy ul{margin:0 0 15px;padding-left:22px;}
+  .policy li{margin:0 0 7px;}
+  .policy li:last-child{margin-bottom:0;}
+  /* Numbered/lettered clauses keep their ORIGINAL marker (so "5.1" stays "5.1",
+     never renumbered by the browser) with a hanging indent. */
+  .policy .clause{display:flex;gap:10px;margin:0 0 9px;align-items:baseline;}
+  .policy .clause .num{flex:0 0 auto;min-width:30px;font-weight:700;color:var(--ink);font-variant-numeric:tabular-nums;}
+  .policy .clause .txt{flex:1 1 auto;}
+  .policy strong{font-weight:700;}
   .state{color:var(--muted);font-size:15px;text-align:center;padding:40px 10px;}
   .foot{max-width:820px;margin:0 auto;padding:0 16px 40px;color:var(--muted);font-size:12px;}
   .foot a{color:var(--muted);}
@@ -102,17 +114,62 @@
     function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){
       return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); }
 
-    // Render plain policy text safely: escape everything, treat blank lines as
-    // paragraph breaks and single newlines as line breaks. A line that is short
-    // and ends without a period and is followed by a blank line reads as a
-    // heading — but to stay safe and predictable we keep it simple: paragraphs
-    // and line breaks only.
-    function renderText(text){
-      var blocks = String(text).replace(/\r\n/g,'\n').split(/\n{2,}/);
-      return blocks.map(function(b){
-        var inner = esc(b.trim()).replace(/\n/g,'<br>');
-        return inner ? ('<p>' + inner + '</p>') : '';
-      }).join('');
+    // Light inline formatting on an ALREADY-ESCAPED string: **bold** and *italic*.
+    function inlineFmt(s){
+      s = s.replace(/\*\*([^*]+?)\*\*/g, '<strong>$1</strong>');
+      s = s.replace(/(^|[\s(])\*([^*\s][^*]*?)\*(?=$|[\s.,;:)])/g, '$1<em>$2</em>');
+      return s;
+    }
+    // A short, letters-only line in ALL CAPS with no terminal punctuation reads
+    // as a section heading (common in policies copied from Word/PDF).
+    function isCapsHeading(t){
+      return t.length <= 72 && /[A-Za-z]/.test(t) && t === t.toUpperCase()
+        && !/[.:;!?]$/.test(t) && t.replace(/[^A-Za-z]/g,'').length >= 3;
+    }
+    // Render the policy text into clean, safe HTML. Everything is escaped first;
+    // we only recognise structure (headings, lists, numbered clauses) and
+    // reflow PDF-style hard-wrapped lines back into flowing paragraphs.
+    function renderPolicy(text){
+      var lines = String(text).replace(/\r\n?/g,'\n').split('\n');
+      var out = [], para = [], listItems = null;
+      function flushPara(){
+        if (para.length){ out.push('<p>' + inlineFmt(esc(para.join(' ').replace(/\s+/g,' ').trim())) + '</p>'); para = []; }
+      }
+      function flushList(){
+        if (listItems){ out.push('<ul>' + listItems.map(function(it){ return '<li>' + inlineFmt(esc(it)) + '</li>'; }).join('') + '</ul>'); listItems = null; }
+      }
+      function flushAll(){ flushPara(); flushList(); }
+
+      for (var i=0;i<lines.length;i++){
+        var t = lines[i].trim();
+        if (!t){ flushAll(); continue; }
+
+        // Markdown headings: #, ##, ### -> h2/h3/h4
+        var mh = t.match(/^(#{1,4})\s+(.+)$/);
+        if (mh){ flushAll(); var lvl = Math.min(mh[1].length + 1, 4); out.push('<h'+lvl+'>' + inlineFmt(esc(mh[2].trim())) + '</h'+lvl+'>'); continue; }
+
+        // SECTION/ARTICLE/PART keyword headings, or ALL-CAPS section titles
+        if ((/^(SECTION|ARTICLE|PART|CHAPTER|APPENDIX|SCHEDULE)\b/i.test(t) && t.length <= 90) || isCapsHeading(t)){
+          flushAll(); out.push('<h2>' + inlineFmt(esc(t)) + '</h2>'); continue;
+        }
+
+        // Bulleted list item: -, *, +, bullet
+        var mb = t.match(/^[-*+•·]\s+(.+)$/);
+        if (mb){ flushPara(); if(!listItems) listItems = []; listItems.push(mb[1].trim()); continue; }
+
+        // Numbered / lettered clause: 1.  2)  2.1  5.1.3  a.  b)  (a)  (i) --
+        // keep the ORIGINAL marker (hanging indent); never auto-renumber. A
+        // multi-level number (2.1) counts even without trailing punctuation; a
+        // bare single number ("2 people...") does NOT, to avoid false matches.
+        var mn = t.match(/^(\([A-Za-z0-9]+\)|\d+(?:\.\d+)+\.?|\d+[.)]|[A-Za-z][.)])\s+(.+)$/);
+        if (mn){ flushAll(); out.push('<div class="clause"><span class="num">' + esc(mn[1]) + '</span><span class="txt">' + inlineFmt(esc(mn[2].trim())) + '</span></div>'); continue; }
+
+        // Plain text line -> accumulate into the current paragraph (reflow).
+        flushList();
+        para.push(t);
+      }
+      flushAll();
+      return out.join('') || '<div class="state">The housing policy has no content yet.</div>';
     }
 
     function state(msg){
@@ -134,7 +191,7 @@
         return;
       }
       if (hasText) {
-        document.getElementById('policy').innerHTML = renderText(d.text);
+        document.getElementById('policy').innerHTML = renderPolicy(d.text);
       } else {
         state('The housing policy is available as a PDF below.');
       }
