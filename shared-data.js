@@ -6666,13 +6666,26 @@ function _wlCollectSows(ctx) {
     Object.keys(sowCache2).forEach(function(uid) {
       var list = (typeof getUnitSowList === 'function') ? getUnitSowList(uid) : [];
       list.forEach(function(sow) {
-        if (!sow || !sow.items || !sow.items.length) return; // no content
+        if (!sow) return;
         // Cancelled and archived requests are terminal — they keep their
         // pre-cancel approval_status by design (see CLAUDE.md), so without
         // this check a cancelled 'submitted' MR stayed in the approval queue
         // with a live Approve button.
         if (sow.cancelled || sow.archived) return;
         var status = sow.approval_status || '';
+        // Skip a genuinely-empty request, but KEEP a no-items request that still
+        // carries substance — a lump-sum cost, a described scope, an assigned
+        // party, or a status past 'new' — so a real request captured without
+        // itemized lines still reaches the approval queue instead of silently
+        // never appearing (it used to be dropped on item-count alone).
+        var _wlCost = parseFloat(String((sow.totalCost != null ? sow.totalCost : (sow.amount != null ? sow.amount : sow.cost)) || '').replace(/[^0-9.\-]/g, '')) || 0;
+        var _wlHasSubstance = (sow.items && sow.items.length)
+          || _wlCost > 0
+          || (sow.description && String(sow.description).trim())
+          || (sow.notes && String(sow.notes).trim())
+          || sow.contractor || sow.assignedTo || sow.assignedToName
+          || (['submitted', 'signed', 'hm_approved'].indexOf(status) !== -1);
+        if (!_wlHasSubstance) return;
         if (status === 'ed_approved' || status === 'completed') return; // already done
         // A draft the current user prepared already shows under "My Drafts" — it
         // hasn't been submitted for approval, so don't also list it here (this was
