@@ -820,33 +820,38 @@ window._aiLetterGenerate = function() {
   });
 };
 
-// Build a branded letter PDF (nation letterhead + date + body) and return a Blob.
-async function _aiLetterPdfBlob(letterText) {
-  var jsPDF = await window.loadJsPdf();
-  var doc = new jsPDF({ unit: 'pt', format: 'letter' });
-  var pageW = doc.internal.pageSize.getWidth();
-  var pageH = doc.internal.pageSize.getHeight();
-  var margin = 56;
-  var nation = (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || 'Housing';
-  var y = margin;
-  doc.setFont('helvetica', 'bold'); doc.setFontSize(16);
-  doc.text(String(nation), margin, y);
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(10);
-  y += 15; doc.text('Housing Department', margin, y);
-  y += 12; doc.setDrawColor(190); doc.setLineWidth(0.8); doc.line(margin, y, pageW - margin, y);
-  y += 20;
-  var today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
-  doc.setFontSize(10); doc.text(today, pageW - margin, y, { align: 'right' });
-  y += 22;
-  doc.setFontSize(11);
-  var lineH = 15;
-  var lines = doc.splitTextToSize(String(letterText || '').replace(/\r\n/g, '\n'), pageW - margin * 2);
-  for (var i = 0; i < lines.length; i++) {
-    if (y > pageH - margin) { doc.addPage(); y = margin; }
-    doc.text(lines[i], margin, y);
-    y += lineH;
+// Build the letter PDF on the app's OFFICIAL branded letterhead and return a
+// Blob. Reuses _makePdfDoc (notifications.js) -- the same letterhead the TIC
+// agreements/leases use: nation logo + name + mailing address + contact line,
+// a brand-accent rule, and a "Page X of Y" footer -- so an AI-drafted letter
+// looks exactly like every other document the office sends.
+async function _aiLetterPdfBlob(letterText, purpose) {
+  if (typeof window.loadJsPdf === 'function') { await window.loadJsPdf(); }
+  else if (typeof _loadJsPdf === 'function') { await _loadJsPdf(); }
+  if (typeof _makePdfDoc !== 'function' || !(window.jspdf && window.jspdf.jsPDF)) {
+    throw new Error('Branded letterhead is unavailable on this page.');
   }
-  return doc.output('blob');
+  var logo = (typeof _fetchLogoForPdf === 'function') ? await _fetchLogoForPdf() : null;
+  var nc = window.NATION_CONFIG || {};
+  var nation = nc.display_name || nc.short || 'Housing';
+  var today = new Date().toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
+  var title = (purpose && String(purpose).trim()) ? String(purpose).toUpperCase() : 'LETTER';
+  var ctx = _makePdfDoc({
+    logoDataUrl:    logo,
+    headerTitle:    title,
+    headerSubtitle: today,
+    footerLeft:     nation + ' Housing Department'
+  });
+  ctx.gap(4);
+  // One paragraph per blank-line-separated block; single newlines inside a
+  // block (recipient address, signature) are preserved by splitTextToSize.
+  var blocks = String(letterText || '').replace(/\r\n?/g, '\n').split(/\n{2,}/);
+  for (var i = 0; i < blocks.length; i++) {
+    var b = blocks[i].replace(/^\n+|\n+$/g, '');
+    if (b.trim()) { ctx.paragraph(b, 10.5); ctx.gap(2.5); }
+  }
+  ctx.finish();                 // stamps the footer + page numbers
+  return ctx.pdf.output('blob');
 }
 
 window._aiLetterSavePdf = function() {
@@ -861,7 +866,8 @@ window._aiLetterSavePdf = function() {
   var purpose = ((document.getElementById('ai_letter_purpose') || {}).value || 'Letter')
     .replace(/[^a-zA-Z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'Letter';
   var fname = 'Letter-' + purpose + '-' + new Date().toISOString().slice(0, 10) + '.pdf';
-  _aiLetterPdfBlob(text).then(function(blob){
+  var purposeLabel = (document.getElementById('ai_letter_purpose') || {}).value || '';
+  _aiLetterPdfBlob(text, purposeLabel).then(function(blob){
     _aiLetterCtx.saveFile(blob, fname, 'other');
     if (typeof showToast === 'function') showToast('Letter saved to documents.', {type:'info'});
     _aiLetterClose();
