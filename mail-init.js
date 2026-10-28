@@ -213,9 +213,9 @@ async function openMailTriage(id) {
     +   '</div>'
     + (isNew
       ? ('<div style="border-top:1px solid var(--border);padding-top:14px;">'
-        +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Suggested match</div>'
+        +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px;">Possible matches <span style="text-transform:none;letter-spacing:0;">(a guess from the email — verify before filing)</span></div>'
         +   '<div style="margin-bottom:10px;">' + suggHtml + '</div>'
-        +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">File to a unit or applicant</div>'
+        +   '<div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px;">Search for the unit, tenant, or applicant to file to</div>'
         +   '<div id="mail_unit_wrap"></div>'
         +   '<div style="margin-top:10px;"><label style="font-size:11px;color:var(--muted);">Note (optional)</label>'
         +     '<textarea id="mail_assign_note" rows="2" class="tic-input" style="width:100%;box-sizing:border-box;" placeholder="Why / what this is…"></textarea></div>'
@@ -248,12 +248,15 @@ async function openMailTriage(id) {
     // application's document library instead of a unit's. _mailPickIndex maps a
     // picker id back to its target so the kind survives the combobox round-trip.
     window._mailPickIndex = {};
+    // Units are searchable by ADDRESS and by their TENANT's name (assignedName),
+    // so "find a tenant" works by typing the person's name — their unit is the
+    // file target. Label makes the type explicit so staff aren't guessing.
     var unitItems = (window.housingUnits || [])
       .filter(function(u){ return !u.archived; })
       .map(function(u){
         var addr = ((u.num||'') + (u.num&&u.street?' ':'') + (u.street||'')) || u.id;
         window._mailPickIndex[String(u.id)] = { kind:'unit', unitId:String(u.id), name:(u.assignedName||'') };
-        return { id: String(u.id), label: addr + (u.assignedName ? ' — ' + u.assignedName : '') };
+        return { id: String(u.id), label: addr + (u.assignedName ? ' — ' + u.assignedName : ' — (vacant)') + '  ·  Unit' };
       });
     var appItems = (window.applications || [])
       .filter(function(a){ return a && !a.archived; })
@@ -261,23 +264,21 @@ async function openMailTriage(id) {
         var nm = (((a.fn||'') + ' ' + (a.ln||'')).trim()) || String(a.id);
         var pid = 'app:' + a.id;
         window._mailPickIndex[pid] = { kind:'application', appId:String(a.id), name:nm };
-        return { id: pid, label: nm + ' — Applicant' };
+        return { id: pid, label: nm + '  ·  Applicant' };
       });
     var pickItems = unitItems.concat(appItems).sort(function(a,b){ return a.label.localeCompare(b.label); });
     var wrap = document.getElementById('mail_unit_wrap');
     if (wrap && typeof clfnSearchSelect === 'function') {
       window._mailUnitSS = clfnSearchSelect({
         wrap: wrap, items: pickItems, value: '',
-        placeholder: 'Search address or name…',
+        placeholder: 'Type a unit address, tenant name, or applicant name…',
         onChange: function(id2, label){ window._mailUnitSS._selectedId = id2; window._mailUnitSS._selectedLabel = label; }
       });
-      // Pre-select the top suggested unit, if any.
-      var firstSugg = sugg.filter(function(s){ return s.unitId; })[0];
-      var firstUnit = firstSugg && firstSugg.unitId;
-      if (firstUnit && window._mailUnitSS && typeof window._mailUnitSS.setValue === 'function') {
-        var firstLabel = _mailUnitLabel(firstUnit, firstSugg.label);
-        try { window._mailUnitSS.setValue(firstUnit, firstLabel); window._mailUnitSS._selectedId = firstUnit; window._mailUnitSS._selectedLabel = firstLabel; } catch(e) {}
-      }
+      // Deliberately NO auto-select. The server suggestion can match the
+      // FORWARDING staff's signature (office address / nation name) instead of
+      // the person the email is about, so pre-filling it filed emails to the
+      // wrong unit. Staff pick the right target by searching (or by tapping a
+      // "possible match" chip above, which only fills the search for review).
     }
   }
 }
