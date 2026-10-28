@@ -1865,7 +1865,19 @@ async function loadHousingData() {
     if (typeof initApprovalAuthority === 'function') initApprovalAuthority();
     if (typeof initModuleEnablement === 'function')  initModuleEnablement();
     _syncAIHeaderBtn();
-    if(applications.length && typeof rescoreAllApplications==='function') rescoreAllApplications();
+    // Re-score is a derived recompute that PATCHes changed scores back to the
+    // DB. It used to run on EVERY page navigation (each sub-page calls
+    // loadHousingData), burning CPU and firing background writes on pages that
+    // have nothing to do with scoring. Run it at most once per browser session;
+    // scores also refresh whenever an application is saved/submitted.
+    if(applications.length && typeof rescoreAllApplications==='function'){
+      var _didRescore = false;
+      try { _didRescore = sessionStorage.getItem('clfn_rescored_session') === '1'; } catch(e){}
+      if(!_didRescore){
+        try { sessionStorage.setItem('clfn_rescored_session','1'); } catch(e){}
+        rescoreAllApplications();
+      }
+    }
     if (window.CLFN_DEBUG) console.log('[CLFN] Loaded '+applications.length+' apps, '+housingUnits.length+' units');
   } catch(e){ console.warn('[HOUSING] data load error:',e); console.warn('[CLFN] Could not load data'); }
 }
