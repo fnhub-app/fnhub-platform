@@ -1782,29 +1782,38 @@ function reconcileAssignments(){
 
 async function loadHousingData() {
   try {
-    var appsData = await sbLoadApplications();
+    // Fire every independent read in PARALLEL. These used to run as ~9
+    // sequential awaits, so every page load (each sub-page calls this on boot)
+    // waited that many Supabase round-trips IN SERIES -- the "slow page to
+    // page" symptom. Dependent post-processing stays ordered below. Raw-table
+    // reads parse to JSON (or null on failure) via _json; the side-effecting
+    // loaders (BCR / review queues) run concurrently too, no longer awaited
+    // one after another.
+    var _isMgmt = (typeof ROLE !== 'undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole));
+    var _json = function(url){ return fetch(url, {headers:HOUSING_HEADERS}).then(function(r){ return r.ok ? r.json() : null; }).catch(function(){ return null; }); };
+    var _res = await Promise.all([
+      sbLoadApplications(),
+      sbLoadUnits(),
+      sbLoadContractors(),
+      _json(SUPABASE_URL+'/rest/v1/housing_sow?select=*'),
+      _json(SUPABASE_URL+'/rest/v1/housing_rfq?select=*&order=created_at.desc'),
+      _json(SUPABASE_URL+'/rest/v1/housing_settings?select=key,value'),
+      (typeof sbLoadBcrRegistry === 'function') ? Promise.resolve(sbLoadBcrRegistry()).catch(function(){}) : null,
+      (_isMgmt && typeof sbLoadTenantMrSubmissions === 'function') ? Promise.resolve(sbLoadTenantMrSubmissions()).catch(function(){}) : null,
+      (_isMgmt && typeof sbLoadApplicationSubmissions === 'function') ? Promise.resolve(sbLoadApplicationSubmissions()).catch(function(){}) : null
+    ]);
+    var appsData = _res[0], unitsData = _res[1], cR = _res[2], sd = _res[3], rd = _res[4], stD = _res[5];
     if(appsData) applications = appsData;
-    var unitsData = await sbLoadUnits();
     if(unitsData) housingUnits = unitsData;
     if(typeof reconcileAssignments === 'function') reconcileAssignments();
-    var cR = await sbLoadContractors(); if(cR) window._contractors = cR;
-    var sowR = await fetch(SUPABASE_URL+'/rest/v1/housing_sow?select=*',{headers:HOUSING_HEADERS});
-    if(sowR.ok){var sd=await sowR.json(); sd.forEach(function(r){window._sowCache[r.unit_id]=r.data;});}
-    var rfqR = await fetch(SUPABASE_URL+'/rest/v1/housing_rfq?select=*&order=created_at.desc',{headers:HOUSING_HEADERS});
-    if(rfqR.ok){var rd=await rfqR.json(); window._rfqCache={}; rd.forEach(function(r){window._rfqCache[r.id]=r;});}
+    if(cR) window._contractors = cR;
+    if(sd){ sd.forEach(function(r){window._sowCache[r.unit_id]=r.data;}); }
+    if(rd){ window._rfqCache={}; rd.forEach(function(r){window._rfqCache[r.id]=r;}); }
     // One-shot repair of duplicate SOW project numbers (the pre-fix generator
-    // rolled over at 100 and minted repeated 'SOW-YYYY-00's). Management only;
-    // needs both the SOW and RFQ caches above (RFQ links get re-pointed).
+    // rolled over at 100 and minted repeated 'SOW-YYYY-00's). Needs both the
+    // SOW and RFQ caches above (RFQ links get re-pointed).
     if(typeof reconcileSowNumbers === 'function'){ try { reconcileSowNumbers(); } catch(e){ console.warn('[boot] sow renumber threw:', e); } }
-    if(typeof sbLoadBcrRegistry === 'function'){ try { await sbLoadBcrRegistry(); } catch(e){} }
-    // Tenant-reported maintenance requests + portal application submissions
-    // (review queues) — management only.
-    if(typeof ROLE !== 'undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole)){
-      if(typeof sbLoadTenantMrSubmissions === 'function'){ try { await sbLoadTenantMrSubmissions(); } catch(e){} }
-      if(typeof sbLoadApplicationSubmissions === 'function'){ try { await sbLoadApplicationSubmissions(); } catch(e){} }
-    }
-    var stR = await fetch(SUPABASE_URL+'/rest/v1/housing_settings?select=key,value',{headers:HOUSING_HEADERS});
-    if(stR.ok){var stD=await stR.json(); window._appSettings={};
+    if(stD){ window._appSettings={};
       stD.forEach(function(r){window._appSettings[r.key]=r.value;});
       if(typeof _flattenLegacyAppSettings === 'function') _flattenLegacyAppSettings();
       if(window._appSettings['scoring_model_v2']) {
