@@ -507,8 +507,11 @@ window.dismissEmailIntake = dismissEmailIntake;
       }
     } catch(e) {}
 
-    await _mailLoadUnits();
-    await _mailLoadStaff();
+    // Units (fallback when loadHousingData didn't populate them) and the staff
+    // map are independent -- load them together, then fetch+render the intake
+    // list (its render resolves "Forwarded by" from the staff map, so it must
+    // come after staff). Previously these three ran as serial awaits.
+    await Promise.all([_mailLoadUnits(), _mailLoadStaff()]);
     await loadEmailIntake();
   } catch(e) {
     console.error('[mail] init error:', e);

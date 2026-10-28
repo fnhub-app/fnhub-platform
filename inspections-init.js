@@ -51,6 +51,10 @@ function _inspHeaders() {
 }
 
 async function _inspLoadUnits() {
+  // Already populated by loadHousingData -- skip the redundant full-table
+  // fetch (it used to fetch every time, then discard the result when units
+  // were already loaded).
+  if (window.housingUnits && window.housingUnits.length) return;
   try {
     var r = await fetch(
       window.SUPABASE_URL + '/rest/v1/housing_units?select=id,num,street,archived&order=street,num&limit=9999',
@@ -58,10 +62,9 @@ async function _inspLoadUnits() {
     );
     if (!r.ok) return;
     var data = await r.json();
-    window.housingUnits = (window.housingUnits && window.housingUnits.length ? window.housingUnits : null)
-      || data.map(function(row) {
-        return { id: row.id, num: row.num, street: row.street, archived: !!row.archived };
-      });
+    window.housingUnits = data.map(function(row) {
+      return { id: row.id, num: row.num, street: row.street, archived: !!row.archived };
+    });
   } catch(e) { console.warn('[Inspections] units load:', e); }
 }
 
@@ -867,8 +870,12 @@ function generateInspectionPDF() {
     var view = document.getElementById('inspectionsView');
     if (view) view.style.display = 'flex';
 
-    try { await _inspLoadUnits(); } catch(e) { console.warn('[inspections] units load:', e); }
-    try { await _inspLoad(); } catch(e) { console.warn('[inspections] insp load:', e); }
+    // Units (skipped when already loaded) and the inspections list are
+    // independent -- load them together, then render once. Previously serial.
+    await Promise.all([
+      _inspLoadUnits().catch(function(e){ console.warn('[inspections] units load:', e); }),
+      _inspLoad().catch(function(e){ console.warn('[inspections] insp load:', e); })
+    ]);
     renderInspectionsList();
   } catch(e) {
     console.error('[inspections] init error:', e);
