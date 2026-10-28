@@ -21,6 +21,8 @@
   if (typeof renderHeaderNav === 'function') renderHeaderNav();
   if (typeof applyRoleVisibility === 'function') applyRoleVisibility(role);
   if (typeof setHeaderNavActive === 'function') setHeaderNavActive('match');
+  // Reveal the shell immediately (progressive render); the view fills as data loads.
+  if (document.body) document.body.style.opacity = '1';
   if (typeof loadHousingData === 'function') {
     try { await loadHousingData(); } catch(e) { console.warn('[match] data load error:', e); }
   }

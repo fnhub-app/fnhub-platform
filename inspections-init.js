@@ -846,6 +846,8 @@ function generateInspectionPDF() {
     if (typeof renderHeaderNav              === 'function') renderHeaderNav();
     if (typeof applyRoleVisibility          === 'function') applyRoleVisibility(role);
     if (typeof setHeaderNavActive           === 'function') setHeaderNavActive('inspections');
+    // Reveal the shell immediately (progressive render); the list fills as data loads.
+    if (document.body) document.body.style.opacity = '1';
 
     if (typeof loadHousingData === 'function') {
       try { await loadHousingData(); } catch(e) { console.warn('[inspections] data load:', e); }

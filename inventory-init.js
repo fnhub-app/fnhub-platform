@@ -23,6 +23,9 @@
   if (typeof renderHeaderNav === 'function') renderHeaderNav();
   if (typeof applyRoleVisibility === 'function') applyRoleVisibility(role);
   if (typeof setHeaderNavActive === 'function') setHeaderNavActive('inventory');
+  // Reveal the shell (header/nav) immediately so navigation feels instant; the
+  // view below fills in once data arrives (progressive render).
+  if (document.body) document.body.style.opacity = '1';
   if (typeof loadHousingData === 'function') {
     try { await loadHousingData(); } catch(e) { console.warn('[inventory] data load error:', e); }
   }
