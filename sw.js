@@ -74,15 +74,34 @@ self.addEventListener('fetch', function(e){
     return;
   }
 
-  // Our own app shell — network-first, cache fallback when offline.
+  // Our own app shell.
   if (url.origin === self.location.origin) {
+    // HTML documents / navigations: NETWORK-FIRST, so the entry document (and
+    // the script URLs it references) is always fresh and SW/app updates land
+    // promptly. Falls back to the cached page, then index.html, when offline.
+    var isDoc = req.mode === 'navigate'
+      || req.destination === 'document'
+      || (url.pathname === '/' || /\.html?$/.test(url.pathname))
+      || (req.headers.get('accept') || '').indexOf('text/html') !== -1;
+    if (isDoc) {
+      e.respondWith(
+        fetch(req).then(function(res){ return putInCache(req, res); }).catch(function(){
+          return caches.match(req).then(function(hit){ return hit || caches.match('/index.html'); });
+        })
+      );
+      return;
+    }
+    // Static assets (JS / CSS / images / fonts): STALE-WHILE-REVALIDATE. Serve
+    // the cached copy instantly and refresh it in the background for next time.
+    // This is the page-to-page speed win -- navigations stop re-downloading
+    // ~2.5-3 MB of JS each time. Trade-off: a just-deployed asset can be ONE
+    // navigation stale (the next load picks it up). The HTML above stays fresh,
+    // so a new page never references a file the SW can't then refresh, and the
+    // app tolerates eventual consistency. First visit (cold cache) hits network.
     e.respondWith(
-      fetch(req).then(function(res){ return putInCache(req, res); }).catch(function(){
-        return caches.match(req).then(function(hit){
-          if (hit) return hit;
-          if (req.mode === 'navigate') return caches.match('/index.html');
-          return Response.error();
-        });
+      caches.match(req).then(function(hit){
+        var network = fetch(req).then(function(res){ return putInCache(req, res); }).catch(function(){ return hit || Response.error(); });
+        return hit || network;
       })
     );
     return;
