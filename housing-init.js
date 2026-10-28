@@ -1727,7 +1727,12 @@ async function submitAddHousingStaff() {
 //     ed_approved show up in the Match queue with an Assign button.
 //   - In rare cases (failed network call), one side persisted and the other
 //     didn't. Re-syncing is a safe no-op when both sides agree.
-function reconcileAssignments(){
+// persist=false (default): apply the in-memory fixups only (what the views
+// need), writing NOTHING. persist=true: also write the corrected rows back to
+// Supabase + audit. The caller runs the write-back at most once per browser
+// session so page navigation is never a DB write path (it used to persist on
+// every load of every sub-page).
+function reconcileAssignments(persist){
   if(typeof housingUnits === 'undefined' || typeof applications === 'undefined') return;
   if(!housingUnits.length || !applications.length) return;
   var fixed = 0;
@@ -1747,10 +1752,12 @@ function reconcileAssignments(){
     }
     if(changed){
       fixed++;
-      if(typeof saveApplicationWithDraftFallback === 'function'){
-        saveApplicationWithDraftFallback(app);
-      } else if(typeof sbSaveApplication === 'function'){
-        sbSaveApplication(app).catch(function(e){ console.warn('[reconcile] save app failed:', e); });
+      if(persist){
+        if(typeof saveApplicationWithDraftFallback === 'function'){
+          saveApplicationWithDraftFallback(app);
+        } else if(typeof sbSaveApplication === 'function'){
+          sbSaveApplication(app).catch(function(e){ console.warn('[reconcile] save app failed:', e); });
+        }
       }
     }
   });
@@ -1771,12 +1778,14 @@ function reconcileAssignments(){
     a.assignedAddress = '';
     if(a.status === APP_STATUS.ASSIGNED) a.status = APP_STATUS.ED_APPROVED;  // un-housed -> back on the list
     fixed++;
-    if(typeof auditEntry === 'function'){ try { auditEntry(a.id, 'status_change', 'Unlinked from unit (no live tenancy) — returned to active application', 'system'); } catch(_e){} }
-    if(typeof saveApplicationWithDraftFallback === 'function') saveApplicationWithDraftFallback(a);
-    else if(typeof sbSaveApplication === 'function') sbSaveApplication(a).catch(function(e){ console.warn('[reconcile] reverse save failed:', e); });
+    if(persist){
+      if(typeof auditEntry === 'function'){ try { auditEntry(a.id, 'status_change', 'Unlinked from unit (no live tenancy) — returned to active application', 'system'); } catch(_e){} }
+      if(typeof saveApplicationWithDraftFallback === 'function') saveApplicationWithDraftFallback(a);
+      else if(typeof sbSaveApplication === 'function') sbSaveApplication(a).catch(function(e){ console.warn('[reconcile] reverse save failed:', e); });
+    }
   });
   if(fixed){
-    console.info('[CLFN] Reconciled assignment drift on '+fixed+' application(s).');
+    console.info('[CLFN] Reconciled assignment drift on '+fixed+' application(s)'+(persist?' (persisted)':' (in-memory only)')+'.');
   }
 }
 
@@ -1805,7 +1814,16 @@ async function loadHousingData() {
     var appsData = _res[0], unitsData = _res[1], cR = _res[2], sd = _res[3], rd = _res[4], stD = _res[5];
     if(appsData) applications = appsData;
     if(unitsData) housingUnits = unitsData;
-    if(typeof reconcileAssignments === 'function') reconcileAssignments();
+    // Reconcile assignment drift: apply the in-memory fixups on every load
+    // (views need correct assignment data), but write the corrections back to
+    // the DB at most ONCE per browser session -- so navigation stops being a
+    // write path while real drift still gets persisted.
+    if(typeof reconcileAssignments === 'function'){
+      var _recPersist = false;
+      try { _recPersist = sessionStorage.getItem('clfn_reconcile_session') !== '1'; } catch(e){}
+      if(_recPersist){ try { sessionStorage.setItem('clfn_reconcile_session','1'); } catch(e){} }
+      reconcileAssignments(_recPersist);
+    }
     if(cR) window._contractors = cR;
     if(sd){ sd.forEach(function(r){window._sowCache[r.unit_id]=r.data;}); }
     if(rd){ window._rfqCache={}; rd.forEach(function(r){window._rfqCache[r.id]=r;}); }
