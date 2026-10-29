@@ -1893,7 +1893,9 @@ async function loadHousingData() {
       try { _didRescore = sessionStorage.getItem('clfn_rescored_session') === '1'; } catch(e){}
       if(!_didRescore){
         try { sessionStorage.setItem('clfn_rescored_session','1'); } catch(e){}
-        rescoreAllApplications();
+        // Defer off the critical path: re-scoring every application (+ its
+        // background PATCHes) must not delay the dashboard's first render.
+        setTimeout(function(){ try { rescoreAllApplications(); } catch(e){} }, 1200);
       }
     }
     if (window.CLFN_DEBUG) console.log('[CLFN] Loaded '+applications.length+' apps, '+housingUnits.length+' units');
@@ -2938,6 +2940,24 @@ function _maybeShowMrNotice() {
       if(HOUSING_SESSION.email && typeof resolveHousingRole === 'function') {
         await resolveHousingRole();
       }
+      // Progressive render: the dashboard is the heaviest page and used to sit
+      // at opacity:0 through the ENTIRE boot (role -> data -> render) -- a blank
+      // screen for the whole load, ~20s on a phone. Paint the branded header +
+      // a loading state NOW; the views fill in once loadHousingData +
+      // initHousingPage finish below (which re-render the header with the
+      // correct per-module nav).
+      try {
+        window.currentRole = HOUSING_SESSION.role || window.currentRole || savedRole;
+        if (typeof updateHeaderUser === 'function')    updateHeaderUser(window.currentRole);
+        if (typeof renderHeaderNav === 'function')     renderHeaderNav();
+        if (typeof applyRoleVisibility === 'function') applyRoleVisibility(window.currentRole);
+        var _lvBoot = document.getElementById('landingView');
+        if (_lvBoot && !document.getElementById('dash_boot_loading')) {
+          _lvBoot.style.display = '';
+          _lvBoot.insertAdjacentHTML('afterbegin', '<div id="dash_boot_loading" style="text-align:center;color:var(--muted);padding:56px 16px;font-size:14px;">Loading your dashboard…</div>');
+        }
+      } catch(e) {}
+      if (document.body) document.body.style.opacity = '1';
       // Drain any drafts that the previous session left in localStorage because
       // the cloud upsert failed (network blip, PGRST303, etc). Silent on
       // empty queue. Fires after auth is resolved so the Bearer token is fresh.
@@ -2946,6 +2966,7 @@ function _maybeShowMrNotice() {
       }
       await loadHousingData();
       initHousingPage();
+      var _dbl = document.getElementById('dash_boot_loading'); if (_dbl) _dbl.remove();
       if (typeof _maybeShowMrNotice === 'function') { try { _maybeShowMrNotice(); } catch(e){ console.warn('[boot] MR notice:', e); } }
       if (document.body) document.body.style.opacity = '1';
     } catch(e) {
