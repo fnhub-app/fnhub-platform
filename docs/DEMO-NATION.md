@@ -100,6 +100,20 @@ demo, so CLFN's boot is unchanged. It then drives four behaviours:
 3. **A persistent demo banner** in `renderAppHeader` (`housing-init.js:2034`): *"DEMO — fictional data. Resets nightly."* Present on every page, including the public applicant/report portals.
 4. **`noindex`** — a `<meta name="robots" content="noindex,nofollow">` injected from `shared.js` when `is_demo`. The Cloudflare `_headers` file is path-scoped, not host-scoped, and the same static assets serve every subdomain, so a `_headers` rule or a `robots.txt` **cannot** target only the demo. The meta tag plus the D1 Transform Rule is how this actually gets done.
 
+**SMS guardrail (added 2026-10 — SMS Phase 1).** Email is not the only outbound
+channel anymore. `window.sendSms` (`shared-data.js`) is a **second, parallel
+chokepoint** that `is_demo` does **not** yet guard. Mirror behaviour 1 for it:
+in demo mode `sendSms` short-circuits before the fetch, writes its audit row, and
+shows *"Demo — text suppressed. Would have sent to X: <body>."* **And** the
+defense-in-depth layer (behaviour 2) applies identically — the demo project gets
+**no Twilio secrets** (`SMS_PROVIDER`/`TWILIO_*` unset), so `send-sms` returns a
+not-configured error even if the client guard were bypassed. Until the client
+short-circuit lands, leaving Twilio unset is the live control: no credentials =
+no text can leave. Keep the **`contractor_portal` module off** on the demo for
+v1 — its login needs Twilio Verify (real texts to real phones), which the demo
+deliberately avoids; the portal story can be shown later from a scripted
+walkthrough rather than a live code send.
+
 **The Anthropic key for `ai-chat`** — yes, load it; the assistant demos
 extremely well and a demo without it undersells the product. Three rules:
 - **A separate key from CLFN's**, created for the demo, so it can be revoked or
