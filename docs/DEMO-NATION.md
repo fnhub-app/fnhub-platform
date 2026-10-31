@@ -5,7 +5,13 @@ nation**, used for sales demos, screenshots, and marketing video. It is a real
 nation on the real platform — its own Supabase project, its own subdomain, its
 own data — so what a prospect sees is exactly what they would buy, not a mockup.
 
-**Status:** planned. Nothing built yet.
+**Status:** **live at https://demo.fnhub.app** — provisioned, branded, and seeded
+(D0/D1/D2/D4 done via `supabase/demo/demo-config.sql` + `docs/demo-seed.js`).
+**D3 (`is_demo` guardrails) is NOT built** — there is no client-side email/SMS
+suppression, no demo banner, and no `noindex` meta. The live controls today are
+(a) the demo project having **no outbound provider credentials** and (b) the
+sensitive modules being pinned OFF in `demo-config.sql`. Building D3 is still
+open and is now higher priority because the environment is live, not planned.
 
 ---
 
@@ -108,11 +114,13 @@ shows *"Demo — text suppressed. Would have sent to X: <body>."* **And** the
 defense-in-depth layer (behaviour 2) applies identically — the demo project gets
 **no Twilio secrets** (`SMS_PROVIDER`/`TWILIO_*` unset), so `send-sms` returns a
 not-configured error even if the client guard were bypassed. Until the client
-short-circuit lands, leaving Twilio unset is the live control: no credentials =
-no text can leave. Keep the **`contractor_portal` module off** on the demo for
-v1 — its login needs Twilio Verify (real texts to real phones), which the demo
-deliberately avoids; the portal story can be shown later from a scripted
-walkthrough rather than a live code send.
+short-circuit lands, two things are the live control: leaving Twilio unset on the
+demo project (no credentials = no text can leave), **and** pinning both
+**`sms_notifications` and `contractor_portal` OFF** in `demo-config.sql` (done —
+the `sms_notifications` code default is `true`, so it must be explicitly false or
+the demo silently has SMS on). The portal's login also needs Twilio Verify (real
+texts to real phones), which the demo avoids; the portal story can be shown from
+a scripted walkthrough rather than a live send.
 
 **The Anthropic key for `ai-chat`** — yes, load it; the assistant demos
 extremely well and a demo without it undersells the product. Three rules:
