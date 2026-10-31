@@ -4701,6 +4701,92 @@ async function _sbEditStaffModal(id) {
   document.getElementById('editStaffCancel').addEventListener('click', function(){ modal.remove(); });
   document.getElementById('editStaffSave').addEventListener('click', function(){ saveStaffEdit(id, u, modal); });
 }
+
+// Self-service text-notification settings. The staff table blocks editing your
+// OWN row (role/feature self-escalation), but a staffer still needs to set
+// their own mobile + SMS consent — otherwise an admin can never opt themselves
+// in without a DB edit. This modal exposes ONLY sms_number + sms_opt_in for the
+// signed-in user's own row (verified against HOUSING_SESSION before any write).
+async function openMySmsPrefs(id) {
+  var u = null;
+  try {
+    var r = await fetch(SUPABASE_URL+'/rest/v1/staff?id=eq.'+id+'&select=*', { headers: HOUSING_HEADERS });
+    var d = await r.json();
+    u = d && d[0];
+  } catch(e) {}
+  if(!u) { showToast('Could not load your profile', {type:'error'}); return; }
+  // Safety: this modal only ever edits the signed-in user's own row.
+  if((u.email||'').toLowerCase() !== (HOUSING_SESSION.email||'').toLowerCase()) {
+    showToast('You can only change your own text settings here.', {type:'error'}); return;
+  }
+  var modal = document.getElementById('mySmsModal');
+  if(!modal) {
+    modal = document.createElement('div');
+    modal.id = 'mySmsModal';
+    modal.className = 'modal-overlay modal-overlay-centered modal-z-1100';
+    document.body.appendChild(modal);
+  }
+  modal.innerHTML = '<div class="modal-body modal-body-sm">'
+      +'<div class="modal-hdr">'
+        +'<div class="modal-hdr-title">My Text Notifications</div>'
+        +'<button id="mySmsClose" class="btn-close-dark-30">&times;</button>'
+      +'</div>'
+      +'<div class="modal-body-stack">'
+        +'<div class="f"><label>My mobile for texts <span style="font-weight:normal;color:var(--muted);">— e.g. (705) 555-1234; saved as +1…</span></label>'
+          +'<input type="tel" id="my_sms_number" value="'+escapeHtml(u.sms_number||'')+'" placeholder="+1 705 555 1234"/></div>'
+        +'<div class="f"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">'
+          +'<input type="checkbox" id="my_sms_optin" '+(u.sms_opt_in?'checked':'')+' style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:0;"/>'
+          +'<span><strong>Send me text notifications (SMS)</strong> — you can reply STOP to any message to opt out at any time.</span></label></div>'
+        +'<div class="box-bg-card txt-help">Texts are only sent for events that have SMS turned on (Settings &rarr; Notifications) while the Text/SMS module is enabled. Standard carrier message rates may apply.</div>'
+      +'</div>'
+      +'<div class="modal-footer">'
+        +'<button id="mySmsCancel" class="btn btn-ghost">Cancel</button>'
+        +'<button id="mySmsSave" class="btn btn-primary">Save</button>'
+      +'</div>'
+    +'</div>';
+  modal.classList.add('is-open');
+  document.getElementById('mySmsClose').addEventListener('click', function(){ modal.remove(); });
+  document.getElementById('mySmsCancel').addEventListener('click', function(){ modal.remove(); });
+  document.getElementById('mySmsSave').addEventListener('click', function(){ saveMySmsPrefs(id, u, modal); });
+}
+
+async function saveMySmsPrefs(id, original, modal) {
+  var btn = document.getElementById('mySmsSave');
+  if(btn) { btn.disabled = true; btn.textContent = 'Saving…'; }
+  try {
+    var numEl = document.getElementById('my_sms_number');
+    var optEl = document.getElementById('my_sms_optin');
+    var e164    = (typeof window._toE164 === 'function') ? window._toE164(numEl && numEl.value) : '';
+    var wantOpt = !!(optEl && optEl.checked);
+    if(wantOpt && !e164) {
+      showToast('Enter a valid mobile (e.g. +17055551234) before turning texts on.', {type:'error'});
+      if(btn) { btn.disabled = false; btn.textContent = 'Save'; }
+      return;
+    }
+    var patch = { sms_number: e164 || null, sms_opt_in: wantOpt };
+    var nowIso = new Date().toISOString();
+    if(wantOpt && original.sms_opt_in !== true)  patch.sms_opt_in_at  = nowIso;
+    if(!wantOpt && original.sms_opt_in === true) patch.sms_opt_out_at = nowIso;
+    var r = await fetch(SUPABASE_URL+'/rest/v1/staff?id=eq.'+id, {
+      method: 'PATCH',
+      headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify(patch)
+    });
+    if(r.ok) {
+      modal.remove();
+      showToast('✓ Text settings saved', {type:'info'});
+      auditEntry('SETTINGS', 'settings_user_sms', 'SMS (self) for '+(original.name||original.email)+': '+(wantOpt?('opted in '+(e164||'')):'off'), window.currentRole||'ed');
+      if(typeof renderHousingUserTable === 'function') renderHousingUserTable();
+    } else {
+      showToast('Could not save — '+(r.status===403?'permission denied':'check connection'), {type:'error'});
+      if(btn) { btn.disabled = false; btn.textContent = 'Save'; }
+    }
+  } catch(e) {
+    showToast('Error: '+e.message, {type:'error'});
+    if(btn) { btn.disabled = false; btn.textContent = 'Save'; }
+  }
+}
+
 function emailContractorAgreement() {
   // Stub — the contractor-agreement send was on the legacy EmailJS path.
   // Re-implement against window.sendNotification when the contractor
@@ -6209,7 +6295,17 @@ async function renderHousingUserTable(){
       var canManage = APPROVAL_AUTHORITY.can('manageStaffRecord', window.currentRole);
       var actionsHtml = '';
       if (isMe) {
-        actionsHtml = '<span style="font-size:11px;color:var(--muted);">You</span>';
+        // Self-service: you can't edit your own role/features here (that's
+        // intentionally blocked), but you CAN set your own mobile + SMS consent
+        // when the Text/SMS module is on — otherwise an admin could never opt
+        // themselves in without a DB edit. Scoped to just those two fields.
+        var selfSms = ((window.moduleOn && window.moduleOn('sms_notifications')) && canManage)
+          ? '<button onclick="openMySmsPrefs('+u.id+')" class="btn btn-ghost btn-sm">📱 Text alerts</button>'
+          : '';
+        actionsHtml = '<div class="flex-end gap-8">'
+          + selfSms
+          + '<span style="font-size:11px;color:var(--muted);align-self:center;">You</span>'
+          + '</div>';
       } else if (canManage) {
         if (filter === 'inactive') {
           // Inactive: offer Reactivate. No Send Reset here — handle that
