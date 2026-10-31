@@ -308,8 +308,11 @@ var EMAIL_EVENT_REGISTRY = [
     // event in Settings. The email above is unchanged and always the record.
     smsCapable:            true,
     smsDefault:            true,
-    sms:                   '{nationShort} Housing: a work order was assigned to you — {unitAddress} (#{projectNumber}). Open the Housing app for details. Reply STOP to opt out.',
-    placeholders:          ['employeeName','unitAddress','projectNumber','tenantName','totalCost','startDate','endDate','nationShort','appLink'],
+    // ASCII-only default so the base text stays GSM-7 (160 chars/segment, not
+    // 70). {mrLink} opens this exact work order; {scopeShort} is a brief scope
+    // line. The link + scope typically make this ~2 segments; trim to taste.
+    sms:                   '{nationShort} Housing work order {projectNumber} - {unitAddress}. {scopeShort} Open: {mrLink} Reply STOP to opt out.',
+    placeholders:          ['employeeName','unitAddress','projectNumber','tenantName','totalCost','startDate','endDate','scopeShort','mrLink','nationShort','appLink'],
     defaults: {
       subject:  '{nationShort} Housing — Work Order Assigned: {unitAddress} ({projectNumber})',
       bodyHtml: '<p>Hello {employeeName},</p>'
@@ -3147,9 +3150,25 @@ window.notifyFinanceRentStop = notifyFinanceRentStop;
 
 // Tokens for the in-house field-employee work-order email — reuses the work
 // order token set and adds the assignee's name.
+// Short, plain-text scope summary for SMS (the full scope would blow the
+// segment count). First work item's text (capped) plus "+N more". ASCII only
+// apart from user-entered item text, so the base message stays GSM-7.
+function _smsScopeShort(sow) {
+  var items = ((sow && sow.items) || []).filter(function(it){ return it && (it.description || it.category); });
+  if (!items.length) return '';
+  var first = String(items[0].description || items[0].category || '').replace(/\s+/g, ' ').trim();
+  if (first.length > 50) first = first.slice(0, 47) + '...';
+  var more = items.length - 1;
+  return more > 0 ? ('Scope: ' + first + ' +' + more + ' more.') : ('Scope: ' + first + '.');
+}
+
 function _emailTokensForFieldWorkOrder(sow, unit) {
   var base = _emailTokensForWorkOrder(sow, unit, null);
   base.employeeName = (sow && sow.assignedToName) || '—';
+  // Extras used by the SMS (and available to the email if the ED inserts them):
+  // a deep link straight to this work order, and a short scope line.
+  base.mrLink     = _emailMrLink(unit && unit.id, (sow && sow.project_number) || '');
+  base.scopeShort = _smsScopeShort(sow);
   return base;
 }
 
