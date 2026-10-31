@@ -630,7 +630,8 @@ function renderNationPanel(){
     ai_assistant: 'AI Assistant (Chat + Draft Notes)',
     inspections:  'Inspections (Unit Condition Reports)',
     projects:     'Capital Projects (Lots & Builds)',
-    email_intake: 'Email Intake (Forward-to-File)'
+    email_intake: 'Email Intake (Forward-to-File)',
+    sms_notifications: 'Text / SMS Notifications'
   };
   var humanize = function(name){
     if(MODULE_LABELS[name]) return MODULE_LABELS[name];

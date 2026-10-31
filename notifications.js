@@ -97,6 +97,13 @@ var EMAIL_EVENT_REGISTRY = [
     defaultRecipientRoles: ['housing_manager'],
     defaultCcRoles:        [],
     wired:                 true,
+    // SMS-capable but OFF by default: sow_created fires on EVERY new request,
+    // so texting here would alert on all of them. The ED can enable it per
+    // event in Settings; true "urgent-only" texting is a separate gated event
+    // (see the urgency decision noted for Phase 1).
+    smsCapable:            true,
+    smsDefault:            false,
+    sms:                   '{nationShort} Housing: new maintenance request {projectNumber} at {unitAddress}. Open the Housing app to review. Reply STOP to opt out.',
     placeholders:          ['unitAddress','projectNumber','totalCost','condition','contractor','nationShort','appLink'],
     // NOTE: the Scope of work list and the Approve / Decline / Add Notes buttons
     // are NOT part of this editable body. They are appended in code by
@@ -295,6 +302,13 @@ var EMAIL_EVENT_REGISTRY = [
     defaultRecipientRoles: [],
     defaultCcRoles:        ['housing_manager'],
     wired:                 true,
+    // SMS (Phase 1): the assigned crew member also gets a short text when the
+    // sms_notifications module is on and they have opted in. ON by default for
+    // this event (crew are staff, in the field); the ED can turn it off per
+    // event in Settings. The email above is unchanged and always the record.
+    smsCapable:            true,
+    smsDefault:            true,
+    sms:                   '{nationShort} Housing: a work order was assigned to you — {unitAddress} (#{projectNumber}). Open the Housing app for details. Reply STOP to opt out.',
     placeholders:          ['employeeName','unitAddress','projectNumber','tenantName','totalCost','startDate','endDate','nationShort','appLink'],
     defaults: {
       subject:  '{nationShort} Housing — Work Order Assigned: {unitAddress} ({projectNumber})',
@@ -3201,6 +3215,20 @@ async function notifyWorkOrderToFieldEmployee(sow, unit) {
       entity_id:   sow.project_number || '—'
     };
   }, eventKey);
+
+  // SMS (Phase 1): additively text the assigned crew member — never the CC'd
+  // Housing Manager — when the SMS channel is on and they've opted in. The
+  // email above remains the authoritative record; this is a heads-up only.
+  try {
+    if (_eventSmsOn(eventKey) && to) {
+      var staffRow = await _sbLoadStaffSmsByEmail(to);
+      var smsNum   = _smsNumberIfOptedIn(staffRow);
+      if (smsNum) {
+        await _sendEventSms(eventKey, smsNum, _emailTokensForFieldWorkOrder(sow, unit),
+                            { type: 'sow', id: sow.project_number || '-' });
+      }
+    }
+  } catch (e) { console.warn('[notify] field-employee SMS step failed:', e); }
 }
 
 // Returns the recipient role list for an event — saved override if the
@@ -3222,6 +3250,103 @@ function _emailEventCcRoles(eventKey) {
   if (Array.isArray(saved.ccRoles)) return saved.ccRoles.slice();
   var cfg = _emailEventConfig(eventKey);
   return (cfg && Array.isArray(cfg.defaultCcRoles)) ? cfg.defaultCcRoles.slice() : [];
+}
+
+// ════════════════════════════════════════════════════════════════════════
+// SMS channel (Phase 1) — the per-event sub-switch inside the SMS feature.
+// ────────────────────────────────────────────────────────────────────────
+// Three gates, ALL required before a text is sent:
+//   1. _smsModuleOn()      — the sms_notifications module is on for this nation
+//   2. _eventSmsOn(key)    — the per-event SMS channel is on (saved override,
+//                            else the registry smsDefault for that event)
+//   3. recipient opted in  — _smsNumberIfOptedIn(row): a valid E.164 number
+//                            AND sms_opt_in true (the Edge Function also
+//                            enforces the global opt-out ledger as a backstop)
+// The email path is never affected by any of this; SMS is strictly additive.
+// ════════════════════════════════════════════════════════════════════════
+var _SMS_E164_RE = /^\+[1-9]\d{7,14}$/;
+
+function _smsModuleOn() {
+  try { return (typeof window.moduleOn !== 'function') ? false : !!window.moduleOn('sms_notifications'); }
+  catch (e) { return false; }
+}
+
+// Per-event SMS on/off. Saved override (Settings) wins; else the registry
+// smsDefault. An event with no smsCapable flag is never SMS-eligible.
+function _eventSmsOn(eventKey) {
+  if (!_smsModuleOn()) return false;
+  var cfg = _emailEventConfig(eventKey);
+  if (!cfg || !cfg.smsCapable) return false;
+  var saved = (window._appSettings && window._appSettings.email_templates
+            && window._appSettings.email_templates[eventKey]) || {};
+  if (saved.channels && typeof saved.channels === 'object' && typeof saved.channels.sms === 'boolean') {
+    return saved.channels.sms;
+  }
+  return !!cfg.smsDefault;
+}
+
+// Render the short SMS text for an event: saved smsBody override wins, else the
+// registry `sms` string; {tokens} are filled from the passed map and any
+// leftover placeholders are dropped. Returns '' when the event has no SMS text.
+function _renderSmsText(eventKey, tokens) {
+  var cfg = _emailEventConfig(eventKey);
+  var saved = (window._appSettings && window._appSettings.email_templates
+            && window._appSettings.email_templates[eventKey]) || {};
+  var tpl = (typeof saved.smsBody === 'string' && saved.smsBody) || (cfg && cfg.sms) || '';
+  if (!tpl) return '';
+  tokens = tokens || {};
+  var out = String(tpl).replace(/\{(\w+)\}/g, function(m, k){
+    return (tokens[k] == null) ? '' : String(tokens[k]);
+  });
+  return out.replace(/\s+/g, ' ').trim();
+}
+
+// A recipient's textable number, or '' if they haven't opted in or the number
+// isn't E.164. Works on any record shape that carries sms_number / sms_opt_in
+// (tenants, staff, housing_contractors).
+function _smsNumberIfOptedIn(row) {
+  if (!row || row.sms_opt_in !== true) return '';
+  var n = String(row.sms_number || '').trim();
+  return _SMS_E164_RE.test(n) ? n : '';
+}
+
+// Look up a single active staff member's SMS consent fields by email (for
+// crew/field-employee texting, where the recipient is identified by email).
+async function _sbLoadStaffSmsByEmail(email) {
+  var e = String(email || '').trim().toLowerCase();
+  if (!e) return null;
+  try {
+    var url = SUPABASE_URL + '/rest/v1/staff?select=email,sms_number,sms_opt_in'
+            + '&is_active=eq.true&email=ilike.' + encodeURIComponent(e) + '&limit=1';
+    var r = await fetch(url, { headers: HOUSING_HEADERS });
+    if (!r.ok) return null;
+    var rows = await r.json();
+    return (rows && rows[0]) || null;
+  } catch (e2) { return null; }
+}
+
+// Send one event SMS. Guarded end-to-end: no-op unless the event's SMS channel
+// is on, window.sendSms exists, and a textable number is supplied. Never throws
+// (fire-and-forget) so it can't disturb the email path that precedes it.
+async function _sendEventSms(eventKey, toNumber, tokens, entity) {
+  try {
+    if (!_eventSmsOn(eventKey)) return;
+    if (typeof window.sendSms !== 'function') return;
+    var num = String(toNumber || '').trim();
+    if (!_SMS_E164_RE.test(num)) return;
+    var text = _renderSmsText(eventKey, tokens);
+    if (!text) return;
+    entity = entity || {};
+    await window.sendSms({
+      to:          num,
+      body:        text,
+      event:       eventKey,
+      entity_type: entity.type || 'notification',
+      entity_id:   entity.id || '-'
+    });
+  } catch (err) {
+    console.warn('[notify] ' + eventKey + ' SMS failed:', err);
+  }
 }
 
 // Look up active staff across multiple roles + dedupe by email so a

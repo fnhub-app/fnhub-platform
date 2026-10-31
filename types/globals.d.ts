@@ -65,6 +65,7 @@ interface Window {
   _stashLoginReturn: (...args: any[]) => any;   // shared-auth.js (deep-link return)
   _removeScoringGateBar: (...args: any[]) => any; // housing-app.js scoring gate bar
   aiWriteLetter: (...args: any[]) => any;        // ai-assistant.js (DocLibrary letter writer)
+  sendSms: (...args: any[]) => any;              // shared-data.js (SMS Edge Function wrapper)
 
   // --- Nation identity / branding ---
   NATIONS_DIRECTORY: Record<string, NationConfig>;
@@ -365,6 +366,7 @@ declare var scLoadDocs: any;
 declare var select: any;
 declare var selectedIndex: any;
 declare var sendNotification: any;
+declare var sendSms: any;
 declare var setHeaderNavActive: any;
 declare var setText: any;
 declare var showConfirm: any;

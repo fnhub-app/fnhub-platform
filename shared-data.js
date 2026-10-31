@@ -3940,6 +3940,54 @@ window.sendNotification = async function(opts) {
   return data;
 };
 
+// ════════════════════════════════════════════════════════════════════════
+// window.sendSms — generic SMS Edge Function wrapper (Phase 1)
+// ────────────────────────────────────────────────────────────────────────
+// Posts to the deployed `send-sms` Edge Function using the caller's Supabase
+// JWT. Mirrors sendNotification: injects the per-nation provider/sender from
+// NATION_CONFIG.sms_config, and throws on HTTP/network errors (callers should
+// fire-and-forget with a .catch). The THREE gates (module on, event SMS
+// channel on, recipient opted in) are enforced by the callers in
+// notifications.js; the Edge Function independently enforces the global
+// opt-out ledger as defense-in-depth. `to` must be E.164 (+15551234567).
+// ════════════════════════════════════════════════════════════════════════
+window.sendSms = async function(opts) {
+  if(!opts || !opts.to || !opts.body) {
+    throw new Error('sendSms: requires to (E.164) + body');
+  }
+  // Per-nation SMS delivery method (provider + sender). The Edge Function
+  // honours the requested provider only when its keys exist server-side, else
+  // falls back to its SMS_PROVIDER secret. Credentials never come from here.
+  try {
+    var _nc = window.NATION_CONFIG || {};
+    if(_nc.sms_config){
+      if(opts.sms_provider == null && _nc.sms_config.provider) opts.sms_provider = _nc.sms_config.provider;
+      if(opts.sms_from     == null && _nc.sms_config.from)     opts.sms_from     = _nc.sms_config.from;
+    }
+  } catch(e) {}
+  var session = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION) ? HOUSING_SESSION : null;
+  var token   = session && session.accessToken;
+  if(!token) throw new Error('sendSms: no access token (not signed in)');
+  var url = SUPABASE_URL + '/functions/v1/send-sms';
+  var r = await fetch(url, {
+    method:  'POST',
+    headers: {
+      'Content-Type':  'application/json',
+      'Authorization': 'Bearer ' + token
+    },
+    body: JSON.stringify(opts)
+  });
+  var data;
+  try { data = await r.json(); } catch(_) { data = {}; }
+  if(!r.ok) {
+    var msg = data.error || 'Unknown error';
+    if(data.detail)  msg += ' — detail: ' + (typeof data.detail === 'string' ? data.detail : JSON.stringify(data.detail));
+    if(data.missing) msg += ' — missing: ' + JSON.stringify(data.missing);
+    throw new Error('sendSms ' + r.status + ': ' + msg);
+  }
+  return data;
+};
+
 function _updateRbaAllocSummary(totalCost, eligiblePools, budgetData) {
   var totalAlloc = 0;
   document.querySelectorAll('#rba_alloc_rows input[type="number"]').forEach(function(inp){
