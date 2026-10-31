@@ -420,38 +420,36 @@ user in the SQL editor).
 
 ---
 
-## Phase G — SMS / Text Notifications  ⬜
+## Phase G — SMS / Text Notifications  ✅ (Phase 1 shipped 2026-10-31) · Phase 2 ⬜
 
-Extends the existing email pipeline (Edge Function → Microsoft Graph) with an SMS
-channel so workflow notifications (starting with **work-order-assigned to a field
-employee**, mirroring `sow_assigned_to_field_employee`) can also go out as a text.
-Email infrastructure is done; this is a **net-new integration**, not a tweak.
+An opt-in SMS channel alongside the existing email pipeline. **Strictly additive to
+email** — the email path is never changed; a text is an extra heads-up. Resolved
+the pre-build open decisions: **provider = Twilio** (Canadian local number),
+**v1 scope = the field-employee work-order event**, **consent = a deliberate
+per-person opt-in** with CASL timestamps.
 
-### Why it's a separate project (not a quick add)
-- **Microsoft Graph cannot send SMS** — Graph is email-only. A different provider is required.
-- New **Edge Function** (`send-sms`) — the email function can't be reused; SMS is a different API/auth.
-- **Provider + cost** — pick one of:
-  - **Azure Communication Services (ACS) SMS** — same cloud as the rest of the stack, but needs a provisioned toll-free/short-code number (US/CA registration/verification, can take days–weeks) and per-message billing.
-  - **Twilio** — fastest to stand up; per-message + per-number cost; separate vendor.
-- **Phone numbers on staff records** — add a `mobile`/`sms` field to the `staff` table + the Settings → Users add/edit form. (Field employees need a mobile on file.)
-- **Consent / CASL** — Canada's anti-spam law wants documented consent. Transactional work assignments to staff are usually covered by an employment agreement, but it should be a deliberate **per-person opt-in** flag on the staff record, and texts should be transactional only (no marketing).
-- **Delivery + audit** — log each send (success/failure) to `housing_audit_log`; surface failures (no silent drops). Handle provider error codes, opt-outs (STOP keyword), and rate limits.
+### Gating — three stacked gates, ALL required before a text sends
+1. **Module** `sms_notifications` on for this nation (`CLFN_MODULES`, Settings → Nation → Modules; per-nation licensable). Label "Text / SMS Notifications".
+2. **Per-event SMS channel** on — Settings → Notifications shows a *Text / SMS* sub-switch (+ editable short SMS body) for SMS-capable events, saved to `email_templates[event].channels.sms` / `.smsBody`. Read by `_eventSmsOn()` / `_renderSmsText()` (notifications.js).
+3. **Recipient opted in** — `sms_opt_in = true` + a valid E.164 `sms_number`; the Edge Function also blocks any number on the global opt-out ledger as a backstop. Module-off short-circuits everything, so a disabled feature never leaks a text.
 
-### Design sketch (when picked up)
-- **Channel registry**: extend the notification model so an event can target `email`, `sms`, or both. Add a per-event SMS toggle + a short SMS body template (160-char-aware; SMS is plain text, no HTML) in **Settings → Notifications**.
-- **Recipient resolution**: SMS recipient = the assignee's `mobile` (for `sow_assigned_to_field_employee`); reuse the existing recipient resolvers, swapping email→mobile.
-- **Edge Function `send-sms`**: verifies caller JWT, sends via the chosen provider (secrets in Project Settings → Edge Functions), writes an audit row via service_role. ASCII-only source rule still applies.
-- **Client wrapper**: `window.sendSms(opts)` mirroring `sendNotification`; per-event helpers call it alongside (or instead of) the email helper based on the channel config.
-- **Opt-out**: store STOP/opt-out state on the staff record; the function skips opted-out numbers.
+### What shipped (Phase 1)
+- **Edge Function `supabase/functions/send-sms/index.ts`** — mirrors `send-notification`: active-staff JWT gate, **per-nation provider** (`SMS_PROVIDER` secret — `twilio` default, `telnyx` optional), E.164 validation, **global opt-out (STOP) check before every send**, logs to `sms_log` + a mirror row in `housing_audit_log`. ASCII-only. Deployed by hand (dashboard paste or `supabase functions deploy send-sms`).
+- **Client** — `window.sendSms(opts)` (injects per-nation `NATION_CONFIG.sms_config`), `window._toE164()` phone normalizer; both declared in `types/globals.d.ts`.
+- **Channel layer (notifications.js)** — `_eventSmsOn`, `_renderSmsText`, `_smsNumberIfOptedIn`, `_sbLoadStaffSmsByEmail`, `_sendEventSms`. SMS strings are registry-driven + ED-editable with `{placeholders}` (incl. `{mrLink}` deep link + `{scopeShort}`). **Keep SMS text ASCII** — an em-dash / smart-quote / emoji drops the segment size from 160 (GSM-7) to 70 (UCS-2) and multiplies billed segments. Edge Function hard-caps 1500 chars.
+- **Wired event** — `sow_assigned_to_field_employee` (default ON) also texts the assigned crew member (never the CC'd HM). `sow_created` is SMS-capable but **default OFF** (urgent-only gating is Phase 2 — see below).
+- **Two-channel Submit dialog** — the "Email Work Order?" prompt now shows an independent **Text** checkbox alongside **Email** (only when the assignee is textable), confirm button "Submit"; email and SMS send separately. `notifyWorkOrderToFieldEmployee(sow, unit, {email, sms})` is decoupled (both default true for back-compat). If the Text row doesn't appear, the recipient isn't set up for texts — no more silent skip.
+- **Consent capture (CASL)** — `sms_number` / `sms_opt_in` / `sms_opt_in_at` / `sms_opt_out_at` columns on `tenants` / `staff` / `housing_contractors`; a global `sms_optouts` ledger (per-number); an append-only `sms_log` table (migration `supabase/migrations/20261031_sms_notifications.sql`, staff-read RLS, service-role insert only). UI: the staff-edit modal has a Mobile + consent field; a **self-service "My Text Notifications"** button on your own Users-table row (admins can't edit their own row's role/features, so this fills the opt-in gap); both inputs have **live E.164 validation feedback** (green normalized number / red invalid / consent disabled until valid). Opt-in is refused without a valid mobile.
 
-### Open decisions before building
-1. Provider: **ACS** (same cloud, slower number provisioning) vs **Twilio** (fastest, separate vendor)?
-2. Scope of v1: just the **work-order-assigned** event, or all workflow events with a per-event SMS toggle?
-3. Who pays / budget for per-message cost, and expected monthly volume?
-4. Consent capture: opt-in checkbox on the staff/Users form + policy text?
+### Provider setup (per nation; done for CLFN)
+Twilio Canadian **local** number (compliance profile required at purchase). Secrets in Project Settings → Edge Functions: `SMS_PROVIDER=twilio`, `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `SMS_FROM` (E.164) — or `TWILIO_MESSAGING_SERVICE_SID`. Per-nation sender via `NATION_CONFIG.sms_config` (`{provider, from}`). **STOP handled at the carrier level by Twilio** automatically (no Messaging Service), so no inbound webhook is needed for compliance. Recommended multi-nation model: **Twilio subaccount + number per nation** (isolates opt-out/deliverability; consolidated billing) — not one shared number.
 
-### Effort / risk
-Medium-large. The engineering is moderate; the **number provisioning, billing, and consent/compliance** are the long poles. No impact on existing email until enabled.
+### Phase 2 — ⬜ (expansion, parked 2026-10-31)
+- **Urgent-MR gate on `sow_created`** — a `_sowIsUrgent(sow)` check (Overall Condition `Critical`, or any health/safety flag: fire/structural/electrical/plumbing/mold/asbestos) → text the recipient-role opted-in staff only for urgent new requests. (Half-started then parked; `sow_created` already SMS-capable/default-off, so it's mostly the urgency check + the send in `notifySowCreated`.)
+- **Tenant / contractor consent UI** — add the same Mobile + consent fields to the TIC / contractor card when tenant- or contractor-facing SMS events get wired.
+- **More SMS-capable events** (inspection due, etc.) — each is a registry `smsCapable` flag + a firing-point call; the toggle UI auto-surfaces.
+- **Delivery dashboard** — a read UI over `sms_log` (status, SID, carrier errors).
+- **Inbound STOP webhook → `sms_optouts`** — optional (Twilio carrier-level opt-out already covers compliance).
 
 ---
 
