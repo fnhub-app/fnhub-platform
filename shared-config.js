@@ -780,8 +780,10 @@ window.isSuperUser = function() {
 // housing_settings (key: 'module_enablement').
 window.CLFN_MODULES = {
   CORE: ['applications', 'inventory', 'tenants', 'worklist'],
-  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true },
-  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true },
+  // contractor_portal defaults OFF (feature in build — Phase CP B1); licensed so
+  // a super user can turn it on when the portal is ready for that nation.
+  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false },
+  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true },
 
   isEnabled: function(mod) {
     if(this.CORE.indexOf(mod) !== -1) return true;

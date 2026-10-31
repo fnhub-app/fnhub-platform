@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Contractor Portal</title>
+  <style>
+    :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f4f5f7; --card:#ffffff;
+            --accent:#1f2937; --ok:#047857; --err:#b91c1c; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--ink);
+           font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
+    .cp-wrap { max-width:560px; margin:0 auto; padding:24px 16px 48px; }
+    .cp-brand { font-size:16px; font-weight:700; letter-spacing:.3px; padding:14px 0 18px;
+                border-bottom:4px solid var(--accent); margin-bottom:22px; }
+    .cp-card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:22px; }
+    h1 { font-size:20px; margin:0 0 6px; }
+    h3.cp-h3 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);
+               margin:22px 0 8px; }
+    p.cp-sub { color:var(--muted); font-size:14px; margin:0 0 18px; line-height:1.5; }
+    label { display:block; font-size:13px; font-weight:600; margin:14px 0 6px; }
+    input { width:100%; padding:12px 12px; font-size:16px; border:1px solid var(--line);
+            border-radius:8px; background:#fff; color:var(--ink); }
+    button { width:100%; margin-top:16px; padding:12px 14px; font-size:15px; font-weight:700;
+             border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
+    button.cp-ghost { background:transparent; color:var(--accent); border:1px solid var(--line);
+                      font-weight:600; }
+    .cp-msg { margin-top:14px; font-size:13px; color:var(--muted); min-height:18px; }
+    .cp-msg.cp-err { color:var(--err); }
+    .cp-count { color:var(--muted); font-size:13px; margin:2px 0 4px; }
+    .cp-wo { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:8px; }
+    .cp-wo-addr { font-weight:600; }
+    .cp-wo-meta { color:var(--muted); font-size:12px; margin-top:2px; }
+    .cp-empty { color:var(--muted); font-size:14px; padding:18px 0; }
+    .hidden { display:none; }
+  </style>
+</head>
+<body>
+  <div class="cp-wrap">
+    <div class="cp-brand" id="cp_brand">Contractor Portal</div>
+
+    <!-- Login -->
+    <div class="cp-card" id="cp_login">
+      <div id="cp_step_phone">
+        <h1>Sign in</h1>
+        <p class="cp-sub">Enter the mobile number on file with the housing office. We will text you a one-time code.</p>
+        <label for="cp_phone">Mobile number</label>
+        <input id="cp_phone" type="tel" inputmode="tel" placeholder="(705) 555-1234" autocomplete="tel"/>
+        <button id="cp_send" type="button">Text me a code</button>
+      </div>
+      <div id="cp_step_code" class="hidden">
+        <h1>Enter your code</h1>
+        <p class="cp-sub">We texted a 6-digit code to <strong id="cp_phone_sent"></strong>.</p>
+        <label for="cp_code">6-digit code</label>
+        <input id="cp_code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"/>
+        <button id="cp_verify" type="button">Verify &amp; sign in</button>
+        <button id="cp_back" type="button" class="cp-ghost">Use a different number</button>
+      </div>
+      <div class="cp-msg" id="cp_msg"></div>
+    </div>
+
+    <!-- Not linked -->
+    <div class="cp-card hidden" id="cp_notlinked">
+      <h1>Not set up yet</h1>
+      <p class="cp-sub">This number isn't linked to a contractor in the system. Please contact the housing office to be invited to the portal.</p>
+    </div>
+
+    <!-- Work orders -->
+    <div class="cp-card hidden" id="cp_app">
+      <h1>My Work Orders</h1>
+      <div class="cp-count" id="cp_count"></div>
+      <div id="cp_list"></div>
+    </div>
+  </div>
+
+  <!-- Shared config layer only (SUPABASE_URL/ANON + nation branding). No staff bundle. -->
+  <script src="shared.js"></script>
+  <script src="shared-config.js"></script>
+  <script src="contractor-portal.js"></script>
+</body>
+</html>

@@ -631,7 +631,8 @@ function renderNationPanel(){
     inspections:  'Inspections (Unit Condition Reports)',
     projects:     'Capital Projects (Lots & Builds)',
     email_intake: 'Email Intake (Forward-to-File)',
-    sms_notifications: 'Text / SMS Notifications'
+    sms_notifications: 'Text / SMS Notifications',
+    contractor_portal: 'Contractor Portal'
   };
   var humanize = function(name){
     if(MODULE_LABELS[name]) return MODULE_LABELS[name];
