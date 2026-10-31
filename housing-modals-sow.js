@@ -3016,6 +3016,14 @@ function saveSOW(opts){
 
   if(_sowUnitId) upsertSowInList(_sowUnitId, data);
 
+  // Contractor Portal: keep the contractor_work_orders projection in sync so a
+  // logged-in contractor sees this work order (or stops seeing it if it was
+  // reassigned off them / cancelled / completed). Module-gated + fire-and-forget.
+  if(typeof window.sbSyncContractorWorkOrder === 'function'){
+    var _cwoUnit = (typeof housingUnits !== 'undefined' && housingUnits) ? housingUnits.find(function(u){ return u && u.id === _sowUnitId; }) : null;
+    window.sbSyncContractorWorkOrder(data, _cwoUnit);
+  }
+
   // ── Unit status auto-flip ────────────────────────────────────────────────
   // When this save took the SOW into its first HM/ED-approved state, flip
   // the unit to 'under_repair' so it surfaces in the Renovations view. When

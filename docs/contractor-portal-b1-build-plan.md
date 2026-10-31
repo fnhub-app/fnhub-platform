@@ -1,7 +1,13 @@
 # Contractor Portal — B1 Build Plan
 
-Status: **PLAN / not built.** The implementation-ready plan for B1 (security
-foundation). Builds on `docs/contractor-portal-b1-scope.md`.
+Status: **BUILT (code).** Batch 1 (migration, `contractor-claim`, portal proof
+surface, module registration) and Batch 2 (projection sync in
+`saveSOW`/`awardRfq` + `backfillContractorWorkOrders()`, and the staff "Invite
+to portal" action) are implemented and on the branch. Still **user-run to go
+live**: run the migration (done), configure Supabase Auth -> Phone -> Twilio
+Verify, and license + enable the `contractor_portal` module per nation. The §6
+negative-test runbook is the remaining acceptance gate. Builds on
+`docs/contractor-portal-b1-scope.md`.
 
 **Decisions locked (2026-10-31):** OTP via **Twilio Verify**; **per-contact
 logins** (one `contractor_users` row per person); B1 surface = **path on the
@@ -181,9 +187,9 @@ Capture this as a checklist in the PR.
 | 3 | Register `contractor_portal` module (default off) | Code → deploy |
 | 4 | `contractor-claim` Edge Function | Code → **User deploys** |
 | 5 | `contractor-portal.html` + login + "My Work Orders" proof | Code → deploy |
-| 6 | Projection sync in `saveSOW`/`awardRfq` + backfill script | Code → deploy |
-| 7 | "Invite to portal" action on the contractor card | Code → deploy |
-| 8 | Run the §6 negative-test runbook; record results | **User + me** |
+| 6 | Projection sync in `saveSOW`/`awardRfq` + backfill script | Code → deploy ✅ (Batch 2) |
+| 7 | "Invite to portal" action on the contractor card | Code → deploy ✅ (Batch 2) |
+| 8 | Run the §6 negative-test runbook; record results | **User + me** (pending) |
 
 ## 8. Out of scope for B1
 Dashboard polish, photos/notes, invoices, completion-% writes, insurance

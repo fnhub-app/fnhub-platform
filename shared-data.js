@@ -2476,6 +2476,148 @@ function getAllSowsForContractor(contractorId) {
   return out;
 }
 
+// ── Contractor Portal projection (B1 Batch 2) ───────────────────────────────
+// contractor_work_orders is a normalized projection the portal reads directly
+// (housing_sow stores one jsonb row PER UNIT, which RLS can't scope per
+// contractor). Staff hold the cwo_staff_write policy, so the staff client keeps
+// it in sync here. All three functions are fire-and-forget safe: they catch +
+// warn and never throw into the SOW save / award / invite paths. Gated by the
+// contractor_portal module so nations that don't use it never write these rows.
+
+// Work-order lifecycle -> portal status. 'closed' hides a job from the active
+// lists; 'in_process' is work underway; 'active' is assigned-but-not-started.
+function _cwoStatusForSow(sow){
+  if(!sow) return 'active';
+  if(sow.cancelled) return 'closed';
+  if(sow.approval_status === 'completed') return 'closed';
+  var pct = (sow.progress && typeof sow.progress.percent !== 'undefined') ? (parseFloat(sow.progress.percent) || 0) : 0;
+  if(pct >= 100) return 'closed';
+  if(pct > 0) return 'in_process';
+  return 'active';
+}
+
+// Upsert (or remove) the projection row for ONE work order. Called from saveSOW
+// and from _rfqApproveLinkedSow whenever a SOW's contractor assignment changes.
+function sbSyncContractorWorkOrder(sow, unit){
+  try {
+    if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')) return Promise.resolve(false);
+    if(!sow || typeof SUPABASE_URL === 'undefined' || typeof HOUSING_HEADERS === 'undefined') return Promise.resolve(false);
+    var unitId = sow.unitId || (unit && unit.id) || '';
+    var pn = sow.project_number || '';
+    if(!unitId || !pn) return Promise.resolve(false);
+    var q = 'sow_unit_id=eq.' + encodeURIComponent(unitId) + '&sow_project_number=eq.' + encodeURIComponent(pn);
+    var isContractorJob = sow.assignedTeam === 'contractor' && sow.contractorId;
+    // No contractor on this work order -> drop any stale projection row, so a
+    // reassignment to in-house (or an unassignment) stops surfacing it.
+    if(!isContractorJob){
+      return fetch(SUPABASE_URL + '/rest/v1/contractor_work_orders?' + q, {
+        method: 'DELETE', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' })
+      }).then(function(){ return true; }).catch(function(e){ console.warn('[portal] cwo delete failed:', e); return false; });
+    }
+    var addr = sow.address || (unit && ((unit.num||'') + ' ' + (unit.street||'')).trim()) || unitId;
+    var row = {
+      contractor_id: String(sow.contractorId),
+      sow_unit_id: String(unitId),
+      sow_project_number: String(pn),
+      address: addr,
+      status: _cwoStatusForSow(sow),
+      updated_at: new Date().toISOString()
+    };
+    // Upsert on the (sow_unit_id, sow_project_number) unique key.
+    return fetch(SUPABASE_URL + '/rest/v1/contractor_work_orders?on_conflict=sow_unit_id,sow_project_number', {
+      method: 'POST',
+      headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+      body: JSON.stringify(row)
+    }).then(function(r){ if(!r.ok) console.warn('[portal] cwo upsert HTTP ' + r.status); return !!r.ok; })
+      .catch(function(e){ console.warn('[portal] cwo upsert failed:', e); return false; });
+  } catch(e){ console.warn('[portal] sbSyncContractorWorkOrder threw:', e); return Promise.resolve(false); }
+}
+window.sbSyncContractorWorkOrder = sbSyncContractorWorkOrder;
+
+// One-time backfill: scan the loaded SOW cache and project every contractor-
+// assigned work order. Safe to re-run (idempotent upserts). Call from the
+// console after enabling the module on a nation with existing SOWs.
+function backfillContractorWorkOrders(){
+  try {
+    if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){
+      if(typeof showToast === 'function') showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'});
+      return Promise.resolve(0);
+    }
+    var cache = window._sowCache || {};
+    var units = (typeof housingUnits !== 'undefined' && housingUnits) ? housingUnits : [];
+    var byId = {}; units.forEach(function(u){ if(u && u.id) byId[u.id] = u; });
+    var jobs = [];
+    Object.keys(cache).forEach(function(uid){
+      var wrap = cache[uid];
+      var sows = (wrap && Array.isArray(wrap.sows)) ? wrap.sows : (wrap ? [wrap] : []);
+      sows.forEach(function(sow){
+        if(sow && sow.assignedTeam === 'contractor' && sow.contractorId){
+          if(!sow.unitId) sow = Object.assign({}, sow, { unitId: uid });
+          jobs.push(sbSyncContractorWorkOrder(sow, byId[uid]));
+        }
+      });
+    });
+    return Promise.all(jobs).then(function(res){
+      var ok = res.filter(Boolean).length;
+      if(typeof showToast === 'function') showToast('Portal backfill: synced ' + ok + ' of ' + jobs.length + ' contractor work order(s).', {type:'info'});
+      return ok;
+    });
+  } catch(e){ console.warn('[portal] backfill threw:', e); return Promise.resolve(0); }
+}
+window.backfillContractorWorkOrders = backfillContractorWorkOrders;
+
+// Invite a contractor's key contacts (those with a mobile number) to the
+// portal: write a contractor_invites row per phone. The invite ALONE can't
+// impersonate — contractor-claim also checks the phone is on the contractor's
+// people[] before linking a login. Keys off the SAVED contractor record (not
+// the unsaved edit inputs), so the phone it authorizes is one on file.
+async function inviteContractorToPortal(ctId){
+  try {
+    if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
+    // Resolve the contractor: explicit id, else the one being edited.
+    var list = window._contractors || [];
+    var ct = ctId ? list.find(function(c){ return String(c.id) === String(ctId); }) : null;
+    if(!ct && typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0) ct = list[window._ctEditIdx];
+    if(!ct || !ct.id){ showToast('Save the contractor first, then invite to the portal.', {type:'error'}); return; }
+    // Collect distinct, valid E.164 phones from the saved key contacts.
+    var seen = {}, invitees = [];
+    (ct.people || []).forEach(function(p){
+      if(!p || !p.phone) return;
+      var e164 = (typeof _toE164 === 'function') ? _toE164(p.phone) : '';
+      if(!e164 || seen[e164]) return;
+      seen[e164] = true; invitees.push({ phone: e164, name: p.name || '' });
+    });
+    if(!invitees.length){ showToast('Add a key contact with a mobile number first, then save.', {type:'error'}); return; }
+    var who = invitees.map(function(x){ return (x.name || x.phone); }).join(', ');
+    var ok = await showConfirm({
+      title: 'Invite to the Contractor Portal?',
+      message: 'Authorize ' + invitees.length + ' phone number(s) to sign in to the portal for ' + (ct.name || 'this contractor') + ':\n\n' + who + '\n\nThey log in at /contractor-portal.html with a texted code. You can revoke access later.',
+      confirmText: 'Send invite' + (invitees.length > 1 ? 's' : '')
+    });
+    if(!ok) return;
+    var now = new Date();
+    var expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30-day window
+    var invitedBy = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.email) || (window.currentRole || 'staff');
+    var rows = invitees.map(function(x){
+      return { phone: x.phone, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires };
+    });
+    var r = await fetch(SUPABASE_URL + '/rest/v1/contractor_invites', {
+      method: 'POST',
+      headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify(rows)
+    });
+    if(!r.ok){
+      var t = await r.text().catch(function(){ return ''; });
+      showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor_portal migration may not be run on this project.', {type:'error'});
+      console.warn('[portal] invite insert failed:', r.status, t.slice(0, 200));
+      return;
+    }
+    if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_portal_invited', 'Portal invite(s) issued to ' + who, window.currentRole || 'staff');
+    showToast('Invited ' + invitees.length + ' contact(s) to the portal. They sign in at ' + ((window.NATION_CONFIG && (window.NATION_CONFIG.portal_base || '')) || '') + '/contractor-portal.html', {type:'info'});
+  } catch(e){ console.warn('[portal] inviteContractorToPortal threw:', e); if(typeof showToast === 'function') showToast('Invite failed: ' + (e && e.message || e), {type:'error'}); }
+}
+window.inviteContractorToPortal = inviteContractorToPortal;
+
 // Renders the contractor's Forms & SOWs in the contractor detail card.
 // Audit entries themselves continue to be written via auditEntry() and shown
 // on the master Audit Log (Settings → Audit Log) — they no longer surface here.
@@ -4310,6 +4452,18 @@ function ctRenderPeople(people) {
   window._ctPeople = people || [];
   var list = document.getElementById('ct_people_list');
   if(!list) return;
+  // Contractor Portal: show "Invite to portal" only when the module is on AND a
+  // SAVED contractor is open (invites authorize a phone that is on file). New,
+  // unsaved contractors have no id yet, so the button stays hidden until Save.
+  try {
+    var _invBtn = document.getElementById('ct_portal_invite_btn');
+    if(_invBtn){
+      var _savedCt = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
+        ? (window._contractors || [])[window._ctEditIdx] : null;
+      var _portalOn = (typeof moduleOn !== 'function') || moduleOn('contractor_portal');
+      _invBtn.style.display = (_portalOn && _savedCt && _savedCt.id) ? '' : 'none';
+    }
+  } catch(e){ /* non-fatal */ }
   if(!window._ctPeople.length) {
     list.innerHTML = '<div style="font-size:12px;color:var(--muted);font-style:italic;padding:4px 0;">No key contacts added yet.</div>';
     return;
@@ -8596,7 +8750,10 @@ function _buildAddContractorModalHTML() {
             '<div class="tic-section tic-section-spaced">',
               '<div class="tic-section-h flex-sb">',
                 '<span>Key People</span>',
-                '<button type="button" onclick="ctAddPerson()" class="btn btn-primary btn-sm">+ Add Person</button>',
+                '<span class="flex-gap8">',
+                  '<button type="button" id="ct_portal_invite_btn" onclick="inviteContractorToPortal()" class="btn btn-ghost btn-sm" style="display:none;" title="Authorize this contractor\'s key contacts to sign in to the Contractor Portal">📱 Invite to portal</button>',
+                  '<button type="button" onclick="ctAddPerson()" class="btn btn-primary btn-sm">+ Add Person</button>',
+                '</span>',
               '</div>',
               '<div id="ct_people_list" class="ct-people-list"></div>',
             '</div>',
@@ -10317,6 +10474,11 @@ function _rfqApproveLinkedSow(unitId, projectNumber, role, contractor) {
                + (didAssign && contractor ? ' -- assigned to ' + (contractor.name || contractor.id) : '');
       auditEntry('SOW:' + unitId, 'sow_system_approval', _msg, role || window.currentRole || 'staff');
     }
+  }
+  // Keep the Contractor Portal projection in step with the award's assignment.
+  if (typeof sbSyncContractorWorkOrder === 'function') {
+    var _cwoUnit = (typeof housingUnits !== 'undefined' && housingUnits) ? housingUnits.find(function(u){ return u && u.id === unitId; }) : null;
+    sbSyncContractorWorkOrder(sow.unitId ? sow : Object.assign({}, sow, { unitId: unitId }), _cwoUnit);
   }
 }
 

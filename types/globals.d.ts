@@ -67,6 +67,9 @@ interface Window {
   aiWriteLetter: (...args: any[]) => any;        // ai-assistant.js (DocLibrary letter writer)
   sendSms: (...args: any[]) => any;              // shared-data.js (SMS Edge Function wrapper)
   _toE164: (raw: any) => string;                 // shared-data.js (phone -> E.164 for SMS)
+  sbSyncContractorWorkOrder: (...args: any[]) => any; // shared-data.js (Contractor Portal projection upsert)
+  backfillContractorWorkOrders: (...args: any[]) => any; // shared-data.js (one-time portal projection backfill)
+  inviteContractorToPortal: (...args: any[]) => any;  // shared-data.js (write a contractor_invites row)
 
   // --- Nation identity / branding ---
   NATIONS_DIRECTORY: Record<string, NationConfig>;
