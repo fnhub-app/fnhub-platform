@@ -263,7 +263,7 @@ serve(async (req) => {
   } catch (e) { step('registry_row', false, 'Error: ' + String(e).slice(0, 200)) }
 
   // --- Step 6: nation Edge Functions + secrets (manual in assisted mode) ------
-  step('edge_functions', false, 'Manual/optional: deploy the nation functions (send-notification, tenant-mr, applicant-intake, ai-chat) + secrets only if this nation uses email, the AI assistant, or the public portals.')
+  step('edge_functions', false, 'Manual/optional: deploy the nation functions via the "Deploy Supabase Edge Functions" workflow (one project ref). It deploys ALL of them, including send-sms (text notifications) and contractor-claim (portal login). Then set per-module secrets only as needed: email (Email tab), AI (ANTHROPIC_API_KEY), SMS (Twilio, SMS & Portal tab). Contractor Portal login also needs Auth > Providers > Phone > Twilio Verify set in this project\'s dashboard (not automated).')
 
   // Audit (best-effort).
   try {

@@ -23,7 +23,8 @@
     ['finance','Finance'], ['match','Match'], ['contractors','Contractors'],
     ['renovations','Renovations'], ['rfq','RFQ'], ['mapping','Mapping'],
     ['inspections','Inspections'], ['ai_assistant','AI Assistant'],
-    ['projects','Capital Projects']
+    ['projects','Capital Projects'], ['email_intake','Email Intake'],
+    ['sms_notifications','SMS / Text Notifications'], ['contractor_portal','Contractor Portal']
   ];
 
   // Home Land Homes fee schedule for the invoice builder. EXACT prices -- do not
@@ -809,8 +810,13 @@
     var g2 = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
     var mods = n.modules_licensed || {};
     var modChecks = MODULES.map(function(m){
+      // The nation app MERGES modules_licensed over the all-true defaults (only
+      // keys PRESENT in the row override), so a key the row omits is licensed by
+      // default. Mirror that here: an absent key renders CHECKED, so opening and
+      // saving a nation whose row predates a module never silently de-licenses it.
+      var on = (m[0] in mods) ? !!mods[m[0]] : true;
       return '<label style="display:inline-flex;align-items:center;gap:6px;font-weight:600;margin:0 12px 8px 0;">'
-        + '<input type="checkbox" class="cn-mod" value="' + m[0] + '" style="width:auto;"' + (mods[m[0]] ? ' checked' : '') + '/> ' + esc(m[1]) + '</label>';
+        + '<input type="checkbox" class="cn-mod" value="' + m[0] + '" style="width:auto;"' + (on ? ' checked' : '') + '/> ' + esc(m[1]) + '</label>';
     }).join('');
     var stOpt = function(v,l){ return '<option value="' + v + '"' + (String(n.status||'provisioning') === v ? ' selected' : '') + '>' + l + '</option>'; };
     var tab = function(k, l, active){ return '<button class="nic-tab' + (active ? ' active' : '') + '" type="button" data-act="nic-tab" data-tab="' + k + '">' + l + '</button>'; };
@@ -948,6 +954,38 @@
       +   '<p class="sub" style="margin:10px 0 0;font-size:11px;"><b>Sender gate:</b> only emails whose sender is an <b>active staff member of this nation</b> create a row &mdash; anything else is dropped (the address is public). Staff forward from their own work address. <b>Do NOT</b> enable Cloudflare Email Routing on the nation&rsquo;s own mail domain (e.g. a Microsoft 365 domain) &mdash; it hijacks the MX and breaks that mail. Use <code>' + iaAddr + '</code>, or have the mail admin auto-forward a friendly address to it. The <code>EMAIL_INTAKE_SECRET</code> must match exactly on the Cloudflare worker and on every nation&rsquo;s Supabase project.</p>'
       + '</div>';
 
+    // SMS / text notifications + Contractor Portal onboarding. The Twilio card
+    // writes send-sms's secrets straight onto the nation project (like the Email
+    // tab's Apply). Phone auth for the portal login is a dashboard step (the
+    // Management API path for Twilio Verify is not wired), documented below.
+    var portalUrl = 'https://' + esc(n.subdomain) + '.fnhub.app/contractor-portal.html';
+    var pSms =
+        '<div class="card"><h3>SMS provider (Twilio)</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Powers the <code>send-sms</code> Edge Function (staff / field / contractor <b>notification</b> texts). Nothing sends unless the <b>SMS / Text Notifications</b> module is licensed (Overview) and enabled in the nation app, the per-event SMS channel is on (Settings &rarr; Notifications), and the recipient has opted in. Give this nation its own Twilio <b>subaccount</b> so STOP/opt-out state and sender reputation stay isolated. Written straight onto the project via the Management API and <b>never stored here</b>.</p>'
+      +   '<div style="' + g2 + '">'
+      +     '<div><label>Twilio Account SID</label><input id="cn-sms-sid" autocomplete="off" placeholder="AC..." /></div>'
+      +     '<div><label>Twilio Auth Token</label><input id="cn-sms-token" type="password" autocomplete="off" placeholder="(secret)"/></div>'
+      +   '</div>'
+      +   '<div style="' + g2 + '">'
+      +     '<div><label>Sender number (E.164)</label><input id="cn-sms-from" placeholder="+17055551234"/></div>'
+      +     '<div><label>&hellip;or Messaging Service SID</label><input id="cn-sms-msvc" placeholder="MG..."/></div>'
+      +   '</div>'
+      +   '<p class="sub" style="margin:4px 0 0;font-size:11px;">Set <b>one</b> sender: a single number (<code>SMS_FROM</code>) or a Messaging Service (<code>TWILIO_MESSAGING_SERVICE_SID</code>, recommended once there is more than one number). <code>SMS_PROVIDER=twilio</code> is set for you. Leave a field blank to keep what is already on the project. The Auth Token is the only credential kept out of the registry entirely.</p>'
+      +   '<div class="msg" id="cn-sms-msg"></div>'
+      +   '<button class="btn sm" type="button" data-act="sms-apply" data-sub="' + esc(n.subdomain) + '">Apply to project</button>'
+      + '</div>'
+      + '<div class="card"><h3>Contractor Portal &mdash; setup</h3>'
+      +   '<p class="sub" style="margin:2px 0 10px;">Contractors sign in at <a href="' + portalUrl + '" target="_blank" rel="noopener"><code>' + portalUrl + '</code></a> with an SMS one-time code (Supabase phone auth via <b>Twilio Verify</b> &mdash; separate from the notification sender above) and see only their own work orders (enforced by RLS). Do these once per nation:</p>'
+      +   '<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">'
+      +     '<li><b>Tables</b> &mdash; run <code>20261101_contractor_portal_b1.sql</code> (and <code>20261031_sms_notifications.sql</code> for SMS) from the <b>Fleet migrations</b> page. Fleet-wide and idempotent, so usually already done.</li>'
+      +     '<li><b>Edge functions</b> &mdash; <code>contractor-claim</code> and <code>send-sms</code> deploy to every nation via CI (the &ldquo;Deploy Supabase Edge Functions&rdquo; workflow). No action.</li>'
+      +     '<li><b>Phone auth</b> &mdash; on <b>this nation&rsquo;s Supabase project</b>: Authentication &rarr; Providers &rarr; <b>Phone</b> &rarr; enable &rarr; SMS provider <b>Twilio Verify</b>, then enter the Account SID + Auth Token and a <b>Verify Service SID</b> (Twilio &rarr; Verify &rarr; Services &rarr; Create). This is a dashboard step.</li>'
+      +     '<li><b>License + enable</b> &mdash; tick <b>Contractor Portal</b> (and <b>SMS / Text Notifications</b>) under <b>Overview &rarr; Licensed modules</b> and Save, then the nation turns each on in <b>Settings &rarr; Nation &rarr; Modules</b>.</li>'
+      +     '<li><b>Invite</b> &mdash; staff invite a contractor&rsquo;s known key-contact phone from the contractor card; only an invited phone that is also on the contractor&rsquo;s record can claim a login.</li>'
+      +   '</ol>'
+      +   '<p class="sub" style="margin:10px 0 0;font-size:11px;"><b>Keep both OFF on the demo nation</b> unless the <code>is_demo</code> SMS guardrail is built &mdash; a live portal/notification send uses real Twilio and would text a real phone.</p>'
+      + '</div>';
+
     var pNotes =
         '<div class="card"><h3>Notes</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Internal log for this nation (calls, decisions, follow-ups). Visible to platform admins only.</p>'
@@ -1036,12 +1074,12 @@
       +   '<div class="nic-strip-tile"><div class="l">Outstanding</div><div class="v" id="cn-sum-inv" style="color:var(--muted);">&mdash;</div></div>'
       + '</div>'
       + '<div class="nic-tabs">'
-      +   tab('overview', 'Overview', true) + tab('supabase', 'Config') + tab('email', 'Email Config') + tab('emailintake', 'Email Intake') + tab('agreement', 'Agreement')
+      +   tab('overview', 'Overview', true) + tab('supabase', 'Config') + tab('email', 'Email Config') + tab('emailintake', 'Email Intake') + tab('sms', 'SMS & Portal') + tab('agreement', 'Agreement')
       +   tab('billing', 'Billing') + tab('invoices', 'Invoices') + tab('notes', 'Notes') + tab('documents', 'Documents')
       + '</div>'
       + '<div class="nic-body">'
       +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail) + panel('emailintake', pEmailIntake)
-      +   panel('agreement', pAgreement) + panel('billing', pBilling) + panel('invoices', pInvoices)
+      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('billing', pBilling) + panel('invoices', pInvoices)
       +   panel('notes', pNotes) + panel('documents', pDocuments)
       + '</div>'
       + '<div class="nic-footer">'
@@ -2150,6 +2188,38 @@
     } catch (e){ setMsg('cn-em-msg', 'Network error: ' + String(e).slice(0, 120)); }
   };
 
+  // SMS & Portal tab -> "Apply to project": write the Twilio secrets the
+  // send-sms function reads onto the nation project via set-nation-secret's
+  // batch mode. Mirrors applyNationEmailSecrets. SMS_PROVIDER=twilio is implied.
+  window.applyNationSmsSecrets = async function(sub){
+    var get = function(x){ return ((document.getElementById(x) || {}).value || '').trim(); };
+    var sid   = get('cn-sms-sid');
+    var token = get('cn-sms-token');
+    var from  = get('cn-sms-from');
+    var msvc  = get('cn-sms-msvc');
+    if (!sid && !token && !from && !msvc){ setMsg('cn-sms-msg', 'Enter the Twilio Account SID, Auth Token, and a sender (number or Messaging Service SID) first.'); return; }
+    if (from && msvc){ setMsg('cn-sms-msg', 'Set only ONE sender: a number (SMS_FROM) OR a Messaging Service SID, not both.'); return; }
+    if (from && !/^\+[1-9]\d{7,14}$/.test(from)){ setMsg('cn-sms-msg', 'The sender number must be E.164, e.g. +17055551234.'); return; }
+    var secrets = [{ name: 'SMS_PROVIDER', value: 'twilio' }];
+    if (sid)   secrets.push({ name: 'TWILIO_ACCOUNT_SID', value: sid });
+    if (token) secrets.push({ name: 'TWILIO_AUTH_TOKEN',  value: token });
+    if (from)  secrets.push({ name: 'SMS_FROM', value: from });
+    if (msvc)  secrets.push({ name: 'TWILIO_MESSAGING_SERVICE_SID', value: msvc });
+    setMsg('cn-sms-msg', 'Applying to project...', 'ok');
+    try {
+      var r = await fetch(PBASE + '/functions/v1/set-nation-secret', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: sub, secrets: secrets })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if (!r.ok){ setMsg('cn-sms-msg', (d && d.error) ? ('Failed: ' + d.error + (d.name ? ' (' + d.name + ')' : '') + (d.detail ? ' - ' + String(d.detail).slice(0,160) : '')) : ('Failed: HTTP ' + r.status)); return; }
+      var tEl = document.getElementById('cn-sms-token'); if (tEl) tEl.value = '';
+      setMsg('cn-sms-msg', 'Applied to the project: ' + (d.applied || []).join(', ') + '. send-sms picks this up within about a minute.', 'ok');
+      await audit('nation_sms_secrets_set', sub, (d.applied || []).join(', '));
+    } catch (e){ setMsg('cn-sms-msg', 'Network error: ' + String(e).slice(0, 120)); }
+  };
+
   window.addNationNote = async function(sub){
     var ta = document.getElementById('cn-note-body');
     var body = (ta && ta.value || '').trim();
@@ -2733,6 +2803,7 @@
       case 'note-add':      window.addNationNote(el.getAttribute('data-sub') || ''); break;
       case 'ai-key-save':   window.saveNationAiKey(el.getAttribute('data-sub') || ''); break;
       case 'email-apply':   window.applyNationEmailSecrets(el.getAttribute('data-sub') || ''); break;
+      case 'sms-apply':     window.applyNationSmsSecrets(el.getAttribute('data-sub') || ''); break;
       case 'copy-text':     window.copyTextBtn(el); break;
       case 'inv-add-line':  window.invAddLine(); break;
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
