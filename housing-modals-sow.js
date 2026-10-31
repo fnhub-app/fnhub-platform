@@ -1524,23 +1524,59 @@ async function _sowPromptWorkOrderEmail(){
       var hmLabel = (window.CLFN_PERMS && CLFN_PERMS.roleLabel) ? CLFN_PERMS.roleLabel('housing_manager') : 'Housing Manager';
       var hasEmp = !!(sow.assignedTo && String(sow.assignedTo).trim());
       var who = sow.assignedToName || sow.assignedTo || '';
-      var msg = hasEmp
-        ? 'Send this work order (PDF attached) to the assigned employee and the ' + hmLabel + '? Uncheck to skip sending.'
-        : 'Send this work order (PDF attached) to the ' + hmLabel + '? Uncheck to skip sending.';
-      var lbl = hasEmp
+      var emailLbl = hasEmp
         ? (_esc(who) + ' (' + _esc(sow.assignedTo) + ') + ' + _esc(hmLabel))
         : _esc(hmLabel);
-      var r = await showConfirm({
-        title:'Email Work Order?',
-        message: msg,
-        confirmText:'Send Email', cancelText:'Cancel',
-        checkbox:{ label: lbl, defaultChecked:true }
-      });
-      var ok  = (typeof r === 'object' && r) ? r.ok : r;
-      var snd = (typeof r === 'object' && r) ? r.checked : false;
-      if(ok && snd){
-        notifyWorkOrderToFieldEmployee(sow, unit);
-        _sowMarkWorkStarted(unit && unit.id, sow, sow.assignedToName || 'the assigned employee');
+
+      // Is the assigned employee reachable by SMS right now? (module on + this
+      // event's SMS channel on + opted in with a valid mobile). If so, offer an
+      // independent Text checkbox so the sender SEES the text is going out and
+      // can send email and/or text separately. Otherwise the dialog is the
+      // email-only flow it has always been.
+      var smsNum = '';
+      try {
+        if(hasEmp && typeof _eventSmsOn === 'function' && _eventSmsOn('sow_assigned_to_field_employee')
+           && typeof _sbLoadStaffSmsByEmail === 'function' && typeof _smsNumberIfOptedIn === 'function'){
+          var _srow = await _sbLoadStaffSmsByEmail(sow.assignedTo);
+          smsNum = _smsNumberIfOptedIn(_srow) || '';
+        }
+      } catch(e){}
+
+      if(smsNum){
+        var rMulti = await showConfirm({
+          title:'Send Work Order?',
+          message:'Send this work order to the assigned employee and the ' + hmLabel + '. Choose how:',
+          confirmText:'Submit', cancelText:'Cancel',
+          checkboxes:[
+            { id:'email', label:'Email &middot; ' + emailLbl + ' (PDF)',              defaultChecked:true },
+            { id:'sms',   label:'Text &middot; ' + _esc(who) + ' at ' + _esc(smsNum), defaultChecked:true }
+          ]
+        });
+        if(!rMulti || !rMulti.ok) return;
+        var picked = rMulti.items || {};
+        var sendEmail = !!picked.email, sendSms = !!picked.sms;
+        if(sendEmail || sendSms){
+          notifyWorkOrderToFieldEmployee(sow, unit, { email: sendEmail, sms: sendSms });
+          _sowMarkWorkStarted(unit && unit.id, sow, sow.assignedToName || 'the assigned employee');
+        } else if(typeof showToast === 'function'){
+          showToast('Nothing selected — nothing sent.', {type:'info'});
+        }
+      } else {
+        var msg = hasEmp
+          ? 'Send this work order (PDF attached) to the assigned employee and the ' + hmLabel + '? Uncheck to skip sending.'
+          : 'Send this work order (PDF attached) to the ' + hmLabel + '? Uncheck to skip sending.';
+        var r = await showConfirm({
+          title:'Email Work Order?',
+          message: msg,
+          confirmText:'Submit', cancelText:'Cancel',
+          checkbox:{ label: emailLbl, defaultChecked:true }
+        });
+        var ok  = (typeof r === 'object' && r) ? r.ok : r;
+        var snd = (typeof r === 'object' && r) ? r.checked : false;
+        if(ok && snd){
+          notifyWorkOrderToFieldEmployee(sow, unit, { email:true, sms:false });
+          _sowMarkWorkStarted(unit && unit.id, sow, sow.assignedToName || 'the assigned employee');
+        }
       }
     } else if(sow.contractorId){
       if(typeof notifyWorkOrderToContractor !== 'function' || typeof _resolveContractorForEmail !== 'function') return;

@@ -3153,74 +3153,79 @@ function _emailTokensForFieldWorkOrder(sow, unit) {
   return base;
 }
 
-// Email an in-house work order. The assigned field employee (if one is
-// selected) gets it, and the Housing Manager ALWAYS gets it (via the event's
-// CC roles). The employee is optional — the work order still goes out to the
-// Housing Manager when no specific employee is picked. Fire-and-forget.
-async function notifyWorkOrderToFieldEmployee(sow, unit) {
+// Send an in-house work order to the assigned field employee (and the Housing
+// Manager, via the event's CC roles) by EMAIL and/or SMS. Both channels are
+// independent: opts.email / opts.sms each default true for back-compat, and the
+// caller (the Email Work Order dialog) can enable each separately per send.
+// The employee is optional for email — it still goes to the Housing Manager —
+// but SMS only ever goes to the assigned employee. Fire-and-forget.
+async function notifyWorkOrderToFieldEmployee(sow, unit, opts) {
   if (!sow) return;
+  opts = opts || {};
+  var doEmail  = opts.email !== false;
+  var doSms    = opts.sms   !== false;
   var eventKey = 'sow_assigned_to_field_employee';
   var to = (sow.assignedTo || '').trim().toLowerCase();
-  var hasEmployee = !!(to && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to));
-  var seen = {}; var emails = [];
-  if (hasEmployee) { emails.push(to); seen[to] = true; }
-  var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
-  if (extraRoles.length) {
-    var extra = await _resolveActiveStaffForRoles(extraRoles);
-    extra.forEach(function(r){ var c = (r.email||'').trim().toLowerCase(); if (c && !seen[c]) { seen[c] = true; emails.push(c); } });
-  }
-  if (!emails.length) {
-    console.log('[notify] sow_assigned_to_field_employee skipped - no employee email and no Housing Manager on file for SOW ' + (sow.project_number || '—'));
-    return;
-  }
-  var rendered = _renderEmailTemplate(eventKey, _emailTokensForFieldWorkOrder(sow, unit));
-  if (!rendered) return;
 
-  // Attach the in-house Work Order PDF (checklist form) so the crew and the
-  // Housing Manager receive the printable form, not just a notice. Best-effort:
-  // if generation fails the email still sends with a short note. The SOW modal
-  // is still mounted (closeSowModal only hides it), so the generator's DOM
-  // reads resolve to the in-house checklist variant.
-  var attachments = null;
-  var bodyHtml    = rendered.bodyHtml;
-  if (typeof _generateWorkOrderPdfBase64 === 'function') {
-    try {
-      var pdfBase64 = await _generateWorkOrderPdfBase64();
-      if (pdfBase64) {
-        attachments = [{
-          name:         'Work Order ' + (sow.project_number || 'wo') + '.pdf',
-          contentType:  'application/pdf',
-          contentBytes: pdfBase64
-        }];
+  // ----- Email -----
+  if (doEmail) {
+    var hasEmployee = !!(to && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(to));
+    var seen = {}; var emails = [];
+    if (hasEmployee) { emails.push(to); seen[to] = true; }
+    var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+    if (extraRoles.length) {
+      var extra = await _resolveActiveStaffForRoles(extraRoles);
+      extra.forEach(function(r){ var c = (r.email||'').trim().toLowerCase(); if (c && !seen[c]) { seen[c] = true; emails.push(c); } });
+    }
+    if (!emails.length) {
+      console.log('[notify] sow_assigned_to_field_employee email skipped - no employee email and no Housing Manager on file for SOW ' + (sow.project_number || '—'));
+    } else {
+      var rendered = _renderEmailTemplate(eventKey, _emailTokensForFieldWorkOrder(sow, unit));
+      if (rendered) {
+        // Attach the in-house Work Order PDF (checklist form). Best-effort: if
+        // generation fails the email still sends with a short note.
+        var attachments = null;
+        var bodyHtml    = rendered.bodyHtml;
+        if (typeof _generateWorkOrderPdfBase64 === 'function') {
+          try {
+            var pdfBase64 = await _generateWorkOrderPdfBase64();
+            if (pdfBase64) {
+              attachments = [{
+                name:         'Work Order ' + (sow.project_number || 'wo') + '.pdf',
+                contentType:  'application/pdf',
+                contentBytes: pdfBase64
+              }];
+            }
+          } catch (e) {
+            console.warn('[notify] in-house Work Order PDF generation failed, sending without attachment:', e);
+          }
+        }
+        if (!attachments) {
+          bodyHtml += '<p style="color:#888;font-size:12px;font-style:italic;">'
+                    + '(Work Order PDF could not be generated automatically. Open the request in the Housing app to print it.)'
+                    + '</p>';
+        }
+        await _sendSerially(emails.map(function(e){ return { email: e }; }), function(rcp){
+          return {
+            to:          rcp.email,
+            to_name:     (rcp.email === to ? (sow.assignedToName || '') : ''),
+            subject:     rendered.subject,
+            bodyHtml:    bodyHtml,
+            attachments: attachments,
+            event:       eventKey,
+            entity_type: 'sow',
+            entity_id:   sow.project_number || '—'
+          };
+        }, eventKey);
       }
-    } catch (e) {
-      console.warn('[notify] in-house Work Order PDF generation failed, sending without attachment:', e);
     }
   }
-  if (!attachments) {
-    bodyHtml += '<p style="color:#888;font-size:12px;font-style:italic;">'
-              + '(Work Order PDF could not be generated automatically. Open the request in the Housing app to print it.)'
-              + '</p>';
-  }
 
-  await _sendSerially(emails.map(function(e){ return { email: e }; }), function(rcp){
-    return {
-      to:          rcp.email,
-      to_name:     (rcp.email === to ? (sow.assignedToName || '') : ''),
-      subject:     rendered.subject,
-      bodyHtml:    bodyHtml,
-      attachments: attachments,
-      event:       eventKey,
-      entity_type: 'sow',
-      entity_id:   sow.project_number || '—'
-    };
-  }, eventKey);
-
-  // SMS (Phase 1): additively text the assigned crew member — never the CC'd
-  // Housing Manager — when the SMS channel is on and they've opted in. The
-  // email above remains the authoritative record; this is a heads-up only.
+  // ----- SMS (additive) -----
+  // Texts the assigned crew member only (never the CC'd Housing Manager), when
+  // the caller allowed it, the SMS channel is on, and they've opted in.
   try {
-    if (_eventSmsOn(eventKey) && to) {
+    if (doSms && _eventSmsOn(eventKey) && to) {
       var staffRow = await _sbLoadStaffSmsByEmail(to);
       var smsNum   = _smsNumberIfOptedIn(staffRow);
       if (smsNum) {

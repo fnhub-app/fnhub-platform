@@ -4003,6 +4003,34 @@ window._toE164 = function(raw){
   return '';
 };
 
+// Live validation feedback for an SMS mobile input: as the user types, show the
+// normalized E.164 the number will be saved as (green), or a red note if it
+// can't be made valid, and disable the consent checkbox until it is. Shared by
+// the staff-edit form and the self-service modal. Idempotent-safe per open.
+function _wireSmsNumberField(numId, optId, hintId) {
+  var numEl = document.getElementById(numId);
+  if(!numEl) return;
+  var optEl  = document.getElementById(optId);
+  var hintEl = document.getElementById(hintId);
+  function update() {
+    var raw  = String(numEl.value || '');
+    var e164 = (typeof window._toE164 === 'function') ? window._toE164(raw) : '';
+    var hasText = !!raw.trim();
+    if(hintEl) {
+      if(!hasText)      { hintEl.textContent = '';                                             hintEl.style.color = 'var(--muted)'; }
+      else if(e164)     { hintEl.textContent = '✓ Texts will be sent to ' + e164;         hintEl.style.color = 'var(--success)'; }
+      else              { hintEl.textContent = '✗ That does not look like a valid mobile number.'; hintEl.style.color = 'var(--danger)'; }
+    }
+    if(optEl) {
+      var ok = !!e164;
+      optEl.disabled = !ok;         // can't consent to texts without a reachable number
+      if(!ok) optEl.checked = false;
+    }
+  }
+  numEl.addEventListener('input', update);
+  update();   // reflect the initial (saved) value
+}
+
 function _updateRbaAllocSummary(totalCost, eligiblePools, budgetData) {
   var totalAlloc = 0;
   document.querySelectorAll('#rba_alloc_rows input[type="number"]').forEach(function(inp){
@@ -4683,7 +4711,8 @@ async function _sbEditStaffModal(id) {
           +'<span><strong>Passwordless (magic-link) sign-in</strong> — for consultants / external users. When on, they sign in with an emailed link; when off, this account uses a password (regular staff).</span></label></div>'
         + ((window.moduleOn && window.moduleOn('sms_notifications')) ? (
             '<div class="f"><label>Mobile for Text/SMS <span style="font-weight:normal;color:var(--muted);">— e.g. (807) 555-1234; saved as +1…</span></label>'
-            +'<input type="tel" id="edit_staff_sms_number" value="'+escapeHtml(u.sms_number||'')+'" placeholder="+1 807 555 1234"/></div>'
+            +'<input type="tel" id="edit_staff_sms_number" value="'+escapeHtml(u.sms_number||'')+'" placeholder="+1 807 555 1234"/>'
+            +'<div id="edit_staff_sms_hint" style="font-size:11px;margin-top:4px;min-height:14px;"></div></div>'
             +'<div class="f"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">'
               +'<input type="checkbox" id="edit_staff_sms_optin" '+(u.sms_opt_in?'checked':'')+' style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:0;"/>'
               +'<span><strong>Consent to receive text notifications (SMS)</strong> — only tick this if this person has agreed to be texted. They can reply STOP to any message to opt out.</span></label></div>'
@@ -4700,6 +4729,7 @@ async function _sbEditStaffModal(id) {
   document.getElementById('editStaffClose').addEventListener('click', function(){ modal.remove(); });
   document.getElementById('editStaffCancel').addEventListener('click', function(){ modal.remove(); });
   document.getElementById('editStaffSave').addEventListener('click', function(){ saveStaffEdit(id, u, modal); });
+  if(document.getElementById('edit_staff_sms_number')) _wireSmsNumberField('edit_staff_sms_number','edit_staff_sms_optin','edit_staff_sms_hint');
 }
 
 // Self-service text-notification settings. The staff table blocks editing your
@@ -4733,7 +4763,8 @@ async function openMySmsPrefs(id) {
       +'</div>'
       +'<div class="modal-body-stack">'
         +'<div class="f"><label>My mobile for texts <span style="font-weight:normal;color:var(--muted);">— e.g. (705) 555-1234; saved as +1…</span></label>'
-          +'<input type="tel" id="my_sms_number" value="'+escapeHtml(u.sms_number||'')+'" placeholder="+1 705 555 1234"/></div>'
+          +'<input type="tel" id="my_sms_number" value="'+escapeHtml(u.sms_number||'')+'" placeholder="+1 705 555 1234"/>'
+          +'<div id="my_sms_hint" style="font-size:11px;margin-top:4px;min-height:14px;"></div></div>'
         +'<div class="f"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">'
           +'<input type="checkbox" id="my_sms_optin" '+(u.sms_opt_in?'checked':'')+' style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:0;"/>'
           +'<span><strong>Send me text notifications (SMS)</strong> — you can reply STOP to any message to opt out at any time.</span></label></div>'
@@ -4748,6 +4779,7 @@ async function openMySmsPrefs(id) {
   document.getElementById('mySmsClose').addEventListener('click', function(){ modal.remove(); });
   document.getElementById('mySmsCancel').addEventListener('click', function(){ modal.remove(); });
   document.getElementById('mySmsSave').addEventListener('click', function(){ saveMySmsPrefs(id, u, modal); });
+  _wireSmsNumberField('my_sms_number','my_sms_optin','my_sms_hint');
 }
 
 async function saveMySmsPrefs(id, original, modal) {
