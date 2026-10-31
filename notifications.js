@@ -3589,6 +3589,27 @@ function _ntfRenderEditorHtml(eventKey) {
     +   '<button type="button" class="ntf-tool" data-ntf-cmd="unlink"              title="Remove link">&#10005;&#128279;</button>'
     + '</div>';
 
+  // Text / SMS sub-switch — only for SMS-capable events. Lets the ED turn the
+  // text channel on/off for THIS event (the per-event gate) and edit the short
+  // SMS text. Saved into email_templates[event].channels.sms / .smsBody, which
+  // _eventSmsOn / _renderSmsText read. Shown only when the module is on so the
+  // editor stays clean for nations without SMS.
+  var smsSection = '';
+  if (cfg.smsCapable && (typeof window.moduleOn !== 'function' || window.moduleOn('sms_notifications'))) {
+    var savedSmsOn = (saved.channels && typeof saved.channels.sms === 'boolean') ? saved.channels.sms : !!cfg.smsDefault;
+    var smsText    = (typeof saved.smsBody === 'string' && saved.smsBody) ? saved.smsBody : (cfg.sms || '');
+    smsSection = ''
+      + '<div class="ntf-field">'
+      +   '<label class="ntf-label">Text / SMS <span class="ntf-label-hint">(additive to the email above; only sends when the recipient has opted in and a valid mobile is on file)</span></label>'
+      +   '<label class="ntf-role-check" style="margin-bottom:8px;">'
+      +     '<input type="checkbox" id="ntf_sms_on"' + (savedSmsOn ? ' checked' : '') + '/>'
+      +     '<span>Also send a text message for this event</span>'
+      +   '</label>'
+      +   '<textarea id="ntf_sms_body" class="ntf-input" style="min-height:70px;resize:vertical;" placeholder="Short text message...">' + _ntfEsc(smsText) + '</textarea>'
+      +   '<div class="ntf-label-hint" style="margin-top:4px;">Keep it short &mdash; long texts split into multiple billed segments. The same {placeholders} above work here. &ldquo;Reply STOP to opt out&rdquo; is recommended.</div>'
+      + '</div>';
+  }
+
   return ''
     + '<div class="ntf-editor-header">'
     +   '<div class="ntf-editor-title">' + _ntfEsc(cfg.label) + '</div>'
@@ -3619,6 +3640,7 @@ function _ntfRenderEditorHtml(eventKey) {
     +   toolbar
     +   '<div id="ntf_body" class="ntf-body" contenteditable="true">' + bodyHtml + '</div>'
     + '</div>'
+    + smsSection
     + '<div class="ntf-actions">'
     +   '<button type="button" class="btn btn-primary" onclick="saveNotificationTemplate()">Save</button>'
     +   '<button type="button" class="btn btn-ghost"   onclick="resetNotificationTemplate()">Reset to Default</button>'
@@ -3782,16 +3804,30 @@ function saveNotificationTemplate() {
   var all  = (window._appSettings && window._appSettings.email_templates) || {};
   // Clone so we don't mutate the cached copy until the upsert succeeds.
   var next = Object.assign({}, all);
-  next[ed.eventKey] = {
+  var _entry = {
     subject:        ed.subject,
     bodyHtml:       ed.bodyHtml,
     recipientRoles: ed.recipientRoles,
     ccRoles:        ed.ccRoles
   };
+  // Carry forward the per-event SMS channel + text when the editor showed the
+  // SMS sub-switch (SMS-capable event, module on). _eventSmsOn/_renderSmsText
+  // read these; a plain email event leaves them untouched.
+  if (ed.smsCapable) {
+    _entry.channels = { sms: !!ed.smsChannelOn };
+    if (ed.smsBody) _entry.smsBody = ed.smsBody;
+  } else if (all[ed.eventKey]) {
+    // Preserve any previously-saved SMS settings even when the sub-switch isn't
+    // on screen (e.g. the module was toggled off since it was last edited).
+    if (all[ed.eventKey].channels) _entry.channels = all[ed.eventKey].channels;
+    if (all[ed.eventKey].smsBody)  _entry.smsBody  = all[ed.eventKey].smsBody;
+  }
+  next[ed.eventKey] = _entry;
 
   var _detail = 'Email template updated: ' + ed.eventKey
               + ' (recipients: ' + (ed.recipientRoles.join(',') || '-')
               + '; cc: '         + (ed.ccRoles.join(',')        || '-')
+              + (ed.smsCapable ? ('; sms: ' + (ed.smsChannelOn ? 'on' : 'off')) : '')
               + ')';
   persistSetting('email_templates', next, {
     auditAction: 'email_template_save',
@@ -3984,12 +4020,19 @@ function _ntfReadEditorState() {
     showToast('Pick at least one recipient role', {type:'info'});
     return null;
   }
+  // SMS sub-switch (only present for SMS-capable events while the module is on).
+  var smsOnEl    = document.getElementById('ntf_sms_on');
+  var smsBodyEl  = document.getElementById('ntf_sms_body');
+  var hasSms     = !!(cfg && cfg.smsCapable && smsOnEl);
   return {
     eventKey:       _ntfSelectedEvent,
     subject:        subject,
     bodyHtml:       bodyHtml,
     recipientRoles: roles,
-    ccRoles:        ccRoles
+    ccRoles:        ccRoles,
+    smsCapable:     hasSms,
+    smsChannelOn:   hasSms ? !!smsOnEl.checked : undefined,
+    smsBody:        (hasSms && smsBodyEl) ? (smsBodyEl.value || '').replace(/\s+/g, ' ').trim() : undefined
   };
 }
 

@@ -3988,6 +3988,21 @@ window.sendSms = async function(opts) {
   return data;
 };
 
+// Normalize a typed phone to E.164 (+15551234567) for SMS. North-America-first
+// (bare 10 digits -> +1…, 11 digits starting 1 -> +…); other intl numbers are
+// accepted digits-only with a '+'. Returns '' when it can't be made valid, so
+// callers can refuse to opt someone in without a usable mobile.
+window._toE164 = function(raw){
+  var s = String(raw == null ? '' : raw).trim();
+  if(!s) return '';
+  if(/^\+[1-9]\d{7,14}$/.test(s)) return s;            // already E.164
+  var d = s.replace(/[^\d]/g, '');
+  if(d.length === 10) return '+1' + d;                 // NANP local
+  if(d.length === 11 && d.charAt(0) === '1') return '+' + d; // NANP w/ country code
+  if(d.length >= 8 && d.length <= 15) return '+' + d;  // other international
+  return '';
+};
+
 function _updateRbaAllocSummary(totalCost, eligiblePools, budgetData) {
   var totalAlloc = 0;
   document.querySelectorAll('#rba_alloc_rows input[type="number"]').forEach(function(inp){
@@ -4666,6 +4681,13 @@ async function _sbEditStaffModal(id) {
         +'<div class="f"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">'
           +'<input type="checkbox" id="edit_staff_magic" '+(u.magic_link?'checked':'')+' style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:0;accent-color:#2563eb;"/>'
           +'<span><strong>Passwordless (magic-link) sign-in</strong> — for consultants / external users. When on, they sign in with an emailed link; when off, this account uses a password (regular staff).</span></label></div>'
+        + ((window.moduleOn && window.moduleOn('sms_notifications')) ? (
+            '<div class="f"><label>Mobile for Text/SMS <span style="font-weight:normal;color:var(--muted);">— e.g. (807) 555-1234; saved as +1…</span></label>'
+            +'<input type="tel" id="edit_staff_sms_number" value="'+escapeHtml(u.sms_number||'')+'" placeholder="+1 807 555 1234"/></div>'
+            +'<div class="f"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">'
+              +'<input type="checkbox" id="edit_staff_sms_optin" '+(u.sms_opt_in?'checked':'')+' style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:0;"/>'
+              +'<span><strong>Consent to receive text notifications (SMS)</strong> — only tick this if this person has agreed to be texted. They can reply STOP to any message to opt out.</span></label></div>'
+          ) : '')
         +'<div class="box-bg-card txt-help">Role + feature changes take effect the next time this staff member signs in. Restricting features hides those functions and blocks their pages; it does not grant approval rights (set separately in Approval Authority). Access Expires denies sign-in after that date (reversible — clear or extend it to restore).</div>'
       +'</div>'
       +'<div class="modal-footer">'
@@ -9218,6 +9240,33 @@ async function saveStaffEdit(id, original, modal) {
         if(!mr.ok) console.warn('[magic-link] save skipped — run the staff.magic_link migration', mr.status);
         else auditEntry('SETTINGS', 'settings_user_magic_link', 'Magic-link sign-in for '+name+': '+(magicVal?'enabled':'disabled'), window.currentRole||'ed');
       } catch(e){ console.warn('[magic-link] save error', e); }
+      // SMS consent — separate best-effort PATCH (new sms_* columns). Normalizes
+      // the number to E.164 and stamps the CASL consent timestamps. Only runs
+      // when the SMS fields were on screen (module on). Opt-in is refused
+      // without a valid mobile so we never flag someone textable with no number.
+      try {
+        var smsNumEl = document.getElementById('edit_staff_sms_number');
+        var smsOptEl = document.getElementById('edit_staff_sms_optin');
+        if (smsNumEl || smsOptEl) {
+          var e164    = (typeof window._toE164 === 'function') ? window._toE164(smsNumEl && smsNumEl.value) : '';
+          var wantOpt = !!(smsOptEl && smsOptEl.checked);
+          if (wantOpt && !e164) {
+            showToast('Enter a valid mobile (e.g. +18075551234) before opting in to texts — SMS consent not saved.', {type:'error'});
+            wantOpt = false;
+          }
+          var smsPatch = { sms_number: e164 || null, sms_opt_in: wantOpt };
+          var nowIso = new Date().toISOString();
+          if (wantOpt && original.sms_opt_in !== true)  smsPatch.sms_opt_in_at  = nowIso;
+          if (!wantOpt && original.sms_opt_in === true) smsPatch.sms_opt_out_at = nowIso;
+          var sr = await fetch(SUPABASE_URL+'/rest/v1/staff?id=eq.'+id, {
+            method: 'PATCH',
+            headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+            body: JSON.stringify(smsPatch)
+          });
+          if(!sr.ok) console.warn('[sms-consent] save skipped — run the sms_notifications migration', sr.status);
+          else auditEntry('SETTINGS', 'settings_user_sms', 'SMS for '+name+': '+(wantOpt?('opted in '+(e164||'')):'off'), window.currentRole||'ed');
+        }
+      } catch(e){ console.warn('[sms-consent] save error', e); }
       modal.remove();
       showToast('✓ Staff member updated', {type:'info'});
       auditEntry('SETTINGS', 'settings_user_edit', 'Staff updated: '+name+' — role set to '+hrole, window.currentRole||'ed');
