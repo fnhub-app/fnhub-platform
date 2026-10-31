@@ -453,6 +453,33 @@ Twilio Canadian **local** number (compliance profile required at purchase). Secr
 
 ---
 
+## Phase CP — Contractor Portal  ⬜ (design approved-pending; **full design in `docs/contractor-portal-design.md`**)
+
+A separate, **module-gated** (`contractor_portal`) surface where a contractor
+and their key contacts log in to see **only their own** awarded work, submit
+photos/notes/invoices/completion %, and upload new WSIB/liability insurance —
+all audited and routed to housing for verification + final approval.
+
+**Decisions locked (2026-10-31):** full design before any code; the contractor
+data boundary is **real Supabase RLS** (not client-trust), via a new
+`contractor_users` table linking `auth.uid()` → contractor; **SMS one-time-code
+auth** through Supabase's native phone provider (Twilio); a **separate surface**
+(ideally `contractors.<nation>.fnhub.app`), never the staff SPA. This foundation
+also unblocks the parked tenant portal.
+
+**Build phases:** B1 = the RLS + phone-auth + invite/claim **security foundation**
+(60–70% of the effort/risk; includes a proof screen) → B2 dashboard → B3 uploads
+(photos/notes/invoices/insurance) + housing verification → B4 completion % +
+notifications → B5 staff-side "text all key people / multiple contractors" (#5,
+portal-independent). **Open decisions before B1** (OTP provider, subdomain,
+per-contact logins, invoice→finance, RLS rollout) are listed in the design doc §9.
+
+🔖 Reuses: contractor registry (key contacts + phones + WSIB/insurance), the
+SMS pipeline (Phase G), RFQ/award, DocLibrary, notifications registry, landing
+worklist. Net-new hard parts: RLS, contractor auth, the separate surface.
+
+---
+
 ## Phase N — Multi-Nation Onboarding & Control Panel
 
 Turns the single-tenant CLFN app into the multi-nation platform. Architecture is
