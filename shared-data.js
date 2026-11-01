@@ -2646,6 +2646,48 @@ window.backfillContractorWorkOrders = backfillContractorWorkOrders;
 // impersonate — contractor-claim also checks the phone is on the contractor's
 // people[] before linking a login. Keys off the SAVED contractor record (not
 // the unsaved edit inputs), so the phone it authorizes is one on file.
+// Pick which key contacts get the portal sign-in text. Returns the selected
+// invitees (array of {phone,name}) or null if cancelled. Default: all checked.
+function _ctInvitePickModal(ct, invitees){
+  return new Promise(function(resolve){
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+    var host = document.getElementById('ctInvitePickModal');
+    if(!host){ host = document.createElement('div'); host.id = 'ctInvitePickModal'; document.body.appendChild(host); }
+    var rows = invitees.map(function(x, i){
+      return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--bg);">'
+        + '<input type="checkbox" class="_ctInvChk" data-i="' + i + '" checked style="width:16px;height:16px;flex:0 0 auto;"/>'
+        + '<div style="min-width:0;"><div style="font-weight:600;color:var(--text);font-size:13px;">' + esc(x.name || '(no name)') + '</div>'
+        + '<div style="color:var(--muted);font-size:12px;">' + esc(x.phone) + '</div></div></label>';
+    }).join('');
+    function close(val){ try { host.innerHTML = ''; } catch(e){} resolve(val); }
+    window._ctInvitePickClose = function(){ close(null); };
+    host.innerHTML =
+      '<div class="modal-overlay" style="display:flex;z-index:1200;" onclick="if(event.target===this)_ctInvitePickClose()">'
+      + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:420px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">'
+      +   '<div style="padding:16px 20px;border-bottom:3px solid var(--accent);">'
+      +     '<div style="font-size:15px;font-weight:700;color:var(--text);">📱 Invite to Contractor Portal</div>'
+      +     '<div style="font-size:12px;color:var(--muted);margin-top:4px;line-height:1.5;">Choose which key contacts to text a sign-in code to for ' + esc(ct.name || 'this contractor') + '. They sign in at the portal with the texted code.</div>'
+      +   '</div>'
+      +   '<div style="padding:16px 20px;overflow-y:auto;">' + rows + '</div>'
+      +   '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;gap:8px;">'
+      +     '<button type="button" id="_ctInvCancel" class="btn btn-ghost">Cancel</button>'
+      +     '<button type="button" id="_ctInvSend" class="btn btn-primary">Send invite</button>'
+      +   '</div>'
+      + '</div></div>';
+    var cEl = host.querySelector('#_ctInvCancel'); if(cEl) cEl.addEventListener('click', function(){ close(null); });
+    var sEl = host.querySelector('#_ctInvSend');
+    if(sEl) sEl.addEventListener('click', function(){
+      var sel = [];
+      host.querySelectorAll('._ctInvChk').forEach(function(chk){
+        if(chk.checked){ var i = parseInt(chk.getAttribute('data-i'), 10); if(invitees[i]) sel.push(invitees[i]); }
+      });
+      if(!sel.length){ if(typeof showToast === 'function') showToast('Select at least one contact to invite.', {type:'info'}); return; }
+      close(sel);
+    });
+  });
+}
+window._ctInvitePickModal = _ctInvitePickModal;
+
 async function inviteContractorToPortal(ctId){
   try {
     if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
@@ -2663,13 +2705,11 @@ async function inviteContractorToPortal(ctId){
       seen[e164] = true; invitees.push({ phone: e164, name: p.name || '' });
     });
     if(!invitees.length){ showToast('Add a key contact with a mobile number first, then save.', {type:'error'}); return; }
+    // Let the user choose which contacts get the sign-in text (default all).
+    var selected = await _ctInvitePickModal(ct, invitees);
+    if(!selected || !selected.length) return;
+    invitees = selected;
     var who = invitees.map(function(x){ return (x.name || x.phone); }).join(', ');
-    var ok = await showConfirm({
-      title: 'Invite to the Contractor Portal?',
-      message: 'Authorize ' + invitees.length + ' phone number(s) to sign in to the portal for ' + (ct.name || 'this contractor') + ':\n\n' + who + '\n\nThey log in at /contractor-portal.html with a texted code. You can revoke access later.',
-      confirmText: 'Send invite' + (invitees.length > 1 ? 's' : '')
-    });
-    if(!ok) return;
     var now = new Date();
     var expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30-day window
     var invitedBy = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.email) || (window.currentRole || 'staff');
@@ -9030,9 +9070,12 @@ function _buildAddContractorModalHTML() {
             '</div>',
 
             '<div class="tic-section tic-section-spaced">',
-              // Add Person + Invite-to-portal buttons moved to the footer so all
-              // action buttons sit in one place near the bottom of the card.
-              '<div class="tic-section-h">Key People</div>',
+              // "+ Add Person" sits in this section header (next to its list);
+              // Invite-to-portal stays in the footer with the other actions.
+              '<div class="tic-section-h flex-sb">',
+                '<span>Key People</span>',
+                '<button type="button" onclick="ctAddPerson()" class="btn btn-ghost btn-sm">+ Add Person</button>',
+              '</div>',
               '<div id="ct_people_list" class="ct-people-list"></div>',
             '</div>',
 
@@ -9241,7 +9284,6 @@ function _buildAddContractorModalHTML() {
         '<div class="tic-footer">',
           '<div id="cic_review_progress" class="txt-muted-sm cic-review-progress"></div>',
           '<span class="tic-footer-spacer"></span>',
-          '<button type="button" onclick="ctAddPerson()" class="btn btn-ghost">+ Add Person</button>',
           '<button type="button" id="ct_portal_invite_btn" onclick="inviteContractorToPortal()" class="btn btn-ghost" style="display:none;" title="Authorize this contractor\'s key contacts to sign in to the Contractor Portal">📱 Invite to portal</button>',
           '<button type="button" id="ct_portal_preview_btn" onclick="_ctPortalPreview()" class="btn btn-ghost" style="display:none;" title="See the Work Orders this contractor sees after signing in to the portal (staff preview, read-only)">👁 Preview portal view</button>',
           '<button type="button" onclick="closeAddContractorModal()" class="btn btn-ghost">Cancel</button>',
@@ -9594,9 +9636,8 @@ function calcRenoScore(unitId) {
 }
 
 function ctAddPerson() {
-  // The button now lives in the global footer, so the Key People list (on the
-  // Overview tab) may not be visible. Switch to Overview first so the new row
-  // and its focus are on screen.
+  // "+ Add Person" lives in the Key People section (Overview tab); ensure that
+  // tab is showing in case it's called from elsewhere.
   if(typeof setCicTab === 'function') setCicTab('overview');
   // Flush any current DOM input values into _ctPeople first, then append blank row.
   ctGetPeople(); // side-effect: syncs DOM → _ctPeople
