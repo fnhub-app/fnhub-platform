@@ -232,6 +232,12 @@
                + '<div>' + esc(it.description || '') + '</div></div>';
         }).join('')
       : '<div class="cp-empty">No scope items listed.</div>');
+    var hs = Array.isArray(d.hsFlags) ? d.hsFlags : [];
+    var hsHtml = hs.length
+      ? '<h3 class="cp-h3">Health &amp; safety</h3><div class="cp-hs-row">'
+        + hs.map(function (f) { return '<span class="cp-hs">&#9888; ' + esc(f) + '</span>'; }).join('')
+        + '</div>'
+      : '';
     var docs = Array.isArray(d.documents) ? d.documents : [];
     var docsHtml = '<h3 class="cp-h3">Documents</h3>' + (docs.length
       ? docs.map(function (f) {
@@ -247,9 +253,12 @@
       '<button type="button" class="cp-back" data-cp-back>&larr; Back to work orders</button>'
       + '<h1>' + esc(w.address || w.sow_unit_id || '') + '</h1>'
       + '<p class="cp-sub">#' + esc(w.sow_project_number || '') + ' &middot; ' + esc(statusLabel) + '</p>'
+      + field('Tenant', d.tenantName)
+      + field('Tenant phone', d.tenantPhone)
       + field('Target start', d.targetStart)
       + field('Target completion', d.targetCompletion)
       + field('Condition', d.condition)
+      + hsHtml
       + field('Housing contact', d.contactName)
       + field('Contact phone', d.contactPhone)
       + scopeHtml
