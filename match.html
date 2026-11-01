@@ -149,8 +149,8 @@
         <div id="ue_hero_sub" class="tic-hero-sub"></div>
       </div>
       <div class="flex-gap8">
-        <button id="ue_tenant_btn" data-ue-keep onclick="ueOpenTenantCard()" title="Open the Tenant Information Card for this unit's tenant" class="btn btn-ghost" style="display:none;">🪪 Tenant Card</button>
-        <button id="ue_sow_btn" data-ue-keep onclick="ueOpenSow()" title="Quick-open the most recent Maintenance Request" class="btn btn-ghost">🔨 Maintenance Request</button>
+        <!-- Doc-generation (Maintenance QR print) stays top-right; the Tenant
+             Card + Maintenance Request navigation shortcuts moved to the footer. -->
         <button id="ue_qr_btn" data-ue-keep onclick="ueOpenMaintenanceQr()" title="Print a maintenance QR code tenants can scan to report an issue" class="btn btn-ghost">🔧 Maintenance QR</button>
         <button data-ue-keep onclick="closeUnitEditModal()" class="tic-close-btn" aria-label="Close">✕</button>
       </div>
@@ -508,6 +508,8 @@
     <!-- Footer -->
     <div class="tic-footer">
       <div id="ue_archive_btn_wrap"></div>
+      <button id="ue_tenant_btn" data-ue-keep onclick="ueOpenTenantCard()" title="Open the Tenant Information Card for this unit's tenant" class="btn btn-ghost" style="display:none;">🪪 Tenant Card</button>
+      <button id="ue_sow_btn" data-ue-keep onclick="ueOpenSow()" title="Quick-open the most recent Maintenance Request" class="btn btn-ghost">🔨 Maintenance Request</button>
       <span class="tic-footer-spacer"></span>
       <button data-ue-keep onclick="closeUnitEditModal()" class="btn btn-ghost">Cancel</button>
       <button id="ue_save_btn" onclick="saveUnitEdit()" class="btn btn-primary">Save Changes</button>
