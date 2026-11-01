@@ -295,6 +295,26 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'contractor_portal_invite',
+    label:                 'Contractor Portal Invitation',
+    description:           'Sent to a contractor when staff use "Invite to portal" on the contractor card. Goes to the contractor email on file plus any key-contact emails; includes the portal link. Silent skip if no email is on file (the invite itself still works -- the contractor signs in with their mobile number).',
+    recipientType:         'contractor',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['contractorName','portalLink','nationShort'],
+    defaults: {
+      subject:  'You have been invited to the {nationShort} Contractor Portal',
+      bodyHtml: '<p>Dear {contractorName},</p>'
+              + '<p>{nationShort} Housing has given your company access to the Contractor Portal, where you can view the work orders assigned to you.</p>'
+              + '<p>To sign in, open the portal and enter the mobile number on file with the housing office. You will receive a one-time code by text to complete sign-in.</p>'
+              + '<p><a href="{portalLink}" style="{brandBtnStyle}">Open the Contractor Portal &rarr;</a></p>'
+              + '<p>If the button does not work, go to: {portalLink}</p>'
+              + '<p>If you have any questions, please reply to this email or contact the {nationShort} Housing office.</p>'
+              + '<p>Sincerely,<br/>{nationShort} Housing</p>'
+    }
+  },
+  {
     key:                   'sow_assigned_to_field_employee',
     label:                 'Work Order Assigned to Field Employee',
     description:           'Sent to the assigned in-house field employee (and CC\'d to the Housing Manager) when a maintenance request is submitted with them assigned. The printable in-house Work Order checklist PDF is attached. Goes to the employee\'s email on file (silent skip if none).',
@@ -3023,6 +3043,35 @@ async function notifyRfqAward(rfq, contractor, amount, notes, addr) {
   }, eventKey);
 }
 window.notifyRfqAward = notifyRfqAward;
+
+// Contractor Portal invitation email. Fired from inviteContractorToPortal
+// (shared-data.js) after the invites are written. Emails the contractor email
+// on file plus any key-contact emails, with the portal link. The invite itself
+// is phone-based, so this is a courtesy notification -- silent skip if nobody
+// has an email. Returns true if at least one email was queued.
+async function notifyContractorPortalInvite(ct, people, portalLink) {
+  if (!ct) return false;
+  var eventKey = 'contractor_portal_invite';
+  var seen = {}, emails = [];
+  function _addEmail(a){ if(!a) return; var c=String(a).trim().toLowerCase(); if(!c||seen[c]) return; if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return; seen[c]=true; emails.push(c); }
+  if (ct.email) _addEmail(ct.email);
+  (people || ct.people || []).forEach(function(p){ if(p && p.email) _addEmail(p.email); });
+  var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+  if (extraRoles.length) { var extra = await _resolveActiveStaffForRoles(extraRoles); extra.forEach(function(r){ _addEmail(r.email); }); }
+  if (!emails.length) { console.log('[notify] contractor_portal_invite skipped — no contractor/contact email for ' + (ct.id || '—')); return false; }
+  var natShort = (window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing';
+  var rendered = _renderEmailTemplate(eventKey, {
+    contractorName: ct.name || 'Contractor',
+    portalLink:     portalLink || '',
+    nationShort:    natShort
+  });
+  if (!rendered) return false;
+  await _sendSerially(emails.map(function(e){ return { email: e }; }), function(rcp){
+    return { to: rcp.email, to_name: '', subject: rendered.subject, bodyHtml: rendered.bodyHtml, event: eventKey, entity_type: 'contractor', entity_id: ct.id || '—' };
+  }, eventKey);
+  return true;
+}
+window.notifyContractorPortalInvite = notifyContractorPortalInvite;
 
 // RFQ regret notices to the OTHER bidders (recorded a bid, not the winner).
 // `losers` is an array of contractor records. Uses the editable `rfq_regret`
