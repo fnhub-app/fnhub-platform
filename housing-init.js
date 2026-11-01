@@ -427,9 +427,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
 // ── Contact settings helpers ──
 function renderScorecardActions(app) {
-  var bar  = document.getElementById('sc_action_bar');
+  // The approval buttons live in the sticky footer (#sc_action_buttons); the
+  // scoring-gate warning renders separately in content flow (#sc_scoring_warn).
+  // The footer itself is static markup (utility buttons always apply), so there
+  // is no longer an action bar whose display we toggle.
+  var warn = document.getElementById('sc_scoring_warn');
   var btns = document.getElementById('sc_action_buttons');
-  if(!bar || !btns || !app) return;
+  if(!btns || !app) return;
+  if(warn) warn.innerHTML = '';
 
   var role   = window.currentRole || 'housing_employee_l1';
   var status = app.status || 'draft';
@@ -499,13 +504,19 @@ function renderScorecardActions(app) {
 
   var canAssignSecondary = status === 'assigned' && APPROVAL_AUTHORITY.can('assignUnit', role);
 
-  if(!actions.length && !canAssignSecondary && !_hadApproveAction) { bar.style.display = 'none'; return; }
+  // The footer stays visible either way (utility buttons are static); just
+  // clear the decision buttons when there are none for this role/stage.
+  if(!actions.length && !canAssignSecondary && !_hadApproveAction) { btns.innerHTML = ''; return; }
 
-  bar.style.display = 'block';
+  // Scoring-gate warning renders in content flow (above the footer) so the
+  // full explanation is visible; the "Complete scoring" button sits with the
+  // decision buttons in the footer.
+  if (_scoringIncomplete && _hadApproveAction && warn) {
+    warn.innerHTML = '<div class="sc-surface" style="font-size:13px;color:var(--warn-amber-text);background:var(--warn-amber-bg);border:1px solid var(--warn-amber-border);border-radius:8px;padding:10px 14px;">⚠️ The <strong>Housing Needs</strong> and <strong>Tenancy History</strong> scoring screens must be completed before this application can be approved.</div>';
+  }
   var _scHtml = '';
   if (_scoringIncomplete && _hadApproveAction) {
-    _scHtml += '<div style="font-size:13px;color:var(--warn-amber-text);background:var(--warn-amber-bg);border:1px solid var(--warn-amber-border);border-radius:8px;padding:10px 14px;margin-bottom:10px;">⚠️ The <strong>Housing Needs</strong> and <strong>Tenancy History</strong> scoring screens must be completed before this application can be approved.</div>'
-      + '<button class="btn btn-primary" style="font-size:13px;margin-right:8px;margin-bottom:6px;" onclick="if(typeof completeScoringScreens===\'function\')completeScoringScreens(\'' + app.id + '\');">📋 Complete scoring screens →</button>';
+    _scHtml += '<button class="btn btn-primary" style="font-size:13px;" onclick="if(typeof completeScoringScreens===\'function\')completeScoringScreens(\'' + app.id + '\');">📋 Complete scoring screens →</button>';
   }
   _scHtml += actions.map(function(a) {
     return '<button class="btn ' + a.cls + '" style="font-size:13px;" '

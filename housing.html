@@ -1001,26 +1001,8 @@
       <h1 id="sc_back_name">—</h1>
       <p id="sc_back_id">—</p>
     </div>
-    <div class="phb-actions">
-      <button onclick="if(window._currentScorecardApp&&typeof openTenantCard==='function')openTenantCard(window._currentScorecardApp.id);"
-              class="btn btn-ghost" title="Open this person's card (TIC)">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-        Person Card
-      </button>
-      <button onclick="var a=window._currentScorecardApp; if(a&&typeof inviteApplicantToPortal==='function')inviteApplicantToPortal(a.email||'',((a.fn||'')+' '+(a.ln||'')).trim(),a.id);"
-              class="btn btn-ghost" title="Email this applicant a sign-in link to the applicant portal">
-        &#9993;&#65039; Invite to Portal
-      </button>
-      <button onclick="if(window._currentScorecardApp&&typeof window.openEditModal==='function')window.openEditModal(window._currentScorecardApp.id);"
-              class="btn btn-ghost">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-        Open
-      </button>
-      <button onclick="printScorecard()" class="btn btn-primary">
-        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        Print / Save PDF
-      </button>
-    </div>
+    <!-- Page-level action buttons moved to the sticky footer (#sc_action_footer)
+         at the bottom of this view, so every action sits in one place. -->
   </div>
   <div class="sc-page-wrap">
     <div class="sc-hero">
@@ -1046,11 +1028,10 @@
       </div>
     </div>
     <div id="sc_info_strip" class="sc-surface sc-info-strip"></div>
-    <!-- ── APPROVAL ACTION BAR ── -->
-    <div id="sc_action_bar" class="sc-surface sc-action-bar" style="display:none;">
-      <div class="lbl-muted mb-12">Approval Actions</div>
-      <div id="sc_action_buttons"></div>
-    </div>
+    <!-- Scoring-gate warning (filled by renderScorecardActions when the staff
+         scoring screens still need completing). The approval action buttons
+         themselves live in the sticky footer at the bottom of this view. -->
+    <div id="sc_scoring_warn"></div>
     <!-- ── SECONDARY UNITS STRIP (shown when tenant holds additional units) ── -->
     <div id="sc_secondary_units" style="display:none;"></div>
     <div class="card sc-ed-panel">
@@ -1096,6 +1077,35 @@
         </div>
       </div>
       <div id="sc_docs_mount"></div>
+    </div>
+
+    <!-- ── STICKY ACTION FOOTER ──────────────────────────────────────────
+         Single home for every scorecard action: utility buttons (Person
+         Card / Invite / Open / Print) on the left, and the role-gated
+         approval decisions (#sc_action_buttons, filled by
+         renderScorecardActions) on the right. Pinned to the bottom of the
+         scrolling view so it stays visible, mirroring the modal footers. -->
+    <div id="sc_action_footer" class="sc-action-footer">
+      <button onclick="if(window._currentScorecardApp&&typeof openTenantCard==='function')openTenantCard(window._currentScorecardApp.id);"
+              class="btn btn-ghost" title="Open this person's card (TIC)">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Person Card
+      </button>
+      <button onclick="var a=window._currentScorecardApp; if(a&&typeof inviteApplicantToPortal==='function')inviteApplicantToPortal(a.email||'',((a.fn||'')+' '+(a.ln||'')).trim(),a.id);"
+              class="btn btn-ghost" title="Email this applicant a sign-in link to the applicant portal">
+        &#9993;&#65039; Invite to Portal
+      </button>
+      <button onclick="if(window._currentScorecardApp&&typeof window.openEditModal==='function')window.openEditModal(window._currentScorecardApp.id);"
+              class="btn btn-ghost">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+        Open
+      </button>
+      <button onclick="printScorecard()" class="btn btn-ghost">
+        <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
+        Print / Save PDF
+      </button>
+      <span class="sc-footer-spacer"></span>
+      <div id="sc_action_buttons" class="sc-footer-actions"></div>
     </div>
 
   </div>
