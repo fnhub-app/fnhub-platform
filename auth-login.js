@@ -551,6 +551,31 @@ async function startSignIn() {
       try { sessionStorage.setItem('clfn_housing_token', data.access_token); } catch(e) {}
     }
 
+    // Two-factor step-up (opt-in, Phase 1). If this user has a verified TOTP
+    // factor, prompt for the 6-digit code and swap in the AAL2 session before
+    // proceeding. No factor -> returns immediately. User cancels -> abort the
+    // sign-in (clear the AAL1 token we just stored).
+    if (typeof window._mfaLoginStepUp === 'function') {
+      var _mfaRes = await window._mfaLoginStepUp(data);
+      if (!_mfaRes || !_mfaRes.ok) {
+        try { sessionStorage.removeItem('clfn_housing_token'); } catch (e) {}
+        HOUSING_SESSION.accessToken = '';
+        HOUSING_HEADERS['Authorization'] = 'Bearer ' + (typeof SUPABASE_ANON !== 'undefined' ? SUPABASE_ANON : '');
+        if (errEl) { errEl.textContent = 'Sign-in cancelled.'; errEl.style.display = 'block'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
+        return;
+      }
+      if (_mfaRes.session && _mfaRes.session.access_token) {
+        if (typeof _applyTokenPayload === 'function') {
+          _applyTokenPayload(_mfaRes.session);
+        } else {
+          HOUSING_SESSION.accessToken = _mfaRes.session.access_token;
+          HOUSING_HEADERS['Authorization'] = 'Bearer ' + _mfaRes.session.access_token;
+          try { sessionStorage.setItem('clfn_housing_token', _mfaRes.session.access_token); } catch (e) {}
+        }
+      }
+    }
+
     // Resolve role from the staff table — this is the real authorization gate
     await resolveHousingRole();
     // resolveHousingRole redirects to the login page if access has expired; bail
