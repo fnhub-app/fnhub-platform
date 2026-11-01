@@ -620,3 +620,225 @@ function stopIdleTimer() {
     _idleListenersAttached = false;
   }
 }
+
+// ════════════════════════════════════════════════════════════════════════════
+// Two-factor authentication (TOTP) — Phase 1: OPT-IN.
+// Direct GoTrue MFA REST (no SDK). Nothing here forces a factor, so no one can
+// be locked out: a staff member enrolls from the avatar menu (openMfaSetup),
+// and only THEN does login step up (_mfaLoginStepUp). Requires MFA to be
+// enabled in the Supabase project (Auth settings). No colour literals — the
+// modals use theme tokens (var(--...)) like the rest of the app.
+// ════════════════════════════════════════════════════════════════════════════
+function _mfaHeaders(token) {
+  return { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + token };
+}
+function _mfaEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
+
+// All TOTP factors for an access token (used by setup to clean up unverified).
+async function _mfaListAllFactors(token) {
+  try {
+    var r = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: _mfaHeaders(token) });
+    if (!r.ok) return [];
+    var u = await r.json();
+    var fx = (u && u.factors) || [];
+    return fx.filter(function (f) { return f && f.factor_type === 'totp'; });
+  } catch (e) { return []; }
+}
+async function _mfaListVerifiedFactors(token) {
+  var all = await _mfaListAllFactors(token);
+  return all.filter(function (f) { return f.status === 'verified'; });
+}
+
+// Challenge + verify a factor with a 6-digit code -> new (AAL2) session, or throw.
+async function _mfaChallengeVerify(token, factorId, code) {
+  var cr = await fetch(SUPABASE_URL + '/auth/v1/factors/' + encodeURIComponent(factorId) + '/challenge', { method: 'POST', headers: _mfaHeaders(token) });
+  var cd = await cr.json().catch(function () { return {}; });
+  if (!cr.ok || !cd.id) throw new Error((cd && (cd.msg || cd.error_description || cd.error)) || 'Could not start the challenge');
+  var vr = await fetch(SUPABASE_URL + '/auth/v1/factors/' + encodeURIComponent(factorId) + '/verify', {
+    method: 'POST', headers: _mfaHeaders(token),
+    body: JSON.stringify({ challenge_id: cd.id, code: String(code || '').trim() })
+  });
+  var vd = await vr.json().catch(function () { return {}; });
+  if (!vr.ok || !vd.access_token) throw new Error((vd && (vd.msg || vd.error_description || vd.error)) || 'That code was not valid');
+  return vd;
+}
+async function _mfaUnenroll(token, factorId) {
+  try { await fetch(SUPABASE_URL + '/auth/v1/factors/' + encodeURIComponent(factorId), { method: 'DELETE', headers: _mfaHeaders(token) }); } catch (e) { /* non-fatal */ }
+}
+
+// ── Login step-up ───────────────────────────────────────────────────────────
+// Called from auth-login.js right after the password grant. Returns
+// { ok:true } (no factor, proceed), { ok:true, session } (stepped up to AAL2),
+// or { ok:false } (user cancelled -> abort login). Listing fails soft (opt-in,
+// no enforcement); the VERIFY itself is strict (success or cancel only).
+async function _mfaLoginStepUp(sessionData) {
+  var token = sessionData && sessionData.access_token;
+  if (!token) return { ok: true };
+  var factors = await _mfaListVerifiedFactors(token);
+  if (!factors.length) return { ok: true };
+  var newSession = await _mfaPromptCode(token, factors[0].id);
+  if (!newSession) return { ok: false };
+  return { ok: true, session: newSession };
+}
+window._mfaLoginStepUp = _mfaLoginStepUp;
+
+// Full-screen code prompt used at login. Resolves to the new session on a
+// correct code, or null if the user cancels. Loops on wrong codes.
+function _mfaPromptCode(token, factorId) {
+  return new Promise(function (resolve) {
+    var ov = document.createElement('div');
+    ov.id = '_mfaCodeOverlay';
+    ov.className = 'modal-overlay';
+    ov.setAttribute('style', 'display:flex;z-index:100000;');
+    ov.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:380px;padding:22px;">'
+      + '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">Two-factor verification</div>'
+      + '<div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Enter the 6-digit code from your authenticator app.</div>'
+      + '<input id="_mfaCodeInput" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="width:100%;box-sizing:border-box;padding:12px;font-size:18px;letter-spacing:4px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
+      + '<div id="_mfaCodeMsg" style="min-height:16px;font-size:12px;color:var(--danger);margin-top:8px;"></div>'
+      + '<div style="display:flex;gap:8px;margin-top:12px;">'
+      +   '<button type="button" id="_mfaCodeCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>'
+      +   '<button type="button" id="_mfaCodeVerify" class="btn btn-primary" style="flex:1;">Verify</button>'
+      + '</div></div>';
+    document.body.appendChild(ov);
+    var input = ov.querySelector('#_mfaCodeInput');
+    var msg = ov.querySelector('#_mfaCodeMsg');
+    var vbtn = ov.querySelector('#_mfaCodeVerify');
+    var cbtn = ov.querySelector('#_mfaCodeCancel');
+    if (input) input.focus();
+    function done(val) { try { ov.remove(); } catch (e) {} resolve(val); }
+    async function tryVerify() {
+      var code = (input && input.value || '').trim();
+      if (code.length < 6) { if (msg) msg.textContent = 'Enter all 6 digits.'; return; }
+      if (vbtn) { vbtn.disabled = true; vbtn.textContent = 'Verifying…'; }
+      if (msg) msg.textContent = '';
+      try {
+        var newSession = await _mfaChallengeVerify(token, factorId, code);
+        done(newSession);
+      } catch (e) {
+        if (msg) msg.textContent = (e && e.message) || 'That code was not valid.';
+        if (vbtn) { vbtn.disabled = false; vbtn.textContent = 'Verify'; }
+        if (input) { input.value = ''; input.focus(); }
+      }
+    }
+    if (vbtn) vbtn.addEventListener('click', tryVerify);
+    if (cbtn) cbtn.addEventListener('click', function () { done(null); });
+    if (input) input.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') tryVerify(); });
+  });
+}
+
+// ── Enrollment / status modal (opt-in, from the avatar menu) ─────────────────
+function openMfaSetup() {
+  var token = (window.HOUSING_SESSION && HOUSING_SESSION.accessToken) || '';
+  if (!token) { if (typeof showToast === 'function') showToast('Please sign in again before changing two-factor settings.', { type: 'error' }); return; }
+  var host = document.getElementById('mfaSetupModal');
+  if (!host) { host = document.createElement('div'); host.id = 'mfaSetupModal'; document.body.appendChild(host); }
+
+  function shell(bodyHtml) {
+    host.innerHTML =
+      '<div class="modal-overlay" style="display:flex;z-index:1200;" onclick="if(event.target===this)_mfaCloseSetup()">'
+      + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:440px;max-height:92vh;display:flex;flex-direction:column;overflow:hidden;">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:3px solid var(--accent);">'
+      +     '<div style="font-size:16px;font-weight:700;color:var(--text);">&#128274; Two-Factor Authentication</div>'
+      +     '<button type="button" onclick="_mfaCloseSetup()" class="tic-close-btn" aria-label="Close">&#10005;</button>'
+      +   '</div>'
+      +   '<div style="padding:18px 20px;overflow-y:auto;">' + bodyHtml + '</div>'
+      + '</div></div>';
+  }
+  shell('<div style="color:var(--muted);font-size:13px;">Loading…</div>');
+
+  _mfaListAllFactors(token).then(function (factors) {
+    var verified = factors.filter(function (f) { return f.status === 'verified'; });
+    if (verified.length) {
+      shell(
+        '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--success-bg,var(--bg));border:1px solid var(--success,var(--border));border-radius:8px;color:var(--success,var(--text));font-size:13px;font-weight:600;margin-bottom:14px;">&#10003; Two-factor authentication is ON for your account.</div>'
+        + '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">You will be asked for a 6-digit code from your authenticator app each time you sign in.</div>'
+        + '<button type="button" id="_mfaTurnOff" class="btn btn-ghost" style="color:var(--danger);border-color:var(--danger);">Turn off two-factor</button>'
+      );
+      var off = document.getElementById('_mfaTurnOff');
+      if (off) off.addEventListener('click', function () {
+        off.disabled = true; off.textContent = 'Turning off…';
+        var jobs = verified.map(function (f) { return _mfaUnenroll(token, f.id); });
+        Promise.all(jobs).then(function () {
+          if (typeof showToast === 'function') showToast('Two-factor authentication turned off.', { type: 'info' });
+          openMfaSetup();
+        });
+      });
+      return;
+    }
+    // Not enrolled: clean up any dangling unverified factors, then show setup.
+    var stale = factors.filter(function (f) { return f.status !== 'verified'; });
+    Promise.all(stale.map(function (f) { return _mfaUnenroll(token, f.id); })).then(function () {
+      shell(
+        '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">Add a second step to your sign-in. You will need an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password, etc.).</div>'
+        + '<button type="button" id="_mfaStart" class="btn btn-primary">Set up two-factor</button>'
+      );
+      var start = document.getElementById('_mfaStart');
+      if (start) start.addEventListener('click', function () { _mfaBeginEnroll(token, shell); });
+    });
+  });
+}
+window.openMfaSetup = openMfaSetup;
+
+function _mfaCloseSetup() { var h = document.getElementById('mfaSetupModal'); if (h) h.innerHTML = ''; }
+window._mfaCloseSetup = _mfaCloseSetup;
+
+function _mfaBeginEnroll(token, shell) {
+  shell('<div style="color:var(--muted);font-size:13px;">Generating your code…</div>');
+  var friendly = (window.HOUSING_SESSION && HOUSING_SESSION.email) || ('Staff-' + Date.now());
+  fetch(SUPABASE_URL + '/auth/v1/factors', {
+    method: 'POST', headers: _mfaHeaders(token),
+    body: JSON.stringify({ factor_type: 'totp', friendly_name: friendly })
+  }).then(function (r) { return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; }); })
+    .then(function (res) {
+      if (!res.ok || !res.d || !res.d.id || !res.d.totp) {
+        var em = (res.d && (res.d.msg || res.d.error_description || res.d.error)) || 'Could not start enrollment. Make sure MFA is enabled for this nation.';
+        shell('<div style="color:var(--danger);font-size:13px;">' + _mfaEsc(em) + '</div>');
+        return;
+      }
+      var factorId = res.d.id, totp = res.d.totp || {};
+      var qr = String(totp.qr_code || '');
+      var qrHtml = qr.indexOf('data:') === 0
+        ? '<img src="' + _mfaEsc(qr) + '" alt="QR code" style="width:180px;height:180px;background:var(--white,#fff);border-radius:8px;padding:6px;"/>'
+        : (qr.indexOf('<svg') !== -1
+            ? '<div style="width:180px;height:180px;background:var(--white,#fff);border-radius:8px;padding:6px;box-sizing:border-box;">' + qr + '</div>'
+            : '');
+      shell(
+        '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Scan this with your authenticator app, then enter the 6-digit code it shows.</div>'
+        + '<div style="display:flex;justify-content:center;margin-bottom:10px;">' + qrHtml + '</div>'
+        + (totp.secret ? '<div style="font-size:11px;color:var(--muted);text-align:center;margin-bottom:14px;">Or enter this key manually:<br><code style="font-size:12px;color:var(--text);word-break:break-all;">' + _mfaEsc(totp.secret) + '</code></div>' : '')
+        + '<input id="_mfaEnrollCode" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="width:100%;box-sizing:border-box;padding:12px;font-size:18px;letter-spacing:4px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
+        + '<div id="_mfaEnrollMsg" style="min-height:16px;font-size:12px;color:var(--danger);margin-top:8px;"></div>'
+        + '<div style="display:flex;gap:8px;margin-top:12px;">'
+        +   '<button type="button" id="_mfaEnrollCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>'
+        +   '<button type="button" id="_mfaEnrollVerify" class="btn btn-primary" style="flex:1;">Verify &amp; turn on</button>'
+        + '</div>'
+      );
+      var inp = document.getElementById('_mfaEnrollCode');
+      var msg = document.getElementById('_mfaEnrollMsg');
+      var vb = document.getElementById('_mfaEnrollVerify');
+      var cb = document.getElementById('_mfaEnrollCancel');
+      if (inp) inp.focus();
+      async function verify() {
+        var code = (inp && inp.value || '').trim();
+        if (code.length < 6) { if (msg) msg.textContent = 'Enter all 6 digits.'; return; }
+        if (vb) { vb.disabled = true; vb.textContent = 'Verifying…'; }
+        if (msg) msg.textContent = '';
+        try {
+          var newSession = await _mfaChallengeVerify(token, factorId, code);
+          // Apply the fresh AAL2 session so the current tab is now fully signed in.
+          if (typeof _applyTokenPayload === 'function' && newSession && newSession.access_token) _applyTokenPayload(newSession);
+          if (typeof showToast === 'function') showToast('Two-factor authentication is on.', { type: 'info' });
+          openMfaSetup();
+        } catch (e) {
+          if (msg) msg.textContent = (e && e.message) || 'That code was not valid.';
+          if (vb) { vb.disabled = false; vb.textContent = 'Verify & turn on'; }
+          if (inp) { inp.value = ''; inp.focus(); }
+        }
+      }
+      if (vb) vb.addEventListener('click', verify);
+      if (cb) cb.addEventListener('click', function () { _mfaUnenroll(token, factorId).then(openMfaSetup); });
+      if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') verify(); });
+    })
+    .catch(function (e) { shell('<div style="color:var(--danger);font-size:13px;">Enrollment failed: ' + _mfaEsc(e && e.message) + '</div>'); });
+}
