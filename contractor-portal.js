@@ -228,12 +228,15 @@
   function uploadFiles(kind, files) {
     if (!files || !files.length || !currentWO || !session || !session.access_token) return;
     var arr = Array.prototype.slice.call(files);
+    var amount = '';
+    if (kind === 'invoice') { var amtEl = el('cp_inv_amount'); amount = amtEl ? (amtEl.value || '') : ''; }
     var done = 0, failed = 0;
     function finish() {
       setUpMsg(failed
         ? (done + ' sent, ' + failed + ' failed. Please try the failed one(s) again or contact the office.')
         : ('✓ ' + done + ' ' + (kind === 'invoice' ? 'invoice' : 'photo') + (done === 1 ? '' : 's') + ' sent to the housing office.'),
         failed > 0);
+      if (!failed && kind === 'invoice') { var a = el('cp_inv_amount'); if (a) a.value = ''; }
     }
     function next(i) {
       if (i >= arr.length) { finish(); return; }
@@ -248,7 +251,7 @@
           body: JSON.stringify({
             unitId: currentWO.sow_unit_id, projectNumber: currentWO.sow_project_number,
             kind: kind, filename: f.name, contentType: f.type || 'application/octet-stream',
-            dataBase64: b64
+            amount: amount, dataBase64: b64
           })
         }).then(function (r) {
           return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
@@ -313,8 +316,12 @@
       + '<h3 class="cp-h3">Submit to the housing office</h3>'
       + '<div class="cp-upload-row">'
       +   '<button type="button" class="cp-upbtn" data-cp-upload="photo">&#128247; Add photos</button>'
+      + '</div>'
+      + '<div class="cp-upload-row">'
+      +   '<input id="cp_inv_amount" type="text" inputmode="decimal" placeholder="Invoice amount $" class="cp-inv-amt"/>'
       +   '<button type="button" class="cp-upbtn" data-cp-upload="invoice">&#129534; Submit invoice</button>'
       + '</div>'
+      + '<div class="cp-note">Invoices are sent to the housing office and added to this job\'s payment schedule for review.</div>'
       + '<input type="file" id="cp_up_photo" accept="image/*" multiple class="hidden"/>'
       + '<input type="file" id="cp_up_invoice" accept="image/*,application/pdf" class="hidden"/>'
       + '<div class="cp-msg" id="cp_up_msg"></div>';
