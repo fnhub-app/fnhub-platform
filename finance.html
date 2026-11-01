@@ -2315,9 +2315,17 @@
 <!-- VOUCHER MODAL -->
 <div class="modal-ov" style="display:none" id="modalVoucher">
   <div class="modal modal-lg">
-    <div class="modal-hdr">
+    <!-- Document-output actions (Download / Email / Print) sit top-right per
+         convention; Void + Close stay in the footer. -->
+    <div class="modal-hdr modal-hdr-stack">
       <div><h2>Transaction Voucher</h2><p>Print or email to Finance</p></div>
-      <button class="modal-close" onclick="closeModal('modalVoucher')">&#x2715;</button>
+      <div class="flex-gap8 flex-wrap">
+        <button class="btn btn-primary btn-sm" onclick="finVoucherDownload()">&#11015;&#65039; Download PDF</button>
+        <button class="btn btn-ghost-dark btn-sm" onclick="finVoucherEmailTenant()">&#9993;&#65039; Email Tenant</button>
+        <button class="btn btn-ghost-dark btn-sm" onclick="printVoucherWithSigs()">&#128424; Print</button>
+        <button class="btn btn-ghost-dark btn-sm" onclick="emailVoucher()">&#128231; Email Finance</button>
+        <button class="modal-close" onclick="closeModal('modalVoucher')">&#x2715;</button>
+      </div>
     </div>
     <div class="modal-body">
       <div id="voucherContent"></div>
@@ -2368,12 +2376,9 @@
       </div>
     </div>
     <div class="modal-footer">
+      <!-- Document-output actions moved to the header top-right. -->
       <button class="btn btn-ghost" onclick="closeModal('modalVoucher')">Close</button>
       <button class="btn btn-danger btn-sm" id="voidInvoiceBtn" onclick="voidCurrentInvoice()" style="display:none;">&#128683; Void Invoice</button>
-      <button class="btn btn-primary btn-sm" onclick="finVoucherDownload()">&#11015;&#65039; Download PDF</button>
-      <button class="btn btn-ghost btn-sm" onclick="finVoucherEmailTenant()">&#9993;&#65039; Email Tenant</button>
-      <button class="btn btn-ghost btn-sm" onclick="printVoucherWithSigs()">&#128424; Print</button>
-      <button class="btn btn-ghost btn-sm" onclick="emailVoucher()">&#128231; Email Finance</button>
     </div>
   </div>
 </div>
