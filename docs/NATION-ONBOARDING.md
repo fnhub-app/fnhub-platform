@@ -90,13 +90,26 @@ delete the Static Web App resource in the Azure Portal and remove the
    (Settings → API → `anon`/`publishable` — safe to ship client-side).
 2. **Run the bootstrap schema** in the SQL editor (one paste — see item 1 below):
    all tables, RLS, triggers, functions, sequences.
+   > **Note (2026-10):** the committed `supabase/bootstrap/schema.sql` predates two
+   > migrations that have since landed — `20261031_sms_notifications.sql` (SMS consent
+   > columns + `sms_optouts`/`sms_log`) and `20261101_contractor_portal_b1.sql`
+   > (`contractor_users`/`contractor_invites`/`contractor_work_orders` +
+   > `current_contractor_id()`). Until the bootstrap dump is re-captured (see item 1),
+   > also run those two migration files after the bootstrap paste so a new nation is at
+   > schema parity. They are additive and safe to run in order.
 3. **Storage:** create the `housing-files` bucket (private).
 
 ### B2. Deploy the Edge Functions to the new project
 Each Supabase project has its own functions. Either:
 - **Manually (once):** `supabase functions deploy <fn> --project-ref <newref>`
-  for `ai-chat`, `send-notification`, `tenant-mr`, `applicant-intake`, **or**
+  for `ai-chat`, `send-notification`, `tenant-mr`, `applicant-intake`,
+  `send-sms` (if the SMS module is licensed), and `contractor-claim` (if the
+  Contractor Portal module is licensed), **or**
 - **Via CI:** add the new project ref to the deploy matrix (see item 2 below).
+
+> Both new functions verify their own JWT, so **do not** pass `--no-verify-jwt`
+> (unlike `email-intake`): `contractor-claim` verifies the caller's phone-auth
+> JWT, and `send-sms` verifies an active-staff JWT.
 
 Then set that project's **Edge Function secrets** (Project Settings → Edge
 Functions → Secrets):
@@ -108,6 +121,35 @@ Functions → Secrets):
 - `ANTHROPIC_API_KEY` if the AI assistant module is licensed for them.
 - Optional: `HOUSING_MR_NOTIFY_TO`, `HOUSING_APP_NOTIFY_TO` to route the
   maintenance/application notifications to a shared mailbox.
+- **SMS (only if the `sms_notifications` or `contractor_portal` module is
+  licensed)** — the `send-sms` function needs:
+  - `SMS_PROVIDER` = `twilio` (the only provider wired today; `telnyx` is stubbed).
+  - `TWILIO_ACCOUNT_SID` + `TWILIO_AUTH_TOKEN` — **per nation.** Give each nation
+    its own Twilio **subaccount** (STOP/opt-out state and sender reputation stay
+    isolated; billing rolls up to the parent account). The auth token goes **only**
+    into this secret — never into the repo, chat, or the directory entry.
+  - `SMS_FROM` — the nation's Twilio number in E.164 (e.g. `+17059605076`), **or**
+    `TWILIO_MESSAGING_SERVICE_SID` if they use a Messaging Service (recommended once
+    there's more than one number). Set one or the other.
+  > The **Contractor Portal login** (SMS one-time code) does **not** go through
+  > `send-sms` — it uses Supabase's own phone auth (next step, B2b). `send-sms`
+  > powers the staff/field/contractor **notification** texts only.
+
+### B2b. Phone auth for the Contractor Portal (only if `contractor_portal` is licensed)
+The portal's one-time-code login uses **Supabase phone auth backed by Twilio
+Verify** (separate from the `send-sms` notification path). In the new project:
+**Authentication → Providers → Phone → enable**, then set the SMS provider to
+**Twilio Verify** and fill:
+- Twilio **Account SID** + **Auth Token** (the nation's subaccount, same as B2).
+- The **Verify Service SID** — create one in Twilio: **Verify → Services → Create**
+  (friendly name e.g. `<Nation> Contractor Portal`), copy its `VA…` SID.
+
+Leave email/password auth as-is; this only adds the phone channel. No `SMS_FROM`
+is used here — Twilio Verify owns the sender. Test: open
+`https://<nation>.fnhub.app/contractor-portal.html`, request a code to a number on
+a contractor's record, and confirm the text arrives. (A number with no matching
+`contractor_invites` row will verify but land on "Not set up yet" — that's the
+intended triage-first behaviour.)
 
 ### B3. Auth URL config for the new project
 Repeat **A3** in the new project (Site URL = their subdomain; Redirect URLs
@@ -130,12 +172,25 @@ subdomain label:
   landlord_committee: 'Housing Committee',
   mailing_po_box: 'P.O. Box ...', mailing_postal: '...', province: 'Quebec',
   role_labels:   {},
-  modules_licensed: { finance:false, match:true, rfq:true }   // null = all licensed
+  // null / omitted = all licensed. Name a module to license/unlicense it.
+  modules_licensed: { finance:false, match:true, rfq:true,
+                      sms_notifications:true, contractor_portal:true },
+  // Optional SMS display config (NO secrets here — the auth token lives in the
+  // send-sms Edge Function secret). Injected into sendSms() at boot.
+  sms_config:    { from: '+1xxxxxxxxxx' }   // display/sender hint only
 }
 ```
 
 Commit + push → CI redeploys the site. `*.fnhub.app` already routes the
 subdomain, so `listuguj.fnhub.app` is now live.
+
+> **Licensed vs enabled.** Listing a module in `modules_licensed` makes it
+> *available* to the nation; it is still **off** until a super-user flips it on in
+> **Settings → Nation → Modules** (persists to `housing_settings`). After B1–B4,
+> turn on `sms_notifications` and/or `contractor_portal` there. Per-event SMS
+> defaults (which notifications also text) are set in **Settings → Notifications**.
+> **Never hardcode the nation into any of this** — it all flows from the directory
+> entry + settings (OCAP rule).
 
 ### B5. Seed + verify
 1. Add the nation's first **staff** rows (their `staff` table): at least one ED,
@@ -144,10 +199,20 @@ subdomain, so `listuguj.fnhub.app` is now live.
 3. Load a unit + an application to sanity-check the flow.
 4. If they use the tenant QR / applicant portal, confirm a magic link returns to
    `https://<nation>.fnhub.app/...`.
+5. **If SMS is on:** turn on `sms_notifications` in Settings → Nation → Modules,
+   opt a test staff member in (their Users-row **📱 Text alerts** button), and
+   send a test (`await window.sendSms({to:'+1…', body:'test'})` from the console,
+   or trigger a work-order assignment). A `{ok:true, sid:'SM…'}` result confirms
+   the provider + secrets are wired.
+6. **If the Contractor Portal is on:** confirm `contractor-portal.html` loads,
+   requests a code, and (with a matching invite) shows the work-order list.
 
-**Per-nation checklist:** ☐ Supabase project ☐ bootstrap schema ☐ storage bucket
-☐ functions deployed ☐ function secrets ☐ auth URLs ☐ directory entry ☐ staff
-seeded ☐ verified.
+**Per-nation checklist:** ☐ Supabase project ☐ bootstrap schema ☐ **+ SMS &
+portal migrations** ☐ storage bucket ☐ functions deployed (**incl. send-sms /
+contractor-claim if licensed**) ☐ function secrets (**incl. Twilio if licensed**)
+☐ **phone auth / Twilio Verify (if portal)** ☐ auth URLs ☐ directory entry
+(**+ module flags / sms_config**) ☐ staff seeded ☐ **modules enabled in Settings**
+☐ verified.
 
 ---
 

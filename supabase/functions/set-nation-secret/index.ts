@@ -31,14 +31,20 @@ const MGMT_BASE    = 'https://api.supabase.com'
 //   email onboarding for a nation is one screen instead of a dashboard visit.
 //   GRAPH_* is deliberately NOT settable here: those are a nation's own Entra
 //   tenant credentials, provisioned by that tenant's admin in their dashboard.
+// - SMS_*/TWILIO_*: the SMS & Portal tab's "Apply to project" button, so the
+//   send-sms notification sender is set from the panel. These are the
+//   NOTIFICATION sender only; the Contractor Portal LOGIN uses Supabase phone
+//   auth (Twilio Verify), configured in the nation's dashboard, not here.
 const ALLOWED = new Set([
   'ANTHROPIC_API_KEY',
   'EMAIL_PROVIDER', 'EMAIL_FROM', 'EMAIL_FROM_NAME', 'EMAIL_REPLY_TO', 'EMAIL_BRAND',
   'RESEND_API_KEY', 'SENDGRID_API_KEY',
+  'SMS_PROVIDER', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN', 'SMS_FROM', 'TWILIO_MESSAGING_SERVICE_SID',
 ])
 // Secrets that are credentials (enforce a minimum length); the rest are plain
-// config values ('resend', an email address) that just need to be non-empty.
-const KEY_LIKE = new Set(['ANTHROPIC_API_KEY', 'RESEND_API_KEY', 'SENDGRID_API_KEY'])
+// config values ('resend', 'twilio', an email address, a phone number) that
+// just need to be non-empty.
+const KEY_LIKE = new Set(['ANTHROPIC_API_KEY', 'RESEND_API_KEY', 'SENDGRID_API_KEY', 'TWILIO_ACCOUNT_SID', 'TWILIO_AUTH_TOKEN'])
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -127,9 +133,11 @@ serve(async (req) => {
 
   // Audit (best-effort). Never the values - only which names were set.
   const names = entries.map((e) => e.name).join(', ')
+  const isSms = entries.some((e) => e.name === 'SMS_PROVIDER' || e.name.indexOf('TWILIO_') === 0)
+  const auditAction = aiEntry ? 'nation_ai_key_set' : (isSms ? 'nation_sms_secrets_set' : 'nation_email_secrets_set')
   try {
     await admin.from('platform_audit').insert({
-      action: aiEntry ? 'nation_ai_key_set' : 'nation_email_secrets_set',
+      action: auditAction,
       subdomain: sub,
       detail: names + ' set by ' + caller + (last4 ? ' (...' + last4 + ')' : ''),
     })

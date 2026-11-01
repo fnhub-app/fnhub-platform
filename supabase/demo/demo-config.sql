@@ -56,10 +56,17 @@ insert into housing_settings (key, value) values (
   'theme', '{"primary_color":"#4FC3F7"}'::jsonb
 ) on conflict (key) do update set value = excluded.value;
 
--- 3) Turn every optional module ON in-app. Licensing is set in the registry;
+-- 3) Turn the demonstrable modules ON in-app. Licensing is set in the registry;
 --    this is the separate per-nation _enabled state (CLFN_MODULES).
+--    sms_notifications + contractor_portal are pinned OFF deliberately: the code
+--    default for sms_notifications is TRUE, and applySavedModuleState only
+--    overrides keys that are PRESENT here -- so without the explicit false below
+--    the demo would silently have SMS ON. There is no is_demo client guard yet
+--    (D3 unbuilt), so a live demo with SMS on + Twilio secrets could text a real
+--    phone. Keep both off until the is_demo sendSms suppression lands.
 insert into housing_settings (key, value) values (
   'module_enablement',
   '{"_enabled":{"finance":true,"match":true,"contractors":true,"renovations":true,
-     "rfq":true,"mapping":true,"ai_assistant":true,"inspections":true,"projects":true}}'::jsonb
+     "rfq":true,"mapping":true,"ai_assistant":true,"inspections":true,"projects":true,
+     "email_intake":false,"sms_notifications":false,"contractor_portal":false}}'::jsonb
 ) on conflict (key) do update set value = excluded.value;

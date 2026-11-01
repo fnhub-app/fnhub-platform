@@ -5,7 +5,13 @@ nation**, used for sales demos, screenshots, and marketing video. It is a real
 nation on the real platform — its own Supabase project, its own subdomain, its
 own data — so what a prospect sees is exactly what they would buy, not a mockup.
 
-**Status:** planned. Nothing built yet.
+**Status:** **live at https://demo.fnhub.app** — provisioned, branded, and seeded
+(D0/D1/D2/D4 done via `supabase/demo/demo-config.sql` + `docs/demo-seed.js`).
+**D3 (`is_demo` guardrails) is NOT built** — there is no client-side email/SMS
+suppression, no demo banner, and no `noindex` meta. The live controls today are
+(a) the demo project having **no outbound provider credentials** and (b) the
+sensitive modules being pinned OFF in `demo-config.sql`. Building D3 is still
+open and is now higher priority because the environment is live, not planned.
 
 ---
 
@@ -99,6 +105,22 @@ demo, so CLFN's boot is unchanged. It then drives four behaviours:
 2. **Defense in depth at the provider.** The demo project's `send-notification` gets **no** working provider credentials, so even a code path that bypassed the client guard cannot deliver mail. Both layers, not either.
 3. **A persistent demo banner** in `renderAppHeader` (`housing-init.js:2034`): *"DEMO — fictional data. Resets nightly."* Present on every page, including the public applicant/report portals.
 4. **`noindex`** — a `<meta name="robots" content="noindex,nofollow">` injected from `shared.js` when `is_demo`. The Cloudflare `_headers` file is path-scoped, not host-scoped, and the same static assets serve every subdomain, so a `_headers` rule or a `robots.txt` **cannot** target only the demo. The meta tag plus the D1 Transform Rule is how this actually gets done.
+
+**SMS guardrail (added 2026-10 — SMS Phase 1).** Email is not the only outbound
+channel anymore. `window.sendSms` (`shared-data.js`) is a **second, parallel
+chokepoint** that `is_demo` does **not** yet guard. Mirror behaviour 1 for it:
+in demo mode `sendSms` short-circuits before the fetch, writes its audit row, and
+shows *"Demo — text suppressed. Would have sent to X: <body>."* **And** the
+defense-in-depth layer (behaviour 2) applies identically — the demo project gets
+**no Twilio secrets** (`SMS_PROVIDER`/`TWILIO_*` unset), so `send-sms` returns a
+not-configured error even if the client guard were bypassed. Until the client
+short-circuit lands, two things are the live control: leaving Twilio unset on the
+demo project (no credentials = no text can leave), **and** pinning both
+**`sms_notifications` and `contractor_portal` OFF** in `demo-config.sql` (done —
+the `sms_notifications` code default is `true`, so it must be explicitly false or
+the demo silently has SMS on). The portal's login also needs Twilio Verify (real
+texts to real phones), which the demo avoids; the portal story can be shown from
+a scripted walkthrough rather than a live send.
 
 **The Anthropic key for `ai-chat`** — yes, load it; the assistant demos
 extremely well and a demo without it undersells the product. Three rules:
