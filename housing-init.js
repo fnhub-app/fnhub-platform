@@ -1843,6 +1843,19 @@ async function loadHousingData() {
     // rolled over at 100 and minted repeated 'SOW-YYYY-00's). Needs both the
     // SOW and RFQ caches above (RFQ links get re-pointed).
     if(typeof reconcileSowNumbers === 'function'){ try { reconcileSowNumbers(); } catch(e){ console.warn('[boot] sow renumber threw:', e); } }
+    // One-time-per-session backfill of the contractor-portal work-order
+    // projection, so contractor jobs assigned before the portal sync existed
+    // (or on any SOW not re-saved since) still reach the contractor's portal.
+    // The per-save sync keeps it fresh going forward; this heals the backlog.
+    // Management + module on; silent; needs the SOW cache + units loaded above.
+    if(_isMgmt && typeof moduleOn === 'function' && moduleOn('contractor_portal') && typeof backfillContractorWorkOrders === 'function'){
+      var _cwoDone = false;
+      try { _cwoDone = sessionStorage.getItem('clfn_cwo_backfill_session') === '1'; } catch(e){}
+      if(!_cwoDone){
+        try { sessionStorage.setItem('clfn_cwo_backfill_session','1'); } catch(e){}
+        try { Promise.resolve(backfillContractorWorkOrders({silent:true})).catch(function(){}); } catch(e){}
+      }
+    }
     if(stD){ window._appSettings={};
       stD.forEach(function(r){window._appSettings[r.key]=r.value;});
       if(typeof _flattenLegacyAppSettings === 'function') _flattenLegacyAppSettings();

@@ -2616,13 +2616,17 @@ function sbSyncContractorWorkOrder(sow, unit){
 }
 window.sbSyncContractorWorkOrder = sbSyncContractorWorkOrder;
 
-// One-time backfill: scan the loaded SOW cache and project every contractor-
-// assigned work order. Safe to re-run (idempotent upserts). Call from the
-// console after enabling the module on a nation with existing SOWs.
-function backfillContractorWorkOrders(){
+// Backfill: scan the loaded SOW cache and project every contractor-assigned
+// work order. Safe to re-run (idempotent upserts). Runs automatically once per
+// session at boot (silent) so pre-existing contractor jobs — assigned before
+// the portal sync existed, or on any SOW not re-saved since — still reach the
+// contractor's portal. Also callable from the console (shows a toast).
+// opts.silent suppresses the toast (used by the auto-run).
+function backfillContractorWorkOrders(opts){
+  var silent = !!(opts && opts.silent);
   try {
     if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){
-      if(typeof showToast === 'function') showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'});
+      if(!silent && typeof showToast === 'function') showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'});
       return Promise.resolve(0);
     }
     var cache = window._sowCache || {};
@@ -2641,7 +2645,7 @@ function backfillContractorWorkOrders(){
     });
     return Promise.all(jobs).then(function(res){
       var ok = res.filter(Boolean).length;
-      if(typeof showToast === 'function') showToast('Portal backfill: synced ' + ok + ' of ' + jobs.length + ' contractor work order(s).', {type:'info'});
+      if(!silent && typeof showToast === 'function') showToast('Portal backfill: synced ' + ok + ' of ' + jobs.length + ' contractor work order(s).', {type:'info'});
       return ok;
     });
   } catch(e){ console.warn('[portal] backfill threw:', e); return Promise.resolve(0); }
