@@ -335,6 +335,7 @@ declare var notifyContractorStatusChange: any;
 declare var notifyContractorSubmitted: any;
 declare var notifyRfqAward: any;
 declare var notifyRfqRegret: any;
+declare var notifyContractorPortalInvite: any;
 declare var onclick: any;
 declare var openBcrManager: any;
 declare var openCommercialApp: any;

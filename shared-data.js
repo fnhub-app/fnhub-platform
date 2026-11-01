@@ -2613,7 +2613,13 @@ async function inviteContractorToPortal(ctId){
       return;
     }
     if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_portal_invited', 'Portal invite(s) issued to ' + who, window.currentRole || 'staff');
-    showToast('Invited ' + invitees.length + ' contact(s) to the portal. They sign in at ' + ((window.NATION_CONFIG && (window.NATION_CONFIG.portal_base || '')) || '') + '/contractor-portal.html', {type:'info'});
+    // Courtesy invite email with the portal link (branded shell + editable in
+    // Settings > Notifications). Fire-and-forget; silent skip if no email on file.
+    var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
+    if(typeof notifyContractorPortalInvite === 'function'){
+      notifyContractorPortalInvite(ct, ct.people || [], _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
+    }
+    showToast('Invited ' + invitees.length + ' contact(s) to the portal (and emailed the sign-in link to any email on file). They sign in at ' + _portalLink, {type:'info'});
   } catch(e){ console.warn('[portal] inviteContractorToPortal threw:', e); if(typeof showToast === 'function') showToast('Invite failed: ' + (e && e.message || e), {type:'error'}); }
 }
 window.inviteContractorToPortal = inviteContractorToPortal;
