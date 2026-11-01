@@ -215,6 +215,52 @@
     });
   }
 
+  function setUpMsg(m, isErr) {
+    var e = el('cp_up_msg'); if (!e) return;
+    e.textContent = m || '';
+    e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
+  }
+
+  // Upload contractor photos / an invoice against the open work order. Each
+  // file is base64'd and POSTed to contractor-upload, which re-checks ownership
+  // server-side and files it to the unit's documents for staff. Sequential so a
+  // batch of photos doesn't hammer the function.
+  function uploadFiles(kind, files) {
+    if (!files || !files.length || !currentWO || !session || !session.access_token) return;
+    var arr = Array.prototype.slice.call(files);
+    var done = 0, failed = 0;
+    function finish() {
+      setUpMsg(failed
+        ? (done + ' sent, ' + failed + ' failed. Please try the failed one(s) again or contact the office.')
+        : ('✓ ' + done + ' ' + (kind === 'invoice' ? 'invoice' : 'photo') + (done === 1 ? '' : 's') + ' sent to the housing office.'),
+        failed > 0);
+    }
+    function next(i) {
+      if (i >= arr.length) { finish(); return; }
+      var f = arr[i];
+      setUpMsg('Uploading ' + (i + 1) + ' of ' + arr.length + '...');
+      var rd = new FileReader();
+      rd.onload = function () {
+        var b64 = String(rd.result || '').split(',').pop();
+        fetch(SB + '/functions/v1/contractor-upload', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+          body: JSON.stringify({
+            unitId: currentWO.sow_unit_id, projectNumber: currentWO.sow_project_number,
+            kind: kind, filename: f.name, contentType: f.type || 'application/octet-stream',
+            dataBase64: b64
+          })
+        }).then(function (r) {
+          return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+        }).then(function (res) { if (res.ok && res.d && res.d.ok) done++; else failed++; next(i + 1); })
+          .catch(function () { failed++; next(i + 1); });
+      };
+      rd.onerror = function () { failed++; next(i + 1); };
+      rd.readAsDataURL(f);
+    }
+    next(0);
+  }
+
   function showWorkOrder(idx) {
     var w = workOrders[idx];
     if (!w) return;
@@ -263,7 +309,15 @@
       + field('Contact phone', d.contactPhone)
       + scopeHtml
       + docsHtml
-      + '<div class="cp-msg" id="cp_detail_msg"></div>';
+      + '<div class="cp-msg" id="cp_detail_msg"></div>'
+      + '<h3 class="cp-h3">Submit to the housing office</h3>'
+      + '<div class="cp-upload-row">'
+      +   '<button type="button" class="cp-upbtn" data-cp-upload="photo">&#128247; Add photos</button>'
+      +   '<button type="button" class="cp-upbtn" data-cp-upload="invoice">&#129534; Submit invoice</button>'
+      + '</div>'
+      + '<input type="file" id="cp_up_photo" accept="image/*" multiple class="hidden"/>'
+      + '<input type="file" id="cp_up_invoice" accept="image/*,application/pdf" class="hidden"/>'
+      + '<div class="cp-msg" id="cp_up_msg"></div>';
     hide('cp_app'); show('cp_detail');
     try { window.scrollTo(0, 0); } catch (e) { /* non-fatal */ }
   }
@@ -291,11 +345,26 @@
     if (detailEl) detailEl.addEventListener('click', function (e) {
       if (!e.target || !e.target.closest) return;
       if (e.target.closest('[data-cp-back]')) { backToWorkOrders(); return; }
+      var up = e.target.closest('[data-cp-upload]');
+      if (up) {
+        var k = up.getAttribute('data-cp-upload');
+        var inp = el(k === 'invoice' ? 'cp_up_invoice' : 'cp_up_photo');
+        if (inp) inp.click();
+        return;
+      }
       var doc = e.target.closest('.cp-doc[data-cpdoc]');
       if (doc) {
         var p = doc.getAttribute('data-cpdoc');
         if (p) downloadDocument(decodeURIComponent(p));
       }
+    });
+    // File-input change bubbles, so one delegated listener on the detail card
+    // catches both the photo and the invoice picker across re-renders.
+    if (detailEl) detailEl.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t) return;
+      if (t.id === 'cp_up_photo')   { uploadFiles('photo', t.files);   t.value = ''; }
+      else if (t.id === 'cp_up_invoice') { uploadFiles('invoice', t.files); t.value = ''; }
     });
     applyNationBranding();
   }
