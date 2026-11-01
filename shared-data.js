@@ -4564,7 +4564,7 @@ async function reactivateStaff(id, btn){
           var portal = (window.NATION_CONFIG && NATION_CONFIG.portal_base) || location.origin;
           var nname  = (window.NATION_CONFIG && (NATION_CONFIG.display_name||NATION_CONFIG.short)) || 'Housing';
           sendNotification({ to: email, to_name: name, subject: 'Your '+nname+' Housing account is ready',
-            html: '<p>Hello '+escapeHtml(name)+',</p><p>Your access to the '+escapeHtml(nname)+' Housing app has been restored.</p>'
+            bodyHtml: '<p>Hello '+escapeHtml(name)+',</p><p>Your access to the '+escapeHtml(nname)+' Housing app has been restored.</p>'
               + '<p><b>Sign in:</b> <a href="'+escapeHtml(portal)+'">'+escapeHtml(portal)+'</a><br>'
               + '<b>Email:</b> '+escapeHtml(email)+'<br><b>Temporary password:</b> '+escapeHtml(pw)+'</p>'
               + '<p>Please sign in and change your password from Settings.</p>' });
