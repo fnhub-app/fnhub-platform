@@ -25,7 +25,7 @@ const SUPABASE_URL         = Deno.env.get('SUPABASE_URL')
 const SUPABASE_ANON_KEY    = Deno.env.get('SUPABASE_ANON_KEY')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
 
-const MODEL          = 'claude-sonnet-4-6'
+const MODEL          = 'claude-sonnet-5-5'
 const MAX_ROW_LIMIT  = 50   // hard cap on rows returned per query
 const MAX_TOOL_TURNS = 6    // hard cap on the tool-use loop
 
