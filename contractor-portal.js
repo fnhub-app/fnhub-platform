@@ -321,6 +321,36 @@
     }).catch(function () { setUpMsg('Could not send the note. Please try again.', true); });
   }
 
+  // Report % complete on the open work order. Recorded by contractor-upload
+  // (kind progress), which writes it to the SOW's work-progress field so the
+  // housing office sees it, and mirrors it back onto this work order.
+  function progMsg(m, isErr) {
+    var e = el('cp_prog_msg'); if (!e) return;
+    e.textContent = m || ''; e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
+  }
+  function updateProgress() {
+    var range = el('cp_prog_range');
+    if (!range || !currentWO || !session || !session.access_token) return;
+    var pct = Math.max(0, Math.min(100, parseInt(range.value, 10) || 0));
+    progMsg('Updating progress...');
+    fetch(SB + '/functions/v1/contractor-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ unitId: currentWO.sow_unit_id, projectNumber: currentWO.sow_project_number, kind: 'progress', percent: pct })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+    }).then(function (res) {
+      if (res.ok && res.d && res.d.ok) {
+        var saved = (typeof res.d.percent === 'number') ? res.d.percent : pct;
+        if (!currentWO.data) currentWO.data = {};
+        currentWO.data.progressPercent = saved;
+        progMsg('✓ Progress updated to ' + saved + '%.');
+      } else {
+        progMsg('Could not update progress. Please try again.', true);
+      }
+    }).catch(function () { progMsg('Could not update progress. Please try again.', true); });
+  }
+
   function showWorkOrder(idx) {
     var w = workOrders[idx];
     if (!w) return;
@@ -331,6 +361,7 @@
       if (!val) return '';
       return '<div class="cp-field"><div class="cp-field-l">' + esc(label) + '</div><div class="cp-field-v">' + esc(val) + '</div></div>';
     }
+    var progPct = (typeof d.progressPercent === 'number') ? Math.max(0, Math.min(100, d.progressPercent)) : 0;
     var scope = Array.isArray(d.scopeItems) ? d.scopeItems : [];
     var scopeHtml = '<h3 class="cp-h3">Scope of work</h3>' + (scope.length
       ? scope.map(function (it) {
@@ -378,6 +409,13 @@
       + scopeHtml
       + docsHtml
       + '<div class="cp-msg" id="cp_detail_msg"></div>'
+      + '<h3 class="cp-h3">Progress</h3>'
+      + '<div class="cp-prog-row">'
+      +   '<input type="range" id="cp_prog_range" min="0" max="100" step="5" value="' + progPct + '" class="cp-prog-range" aria-label="Percent complete"/>'
+      +   '<span class="cp-prog-val" id="cp_prog_val">' + progPct + '%</span>'
+      + '</div>'
+      + '<div class="cp-upload-row"><button type="button" class="cp-upbtn" data-cp-progress="1">Update progress</button></div>'
+      + '<div class="cp-msg" id="cp_prog_msg"></div>'
       + notesReadHtml
       + '<div id="cp_sub_status"></div>'
       + '<h3 class="cp-h3">Submit to the housing office</h3>'
@@ -472,10 +510,18 @@
         if (inp) inp.click();
         return;
       }
+      if (e.target.closest('[data-cp-note]'))     { sendNote(); return; }
+      if (e.target.closest('[data-cp-progress]')) { updateProgress(); return; }
       var doc = e.target.closest('.cp-doc[data-cpdoc]');
       if (doc) {
         var p = doc.getAttribute('data-cpdoc');
         if (p) downloadDocument(decodeURIComponent(p));
+      }
+    });
+    // Live % label as the contractor drags the progress slider.
+    if (detailEl) detailEl.addEventListener('input', function (e) {
+      if (e.target && e.target.id === 'cp_prog_range') {
+        var v = el('cp_prog_val'); if (v) v.textContent = (e.target.value || '0') + '%';
       }
     });
     // File-input change bubbles, so one delegated listener on the detail card
