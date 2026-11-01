@@ -2121,31 +2121,11 @@
     }
     var key = String(unit.id);
     if(_ticDocLibKey === key && _ticDocLib){ return; } // already mounted for this tenant
-    // Eviction notices are HM/ED-only; hide them from other roles.
-    var evictBtns = _ticCanEvict()
-      ? ( '<button type="button" onclick="window._ticOpenEvictionNoticeModal && window._ticOpenEvictionNoticeModal(\'standard\')" class="header-export-item">Notice of Eviction &mdash; Standard (Drug-Related)</button>'
-        + '<button type="button" onclick="window._ticOpenEvictionNoticeModal && window._ticOpenEvictionNoticeModal(\'immediate\')" class="header-export-item">Notice of IMMEDIATE Eviction (Safety Risk)</button>' )
-      : '';
-    p.innerHTML = '<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:flex-end;">'
-      + '<div class="export-dropdown">'
-      +   '<button type="button" onclick="toggleExportMenu(this)" class="btn btn-primary">&#128196; Generate Forms &#9660;</button>'
-      +   '<div class="header-export-menu header-export-menu--wide">'
-      +     '<div class="header-export-group">Occupancy Agreements</div>'
-      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal()" class="header-export-item">'+(nationShort())+' Residential Occupancy Agreement</button>'
-      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'temporary_lease\')" class="header-export-item">Temporary Occupancy Agreement (Fixed Term)</button>'
-      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'monthly_temp_lease\')" class="header-export-item">Month-to-Month Occupancy Agreement (All-Inclusive)</button>'
-      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'commercial_lease\')" class="header-export-item">Commercial Occupancy &amp; Lease Agreement</button>'
-      +     '<button type="button" onclick="window._ticOpenReplacementLeaseModal && window._ticOpenReplacementLeaseModal()" class="header-export-item">Replacement Lease Agreement (No Appliances)</button>'
-      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'replacement_contract\')" class="header-export-item">Rental / Homeownership Agreement (Replacement Contract)</button>'
-      +     '<div class="header-export-group">Notices</div>'
-      +     '<button type="button" onclick="window._ticOpenInspectionNoticeModal && window._ticOpenInspectionNoticeModal()" class="header-export-item">Notice of Inspection &mdash; 48 Hours</button>'
-      +     evictBtns
-      +     '<div class="header-export-group">Consents</div>'
-      +     '<button type="button" onclick="window._ticOpenHydroOneConsentModal && window._ticOpenHydroOneConsentModal()" class="header-export-item">Hydro One &mdash; Consent for Disclosure</button>'
-      +   '</div>'
-      + '</div>'
-      + '</div>'
-      + '<div id="tic_doclib_mount"></div>';
+    // The "Generate Forms" dropdown moved to the TIC hero, top-right
+    // (_ticSyncFooter -> _ticFormsDropdownHtml), per the "document-generation
+    // buttons go top-right" convention; the Documents tab now holds just the
+    // document library.
+    p.innerHTML = '<div id="tic_doclib_mount"></div>';
     var mount = _ticEl('tic_doclib_mount');
     if(!window.DocLibrary){
       p.innerHTML = '<div class="tic-pending-inline">Document library is not loaded on this page.</div>';
@@ -2573,11 +2553,44 @@
         || (_ticState.tenant && (_ticState.tenant.unit_id || _ticState.tenant.current_unit_id))
         || '';
   }
+  // Builds the "Generate Forms" dropdown (occupancy agreements / notices /
+  // consents). Lives top-right of the hero now (not the Documents tab), so it
+  // sits with Generate Letter per the "document-generation buttons go top-right"
+  // convention. The menu opens downward into the card body (not clipped).
+  function _ticFormsDropdownHtml(){
+    // Eviction notices are HM/ED-only; hide them from other roles.
+    var evictBtns = _ticCanEvict()
+      ? ( '<button type="button" onclick="window._ticOpenEvictionNoticeModal && window._ticOpenEvictionNoticeModal(\'standard\')" class="header-export-item">Notice of Eviction &mdash; Standard (Drug-Related)</button>'
+        + '<button type="button" onclick="window._ticOpenEvictionNoticeModal && window._ticOpenEvictionNoticeModal(\'immediate\')" class="header-export-item">Notice of IMMEDIATE Eviction (Safety Risk)</button>' )
+      : '';
+    return '<div class="export-dropdown">'
+      +   '<button type="button" onclick="toggleExportMenu(this)" class="btn btn-primary">&#128196; Generate Forms &#9660;</button>'
+      +   '<div class="header-export-menu header-export-menu--wide">'
+      +     '<div class="header-export-group">Occupancy Agreements</div>'
+      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal()" class="header-export-item">'+(nationShort())+' Residential Occupancy Agreement</button>'
+      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'temporary_lease\')" class="header-export-item">Temporary Occupancy Agreement (Fixed Term)</button>'
+      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'monthly_temp_lease\')" class="header-export-item">Month-to-Month Occupancy Agreement (All-Inclusive)</button>'
+      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'commercial_lease\')" class="header-export-item">Commercial Occupancy &amp; Lease Agreement</button>'
+      +     '<button type="button" onclick="window._ticOpenReplacementLeaseModal && window._ticOpenReplacementLeaseModal()" class="header-export-item">Replacement Lease Agreement (No Appliances)</button>'
+      +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal(\'replacement_contract\')" class="header-export-item">Rental / Homeownership Agreement (Replacement Contract)</button>'
+      +     '<div class="header-export-group">Notices</div>'
+      +     '<button type="button" onclick="window._ticOpenInspectionNoticeModal && window._ticOpenInspectionNoticeModal()" class="header-export-item">Notice of Inspection &mdash; 48 Hours</button>'
+      +     evictBtns
+      +     '<div class="header-export-group">Consents</div>'
+      +     '<button type="button" onclick="window._ticOpenHydroOneConsentModal && window._ticOpenHydroOneConsentModal()" class="header-export-item">Hydro One &mdash; Consent for Disclosure</button>'
+      +   '</div>'
+      + '</div>';
+  }
+
   // Show the "View Unit" footer button only when the tenant has an assigned
   // unit; hide it otherwise.
   function _ticSyncFooter(){
     var btn = _ticEl('tic_act_view_unit');
     if(btn) btn.style.display = _ticAssignedUnitId() ? '' : 'none';
+    // Generate Forms dropdown (hero, top-right) — needs a linked unit (the
+    // agreement/notice generators read the unit card). Empty when no unit.
+    var fm = _ticEl('tic_forms_mount');
+    if(fm){ fm.innerHTML = (_ticState.unit && _ticState.unit.id) ? _ticFormsDropdownHtml() : ''; }
     // Delete Application — same authority as everywhere else deletion lives
     // (deleteApplication, Settings > Approval Authority > Housing Application,
     // default ED). Soft-delete: the record is archived, never destroyed.
@@ -3009,6 +3022,11 @@
 
     var footer = modal.querySelector('.tic-footer');
     if(footer) footer.addEventListener('click', _ticOnFooterClick);
+    // Generate Letter moved to the hero (top-right) with the doc-generation
+    // actions; _ticOnFooterClick dispatches purely by target id, so binding it
+    // here lets the hero button work the same as when it lived in the footer.
+    var heroActions = modal.querySelector('.tic-hero-actions');
+    if(heroActions) heroActions.addEventListener('click', _ticOnFooterClick);
     // "Last saved" indicator — TIC fields auto-save per field; this gives a
     // persistent timestamp alongside the brief per-field highlight.
     if(footer && !footer.querySelector('#tic_saved_indicator')){

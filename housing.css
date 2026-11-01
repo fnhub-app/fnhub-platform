@@ -1860,6 +1860,14 @@ body.is-sow-only .modal-overlay { visibility: visible; }
   #unitEditModal .tic-hero > .flex-gap8      { flex-direction: column; align-items: stretch; width: 100%; gap: 8px; }
   #unitEditModal .tic-hero > .flex-gap8 > .btn { width: 100%; justify-content: center; }
 }
+/* TIC hero: document-generation actions (Generate Forms / Generate Letter) sit
+   top-right beside the close button. Let them wrap rather than squeeze the name
+   column; on phones the whole action group drops to its own line. */
+#ticModal .tic-hero > .flex-gap8 { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+@media (max-width: 700px) {
+  #ticModal .tic-hero { flex-wrap: wrap; }
+  #ticModal .tic-hero > .flex-gap8 { margin-left: auto; }
+}
 .tic-close-btn:hover      { color: var(--text); border-color: var(--text); }
 
 .tic-strip                { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
