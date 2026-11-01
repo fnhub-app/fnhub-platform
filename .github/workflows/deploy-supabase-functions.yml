@@ -125,7 +125,7 @@ jobs:
             case "$name" in _*) echo "Skipping helper folder: $name"; continue;; esac
             # Skip control-plane functions: they deploy to the fnhub-platform
             # project via deploy-platform-functions.yml, never to nation projects.
-            case "$name" in provision-nation|report-nation-usage|recurring-invoices|set-nation-secret|enter-nation|gen-support-key|run-nation-migration) echo "Skipping platform-only function: $name"; continue;; esac
+            case "$name" in provision-nation|report-nation-usage|recurring-invoices|set-nation-secret|set-nation-module|enter-nation|gen-support-key|run-nation-migration) echo "Skipping platform-only function: $name"; continue;; esac
             if [ ! -f "${dir}index.ts" ]; then
               echo "No index.ts in $name - skipping"
               continue
