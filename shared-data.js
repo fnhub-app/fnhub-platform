@@ -2761,10 +2761,11 @@ function _ctPortalPreviewOpen(i){
   var docsHtml = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px;">Documents</div>'
     + (docs.length
         ? docs.map(function(f){
-            return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);display:flex;align-items:center;gap:8px;">'
-              + '<span style="flex:0 0 auto;">📄</span><div style="color:var(--text);font-size:13px;word-break:break-word;">' + esc(f.name || 'Document') + '</div></div>';
+            return '<div onclick="_ctPortalPreviewOpenDoc(\'' + encodeURIComponent(f.path || '') + '\')" style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);display:flex;align-items:center;gap:8px;cursor:pointer;">'
+              + '<span style="flex:0 0 auto;">📄</span><div style="flex:1 1 auto;color:var(--text);font-size:13px;word-break:break-word;">' + esc(f.name || 'Document') + '</div>'
+              + '<span style="flex:0 0 auto;font-size:12px;font-weight:700;color:var(--accent-ink);">Open</span></div>';
           }).join('')
-          + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">In the live portal these become downloads (Phase 2).</div>'
+          + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">In the live portal the contractor downloads these; here they open with your staff access.</div>'
         : '<div style="color:var(--muted);font-size:13px;">No documents shared.</div>');
   _ctPortalPreviewShell(
     '<button type="button" onclick="_ctPortalPreviewRenderList()" class="btn btn-ghost btn-sm" style="margin-bottom:12px;">← Back to work orders</button>'
@@ -2780,6 +2781,26 @@ function _ctPortalPreviewOpen(i){
   );
 }
 window._ctPortalPreviewOpen = _ctPortalPreviewOpen;
+
+// Staff-side: open a previewed work-order document using the staff member's own
+// access (sbGetSignedUrl) — so staff can verify exactly what the contractor
+// would download. The contractor's own download path is the contractor-file
+// Edge Function; this is the staff equivalent for the read-only preview.
+function _ctPortalPreviewOpenDoc(encPath){
+  var path = '';
+  try { path = decodeURIComponent(encPath || ''); } catch(e){ path = encPath || ''; }
+  if(!path) return;
+  if(typeof sbGetSignedUrl !== 'function'){ if(typeof showToast==='function') showToast('Document viewer unavailable on this page.', {type:'info'}); return; }
+  var win = window.open('', '_blank');
+  sbGetSignedUrl(path).then(function(url){
+    if(url){ if(win) win.location = url; else window.location = url; }
+    else if(win){ try{ win.close(); }catch(e){} }
+  }).catch(function(){
+    if(win){ try{ win.close(); }catch(e){} }
+    if(typeof showToast==='function') showToast('Could not open the document.', {type:'error'});
+  });
+}
+window._ctPortalPreviewOpenDoc = _ctPortalPreviewOpenDoc;
 
 function _ctPortalPreview(arg){
   // arg is optional: a registry-row index into window._contractors, or a

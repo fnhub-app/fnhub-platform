@@ -43,6 +43,7 @@
   var session = null;
   var _resendTimer = null;
   var workOrders = [];   // last-loaded rows, indexed by the detail view
+  var currentWO = null;  // the work order whose detail is open (for downloads)
 
   // POST the OTP request for a phone. Shared by the first "Text me a code" and
   // the "Resend code" button. Returns true on success.
@@ -181,9 +182,43 @@
   // Reads the row's `data` jsonb (scope / dates / contact / documents) that the
   // staff client syncs into the RLS-scoped projection. Documents are LISTED in
   // Phase 1; download is wired in Phase 2 (signed-URL Edge Function).
+  function setDetailMsg(m, isErr) {
+    var e = el('cp_detail_msg'); if (!e) return;
+    e.textContent = m || '';
+    e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
+  }
+
+  // Fetch a short-lived signed URL for ONE work-order document from the
+  // contractor-file Edge Function (which re-checks ownership server-side) and
+  // open it. The tab is opened synchronously so pop-up blockers don't eat it.
+  function downloadDocument(path) {
+    if (!path || !session || !session.access_token || !currentWO) return;
+    var win = window.open('', '_blank');
+    setDetailMsg('Opening document...');
+    fetch(SB + '/functions/v1/contractor-file', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ unitId: currentWO.sow_unit_id, projectNumber: currentWO.sow_project_number, path: path })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+    }).then(function (res) {
+      if (res.ok && res.d && res.d.url) {
+        if (win) { win.location = res.d.url; } else { window.location = res.d.url; }
+        setDetailMsg('');
+      } else {
+        if (win) { try { win.close(); } catch (e) { /* ignore */ } }
+        setDetailMsg('Could not open that document. Please contact the housing office.', true);
+      }
+    }).catch(function () {
+      if (win) { try { win.close(); } catch (e) { /* ignore */ } }
+      setDetailMsg('Could not open that document. Please contact the housing office.', true);
+    });
+  }
+
   function showWorkOrder(idx) {
     var w = workOrders[idx];
     if (!w) return;
+    currentWO = w;
     var d = w.data || {};
     var statusLabel = ({ active: 'Active', in_process: 'In process', closed: 'Closed' })[w.status || 'active'] || (w.status || '');
     function field(label, val) {
@@ -200,8 +235,13 @@
     var docs = Array.isArray(d.documents) ? d.documents : [];
     var docsHtml = '<h3 class="cp-h3">Documents</h3>' + (docs.length
       ? docs.map(function (f) {
-          return '<div class="cp-doc"><span>&#128196;</span><span>' + esc(f.name || 'Document') + '</span></div>';
-        }).join('') + '<div class="cp-note">Contact the housing office if you need a copy of a document.</div>'
+          // data-cpdoc carries the URI-encoded storage path; the delegated
+          // handler decodes it and calls downloadDocument (ownership re-checked
+          // server-side by the contractor-file Edge Function).
+          return '<div class="cp-doc" data-cpdoc="' + encodeURIComponent(f.path || '') + '" role="button" tabindex="0">'
+               + '<span>&#128196;</span><span class="cp-doc-name">' + esc(f.name || 'Document') + '</span>'
+               + '<span class="cp-doc-dl">Download</span></div>';
+        }).join('')
       : '<div class="cp-empty">No documents shared.</div>');
     el('cp_detail').innerHTML =
       '<button type="button" class="cp-back" data-cp-back>&larr; Back to work orders</button>'
@@ -213,7 +253,8 @@
       + field('Housing contact', d.contactName)
       + field('Contact phone', d.contactPhone)
       + scopeHtml
-      + docsHtml;
+      + docsHtml
+      + '<div class="cp-msg" id="cp_detail_msg"></div>';
     hide('cp_app'); show('cp_detail');
     try { window.scrollTo(0, 0); } catch (e) { /* non-fatal */ }
   }
@@ -239,7 +280,13 @@
     });
     var detailEl = el('cp_detail');
     if (detailEl) detailEl.addEventListener('click', function (e) {
-      if (e.target && e.target.closest && e.target.closest('[data-cp-back]')) backToWorkOrders();
+      if (!e.target || !e.target.closest) return;
+      if (e.target.closest('[data-cp-back]')) { backToWorkOrders(); return; }
+      var doc = e.target.closest('.cp-doc[data-cpdoc]');
+      if (doc) {
+        var p = doc.getAttribute('data-cpdoc');
+        if (p) downloadDocument(decodeURIComponent(p));
+      }
     });
     applyNationBranding();
   }
