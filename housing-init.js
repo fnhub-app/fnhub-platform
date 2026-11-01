@@ -1674,7 +1674,7 @@ async function submitAddHousingStaff() {
         sendNotification({
           to: email, to_name: name,
           subject: 'Your ' + _nname + ' Housing account is ready',
-          html: '<p>Hello ' + escapeHtml(name) + ',</p>'
+          bodyHtml: '<p>Hello ' + escapeHtml(name) + ',</p>'
             + '<p>An account has been created for you in the ' + escapeHtml(_nname) + ' Housing app.</p>'
             + '<p><b>Sign in:</b> <a href="' + escapeHtml(_portal) + '">' + escapeHtml(_portal) + '</a><br>'
             + '<b>Email:</b> ' + escapeHtml(email) + '<br>'

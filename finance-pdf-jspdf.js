@@ -201,7 +201,7 @@
       window.sendNotification({
         to: email, to_name: nm,
         subject: 'Your ' + nationName + ' statement of account (' + r.monthLabel + ')',
-        html: '<p>Hello ' + nm + ',</p><p>Please find your current statement of account attached. Your total owing is <b>' + money(r.grandTotal) + '</b> as of ' + new Date().toLocaleDateString('en-CA') + '.</p><p>If you have questions about your account, please contact the housing office.</p>',
+        bodyHtml: '<p>Hello ' + nm + ',</p><p>Please find your current statement of account attached. Your total owing is <b>' + money(r.grandTotal) + '</b> as of ' + new Date().toLocaleDateString('en-CA') + '.</p><p>If you have questions about your account, please contact the housing office.</p>',
         attachments: [{ name: fileName(r.tenant), contentType: 'application/pdf', contentBytes: b64 }]
       }).then(function () {
         if (typeof toast === 'function') toast('Statement emailed to ' + email);
@@ -485,7 +485,7 @@
       window.sendNotification({
         to: email, to_name: nm,
         subject: nationName + ' - ' + r.title + ' ' + r.vref,
-        html: '<p>Hello ' + nm + ',</p><p>Please find your ' + r.title.toLowerCase() + ' (' + r.vref + ') for <b>' + money(r.amount) + '</b> attached.</p><p>Thank you.</p>',
+        bodyHtml: '<p>Hello ' + nm + ',</p><p>Please find your ' + r.title.toLowerCase() + ' (' + r.vref + ') for <b>' + money(r.amount) + '</b> attached.</p><p>Thank you.</p>',
         attachments: [{ name: voucherFileName(r), contentType: 'application/pdf', contentBytes: b64 }]
       }).then(function () {
         if (typeof toast === 'function') toast('Receipt emailed to ' + email);
