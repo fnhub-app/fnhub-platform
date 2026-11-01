@@ -2556,7 +2556,11 @@ function _cwoDetailFromSow(sow, unit){
     documents:        docs,
     // Notes the contractor has posted on this work order (newest last). Capped
     // so the projection row stays small; written by the contractor-upload fn.
-    contractorNotes:  Array.isArray(sow.contractorNotes) ? sow.contractorNotes.slice(-20) : []
+    contractorNotes:  Array.isArray(sow.contractorNotes) ? sow.contractorNotes.slice(-20) : [],
+    // Work-progress % (0-100). Mirrors sow.progress.percent so the contractor
+    // sees it in the portal; the contractor can update it (contractor-upload
+    // kind=progress), which writes back to sow.progress AND this projection.
+    progressPercent:  (sow.progress && typeof sow.progress.percent === 'number') ? sow.progress.percent : 0
   };
 }
 window._cwoDetailFromSow = _cwoDetailFromSow;
@@ -2896,6 +2900,7 @@ function _ctPortalPreviewOpen(i){
     + tenantBlock
     + field('Target start', d.targetStart)
     + field('Target completion', d.targetCompletion)
+    + field('Progress (contractor-reported)', (typeof d.progressPercent === 'number' ? d.progressPercent : 0) + '%')
     + field('Condition', d.condition)
     + hsHtml
     + field('Housing contact', d.contactName)
