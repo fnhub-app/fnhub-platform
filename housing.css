@@ -1682,8 +1682,12 @@ body.is-sow-only .modal-overlay { visibility: visible; }
 .ct-status-banner   { padding:10px 20px;font-size:12px;font-weight:700;text-align:center; }
 
 /* ── Contractor Information Card (CIC) — inline approval surface ── */
-/* Lives inside #addContractorModal between the modal header and the form
-   body. JS toggles each section's inline display when entering edit mode. */
+/* Lives inside #addContractorModal, relocated to just above the .tic-footer so
+   every action button sits together near the bottom. Like the footer it is
+   outside the scrolling .tic-body, so it stays fixed/visible; a top border
+   separates it from the form body. JS toggles each inner section's display
+   when entering edit mode. */
+.cic-approval-surface { flex-shrink:0;border-top:1px solid var(--border);background:var(--surface); }
 .cic-notes-wrap     { padding:12px 24px;background:var(--bg);border-bottom:1px solid var(--border); }
 .cic-notes-label    { display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin-bottom:4px; }
 .cic-notes-req      { color:var(--danger); }

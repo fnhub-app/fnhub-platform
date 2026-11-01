@@ -5219,9 +5219,13 @@ function openAddContractorModal(editIdx){
   // open — edit mode will re-set it below.
   _ctApprovalIdx = -1;
   _ctPendingAction = null;
-  // Print/Email buttons (both footer and modal header) are hidden until
-  // edit mode confirms we have a saved contractor to print.
-  ['ct_print_btn','ct_email_btn','ct_header_print_btn','ct_header_email_btn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
+  // Print/Email buttons (footer) are hidden until edit mode confirms we have
+  // a saved contractor to print.
+  ['ct_print_btn','ct_email_btn'].forEach(function(id){var e=document.getElementById(id);if(e)e.style.display='none';});
+  // Clear any stale approval pills from a previous edit-mode open — the footer
+  // now hosts #cic_actions, so leftover content would show on a fresh/new
+  // contractor. _ctRenderActions repopulates it in edit mode below.
+  var cicActs0 = document.getElementById('cic_actions'); if (cicActs0) cicActs0.innerHTML = '';
   // Hide the inline CIC approval surface by default — only shown in edit
   // mode below. The Approval Flow + Forms & SOWs cards were dropped from
   // the CIC entirely (internal-only flow now), so only the inline action
@@ -5315,11 +5319,10 @@ function openAddContractorModal(editIdx){
       if (cas) cas.style.display = '';
       if(typeof _ctSetCicStatusBanner === 'function') _ctSetCicStatusBanner(ct);
       if(typeof _ctRenderActions === 'function')      _ctRenderActions(ct, 'cic');
-      // Show header Print (always) and Email (only when contractor has an
-      // email on file). Footer copies stay hidden — header buttons are the
-      // canonical surface now.
-      var hp=document.getElementById('ct_header_print_btn'); if(hp){ hp.classList.remove('hidden'); hp.style.display=''; }
-      var he=document.getElementById('ct_header_email_btn'); if(he && ct.email){ he.classList.remove('hidden'); he.style.display=''; }
+      // Reveal footer Print (always) and Email (only when contractor has an
+      // email on file) — the footer is the canonical action surface now.
+      var hp=document.getElementById('ct_print_btn'); if(hp){ hp.classList.remove('hidden'); hp.style.display=''; }
+      var he=document.getElementById('ct_email_btn'); if(he && ct.email){ he.classList.remove('hidden'); he.style.display=''; }
     }
   } else {
     var title = document.getElementById('ct_modal_title');
@@ -8179,10 +8182,8 @@ function saveContractorAndFinalize() {
   // at the last contractor in the directory, so the next Save overwrote that
   // unrelated record.
   if (saveContractor() === false) return;
-  // After save, grab the record back and reveal the header Print + Email
-  // buttons. The CIC modal uses header buttons as the canonical Print
-  // surface — the older footer copies stay hidden but are kept in markup
-  // for backwards compatibility with any external callers.
+  // After save, grab the record back and reveal the footer Print + Email
+  // buttons. The CIC footer is the single action surface now.
   try {
     var contractors = (window._contractors || []).slice();
     if(contractors.length) {
@@ -8190,8 +8191,8 @@ function saveContractorAndFinalize() {
       if(window._ctEditIdx >= 0 && window._ctEditIdx < contractors.length) {
         window._ctLastSaved = contractors[window._ctEditIdx];
       }
-      var hp = document.getElementById('ct_header_print_btn');
-      var he = document.getElementById('ct_header_email_btn');
+      var hp = document.getElementById('ct_print_btn');
+      var he = document.getElementById('ct_email_btn');
       if(hp){ hp.classList.remove('hidden'); hp.style.display=''; }
       if(he && window._ctLastSaved.email){ he.classList.remove('hidden'); he.style.display=''; }
       // Keep the hero title on the company name and refresh the glance strip
@@ -8218,6 +8219,9 @@ function saveContractorAndFinalize() {
           _CIC_TAB_NAMES.forEach(function(t){ window._cicVisitedTabs.add(t); });
         }
         if(typeof _updateCicSaveButtonState === 'function') _updateCicSaveButtonState();
+        // The contractor now has an id, so the footer "Invite to portal" button
+        // can show. Re-render the people list to re-run its visibility toggle.
+        if(typeof ctRenderPeople === 'function') ctRenderPeople(window._ctPeople || []);
       }
     }
   } catch(e) {}
@@ -8685,8 +8689,8 @@ function _buildAddContractorModalHTML() {
             '<h2 id="ct_modal_title" class="tic-name">New Contractor</h2>',
           '</div>',
           '<div class="flex-gap8 flex-wrap">',
-            '<button type="button" id="ct_header_print_btn" class="btn btn-ghost hidden" onclick="printContractorAgreement()">🖨 Print / Save PDF</button>',
-            '<button type="button" id="ct_header_email_btn" class="btn btn-ghost hidden" onclick="emailContractorAgreement()">✉ Email to Contractor</button>',
+            // All action buttons (Print / Email / Invite / approval pills /
+            // Save) now live in the footer — the hero keeps only the close.
             '<button type="button" onclick="closeAddContractorModal()" class="tic-close-btn" aria-label="Close">✕</button>',
           '</div>',
         '</div>',
@@ -8699,21 +8703,6 @@ function _buildAddContractorModalHTML() {
           '<div class="tic-strip-tile"><span class="tic-strip-icon">✉️</span><div class="tic-strip-lbl">Email</div><div id="cic_strip_email" class="tic-strip-val">—</div></div>',
           '<div class="tic-strip-tile"><span class="tic-strip-icon">🦺</span><div class="tic-strip-lbl">WSIB Expiry</div><div id="cic_strip_wsib" class="tic-strip-val">—</div></div>',
           '<div class="tic-strip-tile"><span class="tic-strip-icon">🛡️</span><div class="tic-strip-lbl">Insurance Expiry</div><div id="cic_strip_ins" class="tic-strip-val">—</div></div>',
-        '</div>',
-
-        // Inline approval surface (edit/view mode only). Sits between the strip
-        // and the tabs so the status banner + action pills read at a glance.
-        '<div id="cic_approval_surface" style="display:none;margin:12px 28px 0;">',
-          '<div id="cic_status_banner" class="ct-status-banner"></div>',
-          '<div id="cic_actions"></div>',
-          '<div id="cic_notes_wrap" class="cic-notes-wrap" style="display:none;">',
-            '<label class="cic-notes-label">Notes <span id="cic_notes_req" class="cic-notes-req"></span></label>',
-            '<textarea id="cic_notes" rows="2" class="cic-notes-input"></textarea>',
-            '<div class="cic-notes-actions">',
-              '<button type="button" onclick="cancelCtAction()" class="btn btn-ghost btn-sm">Cancel</button>',
-              '<button type="button" id="cic_confirm_btn" onclick="confirmCtAction()" class="btn btn-primary btn-sm">Confirm</button>',
-            '</div>',
-          '</div>',
         '</div>',
 
         // ── Tabs ────────────────────────────────────────────────────────
@@ -8754,13 +8743,9 @@ function _buildAddContractorModalHTML() {
             '</div>',
 
             '<div class="tic-section tic-section-spaced">',
-              '<div class="tic-section-h flex-sb">',
-                '<span>Key People</span>',
-                '<span class="flex-gap8">',
-                  '<button type="button" id="ct_portal_invite_btn" onclick="inviteContractorToPortal()" class="btn btn-ghost btn-sm" style="display:none;" title="Authorize this contractor\'s key contacts to sign in to the Contractor Portal">📱 Invite to portal</button>',
-                  '<button type="button" onclick="ctAddPerson()" class="btn btn-primary btn-sm">+ Add Person</button>',
-                '</span>',
-              '</div>',
+              // Add Person + Invite-to-portal buttons moved to the footer so all
+              // action buttons sit in one place near the bottom of the card.
+              '<div class="tic-section-h">Key People</div>',
               '<div id="ct_people_list" class="ct-people-list"></div>',
             '</div>',
 
@@ -8943,15 +8928,36 @@ function _buildAddContractorModalHTML() {
 
         '</div>', // end tic-body
 
-        // ── Footer (mirrors the TIC / Edit Unit footer) ─────────────────
-        // Print/Email footer copies are kept (hidden) for the open-logic that
-        // toggles ct_print_btn/ct_email_btn; the header copies in the hero are
-        // the visible surface. Cancel + the single primary Save sit at the end.
+        // Inline approval surface (edit/view mode only). Relocated here — just
+        // above the footer — so every action button sits together near the
+        // bottom of the card. Sits outside .tic-body, so (like the footer) it
+        // stays fixed/visible while the tab body scrolls. Holds the status
+        // banner, the role-gated approval pills, and the contextual notes input.
+        '<div id="cic_approval_surface" class="cic-approval-surface" style="display:none;">',
+          '<div id="cic_status_banner" class="ct-status-banner"></div>',
+          '<div id="cic_actions"></div>',
+          '<div id="cic_notes_wrap" class="cic-notes-wrap" style="display:none;">',
+            '<label class="cic-notes-label">Notes <span id="cic_notes_req" class="cic-notes-req"></span></label>',
+            '<textarea id="cic_notes" rows="2" class="cic-notes-input"></textarea>',
+            '<div class="cic-notes-actions">',
+              '<button type="button" onclick="cancelCtAction()" class="btn btn-ghost btn-sm">Cancel</button>',
+              '<button type="button" id="cic_confirm_btn" onclick="confirmCtAction()" class="btn btn-primary btn-sm">Confirm</button>',
+            '</div>',
+          '</div>',
+        '</div>',
+
+        // ── Footer (mirrors the TIC / Edit Unit / SOW footer) ───────────
+        // Single home for every action button: Print / Email / Invite to
+        // portal / Add Person are ghost actions, Cancel is ghost, and the one
+        // primary is Save/Submit. Print/Email/Invite start hidden and are
+        // revealed by the open-logic once a saved contractor exists.
         '<div class="tic-footer">',
+          '<div id="cic_review_progress" class="txt-muted-sm cic-review-progress"></div>',
+          '<span class="tic-footer-spacer"></span>',
+          '<button type="button" onclick="ctAddPerson()" class="btn btn-ghost">+ Add Person</button>',
+          '<button type="button" id="ct_portal_invite_btn" onclick="inviteContractorToPortal()" class="btn btn-ghost" style="display:none;" title="Authorize this contractor\'s key contacts to sign in to the Contractor Portal">📱 Invite to portal</button>',
           '<button type="button" id="ct_print_btn" class="btn btn-ghost hidden" onclick="printContractorAgreement()">🖨 Print / Save PDF</button>',
           '<button type="button" id="ct_email_btn" class="btn btn-ghost hidden" onclick="emailContractorAgreement()">✉ Email to Contractor</button>',
-          '<span class="tic-footer-spacer"></span>',
-          '<div id="cic_review_progress" class="txt-muted-sm cic-review-progress"></div>',
           '<button type="button" onclick="closeAddContractorModal()" class="btn btn-ghost">Cancel</button>',
           '<button type="button" id="ct_save_btn" onclick="saveContractorAndFinalize()" class="btn btn-primary" data-mode="draft">💾 Save Draft</button>',
         '</div>',
@@ -9302,6 +9308,10 @@ function calcRenoScore(unitId) {
 }
 
 function ctAddPerson() {
+  // The button now lives in the global footer, so the Key People list (on the
+  // Overview tab) may not be visible. Switch to Overview first so the new row
+  // and its focus are on screen.
+  if(typeof setCicTab === 'function') setCicTab('overview');
   // Flush any current DOM input values into _ctPeople first, then append blank row.
   ctGetPeople(); // side-effect: syncs DOM → _ctPeople
   var people = (window._ctPeople || []).slice();
