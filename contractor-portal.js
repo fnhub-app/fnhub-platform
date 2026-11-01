@@ -140,9 +140,37 @@
         body: '{}'
       });
       var cd = await cr.json().catch(function () { return {}; });
-      if (!cr.ok || !cd.linked) { hide('cp_login'); show('cp_notlinked'); return; }
-    } catch (e) { hide('cp_login'); show('cp_notlinked'); return; }
+      if (!cr.ok || !cd.linked) { showNotLinked(cd && cd.reason); return; }
+    } catch (e) { showNotLinked('error'); return; }
     await loadWorkOrders();
+  }
+
+  // Show the "not set up yet" card with a message tailored to WHY the claim did
+  // not link, so a contractor (and staff testing) know the actual next step
+  // instead of a generic "contact the office".
+  function showNotLinked(reason) {
+    var msgEl = el('cp_notlinked_msg');
+    if (msgEl) {
+      var m;
+      switch (reason) {
+        case 'no_invite':
+          m = "We don't have a portal invite for this number yet. Ask the housing office to send you a portal invite, then sign in again.";
+          break;
+        case 'phone_not_on_contractor':
+          m = "This number isn't listed as a contact on your contractor record. Ask the housing office to add it, then sign in again.";
+          break;
+        case 'deactivated':
+          m = 'Your portal access has been turned off. Please contact the housing office.';
+          break;
+        case 'contractor_not_found':
+          m = 'Your portal invite points to a contractor record that no longer exists. Please contact the housing office.';
+          break;
+        default:
+          m = "This number isn't linked to a contractor in the system. Please contact the housing office to be invited to the portal.";
+      }
+      msgEl.textContent = m;
+    }
+    hide('cp_login'); show('cp_notlinked');
   }
 
   async function loadWorkOrders() {
