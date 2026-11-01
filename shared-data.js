@@ -2624,6 +2624,82 @@ async function inviteContractorToPortal(ctId){
 }
 window.inviteContractorToPortal = inviteContractorToPortal;
 
+// ── Portal preview (staff-side, read-only) ──────────────────────────────────
+// What a contractor sees in the Contractor Portal "My Work Orders" view, shown
+// to staff for support / troubleshooting / training — WITHOUT an OTP login or
+// any auth bypass on the public portal. Built from the same in-memory SOW cache
+// the contractor_work_orders projection is synced from (via _cwoStatusForSow),
+// so it matches what the portal renders. Purely a read: writes nothing.
+function _ctContractorWorkOrdersForPreview(contractorId){
+  var out = [];
+  var cache = window._sowCache || {};
+  Object.keys(cache).forEach(function(unitId){
+    var raw = cache[unitId];
+    var sows = raw && Array.isArray(raw.sows) ? raw.sows : (raw ? [raw] : []);
+    sows.forEach(function(sow){
+      if(!sow || sow.assignedTeam !== 'contractor') return;
+      if(String(sow.contractorId) !== String(contractorId)) return;
+      var unit = (window.housingUnits || []).find(function(u){ return u.id === unitId; });
+      var addr = sow.address || (unit && ((unit.num||'') + ' ' + (unit.street||'')).trim()) || unitId;
+      out.push({ address: addr, project_number: sow.project_number || '', status: _cwoStatusForSow(sow) });
+    });
+  });
+  return out;
+}
+
+function _ctClosePortalPreview(){
+  var h = document.getElementById('ctPortalPreviewModal');
+  if(h) h.innerHTML = '';
+}
+window._ctClosePortalPreview = _ctClosePortalPreview;
+
+function _ctPortalPreview(){
+  var ct = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
+    ? (window._contractors || [])[window._ctEditIdx] : (window._ctLastSaved || null);
+  if(!ct || !ct.id){ if(typeof showToast==='function') showToast('Save the contractor first to preview their portal view.', {type:'info'}); return; }
+  if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ if(typeof showToast==='function') showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
+  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+  var rows = _ctContractorWorkOrdersForPreview(ct.id);
+  function bucket(st){ return rows.filter(function(x){ return (x.status||'active') === st; }); }
+  function section(title, list){
+    if(!list.length) return '';
+    return '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">' + title + ' (' + list.length + ')</div>'
+      + list.map(function(w){
+          return '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;background:var(--bg);">'
+            + '<div style="font-weight:600;color:var(--text);">' + esc(w.address) + '</div>'
+            + '<div style="color:var(--muted);font-size:12px;margin-top:2px;">#' + esc(w.project_number) + '</div></div>';
+        }).join('');
+  }
+  var nc = window.NATION_CONFIG || {};
+  var brand = esc((nc.display_name || nc.short || 'Housing')) + ' — Contractor Portal';
+  var listHtml = section('Active', bucket('active')) + section('In process', bucket('in_process')) + section('Closed', bucket('closed'));
+  if(!listHtml) listHtml = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No work orders assigned to this contractor yet.</div>';
+  var countTxt = rows.length + (rows.length === 1 ? ' work order' : ' work orders');
+
+  var host = document.getElementById('ctPortalPreviewModal');
+  if(!host){ host = document.createElement('div'); host.id = 'ctPortalPreviewModal'; document.body.appendChild(host); }
+  host.innerHTML =
+    '<div class="modal-overlay" style="display:flex;z-index:1100;" onclick="if(event.target===this)_ctClosePortalPreview()">'
+    + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:3px solid var(--accent);">'
+    +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Portal preview · read-only</div>'
+    +     '<div style="font-size:15px;font-weight:700;color:var(--text);">' + brand + '</div></div>'
+    +     '<button type="button" onclick="_ctClosePortalPreview()" class="tic-close-btn" aria-label="Close">✕</button>'
+    +   '</div>'
+    +   '<div style="padding:11px 20px;background:var(--info-blue-bg);border-bottom:1px solid var(--border);font-size:12px;color:var(--info-blue);line-height:1.5;">👁 This is what <strong>' + esc(ct.name || 'this contractor') + '</strong> sees after signing in to the portal. Read-only — nothing here is sent to the contractor.</div>'
+    +   '<div style="padding:18px 20px;overflow-y:auto;">'
+    +     '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px;">My Work Orders</div>'
+    +     '<div style="color:var(--muted);font-size:13px;">' + countTxt + '</div>'
+    +     listHtml
+    +   '</div>'
+    +   '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">'
+    +     '<button type="button" onclick="_ctClosePortalPreview()" class="btn btn-ghost">Close</button>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+}
+window._ctPortalPreview = _ctPortalPreview;
+
 // Renders the contractor's Forms & SOWs in the contractor detail card.
 // Audit entries themselves continue to be written via auditEntry() and shown
 // on the master Audit Log (Settings → Audit Log) — they no longer surface here.
@@ -4463,11 +4539,16 @@ function ctRenderPeople(people) {
   // unsaved contractors have no id yet, so the button stays hidden until Save.
   try {
     var _invBtn = document.getElementById('ct_portal_invite_btn');
-    if(_invBtn){
+    var _prevBtn = document.getElementById('ct_portal_preview_btn');
+    if(_invBtn || _prevBtn){
       var _savedCt = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
         ? (window._contractors || [])[window._ctEditIdx] : null;
       var _portalOn = (typeof moduleOn !== 'function') || moduleOn('contractor_portal');
-      _invBtn.style.display = (_portalOn && _savedCt && _savedCt.id) ? '' : 'none';
+      var _showPortalBtns = (_portalOn && _savedCt && _savedCt.id) ? '' : 'none';
+      if(_invBtn)  _invBtn.style.display  = _showPortalBtns;
+      // Preview is a read-only staff view of the contractor's portal; same
+      // gate as Invite (saved contractor + module on).
+      if(_prevBtn) _prevBtn.style.display = _showPortalBtns;
     }
   } catch(e){ /* non-fatal */ }
   if(!window._ctPeople.length) {
@@ -8961,6 +9042,7 @@ function _buildAddContractorModalHTML() {
           '<span class="tic-footer-spacer"></span>',
           '<button type="button" onclick="ctAddPerson()" class="btn btn-ghost">+ Add Person</button>',
           '<button type="button" id="ct_portal_invite_btn" onclick="inviteContractorToPortal()" class="btn btn-ghost" style="display:none;" title="Authorize this contractor\'s key contacts to sign in to the Contractor Portal">📱 Invite to portal</button>',
+          '<button type="button" id="ct_portal_preview_btn" onclick="_ctPortalPreview()" class="btn btn-ghost" style="display:none;" title="See the Work Orders this contractor sees after signing in to the portal (staff preview, read-only)">👁 Preview portal view</button>',
           '<button type="button" onclick="closeAddContractorModal()" class="btn btn-ghost">Cancel</button>',
           '<button type="button" id="ct_save_btn" onclick="saveContractorAndFinalize()" class="btn btn-primary" data-mode="draft">💾 Save Draft</button>',
         '</div>',
