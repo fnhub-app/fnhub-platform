@@ -581,7 +581,12 @@ function _prjBuildModalHTML() {
           '<h2 id="prj_hero_name" class="tic-name">' + _prjEsc(d.name || 'New Capital Project') + '</h2>' +
           '<div class="tic-hero-sub" id="prj_hero_number">' + _prjEsc(d.project_number || (isNew ? 'Number assigned on first save' : '')) + '</div>' +
         '</div>' +
-        '<button type="button" onclick="closePrjModal()" class="tic-close-btn" aria-label="Close" data-prj-keep>✕</button>' +
+        // Document-generation action (Status Report PDF) sits top-right per
+        // convention; keeps data-prj-keep so read-only viewers can export it.
+        '<div class="flex-gap8 flex-wrap">' +
+          (d.id ? '<button type="button" onclick="_prjStatusReport()" class="btn btn-ghost" data-prj-keep title="Generate a PDF status report for this project">📄 Status Report</button>' : '') +
+          '<button type="button" onclick="closePrjModal()" class="tic-close-btn" aria-label="Close" data-prj-keep>✕</button>' +
+        '</div>' +
       '</div>' +
 
       '<div class="tic-strip">' +
@@ -613,7 +618,7 @@ function _prjBuildModalHTML() {
 
       '<div class="tic-footer">' +
         '<div id="prj_saved_indicator" class="txt-muted-sm"></div>' +
-        (d.id ? '<button type="button" onclick="_prjStatusReport()" class="btn btn-ghost" data-prj-keep title="Generate a PDF status report for this project">📄 Status Report</button>' : '') +
+        // Status Report (doc-generation) now lives top-right in the hero.
         (d.id ? '<button type="button" onclick="_prjArchiveProject()" class="btn btn-ghost">🗄 Archive</button>' : '') +
         '<span class="tic-footer-spacer"></span>' +
         '<button type="button" onclick="closePrjModal()" class="btn btn-ghost" data-prj-keep>Cancel</button>' +
