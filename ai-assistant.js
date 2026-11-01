@@ -58,6 +58,7 @@ function aiDraftNote() {
       action: action,
       unit:   unit,
       role:   window._effectiveRole || window.currentRole || '',
+      nation: (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || '',
     },
     history: [],
   }).then(function(data) {
@@ -191,6 +192,10 @@ function aiSendMessage() {
 
   var ctx = {
     role:        window._effectiveRole || window.currentRole || '',
+    // Nation identity so the assistant speaks as THIS nation (OCAP / multi-
+    // nation), never a hardcoded one. Falls back server-side if absent.
+    nation:      (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '',
+    nationShort: (window.NATION_CONFIG && (NATION_CONFIG.short || NATION_CONFIG.display_name)) || '',
     // Local-time context so "today"/"yesterday" in activity reports use the
     // nation's calendar day, not UTC (an evening report was rolling into the
     // next UTC day and showing almost no activity).
