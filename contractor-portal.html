@@ -69,6 +69,20 @@
     .cp-upbtn:hover { background:var(--bg); }
     .cp-inv-amt { flex:1 1 auto; min-width:120px; width:auto; padding:10px 12px; font-size:15px;
                   border:1px solid var(--line); border-radius:8px; background:#fff; color:var(--ink); }
+    .cp-note-input { width:100%; padding:10px 12px; font-size:15px; border:1px solid var(--line);
+                     border-radius:8px; background:#fff; color:var(--ink); resize:vertical; font-family:inherit; }
+    .cp-your-note { border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-bottom:6px;
+                    background:var(--bg); font-size:14px; white-space:pre-wrap; word-break:break-word; }
+    .cp-your-note-at { font-size:11px; color:var(--muted); margin-top:3px; }
+    .cp-subrow { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line); }
+    .cp-sub-ic { flex:0 0 auto; }
+    .cp-sub-name { flex:1 1 auto; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .cp-sub-when { flex:0 0 auto; font-size:12px; color:var(--muted); }
+    .cp-sub-st { flex:0 0 auto; font-size:11px; font-weight:800; padding:2px 8px; border-radius:999px;
+                 border:1px solid var(--line); }
+    .cp-st-ok { color:var(--ok); border-color:var(--ok); }
+    .cp-st-no { color:var(--err); border-color:var(--err); }
+    .cp-st-pending { color:var(--muted); }
     .hidden { display:none; }
   </style>
 </head>

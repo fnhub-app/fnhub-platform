@@ -264,6 +264,35 @@
     next(0);
   }
 
+  // Post a note on the open work order. Recorded by contractor-upload (kind
+  // note) to the housing-office audit trail + the work order. Optimistically
+  // shown here right away.
+  function sendNote() {
+    var ta = el('cp_note_text');
+    if (!ta || !currentWO || !session || !session.access_token) return;
+    var text = (ta.value || '').trim();
+    if (!text) { setUpMsg('Enter a note first.', true); return; }
+    setUpMsg('Sending note...');
+    fetch(SB + '/functions/v1/contractor-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ unitId: currentWO.sow_unit_id, projectNumber: currentWO.sow_project_number, kind: 'note', text: text })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+    }).then(function (res) {
+      if (res.ok && res.d && res.d.ok) {
+        if (!currentWO.data) currentWO.data = {};
+        if (!Array.isArray(currentWO.data.contractorNotes)) currentWO.data.contractorNotes = [];
+        currentWO.data.contractorNotes.push({ text: text, at: new Date().toISOString(), by: 'you' });
+        var idx = workOrders.indexOf(currentWO);
+        if (idx >= 0) showWorkOrder(idx);   // re-render with the new note
+        setUpMsg('✓ Note sent.');
+      } else {
+        setUpMsg('Could not send the note. Please try again.', true);
+      }
+    }).catch(function () { setUpMsg('Could not send the note. Please try again.', true); });
+  }
+
   function showWorkOrder(idx) {
     var w = workOrders[idx];
     if (!w) return;
@@ -286,6 +315,14 @@
       ? '<h3 class="cp-h3">Health &amp; safety</h3><div class="cp-hs-row">'
         + hs.map(function (f) { return '<span class="cp-hs">&#9888; ' + esc(f) + '</span>'; }).join('')
         + '</div>'
+      : '';
+    var cnotes = Array.isArray(d.contractorNotes) ? d.contractorNotes : [];
+    var notesReadHtml = cnotes.length
+      ? '<h3 class="cp-h3">Your notes</h3>' + cnotes.slice().reverse().map(function (n) {
+          var when = n && n.at ? String(n.at).slice(0, 10) : '';
+          return '<div class="cp-your-note">' + esc((n && n.text) || '')
+               + (when ? '<div class="cp-your-note-at">' + esc(when) + '</div>' : '') + '</div>';
+        }).join('')
       : '';
     var docs = Array.isArray(d.documents) ? d.documents : [];
     var docsHtml = '<h3 class="cp-h3">Documents</h3>' + (docs.length
@@ -313,6 +350,8 @@
       + scopeHtml
       + docsHtml
       + '<div class="cp-msg" id="cp_detail_msg"></div>'
+      + notesReadHtml
+      + '<div id="cp_sub_status"></div>'
       + '<h3 class="cp-h3">Submit to the housing office</h3>'
       + '<div class="cp-upload-row">'
       +   '<button type="button" class="cp-upbtn" data-cp-upload="photo">&#128247; Add photos</button>'
@@ -321,12 +360,58 @@
       +   '<input id="cp_inv_amount" type="text" inputmode="decimal" placeholder="Invoice amount $" class="cp-inv-amt"/>'
       +   '<button type="button" class="cp-upbtn" data-cp-upload="invoice">&#129534; Submit invoice</button>'
       + '</div>'
-      + '<div class="cp-note">Invoices are sent to the housing office and added to this job\'s payment schedule for review.</div>'
+      + '<div class="cp-note">Invoices are sent to the housing office for review. Once approved, they are added to this job\'s payment schedule.</div>'
+      + '<div class="cp-upload-row">'
+      +   '<textarea id="cp_note_text" rows="2" placeholder="Add a note for the housing office..." class="cp-note-input"></textarea>'
+      + '</div>'
+      + '<div class="cp-upload-row">'
+      +   '<button type="button" class="cp-upbtn" data-cp-note="1">&#128221; Add note</button>'
+      + '</div>'
       + '<input type="file" id="cp_up_photo" accept="image/*" multiple class="hidden"/>'
       + '<input type="file" id="cp_up_invoice" accept="image/*,application/pdf" class="hidden"/>'
       + '<div class="cp-msg" id="cp_up_msg"></div>';
     hide('cp_app'); show('cp_detail');
+    loadSubmissionStatus(w);
     try { window.scrollTo(0, 0); } catch (e) { /* non-fatal */ }
+  }
+
+  // Reflect back the status of what this contractor has submitted on this work
+  // order (RLS lets a contractor read their own contractor_submissions rows), so
+  // they can see whether an invoice was approved. Best-effort: silent if the
+  // table isn't there yet or the fetch fails.
+  function loadSubmissionStatus(w) {
+    var mount = el('cp_sub_status');
+    if (!mount || !w || !session || !session.access_token) return;
+    var q = SB + '/rest/v1/contractor_submissions?unit_id=eq.' + encodeURIComponent(w.sow_unit_id)
+          + '&sow_project_number=eq.' + encodeURIComponent(w.sow_project_number)
+          + '&order=created_at.desc&limit=50';
+    fetch(q, { headers: { 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token } })
+      .then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        if (!Array.isArray(rows) || !rows.length) { mount.innerHTML = ''; return; }
+        var lbl = {
+          invoice: { pending: 'Awaiting review', approved: 'Approved', rejected: 'Not accepted', 'new': 'Sent' },
+          photo:   { 'new': 'Sent', read: 'Reviewed' },
+          note:    { 'new': 'Sent', read: 'Reviewed' }
+        };
+        var icon = { invoice: '🧾', photo: '📷', note: '📝' };
+        var cls = { pending: 'cp-st-pending', approved: 'cp-st-ok', rejected: 'cp-st-no', read: 'cp-st-ok', 'new': 'cp-st-pending' };
+        mount.innerHTML = '<h3 class="cp-h3">Your submissions</h3>'
+          + rows.map(function (s) {
+              var k = s.kind || 'note';
+              var when = s.created_at ? String(s.created_at).slice(0, 10) : '';
+              var name = (k === 'note') ? (s.text || '') : (s.file_name || '');
+              var amt = (k === 'invoice' && s.amount != null && s.amount !== '') ? (' · $' + s.amount) : '';
+              var stTxt = (lbl[k] && lbl[k][s.status]) || s.status || '';
+              return '<div class="cp-subrow">'
+                + '<span class="cp-sub-ic">' + (icon[k] || '') + '</span>'
+                + '<span class="cp-sub-name">' + esc(name + amt) + '</span>'
+                + '<span class="cp-sub-when">' + esc(when) + '</span>'
+                + '<span class="cp-sub-st ' + (cls[s.status] || '') + '">' + esc(stTxt) + '</span>'
+                + '</div>';
+            }).join('');
+      })
+      .catch(function () { /* non-fatal */ });
   }
 
   function backToWorkOrders() { hide('cp_detail'); show('cp_app'); }

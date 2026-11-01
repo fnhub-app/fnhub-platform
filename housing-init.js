@@ -1820,7 +1820,8 @@ async function loadHousingData() {
       _json(SUPABASE_URL+'/rest/v1/housing_settings?select=key,value'),
       (typeof sbLoadBcrRegistry === 'function') ? Promise.resolve(sbLoadBcrRegistry()).catch(function(){}) : null,
       (_isMgmt && typeof sbLoadTenantMrSubmissions === 'function') ? Promise.resolve(sbLoadTenantMrSubmissions()).catch(function(){}) : null,
-      (_isMgmt && typeof sbLoadApplicationSubmissions === 'function') ? Promise.resolve(sbLoadApplicationSubmissions()).catch(function(){}) : null
+      (_isMgmt && typeof sbLoadApplicationSubmissions === 'function') ? Promise.resolve(sbLoadApplicationSubmissions()).catch(function(){}) : null,
+      (_isMgmt && typeof sbLoadContractorSubmissions === 'function') ? Promise.resolve(sbLoadContractorSubmissions()).catch(function(){}) : null
     ]);
     var appsData = _res[0], unitsData = _res[1], cR = _res[2], sd = _res[3], rd = _res[4], stD = _res[5];
     if(appsData) applications = appsData;

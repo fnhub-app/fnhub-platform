@@ -2553,7 +2553,10 @@ function _cwoDetailFromSow(sow, unit){
     hsFlags:          _cwoHsFlags(sow),
     contactName:      sow.preparedBy || '',
     contactPhone:     nc.phone || nc.contact_phone || '',
-    documents:        docs
+    documents:        docs,
+    // Notes the contractor has posted on this work order (newest last). Capped
+    // so the projection row stays small; written by the contractor-upload fn.
+    contractorNotes:  Array.isArray(sow.contractorNotes) ? sow.contractorNotes.slice(-20) : []
   };
 }
 window._cwoDetailFromSow = _cwoDetailFromSow;
@@ -2864,6 +2867,28 @@ function _ctPortalPreviewOpen(i){
       + '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Tenant phone</div>'
       + '<div id="_cpvTenPhone" style="color:var(--text);font-size:14px;">' + (d.tenantPhone ? esc(d.tenantPhone) : '<span style="color:var(--muted);">—</span>') + '</div></div>';
   }
+  // Illustrative (disabled) copy of the contractor's upload/submit controls, so
+  // staff can see in this read-only preview WHERE the contractor adds photos,
+  // submits invoices, and posts notes. The real, working controls live in the
+  // portal itself (contractor-portal.js).
+  var _dis = 'padding:8px 12px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--muted);cursor:not-allowed;font-size:13px;font-weight:700;';
+  var submitHtml = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">Submit to the housing office</div>'
+    + '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+    +   '<button type="button" disabled style="' + _dis + '">📷 Add photos</button>'
+    +   '<button type="button" disabled style="' + _dis + '">🧾 Submit invoice</button>'
+    +   '<button type="button" disabled style="' + _dis + '">📝 Add note</button>'
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:6px;line-height:1.5;">In the portal the contractor adds progress photos, submits invoices (which land on this job\'s Payments tab as a draw), and posts notes here. Disabled in this staff preview.</div>';
+  var cnotes = Array.isArray(d.contractorNotes) ? d.contractorNotes : [];
+  var notesReadHtml = cnotes.length
+    ? '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">Contractor notes</div>'
+      + cnotes.slice().reverse().map(function(n){
+          var when = n && n.at ? String(n.at).slice(0,10) : '';
+          return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);">'
+            + '<div style="color:var(--text);font-size:13px;white-space:pre-wrap;word-break:break-word;">' + esc((n && n.text) || '') + '</div>'
+            + (when ? '<div style="color:var(--muted);font-size:11px;margin-top:3px;">' + esc(when) + '</div>' : '') + '</div>';
+        }).join('')
+    : '';
   _ctPortalPreviewShell(
     '<button type="button" onclick="_ctPortalPreviewRenderList()" class="btn btn-ghost btn-sm" style="margin-bottom:12px;">← Back to work orders</button>'
     + '<div style="font-size:18px;font-weight:700;color:var(--text);">' + esc(r.address) + '</div>'
@@ -2877,6 +2902,8 @@ function _ctPortalPreviewOpen(i){
     + field('Contact phone', d.contactPhone)
     + scopeHtml
     + docsHtml
+    + notesReadHtml
+    + submitHtml
   );
   // Fill the tenant phone lazily (same source the sync uses), so the preview
   // matches the live portal even for a row not yet re-synced.
@@ -3324,6 +3351,143 @@ async function sbResolveTenantMr(id, status, notes, sowPn){
   return true;
 }
 window.sbResolveTenantMr = sbResolveTenantMr;
+
+// ════════════════════════════════════════════════════════════════════════════
+// Contractor Portal submissions — staff review queue (invoices approved,
+// photos/notes flagged) — contractor_submissions table.
+// ════════════════════════════════════════════════════════════════════════════
+// A contractor's portal uploads land in contractor_submissions (inserted by the
+// contractor-upload Edge Function, service role). Staff (management) load the
+// OPEN ones so they surface on the landing-page worklist:
+//   invoice (status 'pending') -> APPROVE (creates the payment draw on the SOW +
+//                                 the invoice file is already filed) or REJECT.
+//   photo / note (status 'new') -> no approval; the file is auto-filed to the
+//                                 unit's Documents / the note is logged, but it
+//                                 is FLAGGED here so staff know to look. Staff
+//                                 mark it 'read'.
+async function sbLoadContractorSubmissions(){
+  try {
+    if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){
+      window._contractorSubmissions = window._contractorSubmissions || []; return window._contractorSubmissions;
+    }
+    var url = SUPABASE_URL + '/rest/v1/contractor_submissions?status=in.(pending,new)&order=created_at.desc&limit=200';
+    var r = await fetch(url, { headers: HOUSING_HEADERS });
+    if(!r.ok){ window._contractorSubmissions = window._contractorSubmissions || []; return window._contractorSubmissions; }
+    var rows = await r.json();
+    window._contractorSubmissions = Array.isArray(rows) ? rows : [];
+    return window._contractorSubmissions;
+  } catch(e){
+    console.warn('[contractor-sub] load failed:', e);
+    window._contractorSubmissions = window._contractorSubmissions || [];
+    return window._contractorSubmissions;
+  }
+}
+window.sbLoadContractorSubmissions = sbLoadContractorSubmissions;
+
+// PATCH a submission's status (approved / rejected / read) + reviewer stamp, and
+// drop it from the in-memory open queue. Returns true, throws on HTTP error.
+async function _sbResolveContractorSub(id, status){
+  var actor = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || '';
+  var r = await fetch(SUPABASE_URL + '/rest/v1/contractor_submissions?id=eq.' + encodeURIComponent(id), {
+    method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+    body: JSON.stringify({ status: status, reviewed_by: actor, reviewed_at: new Date().toISOString() })
+  });
+  if(!r.ok) throw new Error(await r.text());
+  window._contractorSubmissions = (window._contractorSubmissions || []).filter(function(s){ return s.id !== id; });
+  return true;
+}
+
+// Approve a pending contractor invoice: append a payment DRAW to the SOW (so it
+// shows on the Payments tab, unpaid, awaiting staff to pay it down) then mark the
+// submission approved. The invoice FILE is already filed to the unit's Documents
+// by the Edge Function; here we only create the draw. Read-modify-write on
+// housing_sow.data, same shape saveSOW uses, so it can't disturb other fields.
+async function _wlApproveContractorInvoice(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s){ if(typeof showToast==='function') showToast('Submission not found', {type:'error'}); return; }
+  var amt = Number(s.amount) || 0;
+  var money = (typeof formatCurrency==='function') ? formatCurrency(amt) : ('$' + amt.toFixed(2));
+  if(typeof showConfirm !== 'function') return;
+  var ok = await showConfirm({ title: 'Approve this invoice?', message: 'Adds a ' + money + ' payment draw to ' + (s.sow_project_number||'the work order') + ' for ' + (s.address || s.unit_id) + '. The invoice is already on file. You pay it down from the request\'s Payments tab.', confirmText: 'Approve & add draw' });
+  if(!ok) return;
+  try {
+    var unitId = s.unit_id, pn = s.sow_project_number;
+    var gr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId) + '&select=data', { headers: HOUSING_HEADERS });
+    if(!gr.ok) throw new Error('could not load the work order (HTTP ' + gr.status + ')');
+    var rows = await gr.json();
+    var data = (rows && rows[0] && rows[0].data) ? rows[0].data : null;
+    var sows = (data && Array.isArray(data.sows)) ? data.sows : null;
+    var sow  = sows ? sows.find(function(x){ return x && String(x.project_number) === String(pn); }) : null;
+    if(!sow) throw new Error('the work order (' + pn + ') was not found');
+    if(!Array.isArray(sow.draws)) sow.draws = [];
+    sow.draws.push({
+      id: 'cwi_' + Date.now(), type: 'material',
+      label: 'Contractor invoice' + (s.file_name ? ' - ' + s.file_name : ''),
+      amount: amt, paid: false, paidDate: '',
+      invoice: (s.file_path ? { path: s.file_path, name: s.file_name || 'invoice' } : null),
+      submittedBy: 'contractor', submittedByName: s.created_by || '',
+      submittedAt: s.created_at || new Date().toISOString(),
+      approvedBy: (window.HOUSING_SESSION && HOUSING_SESSION.email) || '', approvedAt: new Date().toISOString()
+    });
+    var pr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId), {
+      method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify({ data: data, updated_at: new Date().toISOString() })
+    });
+    if(!pr.ok) throw new Error('could not save the draw (HTTP ' + pr.status + ')');
+    if(window._sowCache) window._sowCache[unitId] = data;   // keep Payments tab in sync
+    await _sbResolveContractorSub(id, 'approved');
+    if(typeof auditEntry === 'function') auditEntry('SOW:' + unitId, 'contractor_invoice_approved', 'Approved contractor invoice ' + money + ' on ' + pn, window.currentRole || 'staff');
+    if(typeof showToast === 'function') showToast('Invoice approved — a ' + money + ' draw was added to ' + pn + '.', {type:'info'});
+  } catch(e){
+    console.warn('[contractor-sub] approve failed:', e);
+    if(typeof showToast === 'function') showToast('Could not approve: ' + (e && e.message || e), {type:'error'});
+  }
+  renderWorklist();
+}
+window._wlApproveContractorInvoice = _wlApproveContractorInvoice;
+
+async function _wlRejectContractorInvoice(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s){ return; }
+  if(typeof showConfirm !== 'function') return;
+  var ok = await showConfirm({ title: 'Reject this invoice?', message: 'It will NOT be added to the payment schedule. The uploaded file stays on the unit\'s Documents. The contractor sees it as not accepted.', confirmText: 'Reject', danger: true });
+  if(!ok) return;
+  try {
+    await _sbResolveContractorSub(id, 'rejected');
+    if(typeof auditEntry === 'function') auditEntry('SOW:' + s.unit_id, 'contractor_invoice_rejected', 'Rejected contractor invoice on ' + (s.sow_project_number||''), window.currentRole || 'staff');
+    if(typeof showToast === 'function') showToast('Invoice rejected.', {type:'info'});
+  } catch(e){ if(typeof showToast==='function') showToast('Could not reject: ' + (e && e.message || e), {type:'error'}); }
+  renderWorklist();
+}
+window._wlRejectContractorInvoice = _wlRejectContractorInvoice;
+
+// Mark a flagged photo/note as read (clears it from the worklist flag).
+async function _wlMarkContractorSubRead(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s){ return; }
+  try { await _sbResolveContractorSub(id, 'read'); }
+  catch(e){ if(typeof showToast==='function') showToast('Could not update: ' + (e && e.message || e), {type:'error'}); }
+  renderWorklist();
+}
+window._wlMarkContractorSubRead = _wlMarkContractorSubRead;
+
+// View a flagged submission: open the file (photo/invoice) via a signed URL, or
+// show the note text. Does NOT mark it read — staff do that explicitly.
+async function _wlViewContractorSub(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s){ return; }
+  if(s.kind === 'note'){
+    if(typeof showConfirm === 'function') showConfirm({ title: 'Contractor note', message: String(s.text || '(empty)'), confirmText: 'Mark read', cancelText: 'Close' }).then(function(ok){ if(ok) _wlMarkContractorSubRead(id); });
+    return;
+  }
+  if(!s.file_path){ if(typeof showToast==='function') showToast('No file on this submission.', {type:'error'}); return; }
+  try {
+    var url = (typeof sbGetSignedUrl === 'function') ? await sbGetSignedUrl(s.file_path) : '';
+    if(url) window.open(url, '_blank', 'noopener');
+    else if(typeof showToast==='function') showToast('Could not open the file.', {type:'error'});
+  } catch(e){ if(typeof showToast==='function') showToast('Could not open the file.', {type:'error'}); }
+}
+window._wlViewContractorSub = _wlViewContractorSub;
 
 // Parse the photo_path column (JSON array of Storage paths; tolerates a bare
 // single path string from any older row) into an array of paths.
@@ -7742,7 +7906,10 @@ function renderWorklist() {
   // Tenant-reported maintenance requests awaiting staff review (management only).
   var tenantMrCount = isManagement ? (window._tenantMrSubmissions || []).length : 0;
   var appSubCount   = isManagement ? (window._appSubmissions || []).length : 0;
-  var total = appItems.length + sowTotalCount + fieldSowItems.length + rfqItems.length + ctItems.length + matchItems.length + unitApprItems.length + draftTotal + tenantMrCount + appSubCount;
+  // Contractor portal submissions awaiting staff (pending invoices + flagged
+  // photos/notes). Management only; empty unless the portal module is on.
+  var ctSubCount    = isManagement ? (window._contractorSubmissions || []).length : 0;
+  var total = appItems.length + sowTotalCount + fieldSowItems.length + rfqItems.length + ctItems.length + matchItems.length + unitApprItems.length + draftTotal + tenantMrCount + appSubCount + ctSubCount;
   var pill = document.getElementById('worklist_count_pill'); if (pill) pill.textContent = total;
   var qa   = document.getElementById('qa_pending_count');   if (qa) qa.textContent = total;
 
@@ -7916,6 +8083,58 @@ function renderWorklist() {
         actions:[{text:'Review',onclick:open}] });
     });
     html += sectionWrap('📄', 'Application Submissions', appSubItems.length, '', _view === 'cards' ? wlGrid(asCards) : asRows, 0);
+  }
+
+  // Contractor Submissions — uploads from the Contractor Portal (management
+  // review queue). INVOICES are pending and need approval (approve -> adds a
+  // payment draw; reject -> dismissed). PHOTOS/NOTES need no approval but are
+  // flagged here so staff know to read them (View / Mark read).
+  var ctSubItems = isManagement ? (window._contractorSubmissions || []) : [];
+  if (ctSubItems.length) {
+    var _csKindLbl = { invoice:'Invoice', photo:'Photo', note:'Note' };
+    var csRows = '', csCards = '';
+    // Pending invoices first (they need a decision), then flagged photos/notes.
+    ctSubItems.slice().sort(function(a,b){
+      var ap = (a.kind==='invoice')?0:1, bp = (b.kind==='invoice')?0:1;
+      if(ap!==bp) return ap-bp;
+      return String(b.created_at||'').localeCompare(String(a.created_at||''));
+    }).forEach(function(s){
+      var idJs = esc(s.id).replace(/'/g, "\\'");
+      var isInvoice = (s.kind === 'invoice');
+      var kindLbl = _csKindLbl[s.kind] || 'Submission';
+      var money = (s.amount != null && s.amount !== '') ? ((typeof formatCurrency==='function') ? formatCurrency(Number(s.amount)||0) : ('$'+(Number(s.amount)||0).toFixed(2))) : '';
+      var subtitle = isInvoice ? (money || (s.file_name||'')) : (s.kind==='note' ? (s.text||'') : (s.file_name||''));
+      var who = s.address || s.unit_id || '';
+      var pillTxt = isInvoice ? 'PENDING' : 'NEW';
+      var pillColor = isInvoice ? 'var(--warn-amber-text)' : 'var(--muted)';
+      // Two actions per row: approve/reject (invoice) or view/mark-read (flag).
+      var btnA, btnB;
+      if (isInvoice) {
+        btnA = { t:'✓ Approve', fn:'_wlApproveContractorInvoice(\'' + idJs + '\')', primary:true };
+        btnB = { t:'Reject',    fn:'_wlRejectContractorInvoice(\'' + idJs + '\')', primary:false };
+      } else {
+        btnA = { t:'View',      fn:'_wlViewContractorSub(\'' + idJs + '\')', primary:true };
+        btnB = { t:'Mark read', fn:'_wlMarkContractorSubRead(\'' + idJs + '\')', primary:false };
+      }
+      function btnHtml(b){
+        var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
+        var col = b.primary ? 'var(--dark)' : 'var(--text)';
+        var bd = b.primary ? 'none' : '1px solid var(--border)';
+        return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
+      }
+      var info = '<span style="font-size:14px;flex-shrink:0;">' + (isInvoice?'🧾':(s.kind==='note'?'📝':'📷')) + '</span>'
+               + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who) + '</span>'
+               + '<span style="font-size:11px;color:var(--muted);width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(kindLbl + (subtitle ? ' · ' + subtitle : '')) + '</span>'
+               + '<span style="font-size:10px;font-weight:800;color:' + pillColor + ';width:66px;flex-shrink:0;">' + pillTxt + '</span>';
+      csRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);">'
+        + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + info + '</div>'
+        + btnHtml(btnA) + btnHtml(btnB)
+        + '</div>';
+      csCards += wlCard({ title: who, pill:{ text: pillTxt, color: pillColor }, open: btnA.fn,
+        metas:[{k:'Type',v:kindLbl},{k:(isInvoice?'Amount':'Detail'),v:(subtitle ? String(subtitle).slice(0,60) : '—')},{k:'Project',v:s.sow_project_number||''}],
+        actions:[{text:btnA.t,onclick:btnA.fn},{text:btnB.t,ghost:true,onclick:btnB.fn}] });
+    });
+    html += sectionWrap('🛠️', 'Contractor Submissions', ctSubItems.length, '', _view === 'cards' ? wlGrid(csCards) : csRows, 0);
   }
 
   // My Drafts — in-progress items the current user hasn't submitted yet.
