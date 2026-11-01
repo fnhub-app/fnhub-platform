@@ -241,6 +241,7 @@ declare var _ctFiles: any;
 declare var _ctLastSaved: any;
 declare var _ctPendingAction: any;
 declare var _ctPeople: any;
+declare var _ctPortalPreviewState: any;
 declare var _ctSetView: any;
 declare var _currentDetailUnitId: any;
 declare var _currentExportView: any;
