@@ -38,10 +38,23 @@
     .cp-msg { margin-top:14px; font-size:13px; color:var(--muted); min-height:18px; }
     .cp-msg.cp-err { color:var(--err); }
     .cp-count { color:var(--muted); font-size:13px; margin:2px 0 4px; }
-    .cp-wo { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:8px; }
+    .cp-wo { border:1px solid var(--line); border-radius:10px; padding:12px 14px; margin-bottom:8px;
+             cursor:pointer; display:flex; align-items:center; justify-content:space-between; gap:10px; }
+    .cp-wo:hover { border-color:var(--cp-accent); }
     .cp-wo-addr { font-weight:600; }
     .cp-wo-meta { color:var(--muted); font-size:12px; margin-top:2px; }
+    .cp-wo-chev { color:var(--muted); font-size:22px; line-height:1; flex:0 0 auto; }
     .cp-empty { color:var(--muted); font-size:14px; padding:18px 0; }
+    /* Work-order detail view */
+    .cp-back { width:auto; margin:0 0 14px; padding:8px 12px; font-size:13px; background:transparent;
+               color:var(--ink); border:1px solid var(--line); font-weight:600; }
+    .cp-field { margin-bottom:12px; }
+    .cp-field-l { font-size:11px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted); margin-bottom:2px; }
+    .cp-field-v { font-size:15px; }
+    .cp-scope, .cp-doc { border:1px solid var(--line); border-radius:8px; padding:9px 11px; margin-bottom:6px; }
+    .cp-scope-cat { font-size:11px; font-weight:700; color:var(--ink); }
+    .cp-doc { display:flex; align-items:center; gap:8px; }
+    .cp-note { font-size:12px; color:var(--muted); margin-top:4px; }
     .hidden { display:none; }
   </style>
 </head>
@@ -86,6 +99,9 @@
       <div class="cp-count" id="cp_count"></div>
       <div id="cp_list"></div>
     </div>
+
+    <!-- Work-order detail (shown when a work order is tapped) -->
+    <div class="cp-card hidden" id="cp_detail"></div>
   </div>
 
   <!-- Shared config layer only (SUPABASE_URL/ANON + nation branding). No staff bundle. -->

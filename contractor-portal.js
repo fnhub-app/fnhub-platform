@@ -42,6 +42,7 @@
   var ANON = window.SUPABASE_ANON;
   var session = null;
   var _resendTimer = null;
+  var workOrders = [];   // last-loaded rows, indexed by the detail view
 
   // POST the OTP request for a phone. Shared by the first "Text me a code" and
   // the "Resend code" button. Returns true on success.
@@ -154,23 +155,70 @@
     } catch (e) { setMsg('Could not load your work orders: ' + e.message, true); }
   }
 
-  function bucket(rows, status) {
-    return rows.filter(function (x) { return (x.status || 'active') === status; });
-  }
   function renderWorkOrders(rows) {
+    workOrders = rows || [];
     el('cp_count').textContent = rows.length + (rows.length === 1 ? ' work order' : ' work orders');
-    function section(title, list) {
+    // Each row carries data-cpwo = its index into workOrders, so the delegated
+    // click handler (wired in init) can open the right detail regardless of
+    // which status section it lands in.
+    function section(title, statusKey) {
+      var list = rows.map(function (w, i) { return { w: w, i: i }; })
+                     .filter(function (x) { return (x.w.status || 'active') === statusKey; });
       if (!list.length) return '';
-      return '<h3 class="cp-h3">' + title + ' (' + list.length + ')</h3>' + list.map(function (w) {
-        return '<div class="cp-wo"><div class="cp-wo-addr">' + esc(w.address || w.sow_unit_id || '') + '</div>'
-             + '<div class="cp-wo-meta">#' + esc(w.sow_project_number || '') + '</div></div>';
+      return '<h3 class="cp-h3">' + title + ' (' + list.length + ')</h3>' + list.map(function (x) {
+        var w = x.w;
+        return '<div class="cp-wo" data-cpwo="' + x.i + '"><div>'
+             + '<div class="cp-wo-addr">' + esc(w.address || w.sow_unit_id || '') + '</div>'
+             + '<div class="cp-wo-meta">#' + esc(w.sow_project_number || '') + '</div></div>'
+             + '<span class="cp-wo-chev">&rsaquo;</span></div>';
       }).join('');
     }
-    var html = section('Active', bucket(rows, 'active'))
-             + section('In process', bucket(rows, 'in_process'))
-             + section('Closed', bucket(rows, 'closed'));
+    var html = section('Active', 'active') + section('In process', 'in_process') + section('Closed', 'closed');
     el('cp_list').innerHTML = html || '<div class="cp-empty">No work orders assigned to you yet.</div>';
   }
+
+  // Work-order detail — what the contractor sees after tapping a property.
+  // Reads the row's `data` jsonb (scope / dates / contact / documents) that the
+  // staff client syncs into the RLS-scoped projection. Documents are LISTED in
+  // Phase 1; download is wired in Phase 2 (signed-URL Edge Function).
+  function showWorkOrder(idx) {
+    var w = workOrders[idx];
+    if (!w) return;
+    var d = w.data || {};
+    var statusLabel = ({ active: 'Active', in_process: 'In process', closed: 'Closed' })[w.status || 'active'] || (w.status || '');
+    function field(label, val) {
+      if (!val) return '';
+      return '<div class="cp-field"><div class="cp-field-l">' + esc(label) + '</div><div class="cp-field-v">' + esc(val) + '</div></div>';
+    }
+    var scope = Array.isArray(d.scopeItems) ? d.scopeItems : [];
+    var scopeHtml = '<h3 class="cp-h3">Scope of work</h3>' + (scope.length
+      ? scope.map(function (it) {
+          return '<div class="cp-scope">' + (it.category ? '<div class="cp-scope-cat">' + esc(it.category) + '</div>' : '')
+               + '<div>' + esc(it.description || '') + '</div></div>';
+        }).join('')
+      : '<div class="cp-empty">No scope items listed.</div>');
+    var docs = Array.isArray(d.documents) ? d.documents : [];
+    var docsHtml = '<h3 class="cp-h3">Documents</h3>' + (docs.length
+      ? docs.map(function (f) {
+          return '<div class="cp-doc"><span>&#128196;</span><span>' + esc(f.name || 'Document') + '</span></div>';
+        }).join('') + '<div class="cp-note">Contact the housing office if you need a copy of a document.</div>'
+      : '<div class="cp-empty">No documents shared.</div>');
+    el('cp_detail').innerHTML =
+      '<button type="button" class="cp-back" data-cp-back>&larr; Back to work orders</button>'
+      + '<h1>' + esc(w.address || w.sow_unit_id || '') + '</h1>'
+      + '<p class="cp-sub">#' + esc(w.sow_project_number || '') + ' &middot; ' + esc(statusLabel) + '</p>'
+      + field('Target start', d.targetStart)
+      + field('Target completion', d.targetCompletion)
+      + field('Condition', d.condition)
+      + field('Housing contact', d.contactName)
+      + field('Contact phone', d.contactPhone)
+      + scopeHtml
+      + docsHtml;
+    hide('cp_app'); show('cp_detail');
+    try { window.scrollTo(0, 0); } catch (e) { /* non-fatal */ }
+  }
+
+  function backToWorkOrders() { hide('cp_detail'); show('cp_app'); }
 
   function init() {
     if (!SB || !ANON) { setMsg('Portal is not configured for this nation.', true); return; }
@@ -180,6 +228,18 @@
     var b = el('cp_back'); if (b) b.addEventListener('click', function () {
       if (_resendTimer) { clearInterval(_resendTimer); _resendTimer = null; }
       hide('cp_step_code'); show('cp_step_phone'); setMsg('');
+    });
+    // Tap a work order -> detail; delegated so it survives list re-renders.
+    var listEl = el('cp_list');
+    if (listEl) listEl.addEventListener('click', function (e) {
+      var row = e.target && e.target.closest ? e.target.closest('.cp-wo') : null;
+      if (!row) return;
+      var idx = parseInt(row.getAttribute('data-cpwo'), 10);
+      if (!isNaN(idx)) showWorkOrder(idx);
+    });
+    var detailEl = el('cp_detail');
+    if (detailEl) detailEl.addEventListener('click', function (e) {
+      if (e.target && e.target.closest && e.target.closest('[data-cp-back]')) backToWorkOrders();
     });
     applyNationBranding();
   }

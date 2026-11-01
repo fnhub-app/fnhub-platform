@@ -1,0 +1,31 @@
+-- ============================================================================
+-- Contractor Portal — work-order detail (Phase 1)
+--
+-- Adds a single `data` jsonb column to the contractor_work_orders projection so
+-- the portal's new work-order DETAIL view can show scope / target dates /
+-- housing contact / a document list — WITHOUT a new RLS surface. The column
+-- rides the same row the existing RLS policies already scope to the contractor
+-- (cwo_contractor_or_staff_read), and it is kept in sync staff-side by
+-- sbSyncContractorWorkOrder (shared-data.js), exactly like the other columns.
+--
+-- Shape written by the staff client (all optional; defaults to {}):
+--   {
+--     "scopeItems":       [ { "category": "...", "description": "..." }, ... ],
+--     "targetStart":      "YYYY-MM-DD",
+--     "targetCompletion": "YYYY-MM-DD",
+--     "condition":        "...",
+--     "contactName":      "...",
+--     "contactPhone":     "...",
+--     "documents":        [ { "name": "...", "path": "storage/path" }, ... ]
+--   }
+--
+-- Document DOWNLOAD is deferred to Phase 2 (a contractor-file Edge Function that
+-- returns a signed URL after verifying the caller owns the work order). This
+-- migration only stores the document list (name + storage path); the portal
+-- lists them in Phase 1 and makes them downloadable in Phase 2.
+--
+-- Safe to run more than once (idempotent).
+-- ============================================================================
+
+alter table public.contractor_work_orders
+  add column if not exists data jsonb not null default '{}'::jsonb;

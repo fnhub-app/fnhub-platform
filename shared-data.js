@@ -2496,6 +2496,34 @@ function _cwoStatusForSow(sow){
   return 'active';
 }
 
+// Detail payload a contractor sees when they open a work order in the portal.
+// Shared by sbSyncContractorWorkOrder (writes it to the RLS-scoped projection
+// row's `data` jsonb) AND the staff-side portal preview (renders the same
+// fields) — so the preview matches what the contractor sees by construction.
+// Only contractor-appropriate fields: scope descriptions (no internal cost
+// estimates), target dates, condition, a housing contact, and the work order's
+// attached files (name + storage path; download is wired in Phase 2).
+function _cwoDetailFromSow(sow, unit){
+  if(!sow) return {};
+  var items = (Array.isArray(sow.items) ? sow.items : [])
+    .filter(function(it){ return it && (it.description || it.category); })
+    .map(function(it){ return { category: it.category || '', description: it.description || '' }; });
+  var docs = (Array.isArray(sow.files) ? sow.files : [])
+    .filter(function(f){ return f && f.path; })
+    .map(function(f){ return { name: f.name || 'Document', path: f.path }; });
+  var nc = window.NATION_CONFIG || {};
+  return {
+    scopeItems:       items,
+    targetStart:      sow.startDate || '',
+    targetCompletion: sow.endDate || '',
+    condition:        sow.condition || '',
+    contactName:      sow.preparedBy || '',
+    contactPhone:     nc.phone || nc.contact_phone || '',
+    documents:        docs
+  };
+}
+window._cwoDetailFromSow = _cwoDetailFromSow;
+
 // Upsert (or remove) the projection row for ONE work order. Called from saveSOW
 // and from _rfqApproveLinkedSow whenever a SOW's contractor assignment changes.
 function sbSyncContractorWorkOrder(sow, unit){
@@ -2521,6 +2549,9 @@ function sbSyncContractorWorkOrder(sow, unit){
       sow_project_number: String(pn),
       address: addr,
       status: _cwoStatusForSow(sow),
+      // Detail payload for the portal's work-order detail view (Phase 1).
+      // Rides the row's RLS scope — no new data-exposure surface.
+      data: _cwoDetailFromSow(sow, unit),
       updated_at: new Date().toISOString()
     };
     // Upsert on the (sow_unit_id, sow_project_number) unique key.
@@ -2641,7 +2672,9 @@ function _ctContractorWorkOrdersForPreview(contractorId){
       if(String(sow.contractorId) !== String(contractorId)) return;
       var unit = (window.housingUnits || []).find(function(u){ return u.id === unitId; });
       var addr = sow.address || (unit && ((unit.num||'') + ' ' + (unit.street||'')).trim()) || unitId;
-      out.push({ address: addr, project_number: sow.project_number || '', status: _cwoStatusForSow(sow) });
+      // detail mirrors exactly what the projection row's `data` carries (same
+      // helper), so the preview detail matches the live portal.
+      out.push({ address: addr, project_number: sow.project_number || '', status: _cwoStatusForSow(sow), detail: _cwoDetailFromSow(sow, unit) });
     });
   });
   return out;
@@ -2650,8 +2683,103 @@ function _ctContractorWorkOrdersForPreview(contractorId){
 function _ctClosePortalPreview(){
   var h = document.getElementById('ctPortalPreviewModal');
   if(h) h.innerHTML = '';
+  window._ctPortalPreviewState = null;
 }
 window._ctClosePortalPreview = _ctClosePortalPreview;
+
+// Shared modal chrome (hero + read-only banner + footer); list and detail views
+// render their own body inside it.
+function _ctPortalPreviewShell(bodyHtml){
+  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+  var st = window._ctPortalPreviewState || {};
+  var nc = window.NATION_CONFIG || {};
+  var brand = esc((nc.display_name || nc.short || 'Housing')) + ' — Contractor Portal';
+  var host = document.getElementById('ctPortalPreviewModal');
+  if(!host){ host = document.createElement('div'); host.id = 'ctPortalPreviewModal'; document.body.appendChild(host); }
+  host.innerHTML =
+    '<div class="modal-overlay" style="display:flex;z-index:1100;" onclick="if(event.target===this)_ctClosePortalPreview()">'
+    + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">'
+    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:3px solid var(--accent);">'
+    +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Portal preview · read-only</div>'
+    +     '<div style="font-size:15px;font-weight:700;color:var(--text);">' + brand + '</div></div>'
+    +     '<button type="button" onclick="_ctClosePortalPreview()" class="tic-close-btn" aria-label="Close">✕</button>'
+    +   '</div>'
+    +   '<div style="padding:11px 20px;background:var(--info-blue-bg);border-bottom:1px solid var(--border);font-size:12px;color:var(--info-blue);line-height:1.5;">👁 This is what <strong>' + esc(st.name || 'this contractor') + '</strong> sees after signing in to the portal. Read-only — nothing here is sent to the contractor.</div>'
+    +   '<div style="padding:18px 20px;overflow-y:auto;">' + bodyHtml + '</div>'
+    +   '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">'
+    +     '<button type="button" onclick="_ctClosePortalPreview()" class="btn btn-ghost">Close</button>'
+    +   '</div>'
+    + '</div>'
+    + '</div>';
+}
+
+function _ctPortalPreviewRenderList(){
+  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+  var st = window._ctPortalPreviewState || {}; var rows = st.rows || [];
+  function section(title, statusKey){
+    var list = rows.map(function(r,i){ return {r:r,i:i}; }).filter(function(x){ return (x.r.status||'active') === statusKey; });
+    if(!list.length) return '';
+    return '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">' + title + ' (' + list.length + ')</div>'
+      + list.map(function(x){
+          return '<div onclick="_ctPortalPreviewOpen(' + x.i + ')" style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;background:var(--bg);cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:10px;">'
+            + '<div><div style="font-weight:600;color:var(--text);">' + esc(x.r.address) + '</div>'
+            + '<div style="color:var(--muted);font-size:12px;margin-top:2px;">#' + esc(x.r.project_number) + '</div></div>'
+            + '<span style="color:var(--muted);font-size:16px;flex:0 0 auto;">›</span>'
+            + '</div>';
+        }).join('');
+  }
+  var listHtml = section('Active','active') + section('In process','in_process') + section('Closed','closed');
+  if(!listHtml) listHtml = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No work orders assigned to this contractor yet.</div>';
+  var countTxt = rows.length + (rows.length === 1 ? ' work order' : ' work orders');
+  _ctPortalPreviewShell(
+    '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px;">My Work Orders</div>'
+    + '<div style="color:var(--muted);font-size:13px;">' + countTxt + '</div>'
+    + (rows.length ? '<div style="font-size:11px;color:var(--muted);margin-top:2px;">Tap a work order to see its details.</div>' : '')
+    + listHtml
+  );
+}
+window._ctPortalPreviewRenderList = _ctPortalPreviewRenderList;
+
+// Work-order detail — what a contractor sees after tapping a property.
+function _ctPortalPreviewOpen(i){
+  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+  var st = window._ctPortalPreviewState || {}; var rows = st.rows || [];
+  var r = rows[i]; if(!r) return;
+  var d = r.detail || {};
+  var statusLabel = ({ active:'Active', in_process:'In process', closed:'Closed' })[r.status||'active'] || (r.status||'');
+  function field(label, val){ if(!val) return ''; return '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">' + label + '</div><div style="color:var(--text);font-size:14px;">' + esc(val) + '</div></div>'; }
+  var scope = Array.isArray(d.scopeItems) ? d.scopeItems : [];
+  var scopeHtml = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px;">Scope of work</div>'
+    + (scope.length
+        ? scope.map(function(it){
+            return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);">'
+              + (it.category ? '<div style="font-size:11px;font-weight:700;color:var(--accent-ink);">' + esc(it.category) + '</div>' : '')
+              + '<div style="color:var(--text);font-size:13px;">' + esc(it.description || '') + '</div></div>';
+          }).join('')
+        : '<div style="color:var(--muted);font-size:13px;">No scope items listed.</div>');
+  var docs = Array.isArray(d.documents) ? d.documents : [];
+  var docsHtml = '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px;">Documents</div>'
+    + (docs.length
+        ? docs.map(function(f){
+            return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);display:flex;align-items:center;gap:8px;">'
+              + '<span style="flex:0 0 auto;">📄</span><div style="color:var(--text);font-size:13px;word-break:break-word;">' + esc(f.name || 'Document') + '</div></div>';
+          }).join('')
+          + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">In the live portal these become downloads (Phase 2).</div>'
+        : '<div style="color:var(--muted);font-size:13px;">No documents shared.</div>');
+  _ctPortalPreviewShell(
+    '<button type="button" onclick="_ctPortalPreviewRenderList()" class="btn btn-ghost btn-sm" style="margin-bottom:12px;">← Back to work orders</button>'
+    + '<div style="font-size:18px;font-weight:700;color:var(--text);">' + esc(r.address) + '</div>'
+    + '<div style="color:var(--muted);font-size:12px;margin-bottom:12px;">#' + esc(r.project_number) + ' · ' + esc(statusLabel) + '</div>'
+    + field('Target start', d.targetStart)
+    + field('Target completion', d.targetCompletion)
+    + field('Condition', d.condition)
+    + field('Housing contact', d.contactName)
+    + field('Contact phone', d.contactPhone)
+    + scopeHtml
+    + docsHtml
+  );
+}
+window._ctPortalPreviewOpen = _ctPortalPreviewOpen;
 
 function _ctPortalPreview(arg){
   // arg is optional: a registry-row index into window._contractors, or a
@@ -2668,45 +2796,8 @@ function _ctPortalPreview(arg){
   }
   if(!ct || !ct.id){ if(typeof showToast==='function') showToast('Save the contractor first to preview their portal view.', {type:'info'}); return; }
   if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ if(typeof showToast==='function') showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
-  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
-  var rows = _ctContractorWorkOrdersForPreview(ct.id);
-  function bucket(st){ return rows.filter(function(x){ return (x.status||'active') === st; }); }
-  function section(title, list){
-    if(!list.length) return '';
-    return '<div style="font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">' + title + ' (' + list.length + ')</div>'
-      + list.map(function(w){
-          return '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;margin-bottom:8px;background:var(--bg);">'
-            + '<div style="font-weight:600;color:var(--text);">' + esc(w.address) + '</div>'
-            + '<div style="color:var(--muted);font-size:12px;margin-top:2px;">#' + esc(w.project_number) + '</div></div>';
-        }).join('');
-  }
-  var nc = window.NATION_CONFIG || {};
-  var brand = esc((nc.display_name || nc.short || 'Housing')) + ' — Contractor Portal';
-  var listHtml = section('Active', bucket('active')) + section('In process', bucket('in_process')) + section('Closed', bucket('closed'));
-  if(!listHtml) listHtml = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No work orders assigned to this contractor yet.</div>';
-  var countTxt = rows.length + (rows.length === 1 ? ' work order' : ' work orders');
-
-  var host = document.getElementById('ctPortalPreviewModal');
-  if(!host){ host = document.createElement('div'); host.id = 'ctPortalPreviewModal'; document.body.appendChild(host); }
-  host.innerHTML =
-    '<div class="modal-overlay" style="display:flex;z-index:1100;" onclick="if(event.target===this)_ctClosePortalPreview()">'
-    + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:520px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">'
-    +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:3px solid var(--accent);">'
-    +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Portal preview · read-only</div>'
-    +     '<div style="font-size:15px;font-weight:700;color:var(--text);">' + brand + '</div></div>'
-    +     '<button type="button" onclick="_ctClosePortalPreview()" class="tic-close-btn" aria-label="Close">✕</button>'
-    +   '</div>'
-    +   '<div style="padding:11px 20px;background:var(--info-blue-bg);border-bottom:1px solid var(--border);font-size:12px;color:var(--info-blue);line-height:1.5;">👁 This is what <strong>' + esc(ct.name || 'this contractor') + '</strong> sees after signing in to the portal. Read-only — nothing here is sent to the contractor.</div>'
-    +   '<div style="padding:18px 20px;overflow-y:auto;">'
-    +     '<div style="font-size:18px;font-weight:700;color:var(--text);margin-bottom:2px;">My Work Orders</div>'
-    +     '<div style="color:var(--muted);font-size:13px;">' + countTxt + '</div>'
-    +     listHtml
-    +   '</div>'
-    +   '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">'
-    +     '<button type="button" onclick="_ctClosePortalPreview()" class="btn btn-ghost">Close</button>'
-    +   '</div>'
-    + '</div>'
-    + '</div>';
+  window._ctPortalPreviewState = { ct: ct, name: ct.name || '', rows: _ctContractorWorkOrdersForPreview(ct.id) };
+  _ctPortalPreviewRenderList();
 }
 window._ctPortalPreview = _ctPortalPreview;
 
