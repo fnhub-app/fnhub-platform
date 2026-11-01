@@ -1227,16 +1227,18 @@
 <!-- LOAN AGREEMENT MODAL -->
 <div class="modal-ov" style="display:none" id="modalLoanAgreement" style="z-index:400;">
   <div class="modal modal-lg" style="max-width:780px;">
-    <div class="modal-hdr">
+    <div class="modal-hdr modal-hdr-stack">
       <div><h2>&#128196; Loan Agreement</h2><p>Draft — Pending ED Approval</p></div>
-      <button class="modal-close" onclick="closeModal('modalLoanAgreement')">&#x2715;</button>
+      <div class="flex-gap8 flex-wrap">
+        <button class="btn btn-primary btn-sm" onclick="printAgreement('loanAgreementContent')">&#128424; Print / Save PDF</button>
+        <button class="modal-close" onclick="closeModal('modalLoanAgreement')">&#x2715;</button>
+      </div>
     </div>
     <div class="modal-body" style="padding:16px;">
       <div id="loanAgreementContent"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalLoanAgreement')">Close</button>
-      <button class="btn btn-primary" onclick="printAgreement('loanAgreementContent')">&#128424; Print / Save PDF</button>
     </div>
   </div>
 </div>
@@ -1245,16 +1247,18 @@
 <!-- ARRANGEMENT AGREEMENT MODAL -->
 <div class="modal-ov" style="display:none" id="modalArrAgreement" style="z-index:400;">
   <div class="modal modal-lg" style="max-width:780px;">
-    <div class="modal-hdr">
+    <div class="modal-hdr modal-hdr-stack">
       <div><h2>&#128196; Payment Arrangement Agreement</h2><p>Draft — Pending ED Approval</p></div>
-      <button class="modal-close" onclick="closeModal('modalArrAgreement')">&#x2715;</button>
+      <div class="flex-gap8 flex-wrap">
+        <button class="btn btn-primary btn-sm" onclick="printAgreement('arrAgreementContent')">&#128424; Print / Save PDF</button>
+        <button class="modal-close" onclick="closeModal('modalArrAgreement')">&#x2715;</button>
+      </div>
     </div>
     <div class="modal-body" style="padding:16px;">
       <div id="arrAgreementContent"></div>
     </div>
     <div class="modal-footer">
       <button class="btn btn-ghost" onclick="closeModal('modalArrAgreement')">Close</button>
-      <button class="btn btn-primary" onclick="printAgreement('arrAgreementContent')">&#128424; Print / Save PDF</button>
     </div>
   </div>
 </div>
@@ -2227,7 +2231,7 @@
 <!-- CASH DENOMINATION MODAL -->
 <div class="modal-ov" style="display:none" id="modalCashDenom">
   <div class="modal">
-    <div class="modal-hdr"><div><h2>Cash Payment — Denomination Breakdown</h2><p>Record bills and coins received</p></div><button class="modal-close" onclick="closeModal('modalCashDenom')">&#x2715;</button></div>
+    <div class="modal-hdr modal-hdr-stack"><div><h2>Cash Payment — Denomination Breakdown</h2><p>Record bills and coins received</p></div><div class="flex-gap8 flex-wrap"><button class="btn btn-ghost-dark btn-sm" onclick="printDenomSheet()">&#128424; Print Cash Sheet</button><button class="modal-close" onclick="closeModal('modalCashDenom')">&#x2715;</button></div></div>
     <div class="modal-body">
       <div class="ibox yellow" id="cashDenomInfo">Enter denominations received.</div>
 
@@ -2305,8 +2309,8 @@
       <div class="f" style="margin-top:14px;"><label>Received By (Staff Name)</label><input id="denom-receivedby" value="Housing Manager"/></div>
     </div>
     <div class="modal-footer">
+      <!-- Print Cash Sheet (doc-output) moved to the header top-right. -->
       <button class="btn btn-ghost" onclick="closeModal('modalCashDenom')">Cancel</button>
-      <button class="btn btn-ghost" onclick="printDenomSheet()">&#128424; Print Cash Sheet</button>
       <button class="btn btn-primary" id="denomConfirmBtn" onclick="confirmCashDenom()">Confirm &amp; Record Payment</button>
     </div>
   </div>
