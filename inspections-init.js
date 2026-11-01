@@ -319,11 +319,9 @@ function openInspectionModal(id) {
     + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--yellow);margin:16px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--border);">Inspection Checklist</div>'
     + '<div class="insp-checklist" id="insp_checklist">' + clHtml + '</div>'
 
-    // ── General notes (with AI draft assist)
-    + '<div style="display:flex;align-items:center;justify-content:space-between;margin:16px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--border);">'
-    +   '<span style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--yellow);">General Notes</span>'
-    +   (aiNotesOn ? '<button type="button" id="insp_ai_notes_btn" class="insp-ai-btn" onclick="_inspDraftNotes()"><span style="color:var(--yellow);">✦</span> Draft with AI</button>' : '')
-    + '</div>'
+    // ── General notes (the "Draft with AI" assist button lives in the footer
+    //    with the other actions)
+    + '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--yellow);margin:16px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--border);">General Notes</div>'
     + '<textarea id="insp_notes" class="tic-input" rows="4" style="resize:vertical;min-height:80px;width:100%;box-sizing:border-box;" placeholder="Overall observations, recommendations…">' + _esc(src ? (src.general_notes||'') : '') + '</textarea>'
 
     // ── Photos & documents (standard upload widget)
@@ -337,6 +335,7 @@ function openInspectionModal(id) {
     +   '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +     (insp ? '<button type="button" class="btn btn-ghost" onclick="_inspConfirmDelete()">Delete</button>' : '')
     +     (insp ? '<button type="button" class="btn btn-ghost" onclick="generateInspectionPDF()">⬇ PDF</button>' : '')
+    +     (aiNotesOn ? '<button type="button" id="insp_ai_notes_btn" class="btn btn-ghost" onclick="_inspDraftNotes()"><span style="color:var(--yellow);">✦</span> Draft Notes with AI</button>' : '')
     +     (canApproveInsp && !inspApprovedBy && inspApprovalRequired ? '<button type="button" class="btn" style="background:var(--success);color:#fff;border:1px solid var(--success);" onclick="saveInspection(\'approve\')">✓ Approve Report</button>' : '')
     +     (canApproveInsp && inspApprovedBy ? '<button type="button" class="btn btn-ghost" onclick="saveInspection(\'revoke\')">Revoke Approval</button>' : '')
     +   '</div>'
