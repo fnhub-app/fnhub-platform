@@ -35,6 +35,7 @@ on:
       - 'supabase/functions/report-nation-usage/**'
       - 'supabase/functions/recurring-invoices/**'
       - 'supabase/functions/set-nation-secret/**'
+      - 'supabase/functions/set-nation-module/**'
       - 'supabase/functions/enter-nation/**'
       - 'supabase/functions/gen-support-key/**'
       - 'supabase/functions/run-nation-migration/**'
@@ -80,6 +81,8 @@ jobs:
           supabase functions deploy recurring-invoices --project-ref "$REF" --no-verify-jwt
           echo "──── Deploying set-nation-secret to $REF (verifies caller against super_admins) ────"
           supabase functions deploy set-nation-secret --project-ref "$REF" --no-verify-jwt
+          echo "──── Deploying set-nation-module to $REF (verifies caller against super_admins) ────"
+          supabase functions deploy set-nation-module --project-ref "$REF" --no-verify-jwt
           echo "──── Deploying enter-nation to $REF (JWT verify ON; super-admin support login) ────"
           supabase functions deploy enter-nation --project-ref "$REF"
           echo "──── Deploying gen-support-key to $REF (JWT verify ON; generates per-nation keypairs) ────"
