@@ -181,10 +181,49 @@
       if (_resendTimer) { clearInterval(_resendTimer); _resendTimer = null; }
       hide('cp_step_code'); show('cp_step_phone'); setMsg('');
     });
+    applyNationBranding();
+  }
+
+  // Brand the portal dynamically from the resolved nation (name + colour +
+  // logo), the same NATION_CONFIG the staff app and other public pages use, so
+  // a new nation is themed automatically from its registry entry — nothing here
+  // is CLFN-specific. No colour literals live in this file (the accent value is
+  // the nation's own; the on-accent text colour is chosen in CSS via the
+  // data-accent flag), so the colour guard stays clean.
+  function applyNationBranding() {
+    var nc = window.NATION_CONFIG || {};
     try {
-      var nc = window.NATION_CONFIG || {};
       el('cp_brand').textContent = (nc.display_name || nc.short || 'Housing') + ' — Contractor Portal';
     } catch (e) { /* keep default brand */ }
+    try {
+      if (nc.primary_color) {
+        var root = document.documentElement;
+        root.style.setProperty('--accent', nc.primary_color);
+        // Pick readable text on the accent fill: dark text on a light colour,
+        // light text on a dark one. CSS owns the two ink values.
+        root.setAttribute('data-accent', _isLightColor(nc.primary_color) ? 'light' : 'dark');
+      }
+    } catch (e) { /* keep default accent */ }
+    try {
+      var logoEl = el('cp_logo');
+      if (logoEl && nc.logo) {
+        var img = document.createElement('img');
+        img.alt = ''; img.src = nc.logo;
+        logoEl.appendChild(img);
+        logoEl.style.display = 'block';
+      }
+    } catch (e) { /* no logo is fine */ }
+  }
+
+  // Relative-luminance test on a #rgb / #rrggbb string (no colour literals).
+  function _isLightColor(hex) {
+    var c = String(hex || '').trim().replace(/^#/, '');
+    if (c.length === 3) c = c.charAt(0) + c.charAt(0) + c.charAt(1) + c.charAt(1) + c.charAt(2) + c.charAt(2);
+    if (c.length !== 6) return false;
+    var r = parseInt(c.substr(0, 2), 16), g = parseInt(c.substr(2, 2), 16), b = parseInt(c.substr(4, 2), 16);
+    if (isNaN(r) || isNaN(g) || isNaN(b)) return false;
+    var L = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+    return L > 0.6;
   }
 
   if (document.readyState !== 'loading') init();

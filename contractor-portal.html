@@ -6,13 +6,21 @@
   <title>Contractor Portal</title>
   <style>
     :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f4f5f7; --card:#ffffff;
-            --accent:#1f2937; --ok:#047857; --err:#b91c1c; }
+            --accent:#1f2937; --accent-ink:#ffffff; --ok:#047857; --err:#b91c1c; }
+    /* contractor-portal.js flips this to "light" when the nation's primary
+       colour is light, so text on the accent fill stays readable (matching the
+       staff app's "accent is a fill behind dark text" convention). */
+    :root[data-accent="light"] { --accent-ink:#111111; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--ink);
            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
     .cp-wrap { max-width:560px; margin:0 auto; padding:24px 16px 48px; }
-    .cp-brand { font-size:16px; font-weight:700; letter-spacing:.3px; padding:14px 0 18px;
-                border-bottom:4px solid var(--accent); margin-bottom:22px; }
+    .cp-head { display:flex; align-items:center; gap:12px; padding:14px 0 18px;
+               border-bottom:4px solid var(--accent); margin-bottom:22px; }
+    .cp-logo { width:40px; height:40px; border-radius:8px; flex:0 0 auto; background:#fff;
+               border:1px solid var(--line); display:none; }
+    .cp-logo img { width:100%; height:100%; object-fit:contain; border-radius:8px; }
+    .cp-brand { font-size:16px; font-weight:700; letter-spacing:.3px; }
     .cp-card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:22px; }
     h1 { font-size:20px; margin:0 0 6px; }
     h3.cp-h3 { font-size:13px; text-transform:uppercase; letter-spacing:.5px; color:var(--muted);
@@ -22,8 +30,8 @@
     input { width:100%; padding:12px 12px; font-size:16px; border:1px solid var(--line);
             border-radius:8px; background:#fff; color:var(--ink); }
     button { width:100%; margin-top:16px; padding:12px 14px; font-size:15px; font-weight:700;
-             border:0; border-radius:8px; background:var(--accent); color:#fff; cursor:pointer; }
-    button.cp-ghost { background:transparent; color:var(--accent); border:1px solid var(--line);
+             border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+    button.cp-ghost { background:transparent; color:var(--ink); border:1px solid var(--line);
                       font-weight:600; }
     .cp-msg { margin-top:14px; font-size:13px; color:var(--muted); min-height:18px; }
     .cp-msg.cp-err { color:var(--err); }
@@ -37,7 +45,10 @@
 </head>
 <body>
   <div class="cp-wrap">
-    <div class="cp-brand" id="cp_brand">Contractor Portal</div>
+    <div class="cp-head">
+      <div class="cp-logo" id="cp_logo"></div>
+      <div class="cp-brand" id="cp_brand">Contractor Portal</div>
+    </div>
 
     <!-- Login -->
     <div class="cp-card" id="cp_login">
