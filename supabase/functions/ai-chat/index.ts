@@ -704,6 +704,31 @@ pending_review -> HM (or a senior employee) recommends -> hm_recommended ->
 final approval by the Housing Manager OR the ED. Either the HM or the ED can
 grant the final approval.
 
+Contractor Portal (how a contractor sees their work orders): the Contractor
+Portal is a SEPARATE public page at <nation>.fnhub.app/contractor-portal.html
+(for CLFN, clfn.fnhub.app/contractor-portal.html). A contractor signs in there
+with their MOBILE NUMBER and a texted one-time code (SMS login, no password, no
+email link, no access to the staff app). After signing in they see a read-only
+list of the work orders (maintenance requests) assigned to THEIR company only,
+grouped Active / In process / Closed. The data boundary is enforced by the
+database (row-level security), so a contractor can never see another
+contractor's work orders. B1 shows the assigned-work-order list only; it does
+NOT yet let contractors bid on RFQs, submit quotes, upload invoices, or view
+contract documents (that is future scope - do not tell staff those exist).
+
+Give a contractor portal access (the real steps): there is NO "Portal Access"
+section and NO email invite. Open the contractor on the Contractors page, and
+in the KEY PEOPLE section use the "Invite to portal" button next to "Add
+Person". This authorizes that key contact's phone number to claim a login. Two
+requirements: (1) the phone must already be listed on that contractor's Key
+People, and (2) the contractor_portal module must be ON (Settings > Nation >
+Modules). The invite button only appears when the module is enabled and the
+contractor record is saved. A contractor then sees a work order once a
+maintenance request is assigned to them (Assigned To -> contractor). Phone login
+also requires the nation's Supabase phone auth (Twilio Verify) to be configured.
+If someone asks and the module is off, tell them to enable Contractor Portal in
+Settings > Nation > Modules first.
+
 Issue an RFQ: from a maintenance request (Renovations or the unit panel) create
 an RFQ to invite contractors to bid. Flow: draft -> issued -> awarded; only
 drafts can be edited. Only the Housing Manager or ED can edit an RFQ; everyone
