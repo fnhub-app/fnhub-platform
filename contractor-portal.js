@@ -198,7 +198,7 @@
     try {
       if (nc.primary_color) {
         var root = document.documentElement;
-        root.style.setProperty('--accent', nc.primary_color);
+        root.style.setProperty('--cp-accent', nc.primary_color);
         // Pick readable text on the accent fill: dark text on a light colour,
         // light text on a dark one. CSS owns the two ink values.
         root.setAttribute('data-accent', _isLightColor(nc.primary_color) ? 'light' : 'dark');

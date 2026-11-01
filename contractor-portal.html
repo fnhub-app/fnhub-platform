@@ -6,17 +6,19 @@
   <title>Contractor Portal</title>
   <style>
     :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f4f5f7; --card:#ffffff;
-            --accent:#1f2937; --accent-ink:#ffffff; --ok:#047857; --err:#b91c1c; }
-    /* contractor-portal.js flips this to "light" when the nation's primary
-       colour is light, so text on the accent fill stays readable (matching the
-       staff app's "accent is a fill behind dark text" convention). */
-    :root[data-accent="light"] { --accent-ink:#111111; }
+            --cp-accent:#1f2937; --cp-accent-ink:#ffffff; --ok:#047857; --err:#b91c1c; }
+    /* Portal-scoped accent vars (NOT --accent/--accent-ink): shared.js has its
+       own theme engine that owns those names and would clobber them. These are
+       ours alone. contractor-portal.js flips data-accent to "light" when the
+       nation's primary colour is light, so text on the accent fill stays
+       readable (matching the staff app's "accent is a fill behind dark text"). */
+    :root[data-accent="light"] { --cp-accent-ink:#111111; }
     * { box-sizing:border-box; }
     body { margin:0; background:var(--bg); color:var(--ink);
            font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif; }
     .cp-wrap { max-width:560px; margin:0 auto; padding:24px 16px 48px; }
     .cp-head { display:flex; align-items:center; gap:12px; padding:14px 0 18px;
-               border-bottom:4px solid var(--accent); margin-bottom:22px; }
+               border-bottom:4px solid var(--cp-accent); margin-bottom:22px; }
     .cp-logo { width:40px; height:40px; border-radius:8px; flex:0 0 auto; background:#fff;
                border:1px solid var(--line); display:none; }
     .cp-logo img { width:100%; height:100%; object-fit:contain; border-radius:8px; }
@@ -30,7 +32,7 @@
     input { width:100%; padding:12px 12px; font-size:16px; border:1px solid var(--line);
             border-radius:8px; background:#fff; color:var(--ink); }
     button { width:100%; margin-top:16px; padding:12px 14px; font-size:15px; font-weight:700;
-             border:0; border-radius:8px; background:var(--accent); color:var(--accent-ink); cursor:pointer; }
+             border:0; border-radius:8px; background:var(--cp-accent); color:var(--cp-accent-ink); cursor:pointer; }
     button.cp-ghost { background:transparent; color:var(--ink); border:1px solid var(--line);
                       font-weight:600; }
     .cp-msg { margin-top:14px; font-size:13px; color:var(--muted); min-height:18px; }
