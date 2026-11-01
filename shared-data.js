@@ -2496,13 +2496,44 @@ function _cwoStatusForSow(sow){
   return 'active';
 }
 
+// Health & safety flags set on the SOW, as contractor-facing labels. These are
+// safety-relevant to the crew, so they ARE exposed (unlike the accountability
+// section — negligence/vandalism/police/arrears — which is internal and never
+// included here).
+function _cwoHsFlags(sow){
+  var map = [
+    ['mold','Mold'], ['asbestos','Asbestos'], ['electrical','Electrical hazard'],
+    ['structural','Structural'], ['plumbing','Plumbing'], ['fire','Fire / life-safety']
+  ];
+  var out = [];
+  map.forEach(function(p){ if(sow && sow[p[0]]) out.push(p[1]); });
+  return out;
+}
+
+// Best-effort tenant phone lookup by assigned name (mirrors the email resolver
+// pattern). select=* so a slim/variant tenants schema never errors; reads the
+// first phone-ish field. Fire-and-forget safe: always resolves to a string.
+function _cwoTenantPhone(name){
+  name = String(name == null ? '' : name).trim();
+  if(!name || typeof SUPABASE_URL === 'undefined' || typeof HOUSING_HEADERS === 'undefined') return Promise.resolve('');
+  try {
+    return fetch(SUPABASE_URL + '/rest/v1/tenants?full_name=eq.' + encodeURIComponent(name) + '&select=*&limit=1', { headers: HOUSING_HEADERS })
+      .then(function(r){ return r.ok ? r.json() : []; })
+      .then(function(rows){ var t = (rows && rows[0]) || {}; return String(t.phone || t.mobile || t.cell || t.phone_number || '').trim(); })
+      .catch(function(){ return ''; });
+  } catch(e){ return Promise.resolve(''); }
+}
+window._cwoTenantPhone = _cwoTenantPhone;
+
 // Detail payload a contractor sees when they open a work order in the portal.
 // Shared by sbSyncContractorWorkOrder (writes it to the RLS-scoped projection
 // row's `data` jsonb) AND the staff-side portal preview (renders the same
 // fields) — so the preview matches what the contractor sees by construction.
-// Only contractor-appropriate fields: scope descriptions (no internal cost
-// estimates), target dates, condition, a housing contact, and the work order's
-// attached files (name + storage path; download is wired in Phase 2).
+// Contractor-appropriate fields only: tenant name/phone (to coordinate access),
+// scope descriptions (no internal cost estimates), condition, health & safety
+// flags, target dates, a housing contact, and the work order's attached files.
+// Deliberately EXCLUDES internal data: cost/estimates, fund source, PO/budget,
+// the approval chain, and the accountability section.
 function _cwoDetailFromSow(sow, unit){
   if(!sow) return {};
   var items = (Array.isArray(sow.items) ? sow.items : [])
@@ -2513,10 +2544,13 @@ function _cwoDetailFromSow(sow, unit){
     .map(function(f){ return { name: f.name || 'Document', path: f.path }; });
   var nc = window.NATION_CONFIG || {};
   return {
+    tenantName:       sow.tenantName || (unit && unit.assignedName) || '',
+    tenantPhone:      '',   // resolved async by the sync (and lazily in the preview)
     scopeItems:       items,
     targetStart:      sow.startDate || '',
     targetCompletion: sow.endDate || '',
     condition:        sow.condition || '',
+    hsFlags:          _cwoHsFlags(sow),
     contactName:      sow.preparedBy || '',
     contactPhone:     nc.phone || nc.contact_phone || '',
     documents:        docs
@@ -2543,24 +2577,34 @@ function sbSyncContractorWorkOrder(sow, unit){
       }).then(function(){ return true; }).catch(function(e){ console.warn('[portal] cwo delete failed:', e); return false; });
     }
     var addr = sow.address || (unit && ((unit.num||'') + ' ' + (unit.street||'')).trim()) || unitId;
-    var row = {
-      contractor_id: String(sow.contractorId),
-      sow_unit_id: String(unitId),
-      sow_project_number: String(pn),
-      address: addr,
-      status: _cwoStatusForSow(sow),
-      // Detail payload for the portal's work-order detail view (Phase 1).
-      // Rides the row's RLS scope — no new data-exposure surface.
-      data: _cwoDetailFromSow(sow, unit),
-      updated_at: new Date().toISOString()
+    // Detail payload for the portal's work-order detail view. Rides the row's
+    // RLS scope — no new data-exposure surface.
+    var data = _cwoDetailFromSow(sow, unit);
+    var doUpsert = function(){
+      var row = {
+        contractor_id: String(sow.contractorId),
+        sow_unit_id: String(unitId),
+        sow_project_number: String(pn),
+        address: addr,
+        status: _cwoStatusForSow(sow),
+        data: data,
+        updated_at: new Date().toISOString()
+      };
+      // Upsert on the (sow_unit_id, sow_project_number) unique key.
+      return fetch(SUPABASE_URL + '/rest/v1/contractor_work_orders?on_conflict=sow_unit_id,sow_project_number', {
+        method: 'POST',
+        headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+        body: JSON.stringify(row)
+      }).then(function(r){ if(!r.ok) console.warn('[portal] cwo upsert HTTP ' + r.status); return !!r.ok; })
+        .catch(function(e){ console.warn('[portal] cwo upsert failed:', e); return false; });
     };
-    // Upsert on the (sow_unit_id, sow_project_number) unique key.
-    return fetch(SUPABASE_URL + '/rest/v1/contractor_work_orders?on_conflict=sow_unit_id,sow_project_number', {
-      method: 'POST',
-      headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
-      body: JSON.stringify(row)
-    }).then(function(r){ if(!r.ok) console.warn('[portal] cwo upsert HTTP ' + r.status); return !!r.ok; })
-      .catch(function(e){ console.warn('[portal] cwo upsert failed:', e); return false; });
+    // Best-effort tenant phone lookup, then upsert. Never blocks or throws into
+    // the SOW save path (the phone just stays blank on failure).
+    if(data.tenantName && !data.tenantPhone){
+      return _cwoTenantPhone(data.tenantName).then(function(ph){ data.tenantPhone = ph || ''; return doUpsert(); })
+        .catch(function(){ return doUpsert(); });
+    }
+    return doUpsert();
   } catch(e){ console.warn('[portal] sbSyncContractorWorkOrder threw:', e); return Promise.resolve(false); }
 }
 window.sbSyncContractorWorkOrder = sbSyncContractorWorkOrder;
@@ -2767,18 +2811,43 @@ function _ctPortalPreviewOpen(i){
           }).join('')
           + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">In the live portal the contractor downloads these; here they open with your staff access.</div>'
         : '<div style="color:var(--muted);font-size:13px;">No documents shared.</div>');
+  var hs = Array.isArray(d.hsFlags) ? d.hsFlags : [];
+  var hsHtml = hs.length
+    ? '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:14px 0 8px;">Health &amp; safety</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px;">'
+      + hs.map(function(f){ return '<span style="display:inline-block;padding:3px 9px;border-radius:999px;background:var(--bg);border:1px solid var(--danger);color:var(--danger);font-size:11px;font-weight:700;">⚠ ' + esc(f) + '</span>'; }).join('')
+      + '</div>'
+    : '';
+  var tenantBlock = '';
+  if(d.tenantName){
+    tenantBlock = field('Tenant', d.tenantName)
+      + '<div style="margin-bottom:10px;"><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Tenant phone</div>'
+      + '<div id="_cpvTenPhone" style="color:var(--text);font-size:14px;">' + (d.tenantPhone ? esc(d.tenantPhone) : '<span style="color:var(--muted);">—</span>') + '</div></div>';
+  }
   _ctPortalPreviewShell(
     '<button type="button" onclick="_ctPortalPreviewRenderList()" class="btn btn-ghost btn-sm" style="margin-bottom:12px;">← Back to work orders</button>'
     + '<div style="font-size:18px;font-weight:700;color:var(--text);">' + esc(r.address) + '</div>'
     + '<div style="color:var(--muted);font-size:12px;margin-bottom:12px;">#' + esc(r.project_number) + ' · ' + esc(statusLabel) + '</div>'
+    + tenantBlock
     + field('Target start', d.targetStart)
     + field('Target completion', d.targetCompletion)
     + field('Condition', d.condition)
+    + hsHtml
     + field('Housing contact', d.contactName)
     + field('Contact phone', d.contactPhone)
     + scopeHtml
     + docsHtml
   );
+  // Fill the tenant phone lazily (same source the sync uses), so the preview
+  // matches the live portal even for a row not yet re-synced.
+  if(d.tenantName && !d.tenantPhone && typeof _cwoTenantPhone === 'function'){
+    _cwoTenantPhone(d.tenantName).then(function(ph){
+      if(!ph) return;
+      d.tenantPhone = ph;
+      var pe = document.getElementById('_cpvTenPhone');
+      if(pe) pe.textContent = ph;
+    });
+  }
 }
 window._ctPortalPreviewOpen = _ctPortalPreviewOpen;
 
