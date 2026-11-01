@@ -27,7 +27,8 @@ const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
 const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const STORAGE_BUCKET       = Deno.env.get("STORAGE_BUCKET") || "housing-files";
 const MAX_B64_LEN          = 14000000;              // ~10 MB raw
-const ALLOWED_KINDS        = ["photo", "invoice"];
+const MAX_NOTE_LEN         = 4000;
+const ALLOWED_KINDS        = ["photo", "invoice", "note"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -79,15 +80,21 @@ serve(async (req: Request) => {
   const contentType   = String(body.contentType ?? "").trim().toLowerCase();
   let   dataBase64     = String(body.dataBase64 ?? "");
   const amount        = Number(String(body.amount ?? "").replace(/[^0-9.\-]/g, "")) || 0;
+  const noteText      = String(body.text ?? "").trim();
 
   if (!unitId || !projectNumber) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
   if (ALLOWED_KINDS.indexOf(kind) === -1) return jsonResponse({ error: "Invalid kind" }, 400);
-  if (!isAllowedType(contentType)) return jsonResponse({ error: "Only images and PDFs are allowed" }, 415);
-  // Strip a data: URI prefix if the client left one on.
-  const comma = dataBase64.indexOf(",");
-  if (dataBase64.slice(0, 5) === "data:" && comma !== -1) dataBase64 = dataBase64.slice(comma + 1);
-  if (!dataBase64) return jsonResponse({ error: "Empty file" }, 400);
-  if (dataBase64.length > MAX_B64_LEN) return jsonResponse({ error: "File too large (max ~10 MB)" }, 413);
+  if (kind === "note") {
+    if (!noteText) return jsonResponse({ error: "Empty note" }, 400);
+    if (noteText.length > MAX_NOTE_LEN) return jsonResponse({ error: "Note too long" }, 413);
+  } else {
+    if (!isAllowedType(contentType)) return jsonResponse({ error: "Only images and PDFs are allowed" }, 415);
+    // Strip a data: URI prefix if the client left one on.
+    const comma = dataBase64.indexOf(",");
+    if (dataBase64.slice(0, 5) === "data:" && comma !== -1) dataBase64 = dataBase64.slice(comma + 1);
+    if (!dataBase64) return jsonResponse({ error: "Empty file" }, 400);
+    if (dataBase64.length > MAX_B64_LEN) return jsonResponse({ error: "File too large (max ~10 MB)" }, 413);
+  }
 
   const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
 
@@ -104,13 +111,76 @@ serve(async (req: Request) => {
   // 2) Confirm the work order is THEIRS.
   const { data: woRows } = await admin
     .from("contractor_work_orders")
-    .select("contractor_id")
+    .select("contractor_id, address")
     .eq("sow_unit_id", unitId)
     .eq("sow_project_number", projectNumber)
     .limit(1);
   const wo = woRows && (woRows[0] as Record<string, unknown> | undefined);
   if (!wo || String(wo.contractor_id) !== contractorId) {
     return jsonResponse({ error: "Not your work order" }, 403);
+  }
+  const woAddress = (wo.address == null) ? "" : String(wo.address);
+  const createdBy = user.phone || contractorId;
+
+  // Insert a staff review-queue row (service role). Every submission surfaces on
+  // the landing-page worklist: invoices as 'pending' (need approval), photos and
+  // notes as 'new' (flagged to read). Returns true on success. For a photo/note
+  // the file/audit row written alongside is authoritative, so a failure here is
+  // non-fatal; for an INVOICE this row IS the approval workflow (nothing enters
+  // the payment schedule without it), so the caller treats a failure as fatal.
+  async function recordSubmission(fields: Record<string, unknown>): Promise<boolean> {
+    try {
+      const { error } = await admin.from("contractor_submissions").insert(Object.assign({
+        contractor_id:      contractorId,
+        unit_id:            unitId,
+        sow_project_number: projectNumber,
+        address:            woAddress,
+        created_by:         createdBy,
+        created_at:         new Date().toISOString(),
+      }, fields));
+      return !error;
+    } catch (_e) { return false; }
+  }
+
+  // Note: no file. Record an append-only contractor_note audit row against the
+  // unit (authoritative; shows in the master Audit Log), and best-effort append
+  // it to the SOW's data.contractorNotes[] so it rides the work order too.
+  if (kind === "note") {
+    const nowIso = new Date().toISOString();
+    try {
+      await admin.from("housing_audit_log").insert({
+        entity_type: "tenant",
+        entity_id:   unitId,
+        action:      "contractor_note",
+        detail:      JSON.stringify({
+          text: noteText, project_number: projectNumber, source: "contractor_portal",
+          actor_name: user.phone || contractorId,
+        }),
+        actor:       user.phone || user.id,
+        created_at:  nowIso,
+      });
+    } catch (_e) {
+      return jsonResponse({ error: "Could not save the note" }, 500);
+    }
+    try {
+      const { data: sowRows } = await admin.from("housing_sow").select("data").eq("unit_id", unitId).limit(1);
+      const sowRow = sowRows && (sowRows[0] as Record<string, unknown> | undefined);
+      const data = sowRow && (sowRow.data as Record<string, unknown> | undefined);
+      const sows = data && Array.isArray(data.sows) ? data.sows as Array<Record<string, unknown>> : null;
+      if (sows) {
+        const sow = sows.find((s) => s && String(s.project_number) === projectNumber);
+        if (sow) {
+          if (!Array.isArray(sow.contractorNotes)) sow.contractorNotes = [];
+          (sow.contractorNotes as Array<Record<string, unknown>>).push({
+            text: noteText, at: nowIso, by: user.phone || contractorId,
+          });
+          await admin.from("housing_sow").update({ data: data, updated_at: nowIso }).eq("unit_id", unitId);
+        }
+      }
+    } catch (_e) { /* best-effort; the audit row above is the authoritative record */ }
+    // Flag it on the staff worklist (no approval needed for notes).
+    await recordSubmission({ kind: "note", status: "new", text: noteText });
+    return jsonResponse({ ok: true, kind: "note" });
   }
 
   // 3) Decode (size already bounded above).
@@ -161,41 +231,23 @@ serve(async (req: Request) => {
     });
   } catch (_e) { /* non-fatal: the file is stored regardless */ }
 
-  // 6) Invoice -> payment draw (best-effort). Append a draw to the SOW's
-  //    housing_sow.data so the invoice flows onto the Payments tab for staff,
-  //    with the file attached and marked contractor-submitted + unpaid. This is
-  //    a convenience layered on top of the authoritative file + audit row above
-  //    -- if the read-modify-write races a staff SOW save it is simply skipped
-  //    (the invoice is never lost; staff can add it to a draw manually).
-  if (kind === "invoice") {
-    try {
-      const { data: sowRows } = await admin
-        .from("housing_sow").select("data").eq("unit_id", unitId).limit(1);
-      const sowRow = sowRows && (sowRows[0] as Record<string, unknown> | undefined);
-      const data = sowRow && (sowRow.data as Record<string, unknown> | undefined);
-      const sows = data && Array.isArray(data.sows) ? data.sows as Array<Record<string, unknown>> : null;
-      if (sows) {
-        const sow = sows.find((s) => s && String(s.project_number) === projectNumber);
-        if (sow) {
-          if (!Array.isArray(sow.draws)) sow.draws = [];
-          (sow.draws as Array<Record<string, unknown>>).push({
-            id: "cwi_" + Date.now(),
-            type: "material",
-            label: "Contractor invoice" + (filename ? " - " + filename : ""),
-            amount: amount,
-            paid: false,
-            paidDate: "",
-            invoice: { path: path, name: filename },
-            submittedBy: "contractor",
-            submittedByName: user.phone || contractorId,
-            submittedAt: new Date().toISOString(),
-          });
-          await admin.from("housing_sow")
-            .update({ data: data, updated_at: new Date().toISOString() })
-            .eq("unit_id", unitId);
-        }
-      }
-    } catch (_e) { /* best-effort; invoice file + audit row already persisted */ }
+  // 6) Flag it on the staff worklist. An INVOICE is 'pending' -- staff approve
+  //    it on the landing page, which is what creates the payment draw on the SOW
+  //    (NOT auto-created here anymore, so nothing enters the payment schedule
+  //    without review). A PHOTO is 'new' -- already filed to Documents above, but
+  //    flagged so staff know to look.
+  const recorded = await recordSubmission({
+    kind:      kind,
+    status:    (kind === "invoice") ? "pending" : "new",
+    amount:    (kind === "invoice") ? amount : null,
+    file_path: path,
+    file_name: filename,
+    file_type: contentType,
+  });
+  // For an invoice, the review-queue row is the workflow: if it did not record,
+  // tell the contractor so they retry rather than believing it was submitted.
+  if (kind === "invoice" && !recorded) {
+    return jsonResponse({ error: "The invoice was received but could not be queued for review. Please try again." }, 500);
   }
 
   return jsonResponse({ ok: true, name: displayName });
