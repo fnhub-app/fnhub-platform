@@ -297,7 +297,12 @@ function openInspectionModal(id) {
     + '<div class="modal-hdr">'
     +   '<div><div class="lbl-yellow">🔍 ' + (insp ? 'Edit Inspection' : 'New Inspection') + '</div>'
     +   '<div class="txt-sm-meta">' + (src ? _esc(src.unit_address||src.unit_id||'') + (src.type ? ' · ' + _esc(src.type) : '') : 'Complete the checklist and save.') + '</div></div>'
-    +   '<button type="button" onclick="closeInspectionModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);">&times;</button>'
+    // Document-generation action (PDF) sits top-right per convention; other
+    // actions (Delete / Approve / Save) live in the footer.
+    +   '<div style="display:flex;gap:8px;align-items:center;">'
+    +     (insp ? '<button type="button" class="btn btn-ghost" onclick="generateInspectionPDF()">⬇ PDF</button>' : '')
+    +     '<button type="button" onclick="closeInspectionModal()" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);">&times;</button>'
+    +   '</div>'
     + '</div>'
     + '<div style="overflow-y:auto;padding:18px 22px;flex:1;">'
 
@@ -334,7 +339,6 @@ function openInspectionModal(id) {
     + '<div class="modal-footer" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 22px;border-top:1px solid var(--border);">'
     +   '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
     +     (insp ? '<button type="button" class="btn btn-ghost" onclick="_inspConfirmDelete()">Delete</button>' : '')
-    +     (insp ? '<button type="button" class="btn btn-ghost" onclick="generateInspectionPDF()">⬇ PDF</button>' : '')
     +     (aiNotesOn ? '<button type="button" id="insp_ai_notes_btn" class="btn btn-ghost" onclick="_inspDraftNotes()"><span style="color:var(--yellow);">✦</span> Draft Notes with AI</button>' : '')
     +     (canApproveInsp && !inspApprovedBy && inspApprovalRequired ? '<button type="button" class="btn" style="background:var(--success);color:#fff;border:1px solid var(--success);" onclick="saveInspection(\'approve\')">✓ Approve Report</button>' : '')
     +     (canApproveInsp && inspApprovedBy ? '<button type="button" class="btn btn-ghost" onclick="saveInspection(\'revoke\')">Revoke Approval</button>' : '')

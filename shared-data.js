@@ -5319,8 +5319,8 @@ function openAddContractorModal(editIdx){
       if (cas) cas.style.display = '';
       if(typeof _ctSetCicStatusBanner === 'function') _ctSetCicStatusBanner(ct);
       if(typeof _ctRenderActions === 'function')      _ctRenderActions(ct, 'cic');
-      // Reveal footer Print (always) and Email (only when contractor has an
-      // email on file) — the footer is the canonical action surface now.
+      // Reveal the hero Print (always) and Email (only when contractor has an
+      // email on file) — the top-right doc-generation surface.
       var hp=document.getElementById('ct_print_btn'); if(hp){ hp.classList.remove('hidden'); hp.style.display=''; }
       var he=document.getElementById('ct_email_btn'); if(he && ct.email){ he.classList.remove('hidden'); he.style.display=''; }
     }
@@ -8182,8 +8182,8 @@ function saveContractorAndFinalize() {
   // at the last contractor in the directory, so the next Save overwrote that
   // unrelated record.
   if (saveContractor() === false) return;
-  // After save, grab the record back and reveal the footer Print + Email
-  // buttons. The CIC footer is the single action surface now.
+  // After save, grab the record back and reveal the hero Print + Email
+  // buttons (top-right doc-generation surface).
   try {
     var contractors = (window._contractors || []).slice();
     if(contractors.length) {
@@ -8689,8 +8689,13 @@ function _buildAddContractorModalHTML() {
             '<h2 id="ct_modal_title" class="tic-name">New Contractor</h2>',
           '</div>',
           '<div class="flex-gap8 flex-wrap">',
-            // All action buttons (Print / Email / Invite / approval pills /
-            // Save) now live in the footer — the hero keeps only the close.
+            // Document-generation actions (Print / Email the agreement) sit
+            // top-right per convention; they stay hidden until a saved
+            // contractor exists (revealed by the open/save logic by id). The
+            // other actions (Invite / Add Person / approval pills / Save) live
+            // in the footer.
+            '<button type="button" id="ct_print_btn" class="btn btn-ghost hidden" onclick="printContractorAgreement()">🖨 Print / Save PDF</button>',
+            '<button type="button" id="ct_email_btn" class="btn btn-ghost hidden" onclick="emailContractorAgreement()">✉ Email to Contractor</button>',
             '<button type="button" onclick="closeAddContractorModal()" class="tic-close-btn" aria-label="Close">✕</button>',
           '</div>',
         '</div>',
@@ -8947,17 +8952,15 @@ function _buildAddContractorModalHTML() {
         '</div>',
 
         // ── Footer (mirrors the TIC / Edit Unit / SOW footer) ───────────
-        // Single home for every action button: Print / Email / Invite to
-        // portal / Add Person are ghost actions, Cancel is ghost, and the one
-        // primary is Save/Submit. Print/Email/Invite start hidden and are
-        // revealed by the open-logic once a saved contractor exists.
+        // Workflow actions: Add Person / Invite to portal are ghost actions,
+        // Cancel is ghost, and the one primary is Save/Submit. (Document-
+        // generation — Print / Email — sits top-right in the hero.) Invite
+        // starts hidden and is revealed by the open-logic once saved.
         '<div class="tic-footer">',
           '<div id="cic_review_progress" class="txt-muted-sm cic-review-progress"></div>',
           '<span class="tic-footer-spacer"></span>',
           '<button type="button" onclick="ctAddPerson()" class="btn btn-ghost">+ Add Person</button>',
           '<button type="button" id="ct_portal_invite_btn" onclick="inviteContractorToPortal()" class="btn btn-ghost" style="display:none;" title="Authorize this contractor\'s key contacts to sign in to the Contractor Portal">📱 Invite to portal</button>',
-          '<button type="button" id="ct_print_btn" class="btn btn-ghost hidden" onclick="printContractorAgreement()">🖨 Print / Save PDF</button>',
-          '<button type="button" id="ct_email_btn" class="btn btn-ghost hidden" onclick="emailContractorAgreement()">✉ Email to Contractor</button>',
           '<button type="button" onclick="closeAddContractorModal()" class="btn btn-ghost">Cancel</button>',
           '<button type="button" id="ct_save_btn" onclick="saveContractorAndFinalize()" class="btn btn-primary" data-mode="draft">💾 Save Draft</button>',
         '</div>',

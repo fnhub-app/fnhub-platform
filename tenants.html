@@ -584,7 +584,14 @@
         <div id="tic_hero_sub" class="tic-hero-sub"></div>
         <div id="tic_hero_badges" class="tic-hero-badges"></div>
       </div>
-      <button id="tic_close_btn" type="button" class="tic-close-btn" aria-label="Close">✕</button>
+      <!-- Document-generation actions live top-right of the card. Generate Forms
+           (occupancy agreements / notices / consents) is rendered into the mount
+           by _ticSyncFooter (needs a linked unit); Generate Letter sits beside it. -->
+      <div class="flex-gap8 flex-wrap tic-hero-actions">
+        <span id="tic_forms_mount"></span>
+        <button id="tic_act_letter" type="button" class="btn btn-ghost">Generate Letter</button>
+        <button id="tic_close_btn" type="button" class="tic-close-btn" aria-label="Close">✕</button>
+      </div>
     </div>
 
     <!-- Info strip -->
@@ -632,7 +639,6 @@
       <button id="tic_act_view_unit" type="button" class="btn btn-ghost" style="display:none;">View Unit</button>
       <button id="tic_act_new_wo"    type="button" class="btn btn-ghost">New Work Order</button>
       <button id="tic_act_ledger"    type="button" class="btn btn-ghost">Rent Ledger</button>
-      <button id="tic_act_letter"    type="button" class="btn btn-ghost">Generate Letter</button>
       <button id="tic_act_invite"    type="button" class="btn btn-ghost">&#9993;&#65039; Invite to Portal</button>
       <button id="tic_act_delete_app" type="button" class="btn btn-ghost" style="display:none;color:var(--danger);border-color:var(--danger);">&#128465; Delete Application</button>
       <span class="tic-footer-spacer"></span>
