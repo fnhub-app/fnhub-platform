@@ -78,6 +78,7 @@ serve(async (req: Request) => {
   const filename      = safeName(body.filename);
   const contentType   = String(body.contentType ?? "").trim().toLowerCase();
   let   dataBase64     = String(body.dataBase64 ?? "");
+  const amount        = Number(String(body.amount ?? "").replace(/[^0-9.\-]/g, "")) || 0;
 
   if (!unitId || !projectNumber) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
   if (ALLOWED_KINDS.indexOf(kind) === -1) return jsonResponse({ error: "Invalid kind" }, 400);
@@ -159,6 +160,43 @@ serve(async (req: Request) => {
       created_at:  new Date().toISOString(),
     });
   } catch (_e) { /* non-fatal: the file is stored regardless */ }
+
+  // 6) Invoice -> payment draw (best-effort). Append a draw to the SOW's
+  //    housing_sow.data so the invoice flows onto the Payments tab for staff,
+  //    with the file attached and marked contractor-submitted + unpaid. This is
+  //    a convenience layered on top of the authoritative file + audit row above
+  //    -- if the read-modify-write races a staff SOW save it is simply skipped
+  //    (the invoice is never lost; staff can add it to a draw manually).
+  if (kind === "invoice") {
+    try {
+      const { data: sowRows } = await admin
+        .from("housing_sow").select("data").eq("unit_id", unitId).limit(1);
+      const sowRow = sowRows && (sowRows[0] as Record<string, unknown> | undefined);
+      const data = sowRow && (sowRow.data as Record<string, unknown> | undefined);
+      const sows = data && Array.isArray(data.sows) ? data.sows as Array<Record<string, unknown>> : null;
+      if (sows) {
+        const sow = sows.find((s) => s && String(s.project_number) === projectNumber);
+        if (sow) {
+          if (!Array.isArray(sow.draws)) sow.draws = [];
+          (sow.draws as Array<Record<string, unknown>>).push({
+            id: "cwi_" + Date.now(),
+            type: "material",
+            label: "Contractor invoice" + (filename ? " - " + filename : ""),
+            amount: amount,
+            paid: false,
+            paidDate: "",
+            invoice: { path: path, name: filename },
+            submittedBy: "contractor",
+            submittedByName: user.phone || contractorId,
+            submittedAt: new Date().toISOString(),
+          });
+          await admin.from("housing_sow")
+            .update({ data: data, updated_at: new Date().toISOString() })
+            .eq("unit_id", unitId);
+        }
+      }
+    } catch (_e) { /* best-effort; invoice file + audit row already persisted */ }
+  }
 
   return jsonResponse({ ok: true, name: displayName });
 });
