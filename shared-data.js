@@ -8096,7 +8096,8 @@ function renderWorklist() {
   // flagged here so staff know to read them (View / Mark read).
   var ctSubItems = isManagement ? (window._contractorSubmissions || []) : [];
   if (ctSubItems.length) {
-    var _csKindLbl = { invoice:'Invoice', photo:'Photo', note:'Note' };
+    var _csKindLbl = { invoice:'Invoice', photo:'Photo', note:'Note', wsib:'WSIB proof', insurance:'Insurance proof' };
+    var _csKindIcon = { invoice:'🧾', note:'📝', photo:'📷', wsib:'🛡️', insurance:'🛡️' };
     var csRows = '', csCards = '';
     // Pending invoices first (they need a decision), then flagged photos/notes.
     ctSubItems.slice().sort(function(a,b){
@@ -8127,7 +8128,7 @@ function renderWorklist() {
         var bd = b.primary ? 'none' : '1px solid var(--border)';
         return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
       }
-      var info = '<span style="font-size:14px;flex-shrink:0;">' + (isInvoice?'🧾':(s.kind==='note'?'📝':'📷')) + '</span>'
+      var info = '<span style="font-size:14px;flex-shrink:0;">' + (_csKindIcon[s.kind] || '📷') + '</span>'
                + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who) + '</span>'
                + '<span style="font-size:11px;color:var(--muted);width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(kindLbl + (subtitle ? ' · ' + subtitle : '')) + '</span>'
                + '<span style="font-size:10px;font-weight:800;color:' + pillColor + ';width:66px;flex-shrink:0;">' + pillTxt + '</span>';
