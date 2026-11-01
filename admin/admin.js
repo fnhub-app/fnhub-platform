@@ -813,27 +813,19 @@
     renderNationBilling(n.subdomain);
     renderSupportKey(n.subdomain);
     loadNicSummary(n.subdomain);
-    renderNationModuleEnablement(n.subdomain, n.supabase_url, n.modules_licensed);
+    renderNationModuleEnablement(n.subdomain, n.id, n.supabase_url, n.modules_licensed);
     if (typeof window.renderNationSeller === 'function') window.renderNationSeller(n);   // Overview -> Sold by (reseller.js)
   };
 
   function configureView(n){
     var g2 = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
     var mods = n.modules_licensed || {};
-    // Combined Modules table rows: one row per optional module with a Licensed
-    // checkbox (class cn-mod, saved with Save changes) and an Enabled cell that
-    // renderNationModuleEnablement() fills asynchronously. The Licensed box
-    // renders synchronously (never depends on the async enabled-state fetch), so
-    // a failed fetch can never blank the cn-mod inputs and let a Save wipe
-    // licensing. Absent key = licensed by default (mirrors the nation app merge).
-    var modTableRows = MODULES.map(function(m){
-      var lic = (m[0] in mods) ? !!mods[m[0]] : true;
-      return '<tr class="row-divider">'
-        + '<td style="padding:8px 12px;font-weight:600;font-size:13px;">' + esc(m[1]) + '</td>'
-        + '<td class="pad-12" style="text-align:center;"><input type="checkbox" class="cn-mod" value="' + m[0] + '" style="width:auto;"' + (lic ? ' checked' : '') + '/></td>'
-        + '<td class="pad-12" id="cn-enb-cell-' + m[0] + '" style="text-align:center;color:var(--muted);font-size:12px;">&hellip;</td>'
-        + '</tr>';
-    }).join('');
+    // Modules are managed by a single ON/OFF toggle per module (see
+    // renderNationModuleEnablement, filled asynchronously): ON licenses AND
+    // enables; OFF disables but keeps the module licensed. Licensing therefore
+    // moves to that live toggle, so saveNationConfig no longer writes
+    // modules_licensed. The toggles render async; a failed fetch just shows an
+    // error and no toggles, so nothing can be written by accident.
     var stOpt = function(v,l){ return '<option value="' + v + '"' + (String(n.status||'provisioning') === v ? ' selected' : '') + '>' + l + '</option>'; };
     var tab = function(k, l, active){ return '<button class="nic-tab' + (active ? ' active' : '') + '" type="button" data-act="nic-tab" data-tab="' + k + '">' + l + '</button>'; };
     var panel = function(k, html, active){ return '<div class="nic-panel' + (active ? ' active' : '') + '" data-panel="' + k + '">' + html + '</div>'; };
@@ -871,15 +863,8 @@
       +   '<input id="cn-logo" type="hidden" value="' + esc(n.logo || '') + '"/>'
       + '</div>'
       + '<div class="card"><h3>Modules</h3>'
-      +   '<p class="sub" style="margin:2px 0 10px;"><b>Licensed</b> = this nation is allowed to use the module (saved with <b>Save changes</b> below). <b>Enabled</b> = the module is turned on in the nation app right now (saved immediately when you flip it; the in-app Modules list is read-only). A module must be licensed to be enabled; enabling takes effect on the nation\'s next page load.</p>'
-      +   '<div class="overflow-x"><table class="std-tbl">'
-      +     '<thead><tr style="background:var(--bg);border-bottom:2px solid var(--border);">'
-      +       '<th style="text-align:left;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);">Module</th>'
-      +       '<th style="text-align:center;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);width:90px;">Licensed</th>'
-      +       '<th style="text-align:center;padding:8px 12px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--muted);width:90px;">Enabled</th>'
-      +     '</tr></thead>'
-      +     '<tbody>' + modTableRows + '</tbody>'
-      +   '</table></div>'
+      +   '<p class="sub" style="margin:2px 0 10px;">Turn optional modules <b>on or off</b> for this nation. Turning one <b>on</b> licenses it (allows it) and enables it; turning it <b>off</b> switches it off but keeps it licensed. Saved immediately &mdash; changes take effect on the nation\'s next page load.</p>'
+      +   '<div id="cn-modules-body"><div class="empty">Loading modules&hellip;</div></div>'
       +   '<div class="msg" id="cn-mod-enable-msg"></div>'
       + '</div>'
       + '<div class="card"><h3>Status</h3>'
@@ -1122,8 +1107,11 @@
     var get = function(x){ return (document.getElementById(x) || {}).value || ''; };
     var name = get('cn-name').trim(), short = get('cn-short').trim();
     if (!name || !short){ setMsg('cn-msg','Display name and short code are required.'); return; }
-    var mods = {};
-    Array.prototype.forEach.call(document.querySelectorAll('.cn-mod'), function(c){ mods[c.value] = c.checked; });
+    // NOTE: modules_licensed is intentionally NOT written here. Licensing is now
+    // managed live by the per-module ON/OFF toggle (toggleNationModule), which
+    // PATCHes modules_licensed itself. Omitting it from this patch leaves the
+    // stored value untouched -- writing it from a now-empty checkbox set would
+    // wipe every nation's licensing.
     // Email delivery config -> nations.email jsonb (published via
     // nations_public). Saved null when untouched (graph default + all blank)
     // so nations that never configured email keep a clean row.
@@ -1144,7 +1132,6 @@
       supabase_anon: get('cn-anon').trim() || null,
       credentials_note: get('cn-cred').trim() || null,
       email: emailCfg,
-      modules_licensed: mods,
       status: get('cn-status') || 'provisioning',
       updated_at: new Date().toISOString()
     };
@@ -2244,20 +2231,19 @@
     } catch (e){ setMsg('cn-sms-msg', 'Network error: ' + String(e).slice(0, 120)); }
   };
 
-  // Fill the Enabled column of the combined Modules table: read the nation's
-  // current module_enablement via set-nation-module and put an on/off toggle in
-  // each row's cn-enb-cell-<key>. A module not licensed renders a disabled
-  // toggle. The Licensed checkboxes are already in the table (rendered
-  // synchronously), so this only touches the Enabled cells.
-  window.renderNationModuleEnablement = async function(sub, supabaseUrl, licensed){
-    licensed = licensed || {};
-    var fillAll = function(html){
-      MODULES.forEach(function(m){ var c = document.getElementById('cn-enb-cell-' + m[0]); if(c) c.innerHTML = html; });
-    };
-    if(!document.getElementById('cn-enb-cell-' + (MODULES[0] && MODULES[0][0]))) return; // table not on this view
+  // Render the single ON/OFF toggle per optional module. ON = the module is
+  // licensed AND enabled for this nation; OFF = disabled (licensing is kept).
+  // Loaded async: reads enabled state via set-nation-module; a module is ON when
+  // it is both licensed (modules_licensed, absent = default licensed) and enabled
+  // (saved value, else code default). _cnLicensedState mirrors the registry's
+  // modules_licensed so the toggle can relicense live without a full form save.
+  var _cnLicensedState = {};
+  window.renderNationModuleEnablement = async function(sub, nationId, supabaseUrl, licensed){
+    var body = document.getElementById('cn-modules-body');
+    if(!body) return;
+    _cnLicensedState = Object.assign({}, licensed || {});
     if(!supabaseUrl){
-      fillAll('<span style="color:var(--muted);">n/a</span>');
-      setMsg('cn-mod-enable-msg', 'This nation has no Supabase project yet, so modules cannot be enabled. Provision it first.');
+      body.innerHTML = '<div class="empty">This nation has no Supabase project yet, so modules cannot be turned on. Provision it first.</div>';
       return;
     }
     var enabled = {};
@@ -2268,40 +2254,51 @@
         body: JSON.stringify({ subdomain: sub, action: 'get' })
       });
       var d = await r.json().catch(function(){ return {}; });
-      if(!r.ok){ fillAll('<span style="color:var(--danger);">?</span>'); setMsg('cn-mod-enable-msg', 'Could not load enabled state: ' + esc(d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + esc(String(d.detail).slice(0,160)) : '')); return; }
+      if(!r.ok){ body.innerHTML = '<div class="empty">Could not load module state: ' + esc(d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + esc(String(d.detail).slice(0,160)) : '') + '</div>'; return; }
       enabled = (d && d.enabled) || {};
-    } catch(e){ fillAll('<span style="color:var(--danger);">?</span>'); setMsg('cn-mod-enable-msg', 'Network error loading enabled state.'); return; }
-    MODULES.forEach(function(m){
+    } catch(e){ body.innerHTML = '<div class="empty">Network error loading module state.</div>'; return; }
+    var html = MODULES.map(function(m){
       var key = m[0];
-      var cell = document.getElementById('cn-enb-cell-' + key);
-      if(!cell) return;
-      var isLicensed = (key in licensed) ? !!licensed[key] : true;
-      // Effective enabled state: saved value if present, else the code default.
-      var isOn = (key in enabled) ? !!enabled[key] : (MODULE_DEFAULT_ENABLED[key] !== false);
-      cell.innerHTML = '<input type="checkbox" class="cn-mod-enable" data-module="' + esc(key) + '"' + (isOn ? ' checked' : '') + (isLicensed ? '' : ' disabled title="Not licensed"') + ' style="width:auto;"/>';
-      var cb = cell.querySelector('.cn-mod-enable');
-      if(cb) cb.addEventListener('change', function(){ window.setNationModuleEnabled(sub, key, cb.checked, cb); });
+      var isLicensed = (key in _cnLicensedState) ? !!_cnLicensedState[key] : true;
+      var isEnabled  = (key in enabled) ? !!enabled[key] : (MODULE_DEFAULT_ENABLED[key] !== false);
+      var isOn = isLicensed && isEnabled;
+      return '<label style="display:inline-flex;align-items:center;gap:8px;font-weight:600;margin:0 16px 10px 0;font-size:13px;">'
+        + '<input type="checkbox" class="cn-mod-toggle" data-module="' + esc(key) + '"' + (isOn ? ' checked' : '') + ' style="width:auto;"/> '
+        + esc(m[1]) + '</label>';
+    }).join('');
+    body.innerHTML = html;
+    Array.prototype.forEach.call(body.querySelectorAll('.cn-mod-toggle'), function(cb){
+      cb.addEventListener('change', function(){ window.toggleNationModule(sub, nationId, cb.getAttribute('data-module'), cb.checked, cb); });
     });
   };
 
-  window.setNationModuleEnabled = async function(sub, module, enabled, cb){
-    setMsg('cn-mod-enable-msg', (enabled ? 'Enabling ' : 'Disabling ') + module + '...', 'ok');
+  // ON  -> license (registry modules_licensed[key]=true) + enable (nation).
+  // OFF -> disable (nation); licensing is intentionally left as-is.
+  window.toggleNationModule = async function(sub, nationId, module, on, cb){
+    setMsg('cn-mod-enable-msg', (on ? 'Turning on ' : 'Turning off ') + module + '...', 'ok');
     try {
+      if(on){
+        // 1) License it on the control-plane registry (merge into modules_licensed).
+        _cnLicensedState[module] = true;
+        var lr = await api('PATCH', '/nations?id=eq.' + encodeURIComponent(nationId), { modules_licensed: _cnLicensedState, updated_at: new Date().toISOString() }, 'return=minimal');
+        if(!lr.ok){ if(cb) cb.checked = false; var lt = await lr.text().catch(function(){return '';}); setMsg('cn-mod-enable-msg', 'Could not license ' + module + ': ' + esc(String(lt).slice(0,160))); return; }
+      }
+      // 2) Enable/disable on the nation project.
       var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ subdomain: sub, action: 'set', module: module, enabled: enabled })
+        body: JSON.stringify({ subdomain: sub, action: 'set', module: module, enabled: on })
       });
       var d = await r.json().catch(function(){ return {}; });
       if(!r.ok){
-        if(cb) cb.checked = !enabled;   // revert on failure
-        setMsg('cn-mod-enable-msg', 'Failed: ' + (d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + String(d.detail).slice(0,160) : ''));
+        if(cb) cb.checked = !on;   // revert on failure
+        setMsg('cn-mod-enable-msg', 'Failed to ' + (on ? 'enable ' : 'disable ') + module + ': ' + (d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + String(d.detail).slice(0,160) : ''));
         return;
       }
-      setMsg('cn-mod-enable-msg', module + ' ' + (enabled ? 'enabled' : 'disabled') + '. The nation app picks it up on its next page load.', 'ok');
-      await audit('nation_module_' + (enabled ? 'enabled' : 'disabled'), sub, module);
+      setMsg('cn-mod-enable-msg', module + ' turned ' + (on ? 'on (licensed + enabled)' : 'off') + '. The nation app picks it up on its next page load.', 'ok');
+      await audit('nation_module_' + (on ? 'on' : 'off'), sub, module);
     } catch(e){
-      if(cb) cb.checked = !enabled;
+      if(cb) cb.checked = !on;
       setMsg('cn-mod-enable-msg', 'Network error: ' + String(e).slice(0,120));
     }
   };
