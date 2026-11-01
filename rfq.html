@@ -74,6 +74,11 @@
         <p id="rfqFormSub"></p>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;">
+        <!-- Document-generation actions sit top-right per convention. Preview is
+             always available (data-rfq-keep); Generate Contract keeps its own
+             readiness gate and stays disabled for read-only viewers. -->
+        <button type="button" class="btn btn-ghost" data-rfq-keep onclick="previewRfqPdf()">&#128202; Preview RFQ PDF</button>
+        <button type="button" class="btn btn-primary" onclick="generateContractorContract()">&#128196; Generate Contract</button>
         <button class="btn btn-ghost" data-rfq-keep onclick="rfqBackToSow()" title="Open the linked maintenance request">&#8592; Maintenance Request</button>
         <button class="btn btn-ghost" data-rfq-keep onclick="showRfqList()">&#8592; Back to List</button>
       </div>
@@ -405,13 +410,10 @@
         </div>
       </div>
 
-      <!-- Generate Contract action bar (moved below the signatures for better flow) -->
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;">
-        <div>
-          <div style="font-size:13px;font-weight:600;color:var(--text);">Contractor Agreement</div>
-          <div style="font-size:11px;color:var(--muted);">Complete the sections above, then generate the signed PDF.</div>
-        </div>
-        <button type="button" class="btn btn-primary" onclick="generateContractorContract()">&#128196; Generate Contract</button>
+      <!-- Contractor Agreement is generated from the "Generate Contract" button
+           in the top-right of the form (doc-generation lives top-right). -->
+      <div style="margin-bottom:16px;padding:12px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;font-size:12px;color:var(--muted);">
+        Complete the sections above, then use <strong>&#128196; Generate Contract</strong> (top-right) to produce the signed Contractor Agreement PDF.
       </div>
 
     </div>
@@ -420,7 +422,6 @@
     <div class="rfq-footer-actions">
       <span id="rfq_saved_indicator" class="txt-muted-sm" style="align-self:center;"></span>
       <button type="button" class="btn btn-ghost" id="rfqSaveDraftBtn" onclick="saveRfqDraft()">Save Draft</button>
-      <button type="button" class="btn btn-ghost" data-rfq-keep onclick="previewRfqPdf()">&#128202; Preview RFQ PDF</button>
       <button type="button" class="btn btn-ghost" id="rfqUnlockBtn" style="display:none;" onclick="unlockRfq()">&#128275; Unlock RFQ</button>
       <button type="button" class="btn btn-ghost" id="rfqCancelBtn" style="display:none;color:var(--danger);border-color:var(--danger-border);" onclick="cancelRfq(_rfqCurrentId)">&#10006; Cancel RFQ</button>
       <button type="button" class="btn btn-primary" id="rfqIssueBtn" onclick="issueRfq()">Issue RFQ &#8594;</button>
