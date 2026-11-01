@@ -28,7 +28,10 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const STORAGE_BUCKET       = Deno.env.get("STORAGE_BUCKET") || "housing-files";
 const MAX_B64_LEN          = 14000000;              // ~10 MB raw
 const MAX_NOTE_LEN         = 4000;
-const ALLOWED_KINDS        = ["photo", "invoice", "note", "progress"];
+const ALLOWED_KINDS        = ["photo", "invoice", "note", "progress", "wsib", "insurance"];
+// Compliance proofs file to the CONTRACTOR record (not a unit), under the same
+// contractors/<id>/<bucket>/ path the Contractor card reads back.
+const COMPLIANCE_KINDS     = ["wsib", "insurance"];
 
 const corsHeaders = {
   "Access-Control-Allow-Origin":  "*",
@@ -235,9 +238,14 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "Could not decode file" }, 400);
   }
 
-  // 4) Store it, contractor-scoped (service role).
-  const path = "contractor-uploads/" + unitId + "/" + projectNumber + "/" + kind + "s/"
-    + Date.now() + "_" + filename;
+  // 4) Store it, contractor-scoped (service role). WSIB / insurance proofs file
+  //    to the CONTRACTOR record (contractors/<id>/<bucket>/), the exact path the
+  //    Contractor card's Documents reads back (_loadCtFilesFromStorage buckets by
+  //    path segment 2). Photos / invoices file under the unit's work-order path.
+  const isCompliance = COMPLIANCE_KINDS.indexOf(kind) !== -1;
+  const path = isCompliance
+    ? "contractors/" + contractorId + "/" + kind + "/" + Date.now() + "_" + filename
+    : "contractor-uploads/" + unitId + "/" + projectNumber + "/" + kind + "s/" + Date.now() + "_" + filename;
   const encodedPath = path.split("/").map(encodeURIComponent).join("/");
   const up = await fetch(SUPABASE_URL + "/storage/v1/object/" + STORAGE_BUCKET + "/" + encodedPath, {
     method: "POST",
@@ -254,14 +262,21 @@ serve(async (req: Request) => {
     return jsonResponse({ error: "Upload failed", detail: t.slice(0, 200) }, 502);
   }
 
-  // 5) Record the file so it appears on the unit's Documents for staff. Matches
-  //    sbSaveFileMeta's file_uploaded audit-row shape; the name is prefixed so
-  //    staff can see it was contractor-submitted at a glance.
-  const displayName = (kind === "invoice" ? "[Contractor invoice] " : "[Contractor photo] ") + filename;
+  // 5) Record the file so it appears in staff Documents. Matches sbSaveFileMeta's
+  //    file_uploaded audit-row shape; the name is prefixed so staff see it was
+  //    contractor-submitted at a glance. Compliance proofs file to the CONTRACTOR
+  //    entity (surface on the Contractor card); work files to the unit.
+  const namePrefix: Record<string, string> = {
+    invoice:   "[Contractor invoice] ",
+    photo:     "[Contractor photo] ",
+    wsib:      "[Contractor WSIB] ",
+    insurance: "[Contractor insurance] ",
+  };
+  const displayName = (namePrefix[kind] || "[Contractor] ") + filename;
   try {
     await admin.from("housing_audit_log").insert({
-      entity_type: "tenant",
-      entity_id:   unitId,
+      entity_type: isCompliance ? "contractor" : "tenant",
+      entity_id:   isCompliance ? contractorId : unitId,
       action:      "file_uploaded",
       detail:      JSON.stringify({
         path: path, name: displayName, size: bytes.length, type: contentType,

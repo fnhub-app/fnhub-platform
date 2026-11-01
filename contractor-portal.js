@@ -259,10 +259,11 @@
     var amount = '';
     if (kind === 'invoice') { var amtEl = el('cp_inv_amount'); amount = amtEl ? (amtEl.value || '') : ''; }
     var done = 0, failed = 0;
+    var kindNoun = { invoice: 'invoice', photo: 'photo', wsib: 'WSIB document', insurance: 'insurance document' }[kind] || 'file';
     function finish() {
       setUpMsg(failed
         ? (done + ' sent, ' + failed + ' failed. Please try the failed one(s) again or contact the office.')
-        : ('✓ ' + done + ' ' + (kind === 'invoice' ? 'invoice' : 'photo') + (done === 1 ? '' : 's') + ' sent to the housing office.'),
+        : ('✓ ' + done + ' ' + kindNoun + (done === 1 ? '' : 's') + ' sent to the housing office.'),
         failed > 0);
       if (!failed && kind === 'invoice') { var a = el('cp_inv_amount'); if (a) a.value = ''; }
     }
@@ -433,8 +434,16 @@
       + '<div class="cp-upload-row">'
       +   '<button type="button" class="cp-upbtn" data-cp-note="1">&#128221; Add note</button>'
       + '</div>'
+      + '<h3 class="cp-h3">Company compliance documents</h3>'
+      + '<div class="cp-note">Upload your current WSIB clearance and liability insurance certificates. These go to the housing office and are kept on your contractor file.</div>'
+      + '<div class="cp-upload-row">'
+      +   '<button type="button" class="cp-upbtn" data-cp-upload="wsib">&#128737; Upload WSIB proof</button>'
+      +   '<button type="button" class="cp-upbtn" data-cp-upload="insurance">&#128737; Upload insurance proof</button>'
+      + '</div>'
       + '<input type="file" id="cp_up_photo" accept="image/*" multiple class="hidden"/>'
       + '<input type="file" id="cp_up_invoice" accept="image/*,application/pdf" class="hidden"/>'
+      + '<input type="file" id="cp_up_wsib" accept="image/*,application/pdf" class="hidden"/>'
+      + '<input type="file" id="cp_up_insurance" accept="image/*,application/pdf" class="hidden"/>'
       + '<div class="cp-msg" id="cp_up_msg"></div>';
     hide('cp_app'); show('cp_detail');
     loadSubmissionStatus(w);
@@ -456,11 +465,13 @@
       .then(function (rows) {
         if (!Array.isArray(rows) || !rows.length) { mount.innerHTML = ''; return; }
         var lbl = {
-          invoice: { pending: 'Awaiting review', approved: 'Approved', rejected: 'Not accepted', 'new': 'Sent' },
-          photo:   { 'new': 'Sent', read: 'Reviewed' },
-          note:    { 'new': 'Sent', read: 'Reviewed' }
+          invoice:   { pending: 'Awaiting review', approved: 'Approved', rejected: 'Not accepted', 'new': 'Sent' },
+          photo:     { 'new': 'Sent', read: 'Reviewed' },
+          note:      { 'new': 'Sent', read: 'Reviewed' },
+          wsib:      { 'new': 'Sent', read: 'Reviewed' },
+          insurance: { 'new': 'Sent', read: 'Reviewed' }
         };
-        var icon = { invoice: '🧾', photo: '📷', note: '📝' };
+        var icon = { invoice: '🧾', photo: '📷', note: '📝', wsib: '🛡️', insurance: '🛡️' };
         var cls = { pending: 'cp-st-pending', approved: 'cp-st-ok', rejected: 'cp-st-no', read: 'cp-st-ok', 'new': 'cp-st-pending' };
         mount.innerHTML = '<h3 class="cp-h3">Your submissions</h3>'
           + rows.map(function (s) {
@@ -506,7 +517,7 @@
       var up = e.target.closest('[data-cp-upload]');
       if (up) {
         var k = up.getAttribute('data-cp-upload');
-        var inp = el(k === 'invoice' ? 'cp_up_invoice' : 'cp_up_photo');
+        var inp = el('cp_up_' + k);   // cp_up_photo | cp_up_invoice | cp_up_wsib | cp_up_insurance
         if (inp) inp.click();
         return;
       }
@@ -528,9 +539,10 @@
     // catches both the photo and the invoice picker across re-renders.
     if (detailEl) detailEl.addEventListener('change', function (e) {
       var t = e.target;
-      if (!t) return;
-      if (t.id === 'cp_up_photo')   { uploadFiles('photo', t.files);   t.value = ''; }
-      else if (t.id === 'cp_up_invoice') { uploadFiles('invoice', t.files); t.value = ''; }
+      if (!t || !t.id || t.id.indexOf('cp_up_') !== 0) return;
+      var kind = t.id.slice(6);   // photo | invoice | wsib | insurance
+      if (['photo', 'invoice', 'wsib', 'insurance'].indexOf(kind) === -1) return;
+      uploadFiles(kind, t.files); t.value = '';
     });
     applyNationBranding();
   }
