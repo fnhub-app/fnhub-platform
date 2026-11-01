@@ -97,15 +97,21 @@ serve(async (req: Request) => {
   });
   if (!invite) return jsonResponse({ linked: false, reason: "no_invite" });
 
-  // Double check: the phone must ALSO be on the contractor's record.
+  // Double check: the phone must ALSO be on the contractor's record. people /
+  // phone / email etc. live inside the housing_contractors `data` jsonb blob
+  // (only id/name/trade/status/data are real columns -- see sbSaveContractor /
+  // sbLoadContractors), so we read people out of `data`, NOT a top-level column.
+  // Selecting a non-existent "people" column makes PostgREST error the whole
+  // query, which previously surfaced as a misleading "contractor_not_found".
   const { data: ctRows } = await admin
     .from("housing_contractors")
-    .select("id, name, people")
+    .select("id, name, data")
     .eq("id", invite.contractor_id)
     .limit(1);
   const ct = ctRows && ctRows[0] as Record<string, unknown> | undefined;
   if (!ct) return jsonResponse({ linked: false, reason: "contractor_not_found" });
-  const people = Array.isArray(ct.people) ? ct.people as Array<Record<string, unknown>> : [];
+  const ctData = (ct.data && typeof ct.data === "object") ? ct.data as Record<string, unknown> : {};
+  const people = Array.isArray(ctData.people) ? ctData.people as Array<Record<string, unknown>> : [];
   const onFile = people.some((p) => phoneKey(p.phone) === pKey);
   if (!onFile) {
     return jsonResponse({ linked: false, reason: "phone_not_on_contractor" });
