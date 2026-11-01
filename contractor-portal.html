@@ -4,6 +4,13 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Contractor Portal</title>
+  <!-- Portal-specific PWA manifest so "Add to Home Screen" launches the
+       Contractor Portal, NOT the staff app. shared.js injects the generic
+       staff manifest (start_url /index.html) only when no manifest link is
+       already present, so declaring ours here pre-empts it. Same reason for
+       the app title meta. -->
+  <link rel="manifest" href="contractor-manifest.json"/>
+  <meta name="apple-mobile-web-app-title" content="Contractor Portal"/>
   <style>
     :root { --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f4f5f7; --card:#ffffff;
             --cp-accent:#1f2937; --cp-accent-ink:#ffffff; --ok:#047857; --err:#b91c1c; }
