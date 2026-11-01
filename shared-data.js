@@ -2653,9 +2653,19 @@ function _ctClosePortalPreview(){
 }
 window._ctClosePortalPreview = _ctClosePortalPreview;
 
-function _ctPortalPreview(){
-  var ct = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
-    ? (window._contractors || [])[window._ctEditIdx] : (window._ctLastSaved || null);
+function _ctPortalPreview(arg){
+  // arg is optional: a registry-row index into window._contractors, or a
+  // contractor id. Omitted (opened from inside the card) -> the open CIC.
+  var list = window._contractors || [];
+  var ct = null;
+  if(arg !== undefined && arg !== null && arg !== ''){
+    if(typeof arg === 'number' && arg >= 0 && arg < list.length) ct = list[arg];
+    else ct = list.find(function(c){ return c && String(c.id) === String(arg); }) || null;
+  }
+  if(!ct){
+    ct = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
+      ? list[window._ctEditIdx] : (window._ctLastSaved || null);
+  }
   if(!ct || !ct.id){ if(typeof showToast==='function') showToast('Save the contractor first to preview their portal view.', {type:'info'}); return; }
   if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ if(typeof showToast==='function') showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
   var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
@@ -6171,6 +6181,9 @@ function renderContractorsView(){
   var classLabels = {internal_indigenous:'Internal — Indigenous',external_indigenous:'External — Indigenous',external_non_indigenous:'External — Non-Indigenous'};
   var role = window.currentRole || 'housing_employee_l1';
   var isMgmt = (typeof ROLE !== 'undefined') && ROLE.isManagement(role);
+  // Contractor Portal preview is offered per-row only when the module is on
+  // (mirrors the in-card "Preview portal view" button's gate).
+  var _ctPortalOn = (typeof moduleOn !== 'function') || moduleOn('contractor_portal');
 
   // Decorate each contractor with derived stats once. Hide archived rows
   // by default (no filter UI to surface them yet — Phase 2C, mirrors
@@ -6269,9 +6282,11 @@ function renderContractorsView(){
             ],
             open: 'openAddContractorModal('+i+')',
             actions: [
-              {text:'🖨 Print', onclick:'event.stopPropagation();ctPrintFromRow('+i+')', ghost:true},
-              {text:'✏️ Edit',  onclick:'event.stopPropagation();openAddContractorModal('+i+')'}
-            ]
+              {text:'🖨 Print', onclick:'event.stopPropagation();ctPrintFromRow('+i+')', ghost:true}
+            ].concat((_ctPortalOn && ct.id) ? [{text:'👁 Portal', onclick:'event.stopPropagation();_ctPortalPreview('+i+')', ghost:true}] : [])
+             .concat([
+              {text:'✏️ Edit',  onclick:'event.stopPropagation();openAddContractorModal('+i+')', ghost:false}
+            ])
           });
         }).join(''));
       }
@@ -6313,6 +6328,11 @@ function renderContractorsView(){
             '<button class="dash-action-btn" onclick="event.stopPropagation();ctPrintFromRow('+i+')" title="Print Agreement">'+
               '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>'+
             '</button>' +
+            ((_ctPortalOn && ct.id)
+              ? '<button class="dash-action-btn" onclick="event.stopPropagation();_ctPortalPreview('+i+')" title="Preview portal view (what this contractor sees)">'+
+                  '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>'+
+                '</button>'
+              : '') +
             (isMgmt
               ? '<button class="dash-action-btn" onclick="event.stopPropagation();ctOpenRowMenu('+i+', this)" title="More options" style="font-size:14px;line-height:1;">⋮</button>'
               : '') +
