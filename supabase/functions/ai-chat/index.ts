@@ -1,4 +1,5 @@
-// CLFN Housing AI Chat - Supabase Edge Function
+// Housing AI Chat - Supabase Edge Function (multi-nation; nation identity comes
+// from the client context, never hardcoded here)
 // Deploy: supabase functions deploy ai-chat
 // Secret:  supabase secrets set ANTHROPIC_API_KEY=<your-key>
 //
@@ -69,7 +70,7 @@ const TABLES: Record<string, TableDef> = {
   },
   housing_applications: {
     roles: MGMT,
-    cols: 'id, status, score, tier, app_type, urgent_need, health_risk, assigned_unit_id, assigned_address, submitted_at, created_by_email, archived. Applicant name and household details live in a `data` jsonb (filter on these top-level columns; names are also in the loaded context). app_type is one of: new_housing (applicant seeking a new unit; scored and ranked), existing_tenant (a file update only -- NOT scored, never on Match), transfer_request (a current CLFN tenant who already has a house on reserve applying for a DIFFERENT unit; scored and ranked; this is the "On Rez" / transfer case shown on the Match page), commercial (a business or department requesting a commercial/admin/band building -- short form, never scored or waitlisted, assignable ONLY to those building types). The data jsonb also carries: livingSituation (own_home | family_on_reserve = staying with family on reserve i.e. DOUBLED UP | renting_off_reserve | temporary_shelter | no_fixed_address | other), deceased (boolean) + deceasedDate, and reserve. A deceased application is kept as a record but is zero-scored, never on Match, unassignable, and excluded from every application count.',
+    cols: 'id, status, score, tier, app_type, urgent_need, health_risk, assigned_unit_id, assigned_address, submitted_at, created_by_email, archived. Applicant name and household details live in a `data` jsonb (filter on these top-level columns; names are also in the loaded context). app_type is one of: new_housing (applicant seeking a new unit; scored and ranked), existing_tenant (a file update only -- NOT scored, never on Match), transfer_request (a current tenant who already has a house on reserve applying for a DIFFERENT unit; scored and ranked; this is the "On Rez" / transfer case shown on the Match page), commercial (a business or department requesting a commercial/admin/band building -- short form, never scored or waitlisted, assignable ONLY to those building types). The data jsonb also carries: livingSituation (own_home | family_on_reserve = staying with family on reserve i.e. DOUBLED UP | renting_off_reserve | temporary_shelter | no_fixed_address | other), deceased (boolean) + deceasedDate, and reserve. A deceased application is kept as a record but is zero-scored, never on Match, unassignable, and excluded from every application count.',
   },
   tenants: {
     roles: ALL,
@@ -596,6 +597,16 @@ return-with-notes. Flow: management recommends -> Housing Manager approves ->
 ED approves, per Settings > Approval Authority. Tip: the approval note box has a
 "Draft with AI" button that writes a professional decision note for you.
 
+Scoring screens must be done before a scored application can be approved: the
+two staff scoring screens -- Housing Need Assessment (wizard step 9) and Tenancy
+History (step 10) -- are HM/ED-only (regular employees skip them). A scored
+application (new_housing or transfer_request) created by a regular employee has
+NOT had them completed, so on the approval scorecard the approve/recommend
+buttons are hidden and a "Complete scoring screens" button appears instead. An
+HM or ED clicks it, fills the two screens, and the approve buttons unlock (this
+does not change the approval status -- they then approve as usual). File updates
+and commercial applications are not scored, so this gate does not apply to them.
+
 Match an applicant to a unit: approved applications with no unit show in "Ready
 to Match"; use the Match page to assign a vacant unit. The Match page lists only
 SCORED applications that have cleared approval (status mgr_approved, hm_approved,
@@ -662,6 +673,15 @@ add notes/photos, and save. A failed/needs-repair inspection can spawn a
 maintenance request for the unit. Unit records show last and next inspection
 dates.
 
+Email Intake (forward-to-file): staff forward an email to the nation's intake
+address (shown in Settings > Nation > Email Intake Address, e.g.
+<nation>@fnhub.app) and it lands in a triage queue under Operations > Email
+Intake. Open a queued item to see the sender, plain-text body, and attachments,
+then assign it to a unit -- the attachments and body are filed to that unit's
+Documents. Only emails whose sender is an ACTIVE staff member of this nation
+create a row (anything else is dropped), so staff forward from their own work
+address. Gated by the Email Intake module.
+
 Capital Projects (under the Operations nav; edit needs the manageProjects
 authority, default HM/ED - everyone else views read-only): Projects page >
 "+ New Project". Pick the type (Lot Development, House Build, Mixed,
@@ -706,7 +726,7 @@ grant the final approval.
 
 Contractor Portal (how a contractor sees their work orders): the Contractor
 Portal is a SEPARATE public page at <nation>.fnhub.app/contractor-portal.html
-(for CLFN, clfn.fnhub.app/contractor-portal.html). A contractor signs in there
+(the nation's own subdomain). A contractor signs in there
 with their MOBILE NUMBER and a texted one-time code (SMS login, no password, no
 email link, no access to the staff app). After signing in they see a read-only
 list of the work orders (maintenance requests) assigned to THEIR company only,
@@ -765,10 +785,37 @@ Collections, Journal Entries, Transactions, Reports. Common tasks:
   - Statements/reports: Finance Reports > "Run Statements"; export buttons on
     each list.
 
+Text (SMS) notifications: an optional channel ALONGSIDE email, not a
+replacement. Nothing texts a person unless three gates all pass: (1) the SMS /
+Text Notifications module is on for the nation, (2) the per-event Text toggle is
+on (Settings > Notifications -- each event has an Email section and a Text
+section), and (3) the recipient has OPTED IN with a validated mobile number
+(legal consent / CASL). Staff opt themselves in from the Users list ("Text
+alerts" button on their own row) or an admin sets a staff member's mobile +
+consent in the Users edit modal; a texted number can reply STOP to opt out
+globally. There is no password or app login involved -- it is one-way alerts.
+If someone asks why a text did not send, check those three gates (module on,
+event's Text toggle on, recipient opted in with a good number).
+
+Contractor Portal access is SEPARATE from these notification texts: see the
+Contractor Portal entry above -- it is an SMS one-time-code LOGIN to a page where
+a contractor sees their assigned work orders, not a notification channel.
+
+Chief & Council (Leadership) dashboard: a read-only, cross-app KPI dashboard for
+leadership (units, occupancy, vacancies, waitlist, awaiting-match, active renos,
+overdue inspections, plus charts). Reached from the "Council" nav item or
+Settings; access is set by the accessLeadershipDashboard approval authority
+(default ED + Housing Manager). It only summarizes data already in the app -- no
+data leaves the nation (OCAP).
+
 Admin settings (ED / super user): Settings has App Settings (incl. the scoring
-model), Approval Authority, Nation (branding, idle timeout, and Module toggles -
-including this AI Assistant and Inspections), Notifications (email templates per
-event), and Users (add/deactivate staff).
+model and the ED-adjustable Match Priority model that decides who gets matched
+first), Approval Authority, Nation (branding, idle timeout, and Module toggles -
+including this AI Assistant, Inspections, SMS / Text Notifications, Email Intake,
+Capital Projects, and Contractor Portal), Notifications (email + text templates
+per event), and Users (add/deactivate staff). Note: module enable/disable is
+managed in the platform admin portal, so the in-app Modules list is read-only
+(status only) -- to turn a module on or off, a platform administrator does it.
 `
 
 function buildSystem(type: string, ctx: any): string {
@@ -796,6 +843,7 @@ Rules:
   }
   if (type === 'draft') {
     const app = ctx?.app ?? {}
+    const nation = ctx?.nation || 'the First Nation'
     const name = [app.fn, app.ln].filter(Boolean).join(' ') || 'the applicant'
     const action = ctx?.action ?? ''
     const actionLabel: Record<string, string> = {
@@ -810,7 +858,7 @@ Rules:
     }
     const label = actionLabel[action] ?? action
 
-    return `You are a professional housing administrator at Constance Lake First Nation (CLFN). Write a brief, professional note for a housing application decision.
+    return `You are a professional housing administrator at ${nation}. Write a brief, professional note for a housing application decision.
 
 Application details:
 - Applicant: ${name} (${app.id ?? ''})
@@ -855,13 +903,18 @@ Rules:
 
   // Chat mode
   const role = ctx?.role ?? 'staff'
+  // Nation identity from the client (OCAP / multi-nation): never hardcode a
+  // nation name here. Falls back to a generic label if the client did not send
+  // one, so the assistant is correct for every nation, not just the lead one.
+  const nationName  = ctx?.nation || 'the First Nation'
+  const nationShort = ctx?.nationShort || nationName
 
   const appsJson = ctx?.apps?.length
     ? `\n\n## Housing Applications (${ctx.apps.length} total)\nEach record is one application. Fields: id, fn/ln (name), status, score, tier (priority tier), bedrooms (requested), household_size, app_type, assignedUnit/assignedAddress (if placed), submittedAt, reserve, living_situation (family_on_reserve = doubled up), deceased (true = record kept, excluded from all counts), bcr_ineligible (true = on the BCR banishment list, excluded from counts, flagged on Match).\n` + JSON.stringify(ctx.apps.slice(0, 50))
     : '\n\n## Housing Applications\nNo application data available.'
 
   const unitsJson = ctx?.units?.length
-    ? `\n\n## Housing Units (${ctx.units.length} total)\nComplete list of CLFN housing units - use this for unit counts and availability questions. Fields: id, address, bedrooms, bathrooms, type, status (vacant/occupied/reserved/condemned), accessible, isElders, funder, assignedTo/assignedName.\n` + JSON.stringify(ctx.units.slice(0, 60))
+    ? `\n\n## Housing Units (${ctx.units.length} total)\nComplete list of ${nationShort} housing units - use this for unit counts and availability questions. Fields: id, address, bedrooms, bathrooms, type, status (vacant/occupied/reserved/condemned), accessible, isElders, funder, assignedTo/assignedName.\n` + JSON.stringify(ctx.units.slice(0, 60))
     : '\n\n## Housing Units\nNo unit data available.'
 
   const sowsJson = ctx?.sows?.length
@@ -888,7 +941,7 @@ Rules:
   const vacantCount = (ctx?.units || []).filter((u: any) => u.status === 'vacant').length
   const pendingApps = (ctx?.apps  || []).filter((a: any) => !['assigned','declined','archived'].includes(a.status)).length
 
-  return `You are an AI assistant for the Constance Lake First Nation (CLFN) Housing Department. You help housing staff answer questions about applications, housing units, maintenance requests (work orders), renovations, contractors, inspections, capital projects, and housing policy, and explain how to do things in the app.
+  return `You are an AI assistant for the ${nationName} Housing Department. You help housing staff answer questions about applications, housing units, maintenance requests (work orders), renovations, contractors, inspections, capital projects, and housing policy, and explain how to do things in the app.
 
 Staff role: ${role}
 Current date/time (UTC): ${new Date().toISOString()} (audit timestamps are stored in UTC).
