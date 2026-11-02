@@ -297,13 +297,6 @@ function _buildSowModalHTML() {
               '<div class="f"><label>Target Completion Date</label><input id="sow_end_date" type="date"/></div>' +
             '</div>' +
           '</div>' +
-          // Notes posted by the assigned contractor via the Contractor Portal.
-          // Read-only; hidden when there are none. Populated on open from the
-          // saved SOW's contractorNotes[] (written by the contractor-upload fn).
-          '<div class="tic-section" id="sow_contractor_notes_section" style="display:none;">' +
-            '<div class="tic-section-h">Contractor Notes</div>' +
-            '<div id="sow_contractor_notes"></div>' +
-          '</div>' +
         '</div>' +
 
         // ── SCOPE OF WORK ────────────────────────────────────────────────
@@ -390,6 +383,13 @@ function _buildSowModalHTML() {
             '<div class="f"><label>Special Instructions / Access Requirements</label>' +
               '<textarea id="sow_notes" rows="3" placeholder="Any additional context, access requirements, tenant considerations…"></textarea>' +
             '</div>' +
+          '</div>' +
+          // Notes the assigned contractor posted via the Contractor Portal.
+          // Read-only; hidden when there are none. Populated on open from the
+          // saved SOW's contractorNotes[] (written by the contractor-upload fn).
+          '<div class="tic-section" id="sow_contractor_notes_section" style="display:none;">' +
+            '<div class="tic-section-h">Contractor Notes</div>' +
+            '<div id="sow_contractor_notes"></div>' +
           '</div>' +
           // Terms & Conditions default to COLLAPSED — the section is long
           // boilerplate that users rarely need to read in full once they've
