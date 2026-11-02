@@ -641,7 +641,7 @@ async function _mfaListAllFactors(token) {
     if (!r.ok) return [];
     var u = await r.json();
     var fx = (u && u.factors) || [];
-    return fx.filter(function (f) { return f && f.factor_type === 'totp'; });
+    return fx.filter(function (f) { return f && (f.factor_type === 'totp' || f.factor_type === 'phone'); });
   } catch (e) { return []; }
 }
 async function _mfaListVerifiedFactors(token) {
@@ -649,18 +649,28 @@ async function _mfaListVerifiedFactors(token) {
   return all.filter(function (f) { return f.status === 'verified'; });
 }
 
-// Challenge + verify a factor with a 6-digit code -> new (AAL2) session, or throw.
-async function _mfaChallengeVerify(token, factorId, code) {
+// Start a challenge for a factor -> challenge id. For a PHONE factor this is
+// what triggers the SMS send; for TOTP it is instant (code comes from the app).
+async function _mfaChallenge(token, factorId) {
   var cr = await fetch(SUPABASE_URL + '/auth/v1/factors/' + encodeURIComponent(factorId) + '/challenge', { method: 'POST', headers: _mfaHeaders(token) });
   var cd = await cr.json().catch(function () { return {}; });
   if (!cr.ok || !cd.id) throw new Error((cd && (cd.msg || cd.error_description || cd.error)) || 'Could not start the challenge');
+  return cd.id;
+}
+// Verify a challenge with a 6-digit code -> new (AAL2) session, or throw.
+async function _mfaVerify(token, factorId, challengeId, code) {
   var vr = await fetch(SUPABASE_URL + '/auth/v1/factors/' + encodeURIComponent(factorId) + '/verify', {
     method: 'POST', headers: _mfaHeaders(token),
-    body: JSON.stringify({ challenge_id: cd.id, code: String(code || '').trim() })
+    body: JSON.stringify({ challenge_id: challengeId, code: String(code || '').trim() })
   });
   var vd = await vr.json().catch(function () { return {}; });
   if (!vr.ok || !vd.access_token) throw new Error((vd && (vd.msg || vd.error_description || vd.error)) || 'That code was not valid');
   return vd;
+}
+// Challenge + verify in one step (TOTP: the code is already in hand from the app).
+async function _mfaChallengeVerify(token, factorId, code) {
+  var challengeId = await _mfaChallenge(token, factorId);
+  return _mfaVerify(token, factorId, challengeId, code);
 }
 async function _mfaUnenroll(token, factorId) {
   try { await fetch(SUPABASE_URL + '/auth/v1/factors/' + encodeURIComponent(factorId), { method: 'DELETE', headers: _mfaHeaders(token) }); } catch (e) { /* non-fatal */ }
@@ -676,7 +686,7 @@ async function _mfaLoginStepUp(sessionData) {
   if (!token) return { ok: true };
   var factors = await _mfaListVerifiedFactors(token);
   if (!factors.length) return { ok: true };
-  var newSession = await _mfaPromptCode(token, factors[0].id);
+  var newSession = await _mfaPromptCode(token, factors[0]);
   if (!newSession) return { ok: false };
   return { ok: true, session: newSession };
 }
@@ -684,7 +694,12 @@ window._mfaLoginStepUp = _mfaLoginStepUp;
 
 // Full-screen code prompt used at login. Resolves to the new session on a
 // correct code, or null if the user cancels. Loops on wrong codes.
-function _mfaPromptCode(token, factorId) {
+// `factor` may be a factor object { id, factor_type } or a bare id. For a PHONE
+// factor the challenge is fired when the prompt OPENS (that is what sends the
+// SMS), and a "Resend" button re-sends it; TOTP verifies challenge+code together.
+function _mfaPromptCode(token, factor) {
+  var factorId = (factor && factor.id) || factor;
+  var isPhone  = !!(factor && factor.factor_type === 'phone');
   return new Promise(function (resolve) {
     var ov = document.createElement('div');
     ov.id = '_mfaCodeOverlay';
@@ -695,13 +710,17 @@ function _mfaPromptCode(token, factorId) {
     // to the bottom of the page in normal flow -- invisible -- and sign-in hung.
     ov.className = 'modal-overlay mfa-code-overlay';
     ov.setAttribute('style', 'z-index:100000;');
+    var intro = isPhone
+      ? 'We just texted a 6-digit code to your phone. Enter it below.'
+      : 'Enter the 6-digit code from your authenticator app.';
     ov.innerHTML =
       '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:380px;padding:22px;">'
       + '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">Two-factor verification</div>'
-      + '<div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5;">Enter the 6-digit code from your authenticator app.</div>'
+      + '<div style="font-size:13px;color:var(--muted);margin-bottom:14px;line-height:1.5;">' + intro + '</div>'
       + '<input id="_mfaCodeInput" type="text" inputmode="numeric" autocomplete="one-time-code" maxlength="6" placeholder="123456" style="width:100%;box-sizing:border-box;padding:12px;font-size:18px;letter-spacing:4px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
       + '<div id="_mfaCodeMsg" style="min-height:16px;font-size:12px;color:var(--danger);margin-top:8px;"></div>'
       + '<div style="display:flex;gap:8px;margin-top:12px;">'
+      +   (isPhone ? '<button type="button" id="_mfaCodeResend" class="btn btn-ghost" style="flex:1;">Resend</button>' : '')
       +   '<button type="button" id="_mfaCodeCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>'
       +   '<button type="button" id="_mfaCodeVerify" class="btn btn-primary" style="flex:1;">Verify</button>'
       + '</div></div>';
@@ -710,7 +729,9 @@ function _mfaPromptCode(token, factorId) {
     var msg = ov.querySelector('#_mfaCodeMsg');
     var vbtn = ov.querySelector('#_mfaCodeVerify');
     var cbtn = ov.querySelector('#_mfaCodeCancel');
+    var rbtn = ov.querySelector('#_mfaCodeResend');
     if (input) input.focus();
+    var challengeId = null;
     function done(val) { try { ov.remove(); } catch (e) {} resolve(val); }
     async function tryVerify() {
       var code = (input && input.value || '').trim();
@@ -718,7 +739,13 @@ function _mfaPromptCode(token, factorId) {
       if (vbtn) { vbtn.disabled = true; vbtn.textContent = 'Verifying…'; }
       if (msg) msg.textContent = '';
       try {
-        var newSession = await _mfaChallengeVerify(token, factorId, code);
+        var newSession;
+        if (isPhone) {
+          if (!challengeId) challengeId = await _mfaChallenge(token, factorId);
+          newSession = await _mfaVerify(token, factorId, challengeId, code);
+        } else {
+          newSession = await _mfaChallengeVerify(token, factorId, code);
+        }
         done(newSession);
       } catch (e) {
         if (msg) msg.textContent = (e && e.message) || 'That code was not valid.';
@@ -728,7 +755,16 @@ function _mfaPromptCode(token, factorId) {
     }
     if (vbtn) vbtn.addEventListener('click', tryVerify);
     if (cbtn) cbtn.addEventListener('click', function () { done(null); });
+    if (rbtn) rbtn.addEventListener('click', async function () {
+      if (msg) msg.textContent = '';
+      rbtn.disabled = true; rbtn.textContent = 'Sending…';
+      try { challengeId = await _mfaChallenge(token, factorId); if (msg) msg.textContent = 'New code sent.'; }
+      catch (e) { if (msg) msg.textContent = (e && e.message) || 'Could not resend.'; }
+      rbtn.disabled = false; rbtn.textContent = 'Resend';
+    });
     if (input) input.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') tryVerify(); });
+    // For a phone factor, send the SMS as soon as the prompt opens.
+    if (isPhone) { _mfaChallenge(token, factorId).then(function (id) { challengeId = id; }).catch(function (e) { if (msg) msg.textContent = (e && e.message) || 'Could not send the code.'; }); }
   });
 }
 
@@ -755,9 +791,10 @@ function openMfaSetup() {
   _mfaListAllFactors(token).then(function (factors) {
     var verified = factors.filter(function (f) { return f.status === 'verified'; });
     if (verified.length) {
+      var onMethod = verified[0].factor_type === 'phone' ? 'sent to you by text message' : 'from your authenticator app';
       shell(
         '<div style="display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--success-bg,var(--bg));border:1px solid var(--success,var(--border));border-radius:8px;color:var(--success,var(--text));font-size:13px;font-weight:600;margin-bottom:14px;">&#10003; Two-factor authentication is ON for your account.</div>'
-        + '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">You will be asked for a 6-digit code from your authenticator app each time you sign in.</div>'
+        + '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">You will be asked for a 6-digit code ' + onMethod + ' each time you sign in.</div>'
         + '<button type="button" id="_mfaTurnOff" class="btn btn-ghost" style="color:var(--danger);border-color:var(--danger);">Turn off two-factor</button>'
       );
       var off = document.getElementById('_mfaTurnOff');
@@ -775,11 +812,15 @@ function openMfaSetup() {
     var stale = factors.filter(function (f) { return f.status !== 'verified'; });
     Promise.all(stale.map(function (f) { return _mfaUnenroll(token, f.id); })).then(function () {
       shell(
-        '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">Add a second step to your sign-in. You will need an authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password, etc.).</div>'
-        + '<button type="button" id="_mfaStart" class="btn btn-primary">Set up two-factor</button>'
+        '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">Add a second step to your sign-in. Choose how you want to receive your code:</div>'
+        + '<button type="button" id="_mfaStartTotp" class="btn btn-primary" style="width:100%;margin-bottom:8px;">Use an authenticator app</button>'
+        + '<button type="button" id="_mfaStartPhone" class="btn btn-ghost" style="width:100%;">Use text messages (SMS)</button>'
+        + '<div style="font-size:11px;color:var(--muted);line-height:1.5;margin-top:10px;">An authenticator app (Google Authenticator, Microsoft Authenticator, Authy, 1Password) is free and works without cell signal. Text messages require SMS to be enabled for your nation.</div>'
       );
-      var start = document.getElementById('_mfaStart');
-      if (start) start.addEventListener('click', function () { _mfaBeginEnroll(token, shell); });
+      var startT = document.getElementById('_mfaStartTotp');
+      var startP = document.getElementById('_mfaStartPhone');
+      if (startT) startT.addEventListener('click', function () { _mfaBeginEnroll(token, shell); });
+      if (startP) startP.addEventListener('click', function () { _mfaBeginEnrollPhone(token, shell); });
     });
   });
 }
@@ -846,4 +887,84 @@ function _mfaBeginEnroll(token, shell) {
       if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') verify(); });
     })
     .catch(function (e) { shell('<div style="color:var(--danger);font-size:13px;">Enrollment failed: ' + _mfaEsc(e && e.message) + '</div>'); });
+}
+
+// Text-message (SMS) enrollment. Needs the Phone sign-in provider + an SMS
+// provider configured in the nation's Supabase project; otherwise the enroll
+// call errors and the message says so. Flow: enroll phone factor -> challenge
+// (sends the SMS) -> verify the texted code -> factor becomes verified.
+function _mfaBeginEnrollPhone(token, shell) {
+  shell(
+    '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Enter your mobile number in full international format, then we will text you a code to confirm it.</div>'
+    + '<input id="_mfaPhoneInput" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 705 555 1234" style="width:100%;box-sizing:border-box;padding:12px;font-size:16px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
+    + '<div id="_mfaPhoneMsg" style="min-height:16px;font-size:12px;color:var(--danger);margin-top:8px;"></div>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;">'
+    +   '<button type="button" id="_mfaPhoneCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>'
+    +   '<button type="button" id="_mfaPhoneSend" class="btn btn-primary" style="flex:1;">Text me a code</button>'
+    + '</div>'
+  );
+  var inp = document.getElementById('_mfaPhoneInput');
+  var msg = document.getElementById('_mfaPhoneMsg');
+  var sb = document.getElementById('_mfaPhoneSend');
+  var cb = document.getElementById('_mfaPhoneCancel');
+  if (inp) inp.focus();
+  if (cb) cb.addEventListener('click', function () { openMfaSetup(); });
+  async function send() {
+    var phone = (inp && inp.value || '').replace(/[^\d+]/g, '');
+    if (phone.length < 8) { if (msg) msg.textContent = 'Enter your full mobile number, including the country code.'; return; }
+    if (sb) { sb.disabled = true; sb.textContent = 'Sending…'; }
+    if (msg) msg.textContent = '';
+    try {
+      var er = await fetch(SUPABASE_URL + '/auth/v1/factors', {
+        method: 'POST', headers: _mfaHeaders(token),
+        body: JSON.stringify({ factor_type: 'phone', phone: phone, friendly_name: (window.HOUSING_SESSION && HOUSING_SESSION.email) || phone })
+      });
+      var ed = await er.json().catch(function () { return {}; });
+      if (!er.ok || !ed.id) throw new Error((ed && (ed.msg || ed.error_description || ed.error)) || 'Could not start enrollment. Make sure text-message two-factor is enabled for your nation.');
+      var factorId = ed.id;
+      var challengeId = await _mfaChallenge(token, factorId);   // triggers the SMS
+      _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone);
+    } catch (e) {
+      if (msg) msg.textContent = (e && e.message) || 'Could not send the code.';
+      if (sb) { sb.disabled = false; sb.textContent = 'Text me a code'; }
+    }
+  }
+  if (sb) sb.addEventListener('click', send);
+  if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') send(); });
+}
+
+function _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone) {
+  shell(
+    '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Enter the 6-digit code we texted to ' + _mfaEsc(phone) + '.</div>'
+    + '<input id="_mfaPEnrollCode" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="width:100%;box-sizing:border-box;padding:12px;font-size:18px;letter-spacing:4px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
+    + '<div id="_mfaPEnrollMsg" style="min-height:16px;font-size:12px;color:var(--danger);margin-top:8px;"></div>'
+    + '<div style="display:flex;gap:8px;margin-top:12px;">'
+    +   '<button type="button" id="_mfaPEnrollCancel" class="btn btn-ghost" style="flex:1;">Cancel</button>'
+    +   '<button type="button" id="_mfaPEnrollVerify" class="btn btn-primary" style="flex:1;">Verify &amp; turn on</button>'
+    + '</div>'
+  );
+  var inp = document.getElementById('_mfaPEnrollCode');
+  var msg = document.getElementById('_mfaPEnrollMsg');
+  var vb = document.getElementById('_mfaPEnrollVerify');
+  var cb = document.getElementById('_mfaPEnrollCancel');
+  if (inp) inp.focus();
+  if (cb) cb.addEventListener('click', function () { _mfaUnenroll(token, factorId).then(openMfaSetup); });
+  async function verify() {
+    var code = (inp && inp.value || '').trim();
+    if (code.length < 6) { if (msg) msg.textContent = 'Enter all 6 digits.'; return; }
+    if (vb) { vb.disabled = true; vb.textContent = 'Verifying…'; }
+    if (msg) msg.textContent = '';
+    try {
+      var newSession = await _mfaVerify(token, factorId, challengeId, code);
+      if (typeof _applyTokenPayload === 'function' && newSession && newSession.access_token) _applyTokenPayload(newSession);
+      if (typeof showToast === 'function') showToast('Two-factor authentication is on.', { type: 'info' });
+      openMfaSetup();
+    } catch (e) {
+      if (msg) msg.textContent = (e && e.message) || 'That code was not valid.';
+      if (vb) { vb.disabled = false; vb.textContent = 'Verify & turn on'; }
+      if (inp) { inp.value = ''; inp.focus(); }
+    }
+  }
+  if (vb) vb.addEventListener('click', verify);
+  if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') verify(); });
 }
