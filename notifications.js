@@ -2935,9 +2935,55 @@ async function _resolveContractorForEmail(contractorId) {
 // picked in the work-order recipient dialog (company + selected Key Contacts).
 // When omitted, falls back to the contractor's company email. Staff primary/CC
 // roles from Settings -> Notifications are always added on top.
-async function notifyWorkOrderToContractor(sow, unit, contractor, recipientEmails) {
+// The contractor's textable E.164 number: company phone first, else the first
+// Key Contact with a phone. '' if none is a valid mobile number.
+function _contractorSmsNumber(contractor) {
+  if (!contractor) return '';
+  var raw = contractor.phone || '';
+  if ((!raw || !_SMS_E164_RE.test((typeof window._toE164 === 'function') ? window._toE164(raw) : '')) && Array.isArray(contractor.people)) {
+    for (var i = 0; i < contractor.people.length; i++) {
+      if (contractor.people[i] && contractor.people[i].phone) { raw = contractor.people[i].phone; break; }
+    }
+  }
+  var e164 = (typeof window._toE164 === 'function') ? window._toE164(raw) : '';
+  return _SMS_E164_RE.test(e164) ? e164 : '';
+}
+// The Contractor Portal URL for the work-order SMS link (contractors sign in by
+// phone, so the staff deep link _emailMrLink builds is useless to them).
+function _contractorPortalLink() {
+  var base = (window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '';
+  return base + '/contractor-portal.html';
+}
+// Exposed for the Email Work Order dialog: the contractor's textable number for
+// the work-order SMS, or '' when SMS isn't available (module/event off, or no
+// valid mobile). Lets the dialog offer a "Text" option only when it will send.
+window._contractorWorkOrderSmsNumber = function(contractor) {
+  if (!_eventSmsOn('sow_work_order_to_contractor')) return '';
+  return _contractorSmsNumber(contractor);
+};
+
+async function notifyWorkOrderToContractor(sow, unit, contractor, recipientEmails, opts) {
   if (!sow) return;
+  opts = opts || {};
   var eventKey = 'sow_work_order_to_contractor';
+
+  // ----- SMS (additive, independent of email) -----
+  // Text the contractor the work order (they sign in to the portal by phone).
+  // Gated by the SMS module + the event's SMS channel; sent to the contractor's
+  // E.164 number with a portal link. No per-contractor opt-in flag exists (unlike
+  // staff) -- the template's "Reply STOP to opt out" + the Edge Function's
+  // opt-out ledger are the consent backstop, matching the SMS template's intent.
+  try {
+    if (opts.sms && _eventSmsOn(eventKey)) {
+      var ctNum = String(opts.smsNumber || _contractorSmsNumber(contractor)).trim();
+      if (_SMS_E164_RE.test(ctNum)) {
+        var smsTokens = _emailTokensForWorkOrder(sow, unit, contractor);
+        smsTokens.scopeShort = _smsScopeShort(sow);
+        smsTokens.mrLink     = _contractorPortalLink();
+        await _sendEventSms(eventKey, ctNum, smsTokens, { type: 'sow', id: sow.project_number || '-' });
+      }
+    }
+  } catch (e) { console.warn('[notify] contractor work-order SMS failed:', e); }
 
   var seen   = {};
   var emails = [];
