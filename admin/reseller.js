@@ -955,9 +955,10 @@
       + '<div id="rs-stmt"></div></div>';
   }
 
-  // Recurring Subscription Fees only (s.7.3): subscription + the monthly AI
-  // add-on. Setup, consulting, travel, interest and carried balances excluded.
-  function isRecurringLine(d){ d = String(d || ''); return /subscription|ai staff assistant/i.test(d) && !/setup|carried forward|interest/i.test(d); }
+  // Commissionable lines (s.7.3): recurring Subscription Fees ONLY. The AI Staff
+  // Assistant add-on is excluded (it carries a per-use processing cost), as are
+  // setup, consulting, travel, interest, text messages and carried balances.
+  function isRecurringLine(d){ d = String(d || ''); return /subscription/i.test(d) && !/ai staff assistant|setup|carried forward|interest/i.test(d); }
   // Recurring share of what was COLLECTED on one invoice (tax-inclusive) + its tax part.
   function invoiceCollected(inv){
     var rec = 0;
@@ -1054,7 +1055,7 @@
     var hst = commissionHst(st, r);
     host.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--accent);">'
       + '<h3 style="margin:0 0 4px;">Statement &middot; ' + esc(fmtMonth(st.period_month)) + ' ' + pill(st.status) + '</h3>'
-      + '<p class="note" style="margin-top:0;">Gross = recurring Subscription Fees collected (incl. tax), taken from invoices paid this month. Setup, consulting, travel and interest are excluded (s.7.3). Hosting is pre-filled from the nation\'s estimated platform cost. Check every figure before issuing.</p>'
+      + '<p class="note" style="margin-top:0;">Gross = recurring Subscription Fees collected (incl. tax), taken from invoices paid this month. The AI Staff Assistant add-on, setup, consulting, travel, text messages and interest are excluded (s.7.3). Hosting is pre-filled from the nation\'s estimated platform cost. Check every figure before issuing.</p>'
       + '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th class="num">Gross collected</th><th class="num">Hosting</th><th class="num">Processing</th><th class="num">Taxes</th><th class="num">Refunds / credits</th><th class="num">Net revenue</th><th class="num">Commission ' + Number(st.commission_rate) + '%</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '<div class="rs-grid3">'
       +   fld('Clawback / offset (s.9.2)', 'rs-s-clawback', (Number(st.clawback) || 0).toFixed(2), { type: 'number', step: '0.01', dis: !draft })
@@ -1219,7 +1220,7 @@
       '-"Customer" means an organization that enters into a Customer Subscription Agreement with the Owner.',
       '-"Customer Subscription Agreement" means the subscription contract between the Owner and a Customer for use of the Platform.',
       '-"Reseller Customer" means a Customer that the Reseller sourced and that the Owner has registered to the Reseller under Section 7.',
-      '-"Subscription Fees" means the recurring fees a Customer actually pays the Owner for the Platform.',
+      '-"Subscription Fees" means the recurring platform subscription fees a Customer actually pays the Owner for the Platform, excluding fees for the AI Staff Assistant add-on and any usage charges passed through at cost (Section 7.3).',
       '-"Gross Revenue" means Subscription Fees actually collected by the Owner from a Reseller Customer in a given month.',
       '-"Net Revenue" has the meaning in Section 8.',
       '-"Confidential Information" has the meaning in Section 13.',
@@ -1265,7 +1266,7 @@
       '##7. Commission',
       '7.1 Rate. For each Reseller Customer, the Owner will pay the Reseller a Commission equal to ' + rate + '% of Net Revenue (Section 8) actually collected from that Customer.',
       '7.2 Duration. The Commission is payable for each month in which both (a) the Reseller Customer remains subscribed and pays Subscription Fees, and (b) this Agreement remains in effect. On termination of this Agreement, the Commission ceases under Section 10.',
-      '7.3 Recurring fees only. Commission is calculated on recurring Subscription Fees only. One-time fees (for example, setup, data migration, or training) are excluded unless the Parties agree otherwise in writing for a specific Customer.',
+      '7.3 Recurring fees only. Commission is calculated on recurring Subscription Fees only. One-time fees (for example, setup, data migration, or training) are excluded unless the Parties agree otherwise in writing for a specific Customer. Fees for the AI Staff Assistant add-on, and charges for text messages or other usage passed through at cost, are not Subscription Fees and never earn Commission, because each carries a per-use processing cost to the Owner.',
       '7.4 Attribution. The Owner will register a prospect as a Reseller Customer where the Reseller is the first to submit that prospect through the Owner\'s process and the prospect was not already in discussions with the Owner. If attribution is disputed, the Owner\'s reasonable, good-faith determination from its records governs.',
       '##8. Net Revenue',
       '"Net Revenue" for a Reseller Customer in a month means the Gross Revenue actually collected from that Customer that month, minus, without duplication:',
@@ -1420,7 +1421,7 @@
         if (st.notes){ y += 6; t('Notes', M, y, { style: 'bold', size: 9, color: [120, 120, 120] }); y += 13; doc.splitTextToSize(String(st.notes), W - M * 2).forEach(function(ln){ t(ln, M, y, { size: 9.5 }); y += 12; }); }
         if (y > H - 90){ doc.addPage(); y = M; }
         y += 10;
-        ['Net Revenue = recurring Subscription Fees actually collected, less attributable hosting and infrastructure, payment-processing and bank fees, taxes, refunds, chargebacks and credits (Section 8). One-time fees are excluded (Section 7.3).',
+        ['Net Revenue = recurring Subscription Fees actually collected, less attributable hosting and infrastructure, payment-processing and bank fees, taxes, refunds, chargebacks and credits (Section 8). One-time fees and the AI Staff Assistant add-on are excluded (Section 7.3).',
          'Commission is reversed and offset for later refunds, chargebacks or uncollectible amounts (Section 9.2). The Reseller invoices the Owner for Commission and adds GST/HST if registered (Section 9.4). All amounts in CAD.'
         ].forEach(function(p){ doc.splitTextToSize(p, W - M * 2).forEach(function(ln){ t(ln, M, y, { size: 8, color: [110, 110, 110] }); y += 10; }); y += 3; });
         t('Reseller Commission Agreement ' + a.agreement_number + ' - statement ' + st.period_month.slice(0, 7), M, H - 24, { size: 8, color: [130, 130, 130] });
@@ -1572,7 +1573,7 @@
       + '<div class="tbl-wrap"><table><thead><tr><th>Seller</th><th class="num">Nations</th><th class="num">Collected</th><th class="num">Recurring</th><th class="num">Commission paid</th><th class="num">Commission owing</th></tr></thead><tbody>' + rows
       + '<tr><td><b>Total</b></td><td class="num"><b>' + tot.n + '</b></td><td class="num"><b>' + money(tot.c) + '</b></td><td class="num"><b>' + money(tot.r) + '</b></td><td class="num"><b>' + money(tot.p) + '</b></td><td class="num"><b>' + money(tot.o) + '</b></td></tr>'
       + '</tbody></table></div>'
-      + '<p class="note">"Collected" is all invoice payments; "Recurring" is the subscription and add-on share that earns commission. A payment counts in the month of the invoice\'s last payment date.</p>';
+      + '<p class="note">"Collected" is all invoice payments; "Recurring" is the platform subscription share that earns commission (the AI add-on and setup are excluded, s.7.3). A payment counts in the month of the invoice\'s last payment date.</p>';
   }
 
   // ---- Events (data-act; the panel CSP blocks inline handlers) ---------------

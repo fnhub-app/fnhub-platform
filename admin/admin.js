@@ -125,7 +125,7 @@
       + 'AI Staff Assistant add-on ' + feeAiText() + '. '
       + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
       + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
-      + 'Only recurring subscription and add-on fees earn Commission (Section 7.3).';
+      + 'Only recurring platform subscription fees earn Commission; the AI Staff Assistant add-on, setup and other one-time or at-cost fees do not (Section 7.3).';
   }
 
   // Provider (Home Land Homes) details -- printed on invoices.
