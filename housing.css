@@ -1868,6 +1868,19 @@ body.is-sow-only .modal-overlay { visibility: visible; }
   #ticModal .tic-hero { flex-wrap: wrap; }
   #ticModal .tic-hero > .flex-gap8 { margin-left: auto; }
 }
+/* Contractor Info Card (CIC) hero: same treatment as the Edit Unit modal — a
+   long company name must not get squeezed by the top-right doc-gen buttons
+   (Print / Email), which collapsed the title to one-word-per-line on phones.
+   Let the buttons wrap on desktop; on phones stack the hero into a column with
+   the close pinned top-right and the action buttons full-width below. */
+#addContractorModal .tic-hero > .flex-gap8 { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+@media (max-width: 700px) {
+  #addContractorModal .tic-hero      { flex-direction: column; align-items: stretch; gap: 12px; padding: 16px 18px; position: relative; }
+  #addContractorModal .tic-hero-main { padding-right: 36px; }
+  #addContractorModal .tic-hero .tic-close-btn { position: absolute; top: 14px; right: 16px; }
+  #addContractorModal .tic-hero > .flex-gap8       { flex-direction: column; align-items: stretch; width: 100%; gap: 8px; }
+  #addContractorModal .tic-hero > .flex-gap8 > .btn { width: 100%; justify-content: center; }
+}
 .tic-close-btn:hover      { color: var(--text); border-color: var(--text); }
 
 .tic-strip                { display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px; background: var(--border); border-bottom: 1px solid var(--border); }
