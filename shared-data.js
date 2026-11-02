@@ -6921,6 +6921,8 @@ function _staffExpiryChip(u){
 async function renderHousingUserTable(){
   var tbody = document.getElementById('userTableBody');
   if(!tbody) return;
+  // Per-role 2FA requirement panel renders alongside the Users table (ED-only).
+  if (typeof renderMfaPolicyPanel === 'function') renderMfaPolicyPanel();
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">Loading…</td></tr>';
   try {
     var filter   = window._staffFilter === 'inactive' ? 'inactive' : 'active';

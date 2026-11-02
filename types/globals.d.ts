@@ -210,6 +210,8 @@ declare function isSowCompleted(sow: any): boolean;
 /** Audit + toast (shared-data.js / shared-ui.js). */
 declare function auditEntry(entityId: string, action: string, detail?: any, user?: any): any;
 declare function showToast(msg: string, opts?: { type?: string; duration?: number; position?: string }): any;
+/** Per-role 2FA policy panel (housing-settings.js); called from the Users table render in shared-data.js. */
+declare function renderMfaPolicyPanel(): void;
 
 // --- Cross-file app globals used by shared-data.js (RX1 slice 3) --------------
 // Pragmatic `any` placeholders for functions/caches/libs defined in files not
