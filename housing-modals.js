@@ -227,6 +227,14 @@ function openUnitEditModal(unitId){
   window._currentDetailUnitId = unitId; // back-compat: udpNewSow(), renos.html, file-panel sync all key off this
   var set = function(id,val){ var el=document.getElementById(id); if(el) el.value=(val===null||val===undefined||val==='nan')?'':String(val); };
   set('ue_street',u.street); set('ue_num',u.num); set('ue_lot_number', u.lotNumber);
+  // Complete mailing address. City/Province/Postal ride the data jsonb (no
+  // migration). Province + Postal default from the nation config when the unit
+  // has none — every unit is in the one community, so these are effectively
+  // constant and don't need an address-lookup service to fill.
+  var _nc = window.NATION_CONFIG || {};
+  set('ue_city', u.city);
+  set('ue_province', u.province || _nc.province || '');
+  set('ue_postal', u.postal || _nc.mailing_postal || '');
   set('ue_bathrooms',u.bathrooms); set('ue_type',u.type); set('ue_foundation',u.foundation);
   ueTypeChanged('ue');         // swap room options + show building name before setting bedrooms
   set('ue_bedrooms',u.bedrooms);
@@ -757,6 +765,10 @@ function saveUnitEdit(){
   // Lot # rides the data jsonb blob (sbSaveUnit data: u / sbLoadUnits row.data
   // spread), same as gasProvider/assignmentType — no column, no migration.
   u.lotNumber = get('ue_lot_number') || null;
+  // City / Province / Postal ride the data jsonb (same as lotNumber).
+  u.city     = get('ue_city') || null;
+  u.province = get('ue_province') || null;
+  u.postal   = get('ue_postal') || null;
   u.bedrooms=parseInt(get('ue_bedrooms'))||u.bedrooms;
   u.bathrooms=get('ue_bathrooms'); u.type=get('ue_type'); u.foundation=get('ue_foundation');
   u.buildingName = get('ue_building_name') || null;
