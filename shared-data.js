@@ -3376,9 +3376,12 @@ window.sbResolveTenantMr = sbResolveTenantMr;
 //                                 mark it 'read'.
 async function sbLoadContractorSubmissions(){
   try {
-    if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){
-      window._contractorSubmissions = window._contractorSubmissions || []; return window._contractorSubmissions;
-    }
+    // NOTE: deliberately NO moduleOn('contractor_portal') gate here. This runs in
+    // the boot Promise.all alongside the settings load, so _appSettings (which
+    // carries the module_enablement override) isn't hydrated yet — and
+    // contractor_portal defaults OFF, so moduleOn would return false and the
+    // queue would silently never load. The _isMgmt gate at the call site scopes
+    // this to management; a nation without the table just gets a 404 -> [].
     var url = SUPABASE_URL + '/rest/v1/contractor_submissions?status=in.(pending,new)&order=created_at.desc&limit=200';
     var r = await fetch(url, { headers: HOUSING_HEADERS });
     if(!r.ok){ window._contractorSubmissions = window._contractorSubmissions || []; return window._contractorSubmissions; }
