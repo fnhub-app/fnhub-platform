@@ -688,8 +688,13 @@ function _mfaPromptCode(token, factorId) {
   return new Promise(function (resolve) {
     var ov = document.createElement('div');
     ov.id = '_mfaCodeOverlay';
-    ov.className = 'modal-overlay';
-    ov.setAttribute('style', 'display:flex;z-index:100000;');
+    // `.mfa-code-overlay` (shared.css) carries the fixed full-screen layout so
+    // this works on the LOGIN page, which loads shared.css but not housing.css
+    // (where `.modal-overlay` is defined). Keeping `.modal-overlay` too is
+    // harmless on app pages. Without the self-positioning class the prompt fell
+    // to the bottom of the page in normal flow -- invisible -- and sign-in hung.
+    ov.className = 'modal-overlay mfa-code-overlay';
+    ov.setAttribute('style', 'z-index:100000;');
     ov.innerHTML =
       '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:380px;padding:22px;">'
       + '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:4px;">Two-factor verification</div>'
