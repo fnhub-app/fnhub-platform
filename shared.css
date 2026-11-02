@@ -1734,6 +1734,11 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
    field-to-field gap. */
 .login-screen        { display: none; position: fixed; inset: 0; z-index: 9999; background: var(--login-bg); align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
 .login-card          { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 20px; }
+/* Two-factor code prompt shown at sign-in. index.html loads shared.css but NOT
+   housing.css (where .modal-overlay gets its fixed full-screen layout), so this
+   class carries the positioning itself. Without it the prompt rendered in normal
+   flow at the bottom of the login page -- invisible -- and sign-in hung. */
+.mfa-code-overlay    { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
 .login-logo-wrap     { text-align: center; padding-top: 8px; }
 .login-logo-bg       { display: inline-block; background: var(--dark); border-radius: 8px; padding: 10px 16px; }
 .login-logo          { width: 56px; height: 56px; display: block; }
