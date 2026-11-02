@@ -617,15 +617,6 @@ function renderMatchView(){
     if(_currentTenancyAddr(a) && !_scored) return false;
     return true;
   });
-  // Text search narrows what's DISPLAYED only — never who competes for units.
-  var filtered = _searchLc ? eligibleApps.filter(function(a){
-    var hay = [
-      a.fn, a.ln, a.id, a.tier, a.status, a.reserve,
-      a.score, a.classification, a.assignedAddress
-    ].filter(function(v){ return v != null; }).join(' ').toLowerCase();
-    return hay.indexOf(_searchLc) !== -1;
-  }) : eligibleApps;
-
   var content = document.getElementById('match_content');
   if(!content) return;
 
@@ -711,6 +702,18 @@ function renderMatchView(){
   var _matchAllocation = (typeof matchAllocateExclusive === 'function') ? matchAllocateExclusive(_priorityOrder) : {};
   function _allocatedUnit(app){ return _matchAllocation[app.id] || null; }
 
+  // Text search narrows what's DISPLAYED only — never who competes for units
+  // (allocation above runs over the full eligible pool). The hay includes the
+  // allocated Best Unit address, so staff can search by unit address too
+  // (e.g. typing "Whabistan" lists the applicants matched to those units).
+  var filtered = _searchLc ? eligibleApps.filter(function(a){
+    var hay = [
+      a.fn, a.ln, a.id, a.tier, a.status, a.reserve,
+      a.score, a.classification, a.assignedAddress, _bestUnitAddr(a)
+    ].filter(function(v){ return v != null; }).join(' ').toLowerCase();
+    return hay.indexOf(_searchLc) !== -1;
+  }) : eligibleApps;
+
   var _matchColumns = {
     applicant:     { label: 'Applicant',      accessor: function(a){ return ((a.fn||'') + ' ' + (a.ln||'')).trim(); } },
     score:         { label: 'Score',          accessor: function(a){ return a.score || 0; } },
@@ -778,7 +781,7 @@ function renderMatchView(){
       ? '<div onclick="openMatchScorecard(\''+app.id+'\',\''+best.unit.id+'\')" style="cursor:pointer;">'
         +'<div style="font-weight:600;font-size:13px;color:var(--text);text-decoration:underline;text-underline-offset:2px;">'+(best.unit.num+' '+best.unit.street)+'</div>'
         +'<div style="display:flex;align-items:center;gap:8px;margin:3px 0;">'
-        +'<div style="height:4px;width:80px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+matchPct+'%;background:'+tCol+';border-radius:3px;"></div></div>'
+        +'<div style="height:4px;width:80px;background:var(--border);border-radius:3px;overflow:hidden;"><div style="height:100%;width:'+matchPct+'%;background:var(--yellow);border-radius:3px;"></div></div>'
         +'<span class="js-lbl-sm">'+matchPct+'% match</span>'
         +'</div>'
         +'<div class="js-lbl-sm">'+_roomBedLabel(best.unit)+' · '+(_fmtUnitType(best.unit.type)||'—')+'</div>'
@@ -817,8 +820,7 @@ function renderMatchView(){
       +'<td style="padding:12px 10px;cursor:pointer;" onclick="openAppFromMatch(\''+app.id+'\');">'
         +'<div style="font-weight:700;font-size:13px;color:var(--text);text-decoration:underline;text-underline-offset:2px;">'+name+'</div>'
         +'<div class="js-lbl-sm">'+app.id+'</div>'
-        +(isTransfer?'<div style="margin-top:4px;"><span style="display:inline-block;font-size:10px;font-weight:700;background:var(--warn-amber);color:#111;padding:1px 7px;border-radius:4px;white-space:nowrap;">🏠 On Rez'+(curAddr?' · '+curAddr:'')+'</span> <span style="font-size:10px;color:var(--muted);font-weight:600;">transfer</span></div>':'')
-        +(!isTransfer && _livingSituationBadge(app) ? '<div style="margin-top:4px;">'+_livingSituationBadge(app)+'</div>' : '')
+        +(isTransfer?'<div style="margin-top:4px;"><span style="display:inline-block;font-size:10px;font-weight:700;background:var(--warn-amber-bg);color:var(--warn-amber-text);border:1px solid var(--warn-amber-border);padding:1px 7px;border-radius:4px;white-space:nowrap;">🏠 On Rez'+(curAddr?' · '+curAddr:'')+'</span> <span style="font-size:10px;color:var(--muted);font-weight:600;">transfer</span></div>':'')
         +(_bcrIneligibleBadge(app) ? '<div style="margin-top:4px;">'+_bcrIneligibleBadge(app)+'</div>' : '')
         +(_arrearsWarnBadge(app) ? '<div style="margin-top:4px;">'+_arrearsWarnBadge(app)+'</div>' : '')
       +'</td>'
@@ -862,8 +864,7 @@ function renderMatchView(){
       app.status === 'assigned'
     );
     var badges = [];
-    if (isTransfer) badges.push('<span style="display:inline-block;font-size:10px;font-weight:700;background:var(--warn-amber);color:#111;padding:1px 7px;border-radius:4px;white-space:nowrap;">🏠 On Rez'+(curAddr?' · '+curAddr:'')+'</span>');
-    if (!isTransfer && _livingSituationBadge(app)) badges.push(_livingSituationBadge(app));
+    if (isTransfer) badges.push('<span style="display:inline-block;font-size:10px;font-weight:700;background:var(--warn-amber-bg);color:var(--warn-amber-text);border:1px solid var(--warn-amber-border);padding:1px 7px;border-radius:4px;white-space:nowrap;">🏠 On Rez'+(curAddr?' · '+curAddr:'')+'</span>');
     if (_bcrIneligibleBadge(app)) badges.push(_bcrIneligibleBadge(app));
     if (_arrearsWarnBadge(app)) badges.push(_arrearsWarnBadge(app));
     var metas = [
