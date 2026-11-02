@@ -582,6 +582,25 @@ async function startSignIn() {
     // here so we don't race it with the hand-off to housing.html.
     if (window._accessExpired) { if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; } return; }
 
+    // Role-based 2FA enforcement (opt-in per role; every role defaults to none,
+    // so this is a no-op until the ED sets a requirement in Settings -> Users).
+    // If the resolved role requires a method the user hasn't set up, force
+    // enrollment now; cancelling aborts the sign-in. Fail-open on read errors.
+    if (typeof window._mfaEnforceEnrollment === 'function') {
+      var _enf = await window._mfaEnforceEnrollment(HOUSING_SESSION.accessToken, window.currentRole);
+      if (_enf && _enf.ok === false) {
+        try { sessionStorage.removeItem('clfn_housing_token'); } catch (e) {}
+        HOUSING_SESSION.accessToken = '';
+        HOUSING_HEADERS['Authorization'] = 'Bearer ' + (typeof SUPABASE_ANON !== 'undefined' ? SUPABASE_ANON : '');
+        if (errEl) { errEl.textContent = 'Two-factor setup is required to sign in.'; errEl.style.display = 'block'; }
+        if (btn) { btn.disabled = false; btn.textContent = 'Sign in'; }
+        return;
+      }
+      if (_enf && _enf.session && _enf.session.access_token && typeof _applyTokenPayload === 'function') {
+        _applyTokenPayload(_enf.session);
+      }
+    }
+
     // Stamp last_login_at on the staff row. Fire-and-forget — a slow PATCH
     // must not delay the redirect to housing.html. Relies on RLS allowing a
     // user to update their own staff row; if it doesn't, the warn lands in

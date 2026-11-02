@@ -829,7 +829,7 @@ window.openMfaSetup = openMfaSetup;
 function _mfaCloseSetup() { var h = document.getElementById('mfaSetupModal'); if (h) h.innerHTML = ''; }
 window._mfaCloseSetup = _mfaCloseSetup;
 
-function _mfaBeginEnroll(token, shell) {
+function _mfaBeginEnroll(token, shell, onDone, onCancel) {
   shell('<div style="color:var(--muted);font-size:13px;">Generating your code…</div>');
   var friendly = (window.HOUSING_SESSION && HOUSING_SESSION.email) || ('Staff-' + Date.now());
   fetch(SUPABASE_URL + '/auth/v1/factors', {
@@ -875,7 +875,7 @@ function _mfaBeginEnroll(token, shell) {
           // Apply the fresh AAL2 session so the current tab is now fully signed in.
           if (typeof _applyTokenPayload === 'function' && newSession && newSession.access_token) _applyTokenPayload(newSession);
           if (typeof showToast === 'function') showToast('Two-factor authentication is on.', { type: 'info' });
-          openMfaSetup();
+          if (typeof onDone === 'function') onDone(newSession); else openMfaSetup();
         } catch (e) {
           if (msg) msg.textContent = (e && e.message) || 'That code was not valid.';
           if (vb) { vb.disabled = false; vb.textContent = 'Verify & turn on'; }
@@ -883,7 +883,7 @@ function _mfaBeginEnroll(token, shell) {
         }
       }
       if (vb) vb.addEventListener('click', verify);
-      if (cb) cb.addEventListener('click', function () { _mfaUnenroll(token, factorId).then(openMfaSetup); });
+      if (cb) cb.addEventListener('click', function () { _mfaUnenroll(token, factorId).then(typeof onCancel === 'function' ? onCancel : openMfaSetup); });
       if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') verify(); });
     })
     .catch(function (e) { shell('<div style="color:var(--danger);font-size:13px;">Enrollment failed: ' + _mfaEsc(e && e.message) + '</div>'); });
@@ -893,7 +893,7 @@ function _mfaBeginEnroll(token, shell) {
 // provider configured in the nation's Supabase project; otherwise the enroll
 // call errors and the message says so. Flow: enroll phone factor -> challenge
 // (sends the SMS) -> verify the texted code -> factor becomes verified.
-function _mfaBeginEnrollPhone(token, shell) {
+function _mfaBeginEnrollPhone(token, shell, onDone, onCancel) {
   shell(
     '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Enter your mobile number in full international format, then we will text you a code to confirm it.</div>'
     + '<input id="_mfaPhoneInput" type="tel" inputmode="tel" autocomplete="tel" placeholder="+1 705 555 1234" style="width:100%;box-sizing:border-box;padding:12px;font-size:16px;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
@@ -908,7 +908,7 @@ function _mfaBeginEnrollPhone(token, shell) {
   var sb = document.getElementById('_mfaPhoneSend');
   var cb = document.getElementById('_mfaPhoneCancel');
   if (inp) inp.focus();
-  if (cb) cb.addEventListener('click', function () { openMfaSetup(); });
+  if (cb) cb.addEventListener('click', function () { (typeof onCancel === 'function' ? onCancel : openMfaSetup)(); });
   async function send() {
     var phone = (inp && inp.value || '').replace(/[^\d+]/g, '');
     if (phone.length < 8) { if (msg) msg.textContent = 'Enter your full mobile number, including the country code.'; return; }
@@ -923,7 +923,7 @@ function _mfaBeginEnrollPhone(token, shell) {
       if (!er.ok || !ed.id) throw new Error((ed && (ed.msg || ed.error_description || ed.error)) || 'Could not start enrollment. Make sure text-message two-factor is enabled for your nation.');
       var factorId = ed.id;
       var challengeId = await _mfaChallenge(token, factorId);   // triggers the SMS
-      _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone);
+      _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone, onDone, onCancel);
     } catch (e) {
       if (msg) msg.textContent = (e && e.message) || 'Could not send the code.';
       if (sb) { sb.disabled = false; sb.textContent = 'Text me a code'; }
@@ -933,7 +933,7 @@ function _mfaBeginEnrollPhone(token, shell) {
   if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') send(); });
 }
 
-function _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone) {
+function _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone, onDone, onCancel) {
   shell(
     '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">Enter the 6-digit code we texted to ' + _mfaEsc(phone) + '.</div>'
     + '<input id="_mfaPEnrollCode" type="text" inputmode="numeric" maxlength="6" placeholder="123456" style="width:100%;box-sizing:border-box;padding:12px;font-size:18px;letter-spacing:4px;text-align:center;border:1px solid var(--border);border-radius:8px;background:var(--bg);color:var(--text);"/>'
@@ -948,7 +948,7 @@ function _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone) {
   var vb = document.getElementById('_mfaPEnrollVerify');
   var cb = document.getElementById('_mfaPEnrollCancel');
   if (inp) inp.focus();
-  if (cb) cb.addEventListener('click', function () { _mfaUnenroll(token, factorId).then(openMfaSetup); });
+  if (cb) cb.addEventListener('click', function () { _mfaUnenroll(token, factorId).then(typeof onCancel === 'function' ? onCancel : openMfaSetup); });
   async function verify() {
     var code = (inp && inp.value || '').trim();
     if (code.length < 6) { if (msg) msg.textContent = 'Enter all 6 digits.'; return; }
@@ -958,7 +958,7 @@ function _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone) {
       var newSession = await _mfaVerify(token, factorId, challengeId, code);
       if (typeof _applyTokenPayload === 'function' && newSession && newSession.access_token) _applyTokenPayload(newSession);
       if (typeof showToast === 'function') showToast('Two-factor authentication is on.', { type: 'info' });
-      openMfaSetup();
+      if (typeof onDone === 'function') onDone(newSession); else openMfaSetup();
     } catch (e) {
       if (msg) msg.textContent = (e && e.message) || 'That code was not valid.';
       if (vb) { vb.disabled = false; vb.textContent = 'Verify & turn on'; }
@@ -967,4 +967,80 @@ function _mfaEnrollPhoneVerifyStep(token, shell, factorId, challengeId, phone) {
   }
   if (vb) vb.addEventListener('click', verify);
   if (inp) inp.addEventListener('keydown', function (/** @type {KeyboardEvent} */ e) { if (e.key === 'Enter') verify(); });
+}
+
+// -- Login enforcement (Stage 4) ----------------------------------------------
+// After the role is known at sign-in, require the role's configured 2FA method
+// if the staff member has not already satisfied it. Policy lives in
+// housing_settings key 'mfa_policy' ({ role: 'none'|'any'|'totp'|'sms' }); a role
+// defaults to 'none' (not required), so NOTHING is enforced until the ED sets it.
+// Returns { ok:true } (nothing to do / already satisfied / just enrolled) with an
+// optional AAL2 `session`, or { ok:false } if the user cancels (abort sign-in).
+// Fail-open on any policy-read error so a glitch never locks everyone out.
+async function _mfaEnforceEnrollment(token, role) {
+  if (!token || !role) return { ok: true };
+  var required = 'none';
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/housing_settings?key=eq.mfa_policy&select=value', { headers: _mfaHeaders(token) });
+    if (!r.ok) return { ok: true };
+    var rows = await r.json().catch(function () { return []; });
+    var pol = (rows && rows[0] && rows[0].value) || {};
+    required = pol[role] || 'none';
+  } catch (e) { return { ok: true }; }
+  if (required === 'none') return { ok: true };
+
+  var factors = await _mfaListVerifiedFactors(token);
+  var hasTotp  = factors.some(function (f) { return f.factor_type === 'totp'; });
+  var hasPhone = factors.some(function (f) { return f.factor_type === 'phone'; });
+  var satisfied = (required === 'any')  ? (hasTotp || hasPhone)
+                : (required === 'totp') ? hasTotp
+                : (required === 'sms')  ? hasPhone
+                : true;
+  if (satisfied) return { ok: true };   // already enrolled; the step-up already ran
+
+  return _mfaForceEnrollModal(token, required);
+}
+window._mfaEnforceEnrollment = _mfaEnforceEnrollment;
+
+// Blocking, self-positioning enrollment modal shown at sign-in when the role
+// requires a method the user has not set up. Resolves { ok:true, session } once
+// they enroll (AAL2), or { ok:false } if they cancel. Uses `.mfa-code-overlay`
+// so it works on the login page (which does not load housing.css).
+function _mfaForceEnrollModal(token, method) {
+  return new Promise(function (resolve) {
+    var ov = document.createElement('div');
+    ov.id = '_mfaForceOverlay';
+    ov.className = 'modal-overlay mfa-code-overlay';
+    ov.setAttribute('style', 'z-index:100000;');
+    ov.innerHTML =
+      '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:440px;max-height:92vh;overflow:auto;padding:22px;">'
+      + '<div style="font-size:16px;font-weight:700;color:var(--text);margin-bottom:6px;">&#128274; Two-factor authentication required</div>'
+      + '<div id="_mfaForceBody"></div></div>';
+    document.body.appendChild(ov);
+    var card = ov.querySelector('#_mfaForceBody');
+    function shell(html) { if (card) card.innerHTML = html; }
+    function onDone(session) { try { ov.remove(); } catch (e) {} resolve({ ok: true, session: session }); }
+    function onCancel() { try { ov.remove(); } catch (e) {} resolve({ ok: false }); }
+    var intro = 'Your role requires two-factor authentication to sign in. Set it up now to continue.';
+    if (method === 'totp') {
+      shell('<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">' + intro + '</div>');
+      _mfaBeginEnroll(token, shell, onDone, onCancel);
+    } else if (method === 'sms') {
+      shell('<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:12px;">' + intro + '</div>');
+      _mfaBeginEnrollPhone(token, shell, onDone, onCancel);
+    } else {
+      shell(
+        '<div style="font-size:13px;color:var(--muted);line-height:1.5;margin-bottom:14px;">' + intro + ' Choose how you want to receive your code:</div>'
+        + '<button type="button" id="_mfaForceTotp" class="btn btn-primary" style="width:100%;margin-bottom:8px;">Use an authenticator app</button>'
+        + '<button type="button" id="_mfaForcePhone" class="btn btn-ghost" style="width:100%;margin-bottom:8px;">Use text messages (SMS)</button>'
+        + '<button type="button" id="_mfaForceCancel" class="btn btn-ghost" style="width:100%;color:var(--danger);border-color:var(--danger);">Cancel sign-in</button>'
+      );
+      var bt = card.querySelector('#_mfaForceTotp');
+      var bp = card.querySelector('#_mfaForcePhone');
+      var bc = card.querySelector('#_mfaForceCancel');
+      if (bt) bt.addEventListener('click', function () { shell('<div style="color:var(--muted);font-size:13px;">Preparing your code&hellip;</div>'); _mfaBeginEnroll(token, shell, onDone, onCancel); });
+      if (bp) bp.addEventListener('click', function () { shell(''); _mfaBeginEnrollPhone(token, shell, onDone, onCancel); });
+      if (bc) bc.addEventListener('click', onCancel);
+    }
+  });
 }

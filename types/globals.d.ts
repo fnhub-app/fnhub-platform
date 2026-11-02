@@ -212,6 +212,8 @@ declare function auditEntry(entityId: string, action: string, detail?: any, user
 declare function showToast(msg: string, opts?: { type?: string; duration?: number; position?: string }): any;
 /** Per-role 2FA policy panel (housing-settings.js); called from the Users table render in shared-data.js. */
 declare function renderMfaPolicyPanel(): void;
+/** Login-time 2FA enforcement (shared-auth.js); called from auth-login.js after the role is resolved. */
+declare function _mfaEnforceEnrollment(token: string, role: string): Promise<{ ok: boolean; session?: any }>;
 
 // --- Cross-file app globals used by shared-data.js (RX1 slice 3) --------------
 // Pragmatic `any` placeholders for functions/caches/libs defined in files not
