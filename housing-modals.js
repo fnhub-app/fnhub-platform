@@ -260,7 +260,7 @@ function udpRenderMatchesTable(unitId){
       : '<span style="font-size:11px;color:var(--muted);">—</span>';
     return '<tr style="border-bottom:1px solid var(--border);">'
       + '<td style="padding:10px 10px;vertical-align:top;">'
-        + '<div style="font-weight:700;color:var(--text);font-size:13px;">' + name + '</div>'
+        + '<div onclick="openAppFromMatch(\'' + aidEsc + '\')" title="Open this application" style="font-weight:700;color:var(--text);font-size:13px;cursor:pointer;text-decoration:underline;text-underline-offset:2px;">' + name + '</div>'
         + '<div style="font-size:11px;color:var(--muted);margin-top:1px;">' + escapeHtml(a.id) + (isTransfer ? ' &middot; <span style="color:var(--warn-amber-text);font-weight:700;">transfer</span>' : '') + '</div>'
         + (statusLbl ? '<div style="font-size:11px;color:var(--muted);margin-top:1px;">' + escapeHtml(statusLbl) + '</div>' : '')
       + '</td>'
