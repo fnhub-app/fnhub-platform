@@ -44,29 +44,45 @@
   // custom=price is free-entry. NOTE: never edit the d strings — saved
   // nation_billing rows re-select their line item by exact-description match.
   var FEE_SCHEDULE = [
-    // Subscription -- billed annually in advance
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Small (up to 100 homes), annual', p: 5400, q: 1 },
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size (101-300 homes), annual', p: 9540, q: 1 },
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Large (301-600 homes), annual', p: 15000, q: 1 },
-    // Subscription -- monthly (higher rate, already includes +10%)
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Small (up to 100 homes), monthly', p: 495, q: 1 },
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size (101-300 homes), monthly', p: 875, q: 1 },
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Large (301-600 homes), monthly', p: 1375, q: 1 },
+    // Pricing effective 2026-11-02 (matches the published bands on nationpathways.com).
+    // Subscription -- billed annually in advance, priced by band within each tier
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Small, up to 50 homes, annual', p: 5400, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Small, 51-100 homes, annual', p: 6480, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size, 101-150 homes, annual', p: 7680, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size, 151-200 homes, annual', p: 8880, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size, 201-250 homes, annual', p: 10080, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size, 251-300 homes, annual', p: 11280, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Large, 301-400 homes, annual', p: 13440, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Large, 401-500 homes, annual', p: 15600, q: 1 },
+    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Large, 501-600 homes, annual', p: 17760, q: 1 },
+    // Subscription -- monthly (annual / 12 + 10%, rounded to the nearest $5)
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Small, up to 50 homes, monthly', p: 495, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Small, 51-100 homes, monthly', p: 595, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size, 101-150 homes, monthly', p: 705, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size, 151-200 homes, monthly', p: 815, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size, 201-250 homes, monthly', p: 925, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size, 251-300 homes, monthly', p: 1035, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Large, 301-400 homes, monthly', p: 1230, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Large, 401-500 homes, monthly', p: 1430, q: 1 },
+    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Large, 501-600 homes, monthly', p: 1630, q: 1 },
     // One-time setup (once per client)
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Small', p: 3500, q: 1 },
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Large', p: 9500, q: 1 },
+    { g: 'One-time setup (once per client)', d: 'One-time setup — Small', p: 4000, q: 1 },
+    { g: 'One-time setup (once per client)', d: 'One-time setup — Mid-size', p: 7000, q: 1 },
+    { g: 'One-time setup (once per client)', d: 'One-time setup — Large', p: 11000, q: 1 },
     // Setup with the 50% discount (one-year term, prepaid) -- the only discount that exists
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Small (50% discount)', p: 1750, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Mid-size (50% discount)', p: 3000, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Large (50% discount)', p: 4750, q: 1 },
-    // Add-on
-    { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 95, q: 1 },
+    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Small (50% discount)', p: 2000, q: 1 },
+    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Mid-size (50% discount)', p: 3500, q: 1 },
+    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Large (50% discount)', p: 5500, q: 1 },
+    // Add-on (priced by tier)
+    { g: 'Add-on', d: 'AI Staff Assistant — Small (per month)', p: 85, q: 1 },
+    { g: 'Add-on', d: 'AI Staff Assistant — Mid-size (per month)', p: 110, q: 1 },
+    { g: 'Add-on', d: 'AI Staff Assistant — Large (per month)', p: 175, q: 1 },
     // Additional services (hourly; written authorization required)
     { g: 'Additional services (hourly, written authorization)', d: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)', p: 150, q: 1, hours: true },
     { g: 'Additional services (hourly, written authorization)', d: 'Travel time (per hour, max 8 hrs/travel day)', p: 75, q: 1, hours: true },
     // Custom / at cost (free-entry amount)
     { g: 'Custom / at cost (enter amount)', d: 'Subscription — 600+ / Tribal Council (custom per quote)', p: 0, q: 1, custom: true },
+    { g: 'Custom / at cost (enter amount)', d: 'Text messages over 500/month (at cost, no markup)', p: 0, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
   ];
 
@@ -79,20 +95,34 @@
   }
   function feeFmt(n){ n = Number(n) || 0; return '$' + (n % 1 ? n.toFixed(2) : String(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
   var FEE_SIZES = { Small: 'Small (up to 100 homes)', 'Mid-size': 'Mid-size (101-300 homes)', Large: 'Large (301-600 homes)' };
-  // "$5,400/year ($450/mo) or $495/month; one-time setup $3,500"
+  // Price bands inside each tier (homes managed). Descriptions are built from these.
+  var FEE_BANDS = {
+    Small: ['up to 50 homes', '51-100 homes'],
+    'Mid-size': ['101-150 homes', '151-200 homes', '201-250 homes', '251-300 homes'],
+    Large: ['301-400 homes', '401-500 homes', '501-600 homes']
+  };
+  // "up to 50 homes $5,400/year ($450/mo) or $495/month; 51-100 homes ...; one-time setup $4,000"
   function feeTierText(size){
-    var yr = feePrice('Subscription — ' + FEE_SIZES[size] + ', annual');
-    return feeFmt(yr) + '/year (' + feeFmt(Math.round(yr / 12 * 100) / 100) + '/mo) or '
-      + feeFmt(feePrice('Subscription — ' + FEE_SIZES[size] + ', monthly')) + '/month; one-time setup '
-      + feeFmt(feePrice('One-time setup — ' + size));
+    return FEE_BANDS[size].map(function(b){
+      var yr = feePrice('Subscription — ' + size + ', ' + b + ', annual');
+      return b + ' ' + feeFmt(yr) + '/year (' + feeFmt(Math.round(yr / 12 * 100) / 100) + '/mo) or '
+        + feeFmt(feePrice('Subscription — ' + size + ', ' + b + ', monthly')) + '/month';
+    }).join('; ') + '; one-time setup ' + feeFmt(feePrice('One-time setup — ' + size));
+  }
+  // "$85/month (Small), $110/month (Mid-size) or $175/month (Large)"
+  function feeAiText(){
+    return ['Small', 'Mid-size', 'Large'].map(function(k){
+      return feeFmt(feePrice('AI Staff Assistant — ' + k + ' (per month)')) + '/month (' + k + ')';
+    }).join(', ').replace(/, ([^,]*)$/, ' or $1');
   }
   // One-paragraph summary of the published pricing (reseller agreement s.6.1 default).
   function feeScheduleSummary(){
     var sz = ['Small', 'Mid-size', 'Large'];
     return "Per the Owner's published fee schedule (CAD, plus applicable taxes): "
-      + sz.map(function(k){ return FEE_SIZES[k] + ' ' + feeTierText(k); }).join('; ')
-      + '; 600+ homes / Tribal Council by quote. The setup fee is reduced 50% for a one-year term with the first year prepaid. '
-      + 'AI Staff Assistant add-on ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month. '
+      + sz.map(function(k){ return FEE_SIZES[k] + ': ' + feeTierText(k); }).join('. ') + '.'
+      + ' 600+ homes / Tribal Council by quote. The setup fee is reduced 50% for a one-year term with the first year prepaid. '
+      + 'Up to 500 text messages a month included; additional texts at cost. '
+      + 'AI Staff Assistant add-on ' + feeAiText() + '. '
       + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
       + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
       + 'Only recurring subscription and add-on fees earn Commission (Section 7.3).';
@@ -1571,7 +1601,7 @@
     '@SIG|nation',
     '@SIG|provider',
     '##Schedule A - Order Form',
-    'Select one tier and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
+    'Select one tier and one billing option; the price is the band matching the number of homes the Nation manages on the Effective Date. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
     '###Subscription tiers',
     '-[ ] Small - up to 100 homes: {{FEE_SMALL}}.',
     '-[ ] Mid-size - 101-300 homes: {{FEE_MID}}.',
@@ -1580,12 +1610,12 @@
     '###Billing and options',
     'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (+10% rate above)',
     'Setup discount: [ ] One-year term with first year prepaid - setup fee reduced 50% to $______ (Section 7.3)',
-    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}/month. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
+    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}, by the tier selected above. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
     'Email delivery method (Schedule D): [ ] Nation\'s own Microsoft 365 tenant (requires the Nation\'s Microsoft administrator to grant application consent during setup)     [ ] Provider-managed transactional email service (Resend or SendGrid - United States; see Schedule D)',
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
     '###Term and contacts',
     'Initial Term: [ ] One (1) year from the Effective Date     [ ] Other: ______________',
-    'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, inspections, capital projects, finance, Chief & Council dashboard, tenant/applicant portal.',
+    'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, inspections, capital projects, finance, Chief & Council dashboard, tenant/applicant portal, contractor portal. Text messages (work-order alerts and contractor sign-in codes): up to 500 per month included; additional messages billed at the Provider\'s cost with no markup.',
     'Nation\'s primary contact for notices: name ____________________ email ____________________',
     'Provider contact for notices: {{PROVIDER_NOTICE}}',
     '##Schedule B - Setup Services (Scope)',
@@ -1901,7 +1931,7 @@
       .replace(/\{\{FEE_SMALL\}\}/g, feeTierText('Small'))
       .replace(/\{\{FEE_MID\}\}/g, feeTierText('Mid-size'))
       .replace(/\{\{FEE_LARGE\}\}/g, feeTierText('Large'))
-      .replace(/\{\{FEE_AI\}\}/g, feeFmt(feePrice('AI Staff Assistant (per month)')))
+      .replace(/\{\{FEE_AI\}\}/g, feeAiText())
       .replace(/\{\{FEE_HOURLY\}\}/g, feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')))
       .replace(/\{\{FEE_TRAVEL_HR\}\}/g, feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')))
       .replace(/\{\{NATION\}\}/g, nationName)
