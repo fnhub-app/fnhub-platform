@@ -1629,18 +1629,25 @@ async function _sowPromptWorkOrderEmail(){
       (ct.people || []).forEach(function(p, i){
         _pushRecip('kc_'+i, p && p.email, (p && p.name) ? (p.name + ' (key contact)') : 'Key contact', false);
       });
-      if(!recips.length){ if(typeof showToast === 'function') showToast('No contractor or key-contact email on file.', {type:'error'}); return; }
+      // Text option: contractors sign in to the portal by phone, so offer a text
+      // to the contractor's mobile when the SMS module + event are on. '' hides
+      // the row (module off, or no valid mobile on file).
+      var ctSmsNum = (typeof window._contractorWorkOrderSmsNumber === 'function') ? window._contractorWorkOrderSmsNumber(ct) : '';
+      var boxes = recips.map(function(x){ return { id:x.id, label:x.label, defaultChecked:x.defaultChecked }; });
+      if(ctSmsNum){ boxes.push({ id:'_sms', label:'&#128241; Text &middot; ' + _esc(ct.name || 'contractor') + ' at ' + _esc(ctSmsNum), defaultChecked:true }); }
+      if(!boxes.length){ if(typeof showToast === 'function') showToast('No contractor email or mobile on file.', {type:'error'}); return; }
       var r2 = await showConfirm({
-        title:'Email Work Order?',
-        message:'Select who should receive this work order (PDF attached):',
-        confirmText:'Send Email', cancelText:'Cancel',
-        checkboxes: recips.map(function(x){ return { id:x.id, label:x.label, defaultChecked:x.defaultChecked }; })
+        title:'Send Work Order?',
+        message:'Select how to send this work order (PDF attached to email):',
+        confirmText:'Send', cancelText:'Cancel',
+        checkboxes: boxes
       });
       if(!r2 || !r2.ok) return;
       var picked = (r2.items) || {};
       var chosen = recips.filter(function(x){ return picked[x.id]; }).map(function(x){ return x.email; });
-      if(!chosen.length){ if(typeof showToast === 'function') showToast('No recipients selected — nothing sent.', {type:'info'}); return; }
-      notifyWorkOrderToContractor(sow, unit, ct, chosen);
+      var wantSms = !!picked._sms;
+      if(!chosen.length && !wantSms){ if(typeof showToast === 'function') showToast('Nothing selected — nothing sent.', {type:'info'}); return; }
+      notifyWorkOrderToContractor(sow, unit, ct, chosen, { sms: wantSms, smsNumber: ctSmsNum });
       _sowMarkWorkStarted(unit && unit.id, sow, ct.name || 'the contractor');
     } else {
       if(typeof showToast === 'function') showToast('Assign this request to a contractor or employee to email the work order.', {type:'info'});
