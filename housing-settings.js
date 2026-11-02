@@ -295,6 +295,84 @@ function saveApprovalAuthoritySettings() {
   });
 }
 
+// ── Two-Factor Authentication requirement by role (Stage 1: policy only) ──────
+// Per-role second-step requirement, configured by the ED on Settings -> Users.
+// Stored in housing_settings key 'mfa_policy' as { role: 'none'|'sms'|'totp'|'any' }.
+// NOT YET ENFORCED at login -- this captures the policy; enforcement is a later
+// stage, and the 'sms' (text) method depends on an SMS provider being configured
+// for the nation. 'totp' (authenticator app) is already available.
+var MFA_POLICY_ROLES = ['ed', 'cfo', 'housing_manager', 'housing_employee_l2', 'housing_employee_l1', 'field_employee', 'finance_l1'];
+var MFA_POLICY_DEFAULTS = { ed:'none', cfo:'none', housing_manager:'none', housing_employee_l2:'none', housing_employee_l1:'none', field_employee:'none', finance_l1:'none' };
+var MFA_METHOD_LABELS = { none:'Not required', any:'Required - either method', totp:'Required - authenticator app', sms:'Required - text message' };
+
+function getMfaPolicy() {
+  var saved = (window._appSettings && window._appSettings.mfa_policy) || {};
+  var out = {};
+  MFA_POLICY_ROLES.forEach(function (r) { out[r] = saved[r] || MFA_POLICY_DEFAULTS[r] || 'none'; });
+  return out;
+}
+window.getMfaPolicy = getMfaPolicy;
+
+function _mfaPolicyIsEd() {
+  var effectiveRole = window._realRole || window.currentRole;
+  return effectiveRole === 'ed' || effectiveRole === 'super_user';
+}
+
+function renderMfaPolicyPanel() {
+  var el = document.getElementById('mfa_policy_panel_body');
+  if (!el) return;
+  if (!_mfaPolicyIsEd()) { el.innerHTML = ''; return; }   // ED-only; hidden for everyone else
+  var pol = getMfaPolicy();
+  var roleLabel = function (v) {
+    if (window.CLFN_PERMS && CLFN_PERMS.ROLE_LABELS && CLFN_PERMS.ROLE_LABELS[v]) return CLFN_PERMS.ROLE_LABELS[v];
+    var fb = { ed:'Executive Director', cfo:'CFO', housing_manager:'Housing Manager', housing_employee_l2:'Housing Employee L2', housing_employee_l1:'Housing Employee L1', field_employee:'Field Employee', finance_l1:'Finance Clerk L1' };
+    return fb[v] || v;
+  };
+  var opts = function (cur) {
+    return ['none', 'sms', 'totp', 'any'].map(function (m) {
+      return '<option value="' + m + '"' + (cur === m ? ' selected' : '') + '>' + MFA_METHOD_LABELS[m] + '</option>';
+    }).join('');
+  };
+  var rows = MFA_POLICY_ROLES.map(function (r) {
+    return '<div style="display:grid;grid-template-columns:220px 1fr;align-items:center;gap:16px;padding:9px 0;border-bottom:1px solid var(--border);">'
+      + '<div class="js-txt-bold">' + roleLabel(r) + '</div>'
+      + '<div><select data-mfa-role="' + r + '" onchange="saveMfaPolicyRole(this)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--surface);font-family:DM Sans,sans-serif;min-width:260px;">'
+      + opts(pol[r]) + '</select></div>'
+      + '</div>';
+  }).join('');
+  el.innerHTML =
+    '<div class="card card-flush-gold" style="margin-top:20px;">'
+    + '<div class="modal-hdr"><div>'
+    +   '<div class="lbl-yellow">&#128274; Two-Factor Authentication by Role</div>'
+    +   '<div class="txt-sm-meta">Choose the sign-in second-step requirement for each role. <strong>Not enforced yet</strong> &mdash; this captures the policy; login enforcement is turned on in a later step. ED only.</div>'
+    + '</div></div>'
+    + '<div class="sec-pad">' + rows
+    +   '<div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.5;"><strong>Authenticator app</strong> uses a code from an app like Google Authenticator. <strong>Text message</strong> texts a code (needs an SMS provider for your nation &mdash; coming soon). <strong>Either</strong> lets the staff member choose. Changes save immediately.</div>'
+    + '</div></div>';
+}
+window.renderMfaPolicyPanel = renderMfaPolicyPanel;
+
+function saveMfaPolicyRole(sel) {
+  if (!_mfaPolicyIsEd()) { showToast('Only the Executive Director can set 2FA requirements.', { type: 'error' }); renderMfaPolicyPanel(); return; }
+  if (!sel) return;
+  var role = sel.getAttribute('data-mfa-role');
+  var val  = sel.value;
+  if (!role) return;
+  if (!window._appSettings) window._appSettings = {};
+  var cfg = Object.assign({}, window._appSettings.mfa_policy || {});
+  cfg[role] = val;
+  window._appSettings.mfa_policy = cfg;
+  saveSettingWithDraftFallback('mfa_policy', cfg).then(function (ok) {
+    if (ok) {
+      showToast('✓ 2FA requirement saved', { type: 'info' });
+      if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'mfa_policy_updated', 'Two-factor requirement for ' + role + ' set to "' + val + '"', (window._realRole || window.currentRole) || 'ed');
+    } else {
+      showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+    }
+  });
+}
+window.saveMfaPolicyRole = saveMfaPolicyRole;
+
 // Map each section ID to its parent group, used by showSettingsSection to
 // keep the top-tier group buttons + sub-tab row in sync when a section is
 // opened programmatically.
