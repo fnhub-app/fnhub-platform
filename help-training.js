@@ -38,6 +38,7 @@
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-02', change: 'Added a Two-Factor Authentication (2FA) procedure.' },
     { date: '2026-11-02', change: 'Expanded step-by-step detail for creating an application, adding a unit, creating a project / adding lots, and creating / issuing a Maintenance Request; added AI-assistant usage notes.' },
     { date: '2026-11-02', change: 'Initial version of the SOP library.' }
   ];
@@ -881,6 +882,43 @@
     <li>If the logo or colours look wrong in the reader, check Settings &rarr; Themes.</li>
     </ul>`;
 
+  var MOD_2FA = `
+    <p>Two-factor authentication (2FA) adds a second step to staff sign-in: after your email and password, you enter a 6-digit code from an authenticator app on your phone. It is opt-in &mdash; if you do not turn it on, you sign in exactly as before.</p>
+    <h2>Who can use it</h2>
+    <ul><li>Any staff member can turn it on for their own account from the avatar menu. It affects only your own sign-in.</li></ul>
+    <h2>What you need</h2>
+    <ul><li>An authenticator app on your phone &mdash; Google Authenticator, Microsoft Authenticator, Authy, or 1Password all work.</li></ul>
+    <h2>Turn on 2FA</h2>
+    <ol>
+    <li>Click your <strong>avatar</strong> (top-right) and choose <strong>Two-Factor Authentication</strong>.</li>
+    <li>Click <strong>Set up two-factor</strong>.</li>
+    <li>In your authenticator app, add an account and <strong>scan the QR code</strong> shown (or type the manual key if you cannot scan).</li>
+    <li>Enter the <strong>6-digit code</strong> your app now shows and confirm. 2FA is now ON for your account.</li>
+    </ol>
+    <h2>Signing in with 2FA on</h2>
+    <ol>
+    <li>Enter your email and password and click <strong>Sign in</strong>.</li>
+    <li>A <strong>Two-factor verification</strong> box appears. Open your authenticator app, read the current 6-digit code for this account, type it in, and click <strong>Verify</strong>.</li>
+    <li>Codes change every 30 seconds &mdash; if one is rejected, wait for the next code and try again.</li>
+    </ol>
+    <h2>Turn off 2FA</h2>
+    <ol>
+    <li>Click your <strong>avatar</strong> &rarr; <strong>Two-Factor Authentication</strong>.</li>
+    <li>Click <strong>Turn off two-factor</strong>. Your next sign-in will be email + password only.</li>
+    </ol>
+    <h2>Lost or replaced phone</h2>
+    <ul>
+    <li>If you can still sign in, turn 2FA off (above) and set it up again on the new phone.</li>
+    <li>If you are locked out (no access to the codes), ask your <strong>ED / administrator</strong> to remove the second factor from your account. You can then sign in with your password and set 2FA up again.</li>
+    </ul>
+    <h2>Notes and cautions</h2>
+    <ul>
+    <li><strong>It protects only your own account</strong> &mdash; each staff member turns it on for themselves.</li>
+    <li>Keep your authenticator app and phone backed up so a lost phone does not lock you out.</li>
+    <li>2FA must be enabled for your nation before setup works; if the setup screen says it is unavailable, your administrator needs to enable it first.</li>
+    <li>If the code box does not appear at sign-in, do a hard refresh of the page and try again.</li>
+    </ul>`;
+
   // ---- SETTINGS SOPs (one per Settings tab) --------------------------------
 
   var SET_NATION = `
@@ -1456,6 +1494,7 @@
     { id: 'mod-email-intake', cat: 'Modules', title: 'Email Intake',                  html: MOD_EMAIL_INTAKE },
     { id: 'mod-ai',           cat: 'Modules', title: 'AI Assistant',                  html: MOD_AI },
     { id: 'mod-leadership',   cat: 'Modules', title: 'Leadership Dashboard',          html: MOD_LEADERSHIP },
+    { id: 'mod-2fa',          cat: 'Modules', title: 'Two-Factor Authentication',      html: MOD_2FA },
     { id: 'mod-help',         cat: 'Modules', title: 'Help & Training',               html: MOD_HELP },
 
     { id: 'set-nation',    cat: 'Settings', title: 'Nation & Modules',     html: SET_NATION },
