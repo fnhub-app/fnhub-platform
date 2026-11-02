@@ -297,6 +297,13 @@ function _buildSowModalHTML() {
               '<div class="f"><label>Target Completion Date</label><input id="sow_end_date" type="date"/></div>' +
             '</div>' +
           '</div>' +
+          // Notes posted by the assigned contractor via the Contractor Portal.
+          // Read-only; hidden when there are none. Populated on open from the
+          // saved SOW's contractorNotes[] (written by the contractor-upload fn).
+          '<div class="tic-section" id="sow_contractor_notes_section" style="display:none;">' +
+            '<div class="tic-section-h">Contractor Notes</div>' +
+            '<div id="sow_contractor_notes"></div>' +
+          '</div>' +
         '</div>' +
 
         // ── SCOPE OF WORK ────────────────────────────────────────────────
@@ -929,6 +936,7 @@ function openSowModal(unitId, projectNumber) {
   } else {
     resetSow();
   }
+  _sowRenderContractorNotes(saved);
   if(label) { var addr=document.getElementById('sow_address'); if(addr) addr.value=label; }
   // Populate fund source dropdown for this unit's funder type
   var savedFs = saved ? (saved.fundSource || '') : '';
@@ -1058,6 +1066,27 @@ function _applySowSeed(seed){
   }
 }
 window._applySowSeed = _applySowSeed;
+
+// Render the read-only "Contractor Notes" panel on the SOW Overview from the
+// saved record's contractorNotes[] (posted by the contractor in the portal).
+// Hidden when there are none. Newest note first.
+function _sowRenderContractorNotes(saved){
+  var sec  = document.getElementById('sow_contractor_notes_section');
+  var body = document.getElementById('sow_contractor_notes');
+  if(!sec || !body) return;
+  var notes = (saved && Array.isArray(saved.contractorNotes)) ? saved.contractorNotes : [];
+  if(!notes.length){ sec.style.display = 'none'; body.innerHTML = ''; return; }
+  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); };
+  body.innerHTML = notes.slice().reverse().map(function(n){
+    var when = (n && n.at) ? String(n.at).slice(0,10) : '';
+    return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);">'
+      + '<div style="white-space:pre-wrap;word-break:break-word;color:var(--text);font-size:13px;">' + esc((n && n.text) || '') + '</div>'
+      + '<div style="color:var(--muted);font-size:11px;margin-top:3px;">' + (when ? esc(when) + ' · ' : '') + 'From contractor</div>'
+      + '</div>';
+  }).join('');
+  sec.style.display = '';
+}
+window._sowRenderContractorNotes = _sowRenderContractorNotes;
 
 // ── Request Source + source letters ───────────────────────────────────────
 // The Overview "Request Source" dropdown (Tenant / Emergency / Housing /

@@ -1758,6 +1758,14 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .login-btn--sm       { font-size: 13px; padding: 10px; margin-bottom: 10px; }
 .login-error         { display: none; background: var(--err-bg); border: 1px solid var(--err-border); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--err-text); text-align: left; }
 .login-msg           { display: none; margin-top: 10px; font-size: 12px; padding: 8px 12px; border-radius: 6px; }
+/* Audience chooser on the staff login: staff use the form; contractors and
+   community members route to their own portals (so a non-employee who lands on
+   the staff sign-in can get to the right place instead of bouncing here). */
+.login-audience        { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--dark-border); }
+.login-audience-label  { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); text-align: center; margin-bottom: 10px; }
+.login-audience-btns   { display: flex; flex-direction: column; gap: 8px; }
+.login-audience-btn    { display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; border: 1px solid var(--dark-border); border-radius: 8px; padding: 11px 14px; font-size: 13px; font-weight: 600; color: #fff; font-family: var(--sans); text-decoration: none; cursor: pointer; }
+.login-audience-btn:hover { border-color: var(--yellow); color: var(--yellow); }
 
 /* ════════════════════════════════════════════════════════════════════════
  * SHARED HEADER (app-header-v2)
