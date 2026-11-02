@@ -38,6 +38,7 @@
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-02', change: 'Documented assigning a tenant from a unit’s new Matches tab; clarified that an emailed document filed via Email Intake also appears on the tenant’s profile.' },
     { date: '2026-11-02', change: 'Added a Two-Factor Authentication (2FA) procedure.' },
     { date: '2026-11-02', change: 'Expanded step-by-step detail for creating an application, adding a unit, creating a project / adding lots, and creating / issuing a Maintenance Request; added AI-assistant usage notes.' },
     { date: '2026-11-02', change: 'Initial version of the SOP library.' }
@@ -270,6 +271,7 @@
     <table><thead><tr><th>Tab</th><th>What it holds</th></tr></thead><tbody>
     <tr><td>Overview</td><td>Address, bed/bath/type, flags, funder, status, assignment type, inspection dates, notes.</td></tr>
     <tr><td>Tenant</td><td>The assigned tenant and tenancy history.</td></tr>
+    <tr><td>Matches</td><td>Approved applicants who are a potential match for this unit, ranked by fit, with an Assign button. Shown for vacant units when the Match module is on.</td></tr>
     <tr><td>Approvals</td><td>Budget indicator and the HM/ED signature blocks for the unit's renovation budget.</td></tr>
     <tr><td>Maintenance Requests</td><td>The unit's Maintenance Requests, with + New Maintenance Request.</td></tr>
     <tr><td>RFQs &amp; Contracts</td><td>RFQs linked to this unit.</td></tr>
@@ -291,6 +293,13 @@
     <ol>
     <li>Open the unit card, go to the relevant tab, change the fields, and <strong>Save</strong>.</li>
     <li>For location, use the <strong>Map &amp; Photos</strong> tab to set the pin.</li>
+    </ol>
+    <h2>Assign a tenant from the unit (Matches tab)</h2>
+    <p>For a vacant unit you can place a tenant from the unit side instead of starting on the Match page:</p>
+    <ol>
+    <li>Open the unit card and go to the <strong>Matches</strong> tab. It lists approved applicants who fit this unit, ranked best-fit first (with the tightest / exact bedroom fit, accessibility, and Elders eligibility flagged).</li>
+    <li>Click <strong>Assign &rarr;</strong> next to the applicant. The Assign-Unit window opens with this unit pre-selected.</li>
+    <li>Confirm (and add notes if your role requires them). The usual approval rules apply &mdash; a unit two or more bedrooms larger than the applicant needs still requires ED approval.</li>
     </ol>
     <h2>Assignment types</h2>
     <ul>
@@ -770,14 +779,22 @@
 
   var MOD_EMAIL_INTAKE = `
     <p>Email Intake lets staff forward an email to the nation's intake address and have it land in a triage queue, where it is filed to a unit or tenant. It is triage-first &mdash; nothing is filed automatically. Gated by the Email Intake module.</p>
+    <h2>Email a document to a tenant's file</h2>
+    <p>This is the quickest way to get a PDF, photo, or scanned letter onto a tenant's file without logging in and uploading &mdash; just email it in:</p>
+    <ol>
+    <li>From your work email, <strong>forward or send the message with the document attached</strong> to the nation's intake address (shown on the Email Intake page, and set in Settings &rarr; Nation).</li>
+    <li>Open <strong>Email Intake</strong> (Operations nav) and find your email in the triage queue (it shows as <em>Needs filing</em>).</li>
+    <li>Open the item, check the attachment, and <strong>assign</strong> it to the tenant's unit (use a suggested match or search for the address).</li>
+    <li>The document now appears on that unit's <strong>Documents</strong> tab &mdash; and because a unit and the tenant living in it share one document file, it also appears on the <strong>tenant's profile</strong> (the tenant card's Documents tab). Filing it once puts it in both places.</li>
+    </ol>
     <h2>Who can use it</h2>
-    <ul><li>Housing staff triage and file. The forwarding address only accepts mail from active staff.</li></ul>
+    <ul><li>Housing staff triage and file. The forwarding address only accepts mail from active staff, so a document must be sent from a staff member's own work email to be accepted.</li></ul>
     <h2>How it works</h2>
     <ol>
     <li>A staff member forwards an email to the nation's intake address (shown as a banner on the Email Intake page, set in Settings &rarr; Nation).</li>
     <li>The email, with attachments, lands in the <strong>triage queue</strong> as a new item.</li>
     <li>Staff open it, review the sender, subject, plain-text body, and attachments, and <strong>assign</strong> it to a unit.</li>
-    <li>On assign, the attachments and body file into that unit's Documents, and the item is marked assigned.</li>
+    <li>On assign, the attachments and body file into that unit's Documents &mdash; which is the same document file the tenant's profile shows &mdash; and the item is marked assigned.</li>
     </ol>
     <h2>Triage an email</h2>
     <ol>

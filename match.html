@@ -172,6 +172,7 @@
       <button type="button" data-ue-keep class="tic-tab tic-active" data-ue-tab="overview"  onclick="_ueSwitchTab('overview')"  role="tab">Overview</button>
       <button type="button" data-ue-keep class="tic-tab"            data-ue-tab="notes"     onclick="_ueSwitchTab('notes')"     role="tab">Notes</button>
       <button type="button" data-ue-keep class="tic-tab"            data-ue-tab="tenant"    onclick="_ueSwitchTab('tenant')"    role="tab">Tenant</button>
+      <button type="button" data-ue-keep class="tic-tab"            data-ue-tab="matches"   onclick="_ueSwitchTab('matches')"   role="tab">Matches</button>
       <button type="button" data-ue-keep class="tic-tab"            data-ue-tab="approvals" onclick="_ueSwitchTab('approvals')" role="tab">Approvals</button>
       <button type="button" data-ue-keep class="tic-tab"            data-ue-tab="sow"       onclick="_ueSwitchTab('sow')"       role="tab">Maintenance Requests</button>
       <button type="button" data-ue-keep class="tic-tab"            data-ue-tab="rfq"       onclick="_ueSwitchTab('rfq')"       role="tab">RFQs &amp; Contracts</button>
@@ -394,6 +395,14 @@
       </div>
 
       <!-- Approvals -->
+      <!-- Potential Matches -->
+      <div id="ue_panel_matches" class="tic-panel">
+        <div id="udp_matches_section">
+          <div class="lbl-muted" style="margin-bottom:8px;">Potential Applicant Matches</div>
+          <div id="udp_matches_mount"></div>
+        </div>
+      </div>
+
       <div id="ue_panel_approvals" class="tic-panel">
 
         <!-- Budget Approval Indicator (shown when SOW cost exists) -->
