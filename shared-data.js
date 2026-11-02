@@ -7016,9 +7016,14 @@ async function renderHousingUserTable(){
           var _sendBtn = (u.magic_link === true)
             ? '<button onclick="sendStaffMagicLink(\''+escapeHtml(u.email)+'\',this)" class="btn btn-ghost btn-sm">Send Sign-in Link</button>'
             : '<button onclick="sendStaffPasswordReset(\''+escapeHtml(u.email)+'\',this)" class="btn btn-ghost btn-sm">Send Reset</button>';
+          // Reset 2FA: ED/super_user only (lost-device safety net before enforcement).
+          var _reset2fa = (window.currentRole === 'ed' || window.currentRole === 'super_user')
+            ? '<button onclick="adminResetUserMfa(\''+escapeHtml(u.email)+'\',this)" class="btn btn-ghost btn-sm" title="Remove their two-factor so they can set it up again">Reset 2FA</button>'
+            : '';
           actionsHtml = '<div class="flex-end gap-8">'
             +'<button onclick="_sbEditStaffModal('+u.id+')" class="btn btn-ghost btn-sm">Edit</button>'
             +_sendBtn
+            +_reset2fa
             +'<button onclick="deactivateStaff('+u.id+',this)" class="btn btn-sm" style="border-color:var(--danger-border);color:var(--danger);">Deactivate</button>'
             +'</div>';
         }
@@ -7048,6 +7053,40 @@ async function renderHousingUserTable(){
     tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--danger);font-size:12px;">Error loading staff: '+escapeHtml(e.message)+'</td></tr>';
   }
 }
+
+// ED/super_user removes a staff member's two-factor factors via the
+// mfa-admin-reset Edge Function (admin rights live only in the function). Used
+// when someone loses their phone/authenticator and -- once 2FA is enforced --
+// would otherwise be locked out. ED-only; audited server-side and client-side.
+async function adminResetUserMfa(email, btn) {
+  if (!(window.currentRole === 'ed' || window.currentRole === 'super_user')) {
+    if (typeof showToast === 'function') showToast('Only the Executive Director can reset two-factor.', { type: 'error' });
+    return;
+  }
+  var msg = 'Reset two-factor for ' + email + '? They will sign in with just their password until they set it up again.';
+  var res = (typeof showConfirm === 'function') ? await showConfirm(msg) : window.confirm(msg);
+  var proceed = (res === true) || (res && res.ok === true);
+  if (!proceed) return;
+  if (btn) { btn.disabled = true; btn.textContent = 'Resetting…'; }
+  try {
+    var token = (window.HOUSING_SESSION && HOUSING_SESSION.accessToken) || '';
+    var r = await fetch(SUPABASE_URL + '/functions/v1/mfa-admin-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': SUPABASE_ANON, 'Authorization': 'Bearer ' + token },
+      body: JSON.stringify({ email: email })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok) throw new Error((d && (d.error || d.detail)) || 'Reset failed');
+    if (typeof showToast === 'function') showToast('✓ Two-factor reset for ' + email + (d && d.removed != null ? ' (' + d.removed + ' removed)' : ''), { type: 'info' });
+    if (typeof auditEntry === 'function') auditEntry('STAFF', 'mfa_admin_reset', 'Reset two-factor for ' + email, window.currentRole || 'ed');
+  } catch (e) {
+    if (typeof showToast === 'function') showToast('Reset failed: ' + ((e && e.message) || 'error'), { type: 'error' });
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = 'Reset 2FA'; }
+  }
+}
+window.adminResetUserMfa = adminResetUserMfa;
+
 function renderRenoScoreBadge(unitId) {
   var el = document.getElementById('rp_reno_score_badge');
   if(!el) return;
