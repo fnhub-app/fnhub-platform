@@ -7750,6 +7750,71 @@ function matchScoreCandidateUnits(app) {
 function matchBestUnit(app) {
   return matchScoreCandidateUnits(app)[0] || null;
 }
+// ── Inverse of matchScoreCandidateUnits: for ONE unit, the eligible applicants
+// scored against it, best-fit first. Powers the Edit Unit modal's "Matches" tab
+// (assign a tenant from the UNIT side instead of the applicant side). Uses the
+// SAME bedroom/accessibility/Elders fit math as matchScoreCandidateUnits so a
+// unit-side match agrees with the Match page's applicant-side scoring. Candidate
+// eligibility mirrors the Match queue exactly: assignable (appIsAssignable), not
+// already placed, not archived/deceased, and only the two SCORED app types
+// (new_housing / transfer_request — file updates are never matched). Hard
+// exclusions for THIS unit: an Elders unit never lists a non-Elders applicant
+// (same rule matchScoreCandidateUnits applies from the other direction), and a
+// unit 2+ bedrooms SMALLER than the applicant needs is dropped as unrealistic.
+// A unit 2+ bedrooms LARGER is kept but flagged isOversized (the ED can approve
+// it — confirmAssignment enforces that gate). Returns
+// [{app, score, maxPossible, needsBeds, needsAccess, isElders, isOversized}].
+function matchScoreCandidateApps(unit) {
+  if(!unit) return [];
+  var allApps = (typeof applications !== 'undefined' ? applications : []);
+  var eldersMin = (window._appSettings && window._appSettings.eldersAgeMin) || 65;
+  var bed = unit.bedrooms;
+  var out = [];
+  allApps.forEach(function(a){
+    if(!a || a.archived || a.deceased) return;
+    if(a.appType === 'existing_tenant') return;            // file update — never matched
+    if(a.status === 'assigned' || a.assignedUnit) return;  // already placed
+    var scored = (a.appType === 'new_housing' || a.appType === 'transfer_request');
+    if(!scored) return;
+    var assignable = (typeof appIsAssignable === 'function')
+      ? appIsAssignable(a)
+      : (a.status === 'ed_approved' || a.status === 'mgr_approved' || a.status === 'hm_approved');
+    if(!assignable) return;
+    var needsBeds = 1;
+    if(a.habitants) needsBeds = Math.max(1, 1 + (a.coApp ? 1 : 0) + a.habitants.length);
+    var needsAccess = a.accessibility && a.accessibility !== 'None' && a.accessibility !== '0' && a.accessibility !== 0;
+    var age = a.dob ? Math.floor((new Date().getTime() - new Date(a.dob).getTime()) / (365.25*24*3600*1000)) : 0;
+    var isElders = age >= eldersMin;
+    // Elders-only unit: non-Elders applicants are ineligible (mirrors
+    // matchScoreCandidateUnits filtering elders units out for non-elders).
+    if(unit.isElders && !isElders) return;
+    // Drop units 2+ bedrooms too SMALL — not a realistic placement.
+    if(bed != null && bed <= needsBeds - 2) return;
+    var sc = 0;
+    if(bed === needsBeds)                        sc += 10;
+    else if(bed === needsBeds + 1)               sc += 5;
+    else if(bed === needsBeds - 1)               sc += 3;
+    else if(bed != null && bed >= needsBeds + 2) sc -= 50; // oversized — ED approval
+    if(needsAccess && unit.accessible)  sc += 8;
+    if(needsAccess && !unit.accessible) sc -= 4;
+    if(isElders && unit.isElders) sc += 6;
+    out.push({
+      app: a, score: sc, maxPossible: 24,
+      needsBeds: needsBeds, needsAccess: needsAccess, isElders: isElders,
+      isOversized: (bed != null && bed >= needsBeds + 2)
+    });
+  });
+  // Best unit-fit first, then the applicant's shared Match Priority (the same
+  // order the Match page allocates by), then raw application score.
+  out.sort(function(x, y){
+    if(y.score !== x.score) return y.score - x.score;
+    var px = (typeof matchPriorityOf === 'function') ? matchPriorityOf(x.app) : (x.app.score||0);
+    var py = (typeof matchPriorityOf === 'function') ? matchPriorityOf(y.app) : (y.app.score||0);
+    if(py !== px) return py - px;
+    return (y.app.score||0) - (x.app.score||0);
+  });
+  return out;
+}
 // ── Shared "who gets matched first" placement-order score ─────────────────
 // Combines "has a matching unit" + that unit's Assignment Type + reserve
 // status + current-house status on top of the raw need score (see

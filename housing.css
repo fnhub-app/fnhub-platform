@@ -1442,6 +1442,17 @@ body.is-sow-only .modal-overlay { visibility: visible; }
   color: var(--muted);
   font-style: italic;
 }
+/* Potential Matches tab (Edit Unit modal) — small fit/tier badge.
+   Layout only; colors are applied inline per badge type. */
+.udp-mt-badge {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
 .empty-icon-lg { font-size: 28px; margin-bottom: 8px; }
 .empty-title   { font-weight: 600; margin-bottom: 4px; }
 .empty-sub     { font-size: 12px; }

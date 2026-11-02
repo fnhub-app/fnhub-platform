@@ -189,6 +189,116 @@ function udpSaveUnitNote(){
 window.udpRenderUnitNotes = udpRenderUnitNotes;
 window.udpSaveUnitNote    = udpSaveUnitNote;
 
+// ── Potential Matches tab (Edit Unit modal) ────────────────────────────────
+// Lists the applicants who are a potential match for THIS unit — the inverse of
+// the Match page (which lists units for an applicant). Another way to assign a
+// tenant: pick an applicant here and the shared Assign-Unit modal opens with
+// this unit pre-selected. Scoring/eligibility come from the shared
+// matchScoreCandidateApps() (shared-data.js) so unit-side matches agree with
+// the applicant-side Match page. Gated by the match module (same as the Match
+// page); the openUnitEditModal caller hides the tab when the module is off.
+function udpRenderMatchesTable(unitId){
+  var mount = document.getElementById('udp_matches_mount');
+  if(!mount) return;
+  var units = (typeof getAllUnits === 'function') ? getAllUnits() : [];
+  var u = units.find(function(x){ return x.id === unitId; });
+  if(!u){ mount.innerHTML = '<div class="empty-state-ctr">Unit not found.</div>'; return; }
+
+  var rows = (typeof matchScoreCandidateApps === 'function') ? matchScoreCandidateApps(u) : [];
+  var isVacant = (u.status === 'vacant');
+
+  var _tierPill = {
+    'Critical Priority': { c:'var(--success)',         bg:'var(--success-bg)' },
+    'High Priority':     { c:'var(--info-blue)',        bg:'var(--info-blue-bg)' },
+    'Medium Priority':   { c:'var(--warn-amber-text)',  bg:'var(--warn-amber-bg)' },
+    'Low Priority':      { c:'var(--muted)',            bg:'var(--bg)' }
+  };
+  function _fitBadge(r){
+    var bed = u.bedrooms, nb = r.needsBeds;
+    if(r.isOversized) return '<span class="udp-mt-badge" style="background:var(--danger-bg);color:var(--danger);">Oversized &middot; ED approval</span>';
+    if(bed === nb)     return '<span class="udp-mt-badge" style="background:var(--success-bg);color:var(--success);">Exact fit</span>';
+    if(bed === nb + 1) return '<span class="udp-mt-badge" style="background:var(--info-blue-bg);color:var(--info-blue);">1 size up</span>';
+    if(bed === nb - 1) return '<span class="udp-mt-badge" style="background:var(--warn-amber-bg);color:var(--warn-amber-text);">Tight &middot; 1 under</span>';
+    return '<span class="udp-mt-badge" style="background:var(--bg);color:var(--muted);">Match</span>';
+  }
+
+  var banner = '';
+  if(!isVacant){
+    var _st = u.status ? (u.status.charAt(0).toUpperCase() + u.status.slice(1)) : 'Not vacant';
+    banner = '<div style="margin-bottom:10px;padding:10px 12px;border-radius:8px;background:var(--warn-amber-bg);border:1px solid var(--warn-amber-border);color:var(--warn-amber-text);font-size:12px;font-weight:600;">'
+      + 'This unit is currently <strong>' + escapeHtml(_st) + '</strong>'
+      + (u.assignedName ? ' (' + escapeHtml(u.assignedName) + ')' : '')
+      + '. Potential matches are shown for reference — free the unit before assigning a new tenant.'
+      + '</div>';
+  }
+
+  var head = '<div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5;">'
+    + 'Applicants ranked by how well they fit this unit, then by Match Priority. '
+    + (isVacant ? 'Click <strong>Assign →</strong> to place one here — the Assign modal opens with this unit pre-selected.' : '')
+    + '</div>';
+
+  if(!rows.length){
+    mount.innerHTML = banner + head + '<div class="empty-state-ctr">No approved applicants are a potential match for this unit right now.</div>';
+    return;
+  }
+
+  var body = rows.map(function(r){
+    var a = r.app;
+    var name = escapeHtml(((a.fn||'') + ' ' + (a.ln||'')).trim()) || '(unnamed)';
+    var tier = a.tier || 'Low Priority';
+    var tp = _tierPill[tier] || _tierPill['Low Priority'];
+    var tierShort = tier.replace(' Priority','');
+    var statusLbl = (typeof formatAppStatusLabel === 'function') ? (formatAppStatusLabel(a.status, {variant:'match'}) || a.status || '') : (a.status || '');
+    var isTransfer = (a.appType === 'transfer_request');
+    var needBits = [r.needsBeds + ' bd'];
+    if(r.needsAccess) needBits.push('♿');
+    if(r.isElders)    needBits.push('Elder');
+    var aidEsc = String(a.id).replace(/'/g,"\\'");
+    var uidEsc = String(unitId).replace(/'/g,"\\'");
+    var action = isVacant
+      ? '<button type="button" onclick="udpAssignFromUnit(\'' + aidEsc + '\',\'' + uidEsc + '\')" style="background:var(--yellow);border:none;color:var(--dark);padding:6px 12px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;white-space:nowrap;">Assign →</button>'
+      : '<span style="font-size:11px;color:var(--muted);">—</span>';
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:10px 10px;vertical-align:top;">'
+        + '<div style="font-weight:700;color:var(--text);font-size:13px;">' + name + '</div>'
+        + '<div style="font-size:11px;color:var(--muted);margin-top:1px;">' + escapeHtml(a.id) + (isTransfer ? ' &middot; <span style="color:var(--warn-amber-text);font-weight:700;">transfer</span>' : '') + '</div>'
+        + (statusLbl ? '<div style="font-size:11px;color:var(--muted);margin-top:1px;">' + escapeHtml(statusLbl) + '</div>' : '')
+      + '</td>'
+      + '<td style="padding:10px 10px;vertical-align:top;white-space:nowrap;">'
+        + '<div style="font-size:16px;font-weight:800;color:var(--text);">' + (a.score||0) + '</div>'
+        + '<span class="udp-mt-badge" style="background:' + tp.bg + ';color:' + tp.c + ';">' + escapeHtml(tierShort) + '</span>'
+      + '</td>'
+      + '<td style="padding:10px 10px;vertical-align:top;white-space:nowrap;font-size:12px;color:var(--text);">' + needBits.join(' &middot; ') + '</td>'
+      + '<td style="padding:10px 10px;vertical-align:top;">' + _fitBadge(r) + '</td>'
+      + '<td style="padding:10px 10px;vertical-align:top;text-align:right;">' + action + '</td>'
+      + '</tr>';
+  }).join('');
+
+  mount.innerHTML = banner + head
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-family:DM Sans,sans-serif;">'
+    + '<thead><tr style="border-bottom:2px solid var(--border);">'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Applicant</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Score</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Needs</th>'
+    + '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Fit</th>'
+    + '<th style="padding:8px 10px;text-align:right;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Action</th>'
+    + '</tr></thead><tbody>' + body + '</tbody></table></div>';
+}
+
+// Assign from the unit's Matches tab: open the shared Assign-Unit modal for the
+// applicant, then pre-select THIS unit (the modal otherwise defaults to the
+// applicant's globally best-matching unit, which may differ). All the approval
+// gates live in confirmAssignment(), so this is purely a convenience entry.
+function udpAssignFromUnit(appId, unitId){
+  if(typeof openAssignModal !== 'function'){ showToast('Assigning is not available on this page.', {type:'error'}); return; }
+  openAssignModal(appId, unitId);
+  if(typeof amSelectUnit === 'function'){
+    try { amSelectUnit(unitId); } catch(e){ /* unit filtered out of the list; leave unselected */ }
+  }
+}
+window.udpRenderMatchesTable = udpRenderMatchesTable;
+window.udpAssignFromUnit     = udpAssignFromUnit;
+
 function _ueSwitchTab(name){
   var modal = document.getElementById('unitEditModal');
   if(!modal) return;
@@ -387,6 +497,13 @@ function openUnitEditModal(unitId){
   udpRenderMap(u);
   if(typeof udpRenderFilePreviews === 'function') udpRenderFilePreviews(unitId);
   if(typeof udpRenderUnitNotes === 'function') udpRenderUnitNotes(unitId);
+
+  // Potential Matches tab — gated by the match module (same as the Match page).
+  // Hide the tab button when the module is off; otherwise render the list.
+  var _matchTabOn = (typeof moduleOn !== 'function') || moduleOn('match');
+  var _matchTabBtn = _uem ? _uem.querySelector('[data-ue-tab="matches"]') : null;
+  if(_matchTabBtn) _matchTabBtn.style.display = _matchTabOn ? '' : 'none';
+  if(_matchTabOn && typeof udpRenderMatchesTable === 'function') udpRenderMatchesTable(unitId);
 
   _ueApplyReadOnly(isFieldEmployee);
   var saveBtn = document.getElementById('ue_save_btn');
