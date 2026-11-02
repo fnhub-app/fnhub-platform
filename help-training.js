@@ -34,6 +34,13 @@
   // own `rev` field once its content diverges from the rest of the set.
   var SOP_REVISION = '2026-11-02';
 
+  // Revision history shown at the foot of every document. Add a new entry
+  // (keep newest first) whenever the procedures change; a DOCS entry may
+  // override it with its own `history` array once its change log diverges.
+  var SOP_HISTORY = [
+    { date: '2026-11-02', change: 'Initial version of the SOP library.' }
+  ];
+
   // Nation-neutral SOP bodies (HTML). Trusted static strings authored here; no
   // user content is interpolated, so no escaping is needed. Template literals
   // keep the long HTML readable -- they contain no backticks or ${} sequences.
@@ -1521,6 +1528,16 @@
     return nav;
   }
 
+  // Revision-history table appended to the foot of every document.
+  function _historyHtml(doc) {
+    var rows = (doc && doc.history) || SOP_HISTORY;
+    var body = '';
+    for (var i = 0; i < rows.length; i++) {
+      body += '<tr><td>' + _esc(rows[i].date) + '</td><td>' + _esc(rows[i].change) + '</td></tr>';
+    }
+    return '<h2>Revision History</h2><table><thead><tr><th>Date</th><th>Change</th></tr></thead><tbody>' + body + '</tbody></table>';
+  }
+
   function _render(activeId) {
     var doc = (activeId === 'videos') ? null : _docById(activeId);
     var theme = (window._appSettings && window._appSettings.theme) || {};
@@ -1530,7 +1547,7 @@
     if (activeId === 'videos') {
       bodyInner = '<div class="ht-videos">&#127909; Training videos are coming soon.<br/>Walkthroughs will be added here as they are produced.</div>';
     } else {
-      bodyInner = (doc && doc.html) || '';
+      bodyInner = ((doc && doc.html) || '') + _historyHtml(doc);
     }
     var titleText = (activeId === 'videos') ? 'Training Videos' : (doc ? doc.title : 'Help & Training');
     var rev = (doc && doc.rev) || SOP_REVISION;
