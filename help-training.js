@@ -38,6 +38,7 @@
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-02', change: 'Expanded step-by-step detail for creating an application, adding a unit, creating a project / adding lots, and creating / issuing a Maintenance Request; added AI-assistant usage notes.' },
     { date: '2026-11-02', change: 'Initial version of the SOP library.' }
   ];
 
@@ -214,15 +215,20 @@
     <tr><td>Transfer Request</td><td>A current tenant on reserve applying for a different unit.</td><td>Yes</td><td>Yes (On Rez / transfer)</td></tr>
     <tr><td>File Update (existing tenant)</td><td>Updating a housed tenant's file only.</td><td>No</td><td>No</td></tr>
     </tbody></table>
-    <h2>Create and submit an application</h2>
+    <h2>Create an application &mdash; step by step</h2>
     <ol>
-    <li>From the landing page or Applications area, start a <strong>New Application</strong>.</li>
-    <li>Choose the <strong>type</strong>. File Updates and Transfers skip the Income, References/Emergency Contacts, and Pets steps automatically.</li>
-    <li>Work through the wizard. Fields marked with a red * are required (set in Settings &rarr; Required Fields).</li>
-    <li>Capture household members, income, and supporting documents on the Documents step.</li>
-    <li>For a scored application created by an HM/ED, complete the two staff scoring screens &mdash; <strong>Housing Needs</strong> and <strong>Tenancy History</strong>. Regular employees skip these; an HM/ED completes them later before approval.</li>
-    <li>On the Review step, submit. Optionally tick to email the applicant a PDF copy.</li>
+    <li><strong>Start it.</strong> From the landing page or the Applications area, click <strong>New Application</strong>.</li>
+    <li><strong>Choose the type</strong> (New Housing, Transfer Request, or File Update). This decides which steps you see &mdash; File Updates and Transfers automatically skip the Income, References/Emergency Contacts, and Pets steps.</li>
+    <li><strong>Applicant details.</strong> Enter the main applicant's name, date of birth, contact information, band/membership details, and current housing situation. Fields with a red <span class="r">*</span> are required and block submission while blank (the required set is configured in Settings &rarr; Required Fields).</li>
+    <li><strong>Household members.</strong> Add everyone who will live in the unit (name, relationship, date of birth). Household size feeds the overcrowding and bedroom-need calculations.</li>
+    <li><strong>Income</strong> (New Housing only). Record each income source and type &mdash; the income type also decides the rent pathway later.</li>
+    <li><strong>References &amp; emergency contacts</strong> (New Housing only). Add the references and emergency contacts requested.</li>
+    <li><strong>Pets</strong> (New Housing only), if your nation collects them.</li>
+    <li><strong>Documents.</strong> Upload supporting files &mdash; ID, income proof, medical or overcrowding letters. Drag-and-drop or browse; each file is kept with the application.</li>
+    <li><strong>Staff scoring</strong> (HM/ED only, scored applications). Complete the <strong>Housing Needs</strong> and <strong>Tenancy History</strong> screens. A regular employee does not see these; an HM/ED completes them later, before the application can be approved.</li>
+    <li><strong>Review &amp; submit.</strong> Check the summary, then submit. You can tick the box to email the applicant a PDF copy of their application.</li>
     </ol>
+    <p>You can save and return to a draft at any point &mdash; it waits for you under <strong>My Drafts</strong> on the landing page.</p>
     <h2>The approval workflow</h2>
     <p>Applications move through stages, each gated by Approval Authority:</p>
     <ol>
@@ -269,14 +275,17 @@
     <tr><td>Documents</td><td>The unit's document library.</td></tr>
     <tr><td>Map &amp; Photos</td><td>The unit's map location and photo uploader.</td></tr>
     </tbody></table>
-    <h2>Add a new unit</h2>
+    <h2>Add a new unit &mdash; step by step</h2>
     <ol>
-    <li>In Inventory, choose <strong>Add Unit</strong>.</li>
-    <li>Enter the address (number, street, city, province, postal code), bedrooms, bathrooms, and type.</li>
-    <li>Set the <strong>funder</strong> and <strong>status</strong>.</li>
-    <li>Set the <strong>Assignment Type</strong> if needed &mdash; Regular (default), Temporary (urgent/emergency), or Transition (probationary).</li>
-    <li>Save. The unit appears in Inventory and becomes available for matching when vacant.</li>
+    <li>Open <strong>Inventory</strong> and click <strong>+ Add New Unit</strong> (or <strong>Add Unit</strong>).</li>
+    <li>Enter the <strong>Unit Number</strong> and <strong>Street Address</strong> (both required).</li>
+    <li>Optionally pick <strong>Build on Lot</strong> to tie the unit to a capital-project lot.</li>
+    <li>Set <strong>Bedrooms</strong>, <strong>Bathrooms</strong>, <strong>Type</strong> (Detached, Duplex, 4/5/6-Plex, Complex, Mobile, or an Admin/Band/Commercial Building), and <strong>Foundation</strong>.</li>
+    <li>Choose the <strong>Funder / Program</strong> (Band, ISC, CMHC Sec. 95, Other) and fill <strong>Phase</strong>, <strong>Year Built</strong>, <strong>Monthly Rent</strong>, and <strong>Construction Cost</strong> as known.</li>
+    <li>Toggle <strong>Accessible</strong> or <strong>Elders Unit</strong> if they apply, add any <strong>Notes</strong>, and drag in <strong>Photos</strong>.</li>
+    <li>Click <strong>Add Unit</strong>. The unit appears in Inventory and is available for matching once its status is vacant.</li>
     </ol>
+    <p>Fields not on this form &mdash; <strong>Assignment Type</strong> (Regular / Temporary / Transition), city/province/postal, map location, approvals, and inspection dates &mdash; are set afterward by opening the unit's card and using its tabs.</p>
     <h2>Edit a unit</h2>
     <ol>
     <li>Open the unit card, go to the relevant tab, change the fields, and <strong>Save</strong>.</li>
@@ -437,21 +446,28 @@
     <tr><td>Payments</td><td>Purchase-order draw-down and progress (management only).</td></tr>
     <tr><td>Notes &amp; Terms</td><td>Contractor notes and terms.</td></tr>
     </tbody></table>
-    <h2>Create and submit a request</h2>
+    <h2>Create a Maintenance Request &mdash; step by step</h2>
     <ol>
-    <li>Open a new Maintenance Request on the unit.</li>
-    <li>Record the <strong>condition</strong> and add <strong>Work Items</strong> with costs. The estimated total updates as you go.</li>
-    <li>Set the <strong>Fund Source</strong> (only eligible sources for this unit/household are listed).</li>
-    <li>Tick any <strong>Health &amp; Safety</strong> hazards.</li>
-    <li>Set the <strong>Assigned To</strong> (in-house crew or a contractor) if you have assign authority.</li>
-    <li>Review every tab, then <strong>Submit</strong>. On submit you may be prompted to email the tenant a copy.</li>
+    <li>Open the unit &rarr; <strong>Maintenance Requests</strong> tab &rarr; <strong>+ New Maintenance Request</strong>. (Or use the <strong>Renovation Questionnaire</strong> quick action on the landing page to build the scope through guided questions &mdash; it opens a pre-filled request.)</li>
+    <li>On <strong>Overview</strong>, confirm the unit, record the <strong>Overall Condition</strong>, and set the <strong>Target Start / Completion</strong> dates.</li>
+    <li>On <strong>Work Items</strong>, add each piece of work with its category and cost &mdash; the <strong>Estimated Cost</strong> on the info strip updates as you go.</li>
+    <li>Choose the <strong>Fund Source</strong>; only sources the unit and household are eligible for are listed.</li>
+    <li>On <strong>Health &amp; Safety</strong>, tick any hazards (mould, electrical, structural, plumbing, fire).</li>
+    <li>If you have assign authority, set <strong>Assigned To</strong> &mdash; in-house crew (pick a field employee) or a contractor.</li>
+    <li>Click <strong>Save</strong> to keep it as a draft, or <strong>Submit</strong> when it is ready for approval. Review every tab first &mdash; the submit step checks you have visited each one. On submit you may be prompted to email the tenant a copy.</li>
     </ol>
-    <h2>Approval and work orders</h2>
+    <h2>Submit, approve, and issue the work order</h2>
+    <ol>
+    <li>A submitted request appears under <strong>Renovations Waiting Approval</strong> on the landing page for the approver.</li>
+    <li>The <strong>Housing Manager</strong> can approve requests at or under the HM budget limit; larger ones go to the <strong>ED</strong> (the limit is set in Settings &rarr; Reno Budget).</li>
+    <li>Approve by opening the request and signing off, or inline from the worklist.</li>
+    <li>On approval the <strong>work order is issued</strong>: an in-house job notifies the assigned crew member; a <strong>contractor</strong> job prompts you to email the work order (and, if SMS is on and the contractor has a mobile, to text a link), and it appears in their Contractor Portal.</li>
+    <li>For larger jobs you can tender first via <strong>RFQ</strong>; awarding the RFQ approves the linked request automatically and badges it <strong>System Approved</strong>.</li>
+    </ol>
+    <h2>Using the AI assistant</h2>
     <ul>
-    <li>Requests at or under the HM budget limit can be approved by the Housing Manager; larger ones require the ED (Settings &rarr; Reno Budget).</li>
-    <li>Approving a request assigned to a <strong>contractor</strong> fires a work-order email (and a text, if SMS is enabled and the contractor has a mobile).</li>
-    <li>An RFQ award can approve the linked request automatically &mdash; it is then badged <strong>System Approved</strong>.</li>
-    <li>HM/ED can approve directly from the worklist.</li>
+    <li>Click the <strong>&#10022; AI</strong> button in the header on any page to open the chat and ask how-to or data questions &mdash; for example "how do I complete a maintenance request?" or "which units have open maintenance requests?" It answers from the app's data within your role's limits and never changes anything.</li>
+    <li><strong>Draft with AI</strong> writes a professional decision note for you to review and edit &mdash; it appears on the <strong>application approval</strong> notes box and on <strong>inspection</strong> general notes (gated by the AI Assistant module). Always read and edit a drafted note before saving; you are accountable for the decision.</li>
     </ul>
     <h2>Payments (PO draw-down)</h2>
     <p>The <strong>Payments</strong> tab (management only) tracks paying down a purchase order in steps:</p>
@@ -662,13 +678,13 @@
     <tr><td>Lots &amp; Units</td><td>Lots and the units created from them.</td></tr>
     <tr><td>Documents</td><td>The project's document library.</td></tr>
     </tbody></table>
-    <h2>Set up a project</h2>
+    <h2>Create a project &mdash; step by step</h2>
     <ol>
-    <li>On the Capital Projects page, create a <strong>New Project</strong>.</li>
-    <li>Set the name, <strong>type</strong>, status, dates, and funding.</li>
-    <li>Save &mdash; this assigns the CP-YYYY-NN number (auto-save only runs after this first explicit save).</li>
-    <li>Add <strong>grants</strong> on Overview if funded by one or more grants (budget then derives from their sum).</li>
-    <li>Adjust the <strong>milestones</strong> and set each milestone's budget on the P &amp; L tab.</li>
+    <li>Open <strong>Capital Projects</strong> (Operations nav) and click <strong>New Project</strong>.</li>
+    <li>Enter the <strong>name</strong>, pick the <strong>type</strong> (lot development, house build, mixed, commercial, band building, infrastructure), set the <strong>status</strong>, the <strong>start</strong> and <strong>target</strong> dates, and the funding.</li>
+    <li>Click <strong>Save</strong> &mdash; this assigns the <strong>CP-YYYY-NN</strong> number. (Auto-save only begins after this first explicit save; until then the indicator reads "Draft &mdash; not saved yet".)</li>
+    <li>On <strong>Overview</strong>, add one or more <strong>grants</strong> (source, reference, amount). When grants exist, the budget is their sum and the funding source becomes the funder names.</li>
+    <li>On <strong>Milestones</strong>, apply or adjust the per-type checklist (add, rename, drag the handle to reorder). Set each milestone's <strong>budget</strong> on the <strong>P &amp; L</strong> tab.</li>
     </ol>
     <h2>Log a cost</h2>
     <ol>
@@ -686,11 +702,13 @@
     <li><strong>Export &amp; Mark Claimed</strong> generates the claim summary PDF and downloads every attached compliance document.</li>
     <li>Claimed lines are badged (not locked) &mdash; a cost can be in more than one funder claim.</li>
     </ol>
-    <h2>Lots and units</h2>
+    <h2>Add lots and create units &mdash; step by step</h2>
     <ol>
-    <li>On <strong>Lots &amp; Units</strong>, batch <strong>+ Add Lots</strong> (count + prefix + address).</li>
-    <li>Set each lot's status (raw &rarr; serviced &rarr; built) or <strong>Link existing unit</strong>.</li>
-    <li>Batch <strong>Create Units from Lots</strong> to create units from unit-less lots &mdash; each gets a unit number and the project/lot links.</li>
+    <li>Open the project &rarr; <strong>Lots &amp; Units</strong> tab.</li>
+    <li>Click <strong>+ Add Lots</strong>. Set <strong>How many lots</strong>, <strong>Numbering starts at</strong>, the <strong>Lot number prefix</strong> (default "Lot "), and the initial <strong>Status</strong> (raw / serviced / built). Add a shared address/subdivision and legal description if you have them, then click <strong>Add Lots</strong>.</li>
+    <li>As work progresses, update each lot's <strong>status</strong> (raw &rarr; serviced &rarr; built) from its row.</li>
+    <li>To attach a unit that already exists, use <strong>Link existing unit</strong> on the lot's row.</li>
+    <li>To build new units, click <strong>Create Units from Lots</strong>. Fill the shared unit details (Street, Bedrooms, Bathrooms, Type, Funder, Year Built), tick the lots to build on, give each an editable unit number, and click <strong>Create Units</strong>. Each new unit is linked to its lot and the project, and the lot flips to <strong>built</strong>.</li>
     </ol>
     <h2>Allocate costs to units</h2>
     <ol>
