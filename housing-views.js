@@ -633,7 +633,7 @@ function renderMatchView(){
   var tierColor = {
     'Critical Priority': 'var(--success)',
     'High Priority':   '#1d4ed8',
-    'Medium Priority': 'var(--warn-amber-text)',
+    'Medium Priority': '#b45309',
     'Low Priority':    '#6b7280'
   };
   // Status wording comes from the shared 'match' variant of
