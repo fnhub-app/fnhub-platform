@@ -634,10 +634,28 @@ function _mfaHeaders(token) {
 }
 function _mfaEsc(s) { return (typeof escapeHtml === 'function') ? escapeHtml(String(s == null ? '' : s)) : String(s == null ? '' : s); }
 
+// Timed fetch for the 2FA LISTING / POLICY reads only. Plain fetch() has no
+// built-in timeout, so a stalled request on a flaky mobile connection hangs
+// forever — and because these reads sit in the sign-in flow (step-up factor
+// list, role-enforcement policy + factor list), a stall froze the whole sign-in
+// on "Signing in..." with no way out. This aborts after `ms` and rejects, so the
+// callers' catch blocks fail soft/open and the login proceeds. NOT used for the
+// interactive code/enroll modals (those legitimately wait on the user).
+function _mfaFetch(url, opts, ms) {
+  opts = opts || {};
+  var ctrl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  if (ctrl) opts.signal = ctrl.signal;
+  var timer = setTimeout(function () { try { if (ctrl) ctrl.abort(); } catch (e) {} }, ms || 8000);
+  return fetch(url, opts).then(
+    function (r) { clearTimeout(timer); return r; },
+    function (e) { clearTimeout(timer); throw e; }
+  );
+}
+
 // All TOTP factors for an access token (used by setup to clean up unverified).
 async function _mfaListAllFactors(token) {
   try {
-    var r = await fetch(SUPABASE_URL + '/auth/v1/user', { headers: _mfaHeaders(token) });
+    var r = await _mfaFetch(SUPABASE_URL + '/auth/v1/user', { headers: _mfaHeaders(token) }, 8000);
     if (!r.ok) return [];
     var u = await r.json();
     var fx = (u && u.factors) || [];
@@ -981,7 +999,7 @@ async function _mfaEnforceEnrollment(token, role) {
   if (!token || !role) return { ok: true };
   var required = 'none';
   try {
-    var r = await fetch(SUPABASE_URL + '/rest/v1/housing_settings?key=eq.mfa_policy&select=value', { headers: _mfaHeaders(token) });
+    var r = await _mfaFetch(SUPABASE_URL + '/rest/v1/housing_settings?key=eq.mfa_policy&select=value', { headers: _mfaHeaders(token) }, 8000);
     if (!r.ok) return { ok: true };
     var rows = await r.json().catch(function () { return []; });
     var pol = (rows && rows[0] && rows[0].value) || {};
@@ -989,7 +1007,18 @@ async function _mfaEnforceEnrollment(token, role) {
   } catch (e) { return { ok: true }; }
   if (required === 'none') return { ok: true };
 
-  var factors = await _mfaListVerifiedFactors(token);
+  // Read the user's verified factors — but if we CANNOT read them (network
+  // error/timeout), fail OPEN: let the user in rather than freezing sign-in, or
+  // wrongly forcing re-enrollment on someone who is in fact already enrolled.
+  var factors;
+  try {
+    var ur = await _mfaFetch(SUPABASE_URL + '/auth/v1/user', { headers: _mfaHeaders(token) }, 8000);
+    if (!ur.ok) return { ok: true };
+    var udata = await ur.json();
+    factors = ((udata && udata.factors) || []).filter(function (f) {
+      return f && (f.factor_type === 'totp' || f.factor_type === 'phone') && f.status === 'verified';
+    });
+  } catch (e) { return { ok: true }; }
   var hasTotp  = factors.some(function (f) { return f.factor_type === 'totp'; });
   var hasPhone = factors.some(function (f) { return f.factor_type === 'phone'; });
   var satisfied = (required === 'any')  ? (hasTotp || hasPhone)
