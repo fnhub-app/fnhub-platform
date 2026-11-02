@@ -28,6 +28,7 @@
 <script src="shared-sow.js"></script>
 <script src="housing-modals-sow.js"></script>
 <script src="housing-app.js"></script>
+<script src="help-training.js"></script>
 <script src="housing-init.js"></script>
 
 <style>body{opacity:0;transition:opacity .15s ease;}
@@ -318,11 +319,19 @@
 
         <!-- Address row -->
         <div>
-          <div class="lbl-muted mb-12">Address</div>
+          <div class="lbl-muted mb-12" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Address</span>
+            <button type="button" data-ue-keep onclick="_ueSwitchTab('map')" class="btn btn-ghost btn-sm" title="View this unit on the map">📍 Map</button>
+          </div>
           <div style="display:grid;grid-template-columns:72px 90px 1fr;gap:10px;">
             <div class="f"><label>Number</label><input id="ue_num" type="text"/></div>
             <div class="f"><label>Lot #</label><input id="ue_lot_number" type="text" placeholder="e.g. 12"/></div>
             <div class="f"><label>Street</label><input id="ue_street" type="text"/></div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr 130px;gap:10px;margin-top:10px;">
+            <div class="f"><label>City / Community</label><input id="ue_city" type="text"/></div>
+            <div class="f"><label>Province</label><input id="ue_province" type="text"/></div>
+            <div class="f"><label>Postal Code</label><input id="ue_postal" type="text" placeholder="A0A 0A0"/></div>
           </div>
         </div>
 
