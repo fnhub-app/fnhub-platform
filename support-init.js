@@ -142,6 +142,7 @@ function openSupportTicket(id) {
     +       (src ? ' · ' + _supEsc(src) : '') + (t.reporter_role ? ' · ' + _supEsc(t.reporter_role) : '') + '</div>'
     +     (t.reporter_email ? '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">' + _supEsc(t.reporter_email) + (t.reporter_phone ? ' · ' + _supEsc(t.reporter_phone) : '') + '</div>' : '')
     +     '<div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px 14px;font-size:13px;color:var(--text);white-space:pre-wrap;line-height:1.5;margin-bottom:12px;">' + _supEsc(t.body || '') + '</div>'
+    +     _supAttachHtml(t)
     +     (ctxLines.length ? '<div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:14px;word-break:break-all;">' + ctxLines.join('<br>') + '</div>' : '')
     +     _supThreadHtml(t)
     +     (isResolved
@@ -165,6 +166,41 @@ function openSupportTicket(id) {
   modal.onclick = function (e) { if (e.target === modal) closeSupportModal(); };
 }
 window.openSupportTicket = openSupportTicket;
+
+// Screenshot gallery for the triage modal. Attachments are base64 data URLs on
+// the ticket's `attachments` jsonb (filed by the report widget); render clickable
+// thumbnails that open a full-size in-page lightbox (avoids data:-URL popup/CSP
+// blocks). Colours use var(--token,#hex) fallbacks to satisfy the colour ratchet.
+function _supAttachHtml(t) {
+  var atts = (t && t.attachments) || [];
+  if (!atts.length) return '';
+  var idEsc = String(t.id).replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+  var thumbs = atts.map(function (a, i) {
+    if (!a || !a.dataUrl) return '';
+    return '<button type="button" onclick="_supViewImg(\'' + idEsc + '\',' + i + ')" '
+      + 'style="padding:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;width:72px;height:72px;cursor:pointer;background:var(--bg);flex:0 0 auto;">'
+      + '<img src="' + a.dataUrl + '" alt="" style="width:100%;height:100%;object-fit:cover;display:block;"/></button>';
+  }).join('');
+  if (!thumbs) return '';
+  return '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px;">Screenshots (' + atts.length + ')</div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;">' + thumbs + '</div>';
+}
+function _supViewImg(id, i) {
+  var t = (window._supportTickets || []).filter(function (x) { return String(x.id) === String(id); })[0];
+  var a = t && t.attachments && t.attachments[i];
+  if (!a || !a.dataUrl) return;
+  var lb = document.getElementById('support_imgview');
+  if (!lb) {
+    lb = document.createElement('div');
+    lb.id = 'support_imgview';
+    lb.style.cssText = 'position:fixed;inset:0;z-index:100000;background:var(--scrim,#0b0b0b);display:flex;align-items:center;justify-content:center;padding:20px;cursor:zoom-out;';
+    lb.onclick = function () { lb.style.display = 'none'; };
+    document.body.appendChild(lb);
+  }
+  lb.innerHTML = '<img src="' + a.dataUrl + '" alt="" style="max-width:96vw;max-height:92vh;border-radius:8px;"/>';
+  lb.style.display = 'flex';
+}
+window._supViewImg = _supViewImg;
 
 function _supThreadHtml(t) {
   var tr = Array.isArray(t.transcript) ? t.transcript : [];
@@ -305,6 +341,13 @@ window._supReopen = _supReopen;
     var view = document.getElementById('supportView');
     if (view) view.style.display = 'flex';
     await loadSupportTickets();
+
+    // Deep link from the landing-page worklist (support.html?ticket=<id>):
+    // open that ticket's triage modal once the list has loaded.
+    try {
+      var _tp = new URLSearchParams(window.location.search).get('ticket');
+      if (_tp && typeof openSupportTicket === 'function') openSupportTicket(_tp);
+    } catch (e) { /* bad/stale id -> just show the list */ }
   } catch (e) {
     console.error('[support] init error:', e);
   } finally {

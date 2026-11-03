@@ -3415,6 +3415,34 @@ async function sbLoadContractorSubmissions(){
 }
 window.sbLoadContractorSubmissions = sbLoadContractorSubmissions;
 
+// Open Help & Support tickets (status new|open) for the landing-page worklist.
+// Same boot-time pattern as sbLoadContractorSubmissions: no moduleOn() gate here
+// (settings aren't hydrated yet in the boot Promise.all); the _isMgmt call-site
+// gate scopes it to management, the worklist render gates the section on
+// moduleOn('support'), and a nation without the table just 404s -> []. On
+// housing.html support-init.js is NOT loaded, so this is what populates
+// window._supportTickets there (distinct name from support-init's loader).
+async function sbLoadSupportTickets(){
+  try {
+    // Light column set on purpose: the worklist only needs the summary fields,
+    // NOT the heavy base64 `attachments`/`body`/`transcript`/`context` blobs
+    // (keeps the landing page fast — those load on the Support page when a
+    // ticket is opened).
+    var cols = 'id,source,category,subject,reporter_name,reporter_email,status,created_at';
+    var url = SUPABASE_URL + '/rest/v1/support_tickets?select=' + cols + '&status=in.(new,open)&order=created_at.desc&limit=200';
+    var r = await fetch(url, { headers: HOUSING_HEADERS });
+    if(!r.ok){ window._supportTickets = window._supportTickets || []; return window._supportTickets; }
+    var rows = await r.json();
+    window._supportTickets = Array.isArray(rows) ? rows : [];
+    return window._supportTickets;
+  } catch(e){
+    console.warn('[support] load failed:', e);
+    window._supportTickets = window._supportTickets || [];
+    return window._supportTickets;
+  }
+}
+window.sbLoadSupportTickets = sbLoadSupportTickets;
+
 // PATCH a submission's status (approved / rejected / read) + reviewer stamp, and
 // drop it from the in-memory open queue. Returns true, throws on HTTP error.
 async function _sbResolveContractorSub(id, status){
@@ -6940,6 +6968,9 @@ function _staffExpiryChip(u){
 async function renderHousingUserTable(){
   var tbody = document.getElementById('userTableBody');
   if(!tbody) return;
+  // Generation token: a background last-active patch must not touch a newer
+  // render (e.g. the user flipped the Active/Inactive filter meanwhile).
+  var _laSeq = (window._userTableLaSeq = (window._userTableLaSeq || 0) + 1);
   // Per-role 2FA requirement panel renders alongside the Users table (ED-only).
   if (typeof renderMfaPolicyPanel === 'function') renderMfaPolicyPanel();
   tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">Loading…</td></tr>';
@@ -6953,21 +6984,15 @@ async function renderHousingUserTable(){
     // session, and staff.last_login_at only on a credential sign-in (and can be
     // RLS-blocked), so a staff member on a long-lived, auto-refreshing session
     // keeps working -- writing ordinary audit rows -- without ever updating
-    // either, which made active users read as months idle. Query per-user (one
-    // newest row each) so the answer is reliable regardless of overall log
-    // volume, instead of a single capped recent scan that a few busy users can
-    // fill (dropping quieter users out of the window).
+    // either, which made active users read as months idle. Each user's newest
+    // row is ONE query; awaiting all of them (N parallel audit-log queries on a
+    // phone) before painting made the whole Users page wait on the slowest one.
+    // So the table renders NOW from the stored last_login_at, and the per-user
+    // audit lookups run in the BACKGROUND after paint (below), patching each
+    // "Last Active" cell as it resolves -- instant table, value sharpens a
+    // moment later. Keeps the per-user correctness (no capped recent scan that
+    // a few busy users fill, dropping quieter users out of the window).
     var _activeMap = {};
-    if (staff && staff.length) {
-      await Promise.all(staff.map(function(u){
-        var em = (u.email||'').toLowerCase();
-        if (!em) return null;
-        return fetch(SUPABASE_URL+'/rest/v1/housing_audit_log?actor=eq.'+encodeURIComponent(em)+'&select=created_at&order=created_at.desc&limit=1', {headers:HOUSING_HEADERS})
-          .then(function(resp){ return resp.ok ? resp.json() : []; })
-          .then(function(rows){ if (rows && rows.length && rows[0]) _activeMap[em] = rows[0].created_at; })
-          .catch(function(){ /* a single user's lookup failing must not blank the table */ });
-      }));
-    }
     if(!staff||!staff.length){
       var emptyMsg = filter === 'inactive' ? 'No deactivated staff.' : 'No staff found.';
       tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">'+emptyMsg+'</td></tr>';
@@ -7054,7 +7079,9 @@ async function renderHousingUserTable(){
       var _em = (u.email||'').toLowerCase();
       var lastActive = _activeMap[_em] || null;
       if (u.last_login_at && (!lastActive || String(u.last_login_at) > String(lastActive))) lastActive = u.last_login_at;
-      var lastLoginCell = '<td style="font-size:12px;color:var(--muted);"'
+      var lastLoginCell = '<td class="js-last-active" data-la-email="'+escapeHtml(_em)+'"'
+        + (lastActive ? ' data-la-ts="'+escapeHtml(lastActive)+'"' : '')
+        + ' style="font-size:12px;color:var(--muted);"'
         + (lastActive ? ' title="'+escapeHtml(lastActive)+'"' : '')
         + '>'+escapeHtml(_fmtRelativeTime(lastActive))+'</td>';
       return '<tr>'
@@ -7068,6 +7095,30 @@ async function renderHousingUserTable(){
         +'<td class="std-cell-right">'+actionsHtml+'</td>'
         +'</tr>';
     }).join('');
+    // Background last-active enrichment (see note above): one newest-row query
+    // per user, patched into its cell as it resolves. Not awaited, so the table
+    // is already interactive. Skipped silently per-user on any error.
+    if (staff && staff.length) {
+      staff.forEach(function(u){
+        var em = (u.email||'').toLowerCase();
+        if (!em) return;
+        fetch(SUPABASE_URL+'/rest/v1/housing_audit_log?actor=eq.'+encodeURIComponent(em)+'&select=created_at&order=created_at.desc&limit=1', {headers:HOUSING_HEADERS})
+          .then(function(resp){ return resp.ok ? resp.json() : []; })
+          .then(function(rows){
+            if (_laSeq !== window._userTableLaSeq) return;         // a newer render superseded us
+            if (!rows || !rows.length || !rows[0] || !rows[0].created_at) return;
+            var ts = rows[0].created_at;
+            var cell = tbody.querySelector('td.js-last-active[data-la-email="'+em.replace(/["\\]/g,'\\$&')+'"]');
+            if (!cell) return;
+            var cur = cell.getAttribute('data-la-ts') || '';
+            if (cur && String(cur) >= String(ts)) return;          // stored login already newer
+            cell.setAttribute('data-la-ts', ts);
+            cell.setAttribute('title', ts);
+            cell.textContent = _fmtRelativeTime(ts);
+          })
+          .catch(function(){ /* a single user's lookup failing must not disturb the table */ });
+      });
+    }
   } catch(e){
     tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--danger);font-size:12px;">Error loading staff: '+escapeHtml(e.message)+'</td></tr>';
   }
@@ -8273,6 +8324,45 @@ function renderWorklist() {
         actions:[{text:btnA.t,onclick:btnA.fn},{text:btnB.t,ghost:true,onclick:btnB.fn}] });
     });
     html += sectionWrap('🛠️', 'Contractor Submissions', ctSubItems.length, '', _view === 'cards' ? wlGrid(csCards) : csRows, 0);
+  }
+
+  // Support Tickets — open Help & Support tickets (status new|open) filed from
+  // the staff app or either portal. Management review queue; clicking opens the
+  // ticket's triage modal on the Support page (support.html?ticket=<id>). Gated
+  // by the support module (hydrated by render time) in addition to management.
+  var supItems = (isManagement && (typeof moduleOn !== 'function' || moduleOn('support'))) ? (window._supportTickets || []) : [];
+  if (supItems.length) {
+    var _supSrcLbl = { staff:'Staff', member:'Member', contractor:'Contractor' };
+    var supRows = '', supCards = '';
+    supItems.slice().sort(function(a,b){
+      // Unseen ('new') first, then newest.
+      var ap = (a.status==='new')?0:1, bp = (b.status==='new')?0:1;
+      if(ap!==bp) return ap-bp;
+      return String(b.created_at||'').localeCompare(String(a.created_at||''));
+    }).forEach(function(t){
+      var idJs = esc(String(t.id)).replace(/'/g, "\\'");
+      var isNew = (t.status === 'new');
+      var subject = t.subject || 'Support request';
+      var who = t.reporter_name || t.reporter_email || _supSrcLbl[t.source] || 'Someone';
+      var cat = t.category || 'other';
+      var src = _supSrcLbl[t.source] || 'Staff';
+      var pillTxt = isNew ? 'NEW' : 'OPEN';
+      var pillColor = isNew ? 'var(--warn-amber-text)' : 'var(--info-blue)';
+      var openFn = "window.location.href='support.html?ticket='+encodeURIComponent('" + idJs + "')";
+      var btn = '<button type="button" onclick="' + openFn + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">Open &rarr;</button>';
+      var info = '<span style="font-size:14px;flex-shrink:0;">🛟</span>'
+               + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(subject) + '</span>'
+               + '<span style="font-size:11px;color:var(--muted);width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who + ' · ' + cat + ' · ' + src) + '</span>'
+               + '<span style="font-size:10px;font-weight:800;color:' + pillColor + ';width:66px;flex-shrink:0;">' + pillTxt + '</span>';
+      supRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);">'
+        + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + info + '</div>'
+        + btn
+        + '</div>';
+      supCards += wlCard({ title: subject, pill:{ text: pillTxt, color: pillColor }, open: openFn,
+        metas:[{k:'From',v:who},{k:'Category',v:cat},{k:'Source',v:src}],
+        actions:[{text:'Open →',onclick:openFn}] });
+    });
+    html += sectionWrap('🛟', 'Support Tickets', supItems.length, '', _view === 'cards' ? wlGrid(supCards) : supRows, 0);
   }
 
   // My Drafts — in-progress items the current user hasn't submitted yet.
