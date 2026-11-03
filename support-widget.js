@@ -66,6 +66,7 @@
     { k: 'other',   l: 'Something else' }
   ];
   var _chat = [];   // [{role:'user'|'assistant', text}]
+  var _attach = []; // [{name,type,dataUrl}] screenshots attached to the report form
 
   function _injectStyles() {
     if (document.getElementById('support_widget_styles')) return;
@@ -92,7 +93,12 @@
       '#supportWidget .sw-msg-bot{align-self:flex-start;background:var(--bg,#f4f1ea);color:var(--text,#1c1c1c);border:1px solid var(--border,#dcdcd4);border-bottom-left-radius:4px;}',
       '#supportWidget .sw-row{display:flex;gap:8px;align-items:flex-end;margin-top:4px;}',
       '#supportWidget .sw-row textarea{flex:1;min-height:38px;max-height:120px;resize:none;}',
-      '#supportWidget .sw-link{background:none;border:none;color:var(--muted,#777068);font-size:12px;text-decoration:underline;cursor:pointer;padding:10px 0 0;font-family:inherit;display:block;}'
+      '#supportWidget .sw-link{background:none;border:none;color:var(--muted,#777068);font-size:12px;text-decoration:underline;cursor:pointer;padding:10px 0 0;font-family:inherit;display:block;}',
+      '#supportWidget input[type=file]{padding:6px;font-size:12px;}',
+      '#supportWidget .sw-thumbs{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px;}',
+      '#supportWidget .sw-thumb{position:relative;width:64px;height:64px;border-radius:8px;overflow:hidden;border:1px solid var(--border,#dcdcd4);background:var(--bg,#f4f1ea);}',
+      '#supportWidget .sw-thumb img{width:100%;height:100%;object-fit:cover;display:block;}',
+      '#supportWidget .sw-thumb button{position:absolute;top:2px;right:2px;width:18px;height:18px;border-radius:50%;border:none;background:var(--danger,#b3261e);color:var(--on-accent,#ffffff);font-size:12px;line-height:1;cursor:pointer;padding:0;}'
     ].join('');
     document.head.appendChild(st);
   }
@@ -119,6 +125,10 @@
       +       '<label>What do you need?</label><select id="support_cat">' + optsHtml + '</select>'
       +       '<label>Subject</label><input id="support_subject" type="text" placeholder="Short summary" autocomplete="off"/>'
       +       '<label>Details</label><textarea id="support_body" rows="4" placeholder="What happened, what you expected, and any steps to reproduce..."></textarea>'
+      +       '<label>Screenshots (optional)</label>'
+      +       '<input id="support_files" type="file" accept="image/*" multiple onchange="_supportPickFiles(this)"/>'
+      +       '<div class="sw-hint">Attach up to 4 images — screenshots help a lot. Large images are shrunk automatically.</div>'
+      +       '<div id="support_thumbs" class="sw-thumbs"></div>'
       +       '<div class="sw-hint">We’ll include the page you’re on and your account (and this chat) so the team can follow up.</div>'
       +       '<div id="support_err" class="sw-err"></div>'
       +       '<div class="sw-row" style="justify-content:flex-end;margin-top:12px;">'
@@ -156,6 +166,9 @@
     _setView('chat');
     var err = document.getElementById('support_err'); if (err) err.style.display = 'none';
     var btn = document.getElementById('support_send_btn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to help desk'; }
+    _attach = [];                                          // fresh session: drop any prior attachments
+    var tb = document.getElementById('support_thumbs'); if (tb) tb.innerHTML = '';
+    var fi = document.getElementById('support_files'); if (fi) fi.value = '';
     var ov = document.getElementById('supportWidget'); if (ov) ov.style.display = 'flex';
     _greet();
     var ci = document.getElementById('support_chat_input'); if (ci) setTimeout(function () { try { ci.focus(); } catch (e) {} }, 30);
@@ -228,6 +241,59 @@
     };
   }
 
+  // ---- Screenshot attachments ------------------------------------------------
+  // Images are downscaled + JPEG-compressed in the browser and carried as base64
+  // in the ticket's `attachments` jsonb. No Storage upload: the portals have no
+  // storage grants (and load no shared JS), so this works identically for staff,
+  // members and contractors with no bucket policy or migration. Capped so a row
+  // stays reasonable (4 images; ~2.2MB each after shrinking).
+  function _compressImage(file) {
+    return new Promise(function (resolve, reject) {
+      if (!file || !/^image\//.test(file.type || '')) { reject(new Error('not an image')); return; }
+      var fr = new FileReader();
+      fr.onerror = function () { reject(new Error('read failed')); };
+      fr.onload = function () {
+        var img = new Image();
+        img.onerror = function () { reject(new Error('decode failed')); };
+        img.onload = function () {
+          try {
+            var max = 1400;
+            var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+            var scale = Math.min(1, max / Math.max(w || 1, h || 1));
+            var cw = Math.max(1, Math.round((w || 1) * scale)), ch = Math.max(1, Math.round((h || 1) * scale));
+            var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+            cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+            resolve({ name: file.name || 'screenshot.jpg', type: 'image/jpeg', dataUrl: cv.toDataURL('image/jpeg', 0.7) });
+          } catch (e) { reject(e); }
+        };
+        img.src = fr.result;
+      };
+      fr.readAsDataURL(file);
+    });
+  }
+  function _noteToast(msg, type) { if (typeof showToast === 'function') try { showToast(msg, { type: type || 'info' }); } catch (e) {} }
+  async function _supportPickFiles(input) {
+    var files = (input && input.files) ? Array.prototype.slice.call(input.files) : [];
+    if (input) input.value = '';   // allow re-picking the same file
+    for (var i = 0; i < files.length; i++) {
+      if (_attach.length >= 4) { _noteToast('You can attach up to 4 images.'); break; }
+      try {
+        var a = await _compressImage(files[i]);
+        if (a.dataUrl.length > 2200000) { _noteToast('“' + (files[i].name || 'image') + '” is too large even after shrinking — skipped.', 'error'); continue; }
+        _attach.push(a);
+      } catch (e) { _noteToast('Could not add that image.', 'error'); }
+    }
+    _renderThumbs();
+  }
+  function _renderThumbs() {
+    var el = document.getElementById('support_thumbs'); if (!el) return;
+    el.innerHTML = _attach.map(function (a, i) {
+      return '<div class="sw-thumb"><img src="' + a.dataUrl + '" alt=""/>'
+        + '<button type="button" title="Remove" onclick="_supportRemoveFile(' + i + ')">&times;</button></div>';
+    }).join('');
+  }
+  function _supportRemoveFile(i) { _attach.splice(i, 1); _renderThumbs(); }
+
   async function _supportSubmit() {
     var cat = (document.getElementById('support_cat') || {}).value || 'other';
     var subject = ((document.getElementById('support_subject') || {}).value || '').trim();
@@ -257,6 +323,7 @@
       body: body,
       context: _ctx(),
       transcript: _chat.map(function (m) { return { role: m.role, text: m.text, at: new Date().toISOString() }; }),
+      attachments: _attach.slice(),
       status: 'new'
     };
     try {
@@ -265,6 +332,9 @@
       var saved = await r.json().catch(function () { return []; });
       var ticket = (saved && saved[0]) || row;
       if (src === 'staff') _supportNotify(ticket);
+      _attach = [];                                        // clear attachments after a successful send
+      var _tb = document.getElementById('support_thumbs'); if (_tb) _tb.innerHTML = '';
+      var _fi = document.getElementById('support_files'); if (_fi) _fi.value = '';
       _setView('done');
       var ref = document.getElementById('support_ref');
       if (ref && ticket.id) ref.textContent = 'Reference: ' + String(ticket.id).slice(0, 8);
@@ -290,6 +360,7 @@
         +   ' (' + _esc(ticket.reporter_email || '') + (ticket.reporter_role ? (' · ' + _esc(ticket.reporter_role)) : '') + ')</p>'
         + (ticket.subject ? ('<p><strong>Subject:</strong> ' + _esc(ticket.subject) + '</p>') : '')
         + '<p><strong>Details:</strong><br>' + _esc(ticket.body).replace(/\n/g, '<br>') + '</p>'
+        + (((ticket.attachments || []).length) ? ('<p><strong>' + ticket.attachments.length + ' screenshot(s) attached</strong> — view them in the Support queue.</p>') : '')
         + '<p><small>Page: ' + _esc(ctxUrl) + '</small></p>';
       window.sendNotification({ to: to, subject: 'Support request: ' + (ticket.subject || catLabel), html: html })
         .catch(function (e) { console.warn('[support] notify failed:', e); });
@@ -316,6 +387,8 @@
   window.openSupportWidget = openSupportWidget;
   window.closeSupportWidget = closeSupportWidget;
   window._supportSubmit = _supportSubmit;
+  window._supportPickFiles = _supportPickFiles;
+  window._supportRemoveFile = _supportRemoveFile;
   window._supportChatSend = _supportChatSend;
   window._supportShowForm = _supportShowForm;
   window._supportShowChat = _supportShowChat;
