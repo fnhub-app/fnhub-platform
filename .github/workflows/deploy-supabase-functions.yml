@@ -137,10 +137,13 @@ jobs:
             # 401s the caller before our code runs):
             #   support-login  - gated by SUPPORT_LOGIN_SECRET
             #   email-intake   - gated by EMAIL_INTAKE_SECRET (Cloudflare Email Worker)
+            # --yes is required: newer Supabase CLI refuses to deploy in a
+            # non-interactive shell (no TTY to confirm) and exits 1 otherwise,
+            # which aborts the whole loop on the first function.
             if [ "$name" = "support-login" ] || [ "$name" = "email-intake" ]; then
-              supabase functions deploy "$name" --project-ref "$REF" --no-verify-jwt
+              supabase functions deploy "$name" --project-ref "$REF" --no-verify-jwt --yes
             else
-              supabase functions deploy "$name" --project-ref "$REF"
+              supabase functions deploy "$name" --project-ref "$REF" --yes
             fi
           done
           echo "All functions deployed to ${{ matrix.nation.subdomain }}."

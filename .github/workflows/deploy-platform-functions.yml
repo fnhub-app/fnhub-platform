@@ -73,20 +73,22 @@ jobs:
         run: |
           set -e
           REF="${PLATFORM_REF_SECRET:-dnaxulsdetlnpupegoiq}"
+          # --yes is required: newer Supabase CLI refuses to deploy in a
+          # non-interactive shell (no TTY to confirm) and exits 1 otherwise.
           echo "──── Deploying provision-nation to $REF (JWT verify ON) ────"
-          supabase functions deploy provision-nation --project-ref "$REF"
+          supabase functions deploy provision-nation --project-ref "$REF" --yes
           echo "──── Deploying report-nation-usage to $REF (JWT verify OFF) ────"
-          supabase functions deploy report-nation-usage --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy report-nation-usage --project-ref "$REF" --no-verify-jwt --yes
           echo "──── Deploying recurring-invoices to $REF (JWT verify OFF; x-cron-secret gated) ────"
-          supabase functions deploy recurring-invoices --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy recurring-invoices --project-ref "$REF" --no-verify-jwt --yes
           echo "──── Deploying set-nation-secret to $REF (verifies caller against super_admins) ────"
-          supabase functions deploy set-nation-secret --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy set-nation-secret --project-ref "$REF" --no-verify-jwt --yes
           echo "──── Deploying set-nation-module to $REF (verifies caller against super_admins) ────"
-          supabase functions deploy set-nation-module --project-ref "$REF" --no-verify-jwt
+          supabase functions deploy set-nation-module --project-ref "$REF" --no-verify-jwt --yes
           echo "──── Deploying enter-nation to $REF (JWT verify ON; super-admin support login) ────"
-          supabase functions deploy enter-nation --project-ref "$REF"
+          supabase functions deploy enter-nation --project-ref "$REF" --yes
           echo "──── Deploying gen-support-key to $REF (JWT verify ON; generates per-nation keypairs) ────"
-          supabase functions deploy gen-support-key --project-ref "$REF"
+          supabase functions deploy gen-support-key --project-ref "$REF" --yes
           echo "──── Deploying run-nation-migration to $REF (JWT verify ON; fleet schema updates) ────"
-          supabase functions deploy run-nation-migration --project-ref "$REF"
+          supabase functions deploy run-nation-migration --project-ref "$REF" --yes
           echo "Platform functions deployed."
