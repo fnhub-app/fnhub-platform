@@ -365,18 +365,32 @@
     } catch (e) { /* best-effort */ }
   }
 
-  // On the portals (host adapter set) there is no staff header, so self-inject a
-  // floating launcher. The staff app uses the avatar-menu item and sets no host.
+  // Floating "Help" launcher (bottom-right). Portals (host adapter set) always
+  // get it -- it's their only entry point. The staff app shows it too, but gated
+  // by the nation setting `support_launcher` (default ON, ED-toggled in
+  // Settings -> Nation) plus the support module and a signed-in session.
+  function _launcherOn() {
+    if (typeof moduleOn === 'function' && !moduleOn('support')) return false;
+    if (_host()) return true;                                // portals: always on
+    var signedIn = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.accessToken);
+    if (!signedIn) return false;                             // not on the login screen
+    var s = (window._appSettings && window._appSettings.support_launcher);
+    return (typeof s === 'boolean') ? s : true;              // default ON
+  }
+  // Idempotent: injects when the gate is on and the button is absent, and REMOVES
+  // it when the gate turns off -- so the settings toggle applies live.
   function _injectLauncher() {
-    if (!_host()) return;
-    if (document.getElementById('support_launcher')) return;
-    if (typeof moduleOn === 'function' && !moduleOn('support')) return;
+    var existing = document.getElementById('support_launcher');
+    if (!_launcherOn()) { if (existing && existing.remove) existing.remove(); return; }
+    if (existing) return;
     _injectStyles();
     var b = document.createElement('button');
     b.id = 'support_launcher';
     b.type = 'button';
-    b.textContent = '🛟 Help';
-    b.setAttribute('style', 'position:fixed;right:16px;bottom:16px;z-index:99998;padding:10px 16px;border-radius:24px;border:1px solid var(--border,#ccc6ba);background:var(--surface,#ffffff);color:var(--text,#1c1c1c);font-family:"DM Sans",system-ui,-apple-system,sans-serif;font-size:13px;font-weight:700;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,0.25);');
+    b.textContent = '🛟';
+    b.title = 'Help & Support';
+    b.setAttribute('aria-label', 'Help and Support');
+    b.setAttribute('style', 'position:fixed;right:18px;bottom:18px;z-index:99998;width:56px;height:56px;padding:0;border-radius:50%;border:1px solid var(--border,#ccc6ba);background:var(--surface,#ffffff);color:var(--text,#1c1c1c);font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.25);');
     b.onclick = openSupportWidget;
     document.body.appendChild(b);
   }
@@ -393,4 +407,10 @@
 
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _injectLauncher);
   else _injectLauncher();
+  // Re-check after app settings hydrate on staff pages (the nation may have the
+  // floating button turned off) and after sign-in state settles. Portals are
+  // unaffected. Cheap + idempotent, so a couple of delayed passes are safe.
+  try { window.addEventListener('load', _injectLauncher); } catch (e) {}
+  setTimeout(_injectLauncher, 1500);
+  setTimeout(_injectLauncher, 4000);
 })();
