@@ -1034,8 +1034,21 @@ function saveUnitEdit(){
   // UNIT: prefix is required so shared-data.js auditEntry classifies the
   // entry as entity_type='unit' rather than defaulting to 'application'.
   auditEntry('UNIT:'+u.id,'unit_edit','Unit saved'+(u.assignedTo?' — tenant: '+u.assignedName:''),window.currentRole||'staff');
-  closeUnitEditModal(); renderInventoryView();
+  // Keep the form OPEN on Save (do not close) so staff can keep working. Refresh
+  // the background inventory list + dashboard, and re-sync this modal's hero
+  // glance strip to the saved values. The "Go to Match" / "Generate Agreement"
+  // hand-off buttons call closeUnitEditModal() directly, so they're unaffected.
+  renderInventoryView();
   if(typeof updateDashStats==='function') updateDashStats();
+  var _ueStripStatus = { vacant:'Vacant', occupied:'Occupied', reserved:'Reserved', condemned:'Condemned' };
+  setText('ue_strip_status',    _ueStripStatus[u.status] || (u.status || '—'));
+  setText('ue_strip_bedrooms',  (u.bedrooms != null && u.bedrooms !== '') ? String(u.bedrooms) : '—');
+  setText('ue_strip_bathrooms', (u.bathrooms && u.bathrooms !== 'nan') ? String(u.bathrooms) : '—');
+  setText('ue_strip_type',      (typeof _fmtUnitType === 'function' ? _fmtUnitType(u.type) : u.type) || '—');
+  setText('ue_strip_funder',    (typeof _fmtFunder === 'function' ? _fmtFunder(u.funder) : u.funder) || 'Band');
+  var _ueRentVal2 = (u.monthlyRent != null ? u.monthlyRent : u.monthly_rent);
+  setText('ue_strip_rent', (_ueRentVal2 != null && _ueRentVal2 !== '') ? ('$' + Number(_ueRentVal2).toLocaleString('en-CA', {minimumFractionDigits:0, maximumFractionDigits:2})) : '—');
+  var _ueTitle2 = document.getElementById('ue_modal_title'); if(_ueTitle2) _ueTitle2.textContent = u.num + ' ' + u.street;
   showToast('✓ Saved — '+u.num+' '+u.street, {type:'info'});
 }
 
