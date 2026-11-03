@@ -7,7 +7,16 @@ function openModal(id,extra){
   // Ensure unit picker datalist is current when the tenant form is opening
   if(id==='modalTenantForm' && typeof _populateUnitDatalist === 'function') _populateUnitDatalist();
   var _mEl = document.getElementById(id);
-  if (_mEl) { _mEl.style.display = ''; _mEl.classList.add('on'); }
+  if (_mEl) {
+    _mEl.style.display = ''; _mEl.classList.add('on');
+    // Keep-open finance dialogs (Journal Entry / Opening Balance / Collections
+    // Flag) stay open after Save and track the id of the entry they just created
+    // so a re-save UPDATES it instead of inserting a duplicate ledger row. A
+    // fresh open must start clean so the next entry is a new record.
+    if (id === 'modalJournalEntry' || id === 'modalOpeningBalance' || id === 'modalFlagCollections') {
+      if (_mEl.dataset) { delete _mEl.dataset.savedEntryId; delete _mEl.dataset.savedGroupRef; }
+    }
+  }
   // Auto-init payment modal
   if(id==='modalRentPayment'){
     var dateEl=document.getElementById('rp-date');
