@@ -2578,6 +2578,8 @@
       +     evictBtns
       +     '<div class="header-export-group">Consents</div>'
       +     '<button type="button" onclick="window._ticOpenHydroOneConsentModal && window._ticOpenHydroOneConsentModal()" class="header-export-item">Hydro One &mdash; Consent for Disclosure</button>'
+      +     '<div class="header-export-group">Letters</div>'
+      +     '<button type="button" onclick="window.showToast && showToast(\'Generate letter &mdash; coming soon.\', {type:\'info\'})" class="header-export-item">Generate Letter (coming soon)</button>'
       +   '</div>'
       + '</div>';
   }
@@ -3958,6 +3960,55 @@
       .catch(function(e){ console.warn('[lease] address persist failed:', e); });
   }
 
+  // File a generated PDF into the tenant's document library (offline-safe) and
+  // report the REAL outcome so callers never show a false "saved" message. On
+  // success it also refreshes the Documents tab if it's open, so the file shows
+  // without reopening the card. Returns {ok, queued, noUnit, error}.
+  async function _ticFilePdf(blob, filename) {
+    var unit = _ticState.unit || {};
+    if (!unit || !unit.id) return { ok:false, queued:false, noUnit:true };
+    var storePath = 'tenants/' + unit.id + '/' + Date.now() + '_' + filename;
+    function _refreshDocs(){
+      _ticDocLibKey = null; _ticDocLib = null;
+      _ticUtilDocLibKey = null; _ticUtilDocLib = null;
+      if (_ticState.activeTab === 'documents') {
+        try { _ticRenderDocuments(); } catch(_e){}
+        // Re-read once more after the file_uploaded audit row propagates.
+        setTimeout(function(){ try { if (_ticState.activeTab === 'documents') { _ticDocLibKey = null; _ticDocLib = null; _ticRenderDocuments(); } } catch(_e){} }, 1400);
+      }
+    }
+    try {
+      if (typeof window.uploadFileResilient === 'function') {
+        var up = await window.uploadFileResilient(storePath, blob, {
+          entityType:'tenant', entityId:String(unit.id), filename:filename,
+          size: blob.size, contentType:'application/pdf'
+        });
+        var queued = !!(up && up.queued);
+        if (!queued) _refreshDocs();
+        return { ok:true, queued: queued };
+      }
+      await window.sbUploadFile(storePath, blob);
+      if (typeof window.sbSaveFileMeta === 'function') {
+        await window.sbSaveFileMeta('tenant', String(unit.id), storePath, filename, blob.size, 'application/pdf');
+      }
+      _refreshDocs();
+      return { ok:true, queued:false };
+    } catch(e) {
+      console.warn('[lease] doc library upload failed:', e);
+      return { ok:false, queued:false, error:e };
+    }
+  }
+  // Honest toast for a document-library save outcome (never claims success on a
+  // failed upload -- that was telling staff the lease attached when it hadn't).
+  function _ticFileResultToast(res, docNoun){
+    if (typeof showToast !== 'function') return;
+    docNoun = docNoun || 'Document';
+    if (res.noUnit)       showToast(docNoun + ' downloaded. Link a unit to also save it to the document library.', {type:'info'});
+    else if (res.ok && res.queued) showToast(docNoun + ' saved on this device — it will upload to the document library when you are back online.', {type:'info'});
+    else if (res.ok)      showToast(docNoun + ' saved to the document library.', {type:'info'});
+    else                  showToast(docNoun + ' downloaded, but saving to the document library FAILED. Check your connection and generate it again.', {type:'error'});
+  }
+
   async function _ticGenerateLeasePdf() {
     // Hard gate — don't generate with a core term (fixed-term end date)
     // literally missing from the document.
@@ -4141,34 +4192,10 @@
         link.href = url; link.download = filename; link.click();
         setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
 
-        var unit = _ticState.unit || {};
-        var _leaseQueued = false;
-        if (unit.id) {
-          try {
-            var storePath = 'tenants/' + unit.id + '/' + Date.now() + '_' + filename;
-            // Resilient: uploads now if online, otherwise queues to IndexedDB and
-            // syncs on reconnect — so the signed agreement saves with no internet.
-            if (typeof window.uploadFileResilient === 'function') {
-              var _up = await window.uploadFileResilient(storePath, blob, {
-                entityType: 'tenant', entityId: String(unit.id), filename: filename,
-                size: blob.size, contentType: 'application/pdf'
-              });
-              _leaseQueued = !!(_up && _up.queued);
-            } else {
-              await window.sbUploadFile(storePath, blob);
-              if (typeof window.sbSaveFileMeta === 'function') {
-                await window.sbSaveFileMeta('tenant', String(unit.id), storePath, filename, blob.size, 'application/pdf');
-              }
-            }
-            _ticDocLibKey = null; _ticDocLib = null;
-            _ticUtilDocLibKey = null; _ticUtilDocLib = null;
-          } catch(e) { console.warn('[lease] doc library upload failed:', e); }
-        }
+        var _res = await _ticFilePdf(blob, filename);
         var mo = document.getElementById('tic_lease_modal');
         if (mo) mo.remove();
-        if (typeof showToast === 'function') showToast(_leaseQueued
-          ? 'Agreement saved on this device — it will upload to the document library when you are back online.'
-          : 'Occupancy Agreement saved to document library', {type:'info'});
+        _ticFileResultToast(_res, 'Occupancy Agreement');
         return;
       } catch(e) {
         console.error('[lease] jsPDF generation failed:', e);
@@ -4338,22 +4365,10 @@
       link.href = url; link.download = filename; link.click();
       setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
 
-      var unit = _ticState.unit || {};
-      if (unit.id) {
-        try {
-          var storePath = 'tenants/' + unit.id + '/' + Date.now() + '_' + filename;
-          await window.sbUploadFile(storePath, blob);
-          if (typeof window.sbSaveFileMeta === 'function') {
-            await window.sbSaveFileMeta('tenant', String(unit.id), storePath, filename, blob.size, 'application/pdf');
-          }
-          _ticDocLibKey = null; _ticDocLib = null;
-          _ticUtilDocLibKey = null; _ticUtilDocLib = null;
-        } catch(e) { console.warn('[lease] doc library upload failed:', e); }
-      }
-
+      var _res = await _ticFilePdf(blob, filename);
       var mo = document.getElementById('tic_lease_modal');
       if (mo) mo.remove();
-      if (typeof showToast === 'function') showToast('Occupancy Agreement saved to document library', {type:'info'});
+      _ticFileResultToast(_res, 'Occupancy Agreement');
 
     } catch(e) {
       console.error('[lease] PDF generation failed:', e);
