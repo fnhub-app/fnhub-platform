@@ -1557,6 +1557,8 @@
     + '#helpTrainingModal .ht-rev{font-size:11px;color:var(--muted);margin-top:3px;}'
     + '#helpTrainingModal .ht-layout{display:flex;flex:1;min-height:0;}'
     + '#helpTrainingModal .ht-side{width:244px;flex-shrink:0;border-right:1px solid var(--border);overflow-y:auto;padding:12px 10px;}'
+    + '#helpTrainingModal .ht-side-toggle{display:none;}'          /* desktop: no toggle, list always shown */
+    + '#helpTrainingModal .ht-side-inner{display:block;}'
     + '#helpTrainingModal .ht-search{width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--text);font-size:13px;font-family:inherit;margin-bottom:8px;}'
     + '#helpTrainingModal .ht-nav-group{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);margin:14px 0 4px;padding-left:8px;}'
     + '#helpTrainingModal .ht-nav-item{display:block;width:100%;box-sizing:border-box;text-align:left;border:none;background:none;padding:7px 10px;border-radius:7px;border-left:3px solid transparent;font-size:13px;color:var(--text);cursor:pointer;font-family:inherit;line-height:1.3;}'
@@ -1577,8 +1579,16 @@
     + '#helpTrainingModal .ht-foot{padding:12px 24px;border-top:1px solid var(--border);text-align:right;flex-shrink:0;}'
     + '@media (max-width:760px){'
     +   '#helpTrainingModal .ht-layout{flex-direction:column;}'
-    +   '#helpTrainingModal .ht-side{width:auto;border-right:none;border-bottom:1px solid var(--border);max-height:34vh;}'
-    +   '#helpTrainingModal .ht-title{font-size:19px;}'
+    +   '#helpTrainingModal .ht-side{width:auto;border-right:none;border-bottom:1px solid var(--border);max-height:none;padding:8px 10px;flex-shrink:0;}'
+    +   '#helpTrainingModal .ht-title{font-size:18px;}'
+    +   '#helpTrainingModal .ht-hero{padding:12px 16px;gap:10px;}'       /* tighter header */
+    +   '#helpTrainingModal .ht-logo{height:32px;}'
+    +   '#helpTrainingModal .ht-body{padding:14px 16px 24px;}'
+    +   '#helpTrainingModal .ht-side-toggle{display:flex;align-items:center;justify-content:space-between;width:100%;box-sizing:border-box;padding:9px 11px;background:var(--bg);border:1px solid var(--border);border-radius:8px;font-size:13px;font-weight:700;color:var(--text);font-family:inherit;cursor:pointer;}'
+    +   '#helpTrainingModal .ht-side-chev{font-size:12px;color:var(--muted);transition:transform .18s ease;}'
+    +   '#helpTrainingModal .ht-side-toggle[aria-expanded="true"] .ht-side-chev{transform:rotate(90deg);}'
+    +   '#helpTrainingModal .ht-side-inner{display:none;margin-top:8px;max-height:46vh;overflow-y:auto;}'
+    +   '#helpTrainingModal .ht-side-inner.open{display:block;}'
     + '}';
     document.head.appendChild(s);
   }
@@ -1637,8 +1647,11 @@
       +   '</div>'
       +   '<div class="ht-layout">'
       +     '<div class="ht-side">'
-      +       '<input type="text" class="ht-search" placeholder="Search procedures..." oninput="_htFilterNav(this.value)" aria-label="Search procedures"/>'
-      +       '<nav id="ht_nav">' + _navHtml(activeId) + '</nav>'
+      +       '<button type="button" class="ht-side-toggle" aria-expanded="false" onclick="_htToggleTopics(this)"><span>&#128218; Browse topics</span><span class="ht-side-chev">&#9656;</span></button>'
+      +       '<div class="ht-side-inner">'
+      +         '<input type="text" class="ht-search" placeholder="Search procedures..." oninput="_htFilterNav(this.value)" aria-label="Search procedures"/>'
+      +         '<nav id="ht_nav">' + _navHtml(activeId) + '</nav>'
+      +       '</div>'
       +     '</div>'
       +     '<div class="ht-main"><div class="ht-body">' + bodyInner + '</div></div>'
       +   '</div>'
@@ -1676,6 +1689,21 @@
     if (empty) empty.style.display = anyShown ? 'none' : 'block';
   }
   window._htFilterNav = _htFilterNav;
+
+  // Mobile only: expand/collapse the topic list (collapsed by default so the
+  // document starts right under the header). On desktop the toggle is hidden
+  // and the list is always shown. Picking a topic re-renders the modal, which
+  // resets the list to collapsed again.
+  function _htToggleTopics(btn) {
+    var side = btn && btn.closest ? btn.closest('.ht-side') : null;
+    var inner = side ? side.querySelector('.ht-side-inner') : null;
+    if (!inner) return;
+    var open = !inner.classList.contains('open');
+    inner.classList.toggle('open', open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (open) { var s = inner.querySelector('.ht-search'); if (s) try { s.focus(); } catch (e) {} }
+  }
+  window._htToggleTopics = _htToggleTopics;
 
   function openHelpTraining(docId) {
     _ensureStyles();
