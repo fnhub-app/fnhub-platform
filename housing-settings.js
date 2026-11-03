@@ -480,28 +480,57 @@ var SETTINGS_GROUP_DEFAULT_SECTION = {
   app:   'sec_app_scoring'
 };
 
-// Expand/collapse a settings group's sub-list (accordion, closed by default).
-// Independent toggles -- opening one does not close the other. Revealing a
-// group's list does NOT auto-select a section; the user picks a sub-item.
-function toggleSettingsGroup(groupId) {
-  var row = document.getElementById('settings_subtabs_' + groupId);
-  if (!row) return;
-  var open = !row.classList.contains('open');
-  row.classList.toggle('open', open);
-  var hdr = document.getElementById('sgroup_' + groupId);
-  if (hdr) { hdr.classList.toggle('active', open); hdr.setAttribute('aria-expanded', open ? 'true' : 'false'); }
-}
-window.toggleSettingsGroup = toggleSettingsGroup;
-
-// Ensure a group's sub-list is EXPANDED. Called by showSettingsSection when a
-// section is opened (programmatically or by clicking its sub-tab) so that the
-// section's sub-tab is visible in its group. Never collapses the other group.
 function showSettingsGroup(groupId) {
-  var row = document.getElementById('settings_subtabs_' + groupId);
-  if (row) row.classList.add('open');
-  var hdr = document.getElementById('sgroup_' + groupId);
-  if (hdr) { hdr.classList.add('active'); hdr.setAttribute('aria-expanded', 'true'); }
+  // Toggle group-bar pill state
+  ['admin','app'].forEach(function(g){
+    var btn = document.getElementById('sgroup_' + g);
+    if (btn) btn.classList.toggle('active', g === groupId);
+    var row = document.getElementById('settings_subtabs_' + g);
+    if (row) row.classList.toggle('active', g === groupId);
+  });
+  // If the section currently visible doesn't belong to the new group, jump
+  // to that group's first tab. Direct calls from showSettingsSection (after
+  // the section was already chosen) skip this — guarded by _settingsSectionLock.
+  if (window._settingsSectionLock) return;
+  var defaultSec = SETTINGS_GROUP_DEFAULT_SECTION[groupId];
+  if (!defaultSec) return;
+  var current = document.querySelector('.settings-section[style*="block"]');
+  var currentId = current ? current.id : null;
+  if (!currentId || SETTINGS_SECTION_GROUPS[currentId] !== groupId) {
+    showSettingsSection(defaultSec);
+  }
 }
+
+// Make each card in a settings section collapsible: the card collapses to just
+// its .modal-hdr header, and tapping the header expands it. Closed by default.
+// Idempotent (dataset flag) so it can run on every section show + a short re-pass
+// to catch cards that panels render asynchronously. Clicks on controls inside a
+// header (buttons/inputs/links) are ignored so they keep working.
+function _wireSettingsCollapsibles() {
+  var view = document.getElementById('settingsView');
+  if (!view) return;
+  view.querySelectorAll('.settings-section .card').forEach(function (card) {
+    if (card.dataset.stgWired) return;
+    var hdr = card.querySelector(':scope > .modal-hdr');
+    if (!hdr) return;
+    card.dataset.stgWired = '1';
+    card.classList.add('stg-collapse');   // collapsed by default (no .stg-open)
+    // Chevron at the start of the header (left side, so it never overlaps any
+    // right-aligned header buttons like Export/Refresh).
+    if (!hdr.querySelector('.stg-chev')) {
+      var chev = document.createElement('span');
+      chev.className = 'stg-chev';
+      chev.setAttribute('aria-hidden', 'true');
+      chev.innerHTML = '&#9656;';
+      hdr.insertBefore(chev, hdr.firstChild);
+    }
+    hdr.addEventListener('click', function (e) {
+      if (e.target.closest && e.target.closest('button,a,input,select,textarea,label')) return;
+      card.classList.toggle('stg-open');
+    });
+  });
+}
+window._wireSettingsCollapsibles = _wireSettingsCollapsibles;
 
 function showSettingsSection(section) {
   var sections = ['sec_users','sec_app_scoring','sec_required_fields','sec_unit_match','sec_reno_score','sec_budget','sec_nation','sec_themes','sec_approval_authority','sec_notifications','sec_terms','sec_contracts','sec_config','sec_maint_qr','sec_audit','sec_occupancy','sec_rent_model','sec_policy_rules'];
@@ -553,6 +582,12 @@ function showSettingsSection(section) {
   if(section==='sec_maint_qr'       && typeof renderLabelsPanel==='function') renderLabelsPanel();
   else if(section==='sec_maint_qr'  && typeof renderMaintenanceQrPanel==='function') renderMaintenanceQrPanel();
   if(section==='sec_approval_authority' && typeof renderApprovalAuthorityPanel==='function') renderApprovalAuthorityPanel();
+  // Make this section's cards collapsible (closed by default). Run now for the
+  // static cards and once more shortly after for cards that panels above render
+  // asynchronously (e.g. the staff table, scoring editor, Nation/FAQ panels).
+  _wireSettingsCollapsibles();
+  setTimeout(_wireSettingsCollapsibles, 250);
+  setTimeout(_wireSettingsCollapsibles, 900);
 }
 
 

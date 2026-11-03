@@ -291,41 +291,34 @@
 /* ── Tab bar ── */
 #settingsView .tabs { overflow-x: auto; overflow-y: visible; margin-bottom: 20px; }
 
-/* ── Settings groups: collapsible accordion (Admin / App Settings) ──
-   Each group header toggles a vertical sub-list that is collapsed by default
-   and expandable. Replaces the old pill-bar + horizontal underline-tab row. */
-.settings-accordion {
-  margin-bottom: 20px; border: 1px solid var(--border); border-radius: 10px;
-  overflow: hidden;
+/* ── Two-tier tab grouping (Admin / App Settings) ──
+   Group bar uses .pill-tabs / .pill-tab from shared.css.
+   .settings-subtabs is the second-tier underline-tab row, settings-only. */
+.settings-subtabs {
+  display: none; border-bottom: 2px solid var(--border);
+  margin-bottom: 20px; gap: 0;
+  overflow-x: auto; overflow-y: visible; scrollbar-width: none;
 }
-.settings-acc-hd {
-  width: 100%; display: flex; align-items: center; gap: 8px;
-  background: var(--bg); border: none; border-top: 1px solid var(--border);
-  padding: 13px 16px; font-size: 14px; font-weight: 700; color: var(--text);
-  font-family: var(--sans); cursor: pointer; text-align: left;
-}
-.settings-accordion > .settings-acc-hd:first-child { border-top: none; }
-.settings-acc-hd:hover { background: var(--surface); }
-.settings-acc-chev {
-  display: inline-block; font-size: 12px; color: var(--muted);
+.settings-subtabs::-webkit-scrollbar { display: none; }
+.settings-subtabs.active { display: flex; }
+
+/* ── Collapsible settings cards ──
+   Each card in a settings section collapses to just its header; tap the header
+   to expand. Closed by default (no .stg-open). A chevron is inserted at the
+   start of the header (left side, so it never overlaps right-aligned header
+   buttons). Controls inside the header still work (the JS ignores clicks on
+   buttons/inputs). */
+#settingsView .settings-section .card.stg-collapse > .modal-hdr { cursor: pointer; }
+#settingsView .settings-section .card.stg-collapse > .modal-hdr .stg-chev {
+  display: inline-block; flex-shrink: 0; align-self: center; margin-right: 2px;
+  font-size: 13px; color: var(--txt-on-dark); opacity: .85;
   transition: transform .18s ease;
 }
-.settings-acc-hd.active .settings-acc-chev { transform: rotate(90deg); }
-
-/* Sub-list: vertical, collapsed by default, revealed by .open. */
-.settings-subtabs {
-  display: none; flex-direction: column; gap: 0;
-  background: var(--surface); border-top: 1px solid var(--border);
+#settingsView .settings-section .card.stg-collapse.stg-open > .modal-hdr .stg-chev {
+  transform: rotate(90deg);
 }
-.settings-subtabs.open { display: flex; }
-.settings-subtabs .tab-btn {
-  width: 100%; text-align: left; border-bottom: none; margin-bottom: 0;
-  border-radius: 0; padding: 11px 16px 11px 34px; white-space: normal;
-}
-.settings-subtabs .tab-btn + .tab-btn { border-top: 1px solid var(--border); }
-.settings-subtabs .tab-btn.active {
-  border-bottom: none; background: var(--bg); color: var(--text);
-  box-shadow: inset 3px 0 0 var(--accent-ink);
+#settingsView .settings-section .card.stg-collapse:not(.stg-open) > :not(.modal-hdr) {
+  display: none !important;
 }
 
 /* ── Sections ── */
