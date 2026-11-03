@@ -63,7 +63,10 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         uses: supabase/setup-cli@v1
         with:
-          version: latest
+          # Pinned, not `latest`: a CLI change (e.g. the non-interactive
+          # deploy now needing --yes) must not silently break deploys.
+          # Bump deliberately after checking the deploy still works.
+          version: 3.0.0
 
       - name: Deploy control-plane functions
         if: steps.secrets.outputs.ready == 'true'
