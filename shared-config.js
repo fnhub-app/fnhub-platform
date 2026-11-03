@@ -44,6 +44,7 @@ window.NATIONS_DIRECTORY = window.NATIONS_DIRECTORY || {
     email_domain:  '',
     finance_email: '',
     intake_email:  '',
+    support_email: '',
     modules_licensed: null
   },
   // CLFN — a normal nation now (carries its own branding); no longer the default.
@@ -65,6 +66,7 @@ window.NATIONS_DIRECTORY = window.NATIONS_DIRECTORY || {
     housing_email: 'housing@clfn.on.ca',  // the nation's housing dept mailbox (AP/manager defaults)
     finance_email: 'finance@clfn.on.ca',  // the nation's finance mailbox (rent start/stop notices)
     intake_email:  'clfn@fnhub.app',      // address staff forward emails to (Email Intake); routed in Cloudflare
+    support_email: 'housing@clfn.on.ca',  // where Help / Report-an-Issue tickets are emailed (nation help desk)
     // Landlord mailing block for generated agreements/leases (kept in config,
     // not as literals in the generators — see the CLFN hard rule).
     landlord_committee: 'Housing Committee',
@@ -383,6 +385,7 @@ window._mapNationRow = function(r){
     housing_email: r.housing_email || '',
     finance_email: r.finance_email || '',
     intake_email:  r.intake_email  || '',
+    support_email: r.support_email || '',
     // Per-nation email delivery config from the registry, when present. Never
     // inherits another nation's mailbox/provider (OCAP): absent -> the app's
     // email_config falls back to the nation's own housing_email or empty.
@@ -782,8 +785,8 @@ window.CLFN_MODULES = {
   CORE: ['applications', 'inventory', 'tenants', 'worklist'],
   // contractor_portal defaults OFF (feature in build — Phase CP B1); licensed so
   // a super user can turn it on when the portal is ready for that nation.
-  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false },
-  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true },
+  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false, support: true },
+  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true, support: true },
 
   isEnabled: function(mod) {
     if(this.CORE.indexOf(mod) !== -1) return true;
