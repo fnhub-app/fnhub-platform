@@ -4585,6 +4585,16 @@ window.sendNotification = async function(opts) {
       if(_nc.mailing_address) _cp.push(String(_nc.mailing_address).split('\n')[0]);
       if(_cp.length) opts.contact_line = _cp.join('  |  ');
     }
+    // Header logo for the branded email shell. Email clients (Gmail/Outlook)
+    // strip data: URIs, so we can't send NATION_CONFIG.logo (a data URL) --
+    // instead point at the app icon hosted at THIS nation's own https origin,
+    // which renders reliably. The Edge Function validates it's https.
+    if(opts.logo_url == null){
+      try {
+        var _origin = (typeof location !== 'undefined' && location.origin) || '';
+        if(/^https:\/\//i.test(_origin)) opts.logo_url = _origin + '/icon-192.png';
+      } catch(e){}
+    }
     // Per-nation email delivery method. The Edge Function honours the requested
     // provider only when its keys are configured server-side, else falls back to
     // its EMAIL_PROVIDER secret. from/from_name apply to the resend/sendgrid path.
