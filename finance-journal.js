@@ -126,7 +126,15 @@ function saveJournalEntry() {
   var d = getData();
   d.journalEntries = d.journalEntries || [];
   d.auditLog = d.auditLog || [];
-  var groupRef = uid();
+  // Keep-open: on a re-save of the same open form, replace the balanced group of
+  // rows created a moment ago (matched by ref) instead of posting a duplicate
+  // journal entry.
+  var _jeModal = document.getElementById('modalJournalEntry');
+  var _jeEditRef = (_jeModal && _jeModal.dataset && _jeModal.dataset.savedGroupRef) || '';
+  if (_jeEditRef) {
+    d.journalEntries = d.journalEntries.filter(function(e){ return e.ref !== _jeEditRef; });
+  }
+  var groupRef = _jeEditRef || uid();
   lines.forEach(function(l) {
     var entry = {
       id: uid(), tenantId: tid||null, date: date,
@@ -144,10 +152,11 @@ function saveJournalEntry() {
       summary:'Journal entry ('+l.type+'): '+memo, detail:{after:entry}});
   });
   saveData(d);
-  closeModal('modalJournalEntry');
+  if (_jeModal && _jeModal.dataset) _jeModal.dataset.savedGroupRef = groupRef;
   renderDashboard();
   if (document.getElementById('page-journal').classList.contains('on')) renderJournal();
   if (document.getElementById('page-transactions').classList.contains('on')) renderTransactions();
+  toast('Journal entry saved.');
 }
 
 
@@ -160,16 +169,22 @@ function saveOpeningBalance() {
   if (!tid)    { toast('Please select a tenant.'); return; }
   if (!amount) { toast('Amount required.'); return; }
   var d = getData(); var t = getTenant(tid);
-  var entry = {id:uid(),tenantId:tid,date:date,
+  // Keep-open: on a re-save of the same open form, UPDATE the opening-balance
+  // row created a moment ago instead of pushing a duplicate.
+  var _obModal = document.getElementById('modalOpeningBalance');
+  var _obEditId = (_obModal && _obModal.dataset && _obModal.dataset.savedEntryId) || '';
+  var entry = {id: _obEditId || uid(),tenantId:tid,date:date,
     desc:'Opening Balance'+(notes?' \u2014 '+notes:''),
     charge:amount,payment:0,type:'opening',method:'',status:'approved',ref:'OB-'+tid.slice(-4)};
-  d.rentLedger.push(entry);
+  var _obIdx = _obEditId ? d.rentLedger.findIndex(function(r){ return r.id === _obEditId; }) : -1;
+  if (_obIdx >= 0) { d.rentLedger[_obIdx] = entry; } else { d.rentLedger.push(entry); }
   writeAuditEntry({action:'post_opening_balance',entity_type:'opening-balance',entity_id:entry.id,
     summary:'Opening balance: '+(t?tenantName(t):tid)+' \u2014 '+fmt(amount),detail:{after:entry}});
   saveData(d);
-  closeModal('modalOpeningBalance');
+  if (_obModal && _obModal.dataset) _obModal.dataset.savedEntryId = entry.id;
   renderDashboard();
   renderRentLedger();
+  toast('Opening balance saved.');
 }
 
 // \u2500\u2500 REPORTS PAGE \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500

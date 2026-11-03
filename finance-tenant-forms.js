@@ -259,18 +259,26 @@ function saveCollectionsFlag() {
   if (!tid)    { toast('Please select a tenant.'); return; }
   if (!amount) { toast('Please enter the amount at referral.'); return; }
   var d = getData();
-  var entry = {id:uid(),tenantId:tid,dateFlagged:today(),amountAtReferral:amount,
-    agency:agency,notes:notes,status:'approved'};
   d.collections = d.collections||[];
-  d.collections.push(entry);
+  // Keep-open: on a re-save of the same open form, UPDATE the entry created a
+  // moment ago instead of pushing a duplicate collections flag.
+  var _cfModal = document.getElementById('modalFlagCollections');
+  var _cfEditId = (_cfModal && _cfModal.dataset && _cfModal.dataset.savedEntryId) || '';
+  var _cfPrev = _cfEditId ? d.collections.find(function(c){ return c.id === _cfEditId; }) : null;
+  var entry = {id: _cfEditId || uid(), tenantId:tid,
+    dateFlagged: _cfPrev ? _cfPrev.dateFlagged : today(), amountAtReferral:amount,
+    agency:agency, notes:notes, status: _cfPrev ? _cfPrev.status : 'approved'};
+  if (_cfPrev) { d.collections[d.collections.indexOf(_cfPrev)] = entry; }
+  else { d.collections.push(entry); }
   writeAuditEntry({action:'flag_collections',entity_type:'collection',entity_id:entry.id,
     summary:'Collections flag: '+(getTenant(tid)?tenantName(getTenant(tid)):tid)+' \u2014 '+fmt(amount),
     detail:{after:entry}});
   saveData(d);
-  closeModal('modalFlagCollections');
+  if (_cfModal && _cfModal.dataset) _cfModal.dataset.savedEntryId = entry.id;
   renderDashboard();
   renderCollections();
   if (document.getElementById('page-tenants').classList.contains('on')) renderTenantProfile(tid);
+  toast('Collections flag saved.');
 }
 
 // \u2500\u2500 ARRANGEMENT MODAL \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
