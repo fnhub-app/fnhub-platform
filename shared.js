@@ -1481,7 +1481,7 @@ window.DocLibrary = (function(){
     var base = opts.supabaseUrl + '/rest/v1/' + opts.auditTable +
       '?entity_type=eq.' + encodeURIComponent(opts.entityType) +
       '&entity_id=eq.' + encodeURIComponent(String(opts.entityId)) +
-      '&action=in.(file_uploaded,file_deleted,file_category_changed,file_archived,file_restored)' +
+      '&action=in.(file_uploaded,file_deleted,file_undeleted,file_purged,file_category_changed,file_archived,file_restored)' +
       '&order=created_at.desc&limit=500';
     var tok = (typeof opts.getAuthToken === 'function' && opts.getAuthToken()) || opts.supabaseAnon;
     return fetch(base, {
@@ -1489,16 +1489,25 @@ window.DocLibrary = (function(){
     }).then(function(r){ return r.ok ? r.json() : []; })
       .then(function(rows){
         if (!Array.isArray(rows)) return [];
-        var deletedPaths = {};
+        var purgedPaths = {};       // path → true (permanently deleted; never shown)
+        var deletedState = {};      // path → true/false (latest delete/undelete wins → Recycle bin)
         var categoryOverrides = {}; // path → latest category
         var archivedState = {};     // path → true/false (latest archive/restore wins)
         // Rows are ordered desc — first occurrence of each action per path wins.
         var seenCatPath = {};
         var seenArchPath = {};
+        var seenDelPath = {};
         rows.forEach(function(r){
-          if (r.action === 'file_deleted') {
-            var d = _parseDetail(r.detail);
-            if (d.path) deletedPaths[d.path] = true;
+          if (r.action === 'file_purged') {
+            var dp = _parseDetail(r.detail);
+            if (dp.path) purgedPaths[dp.path] = true;
+          }
+          if (r.action === 'file_deleted' || r.action === 'file_undeleted') {
+            var dd = _parseDetail(r.detail);
+            if (dd.path && !seenDelPath[dd.path]) {
+              seenDelPath[dd.path] = true;
+              deletedState[dd.path] = (r.action === 'file_deleted');
+            }
           }
           if (r.action === 'file_category_changed') {
             var d = _parseDetail(r.detail);
@@ -1520,7 +1529,10 @@ window.DocLibrary = (function(){
         rows.forEach(function(r){
           if (r.action !== 'file_uploaded') return;
           var d = _parseDetail(r.detail);
-          if (!d.path || deletedPaths[d.path]) return;
+          // Purged files are gone for good (bytes removed + record closed); never
+          // list them. Soft-deleted files are KEPT (flagged) so they can show in
+          // the Recycle bin and be restored.
+          if (!d.path || purgedPaths[d.path]) return;
           if (seenPath[d.path]) return;
           seenPath[d.path] = true;
           files.push({
@@ -1530,6 +1542,7 @@ window.DocLibrary = (function(){
             type: d.type || '',
             category: categoryOverrides[d.path] || d.category || 'other',
             archived: !!archivedState[d.path],
+            deleted: !!deletedState[d.path],
             addedAt: (r.created_at || '').slice(0,10),
             addedBy: r.actor || ''
           });
@@ -1588,6 +1601,47 @@ window.DocLibrary = (function(){
     });
   }
 
+  // Restore a soft-deleted file from the Recycle bin — append-only audit row.
+  function _markUndeleted(opts, path, name) {
+    var url = opts.supabaseUrl + '/rest/v1/' + opts.auditTable;
+    var actor = (typeof opts.getActor === 'function' && opts.getActor()) || 'staff';
+    var detailPayload = { path:path, name:name };
+    return fetch(url, {
+      method:'POST',
+      headers: _restHeaders(opts),
+      body: JSON.stringify({
+        entity_type: opts.entityType,
+        entity_id:   String(opts.entityId),
+        action:      'file_undeleted',
+        detail:      opts.detailAsJson ? detailPayload : JSON.stringify(detailPayload),
+        actor:       actor,
+        created_at:  new Date().toISOString()
+      })
+    });
+  }
+
+  // Permanently remove a soft-deleted file: delete the storage object AND close
+  // the record with a file_purged row so it never returns to the Recycle bin.
+  function _purgeFile(opts, path, name) {
+    var url = opts.supabaseUrl + '/rest/v1/' + opts.auditTable;
+    var actor = (typeof opts.getActor === 'function' && opts.getActor()) || 'staff';
+    var detailPayload = { path:path, name:name };
+    return _deleteObject(opts, path).then(function(){
+      return fetch(url, {
+        method:'POST',
+        headers: _restHeaders(opts),
+        body: JSON.stringify({
+          entity_type: opts.entityType,
+          entity_id:   String(opts.entityId),
+          action:      'file_purged',
+          detail:      opts.detailAsJson ? detailPayload : JSON.stringify(detailPayload),
+          actor:       actor,
+          created_at:  new Date().toISOString()
+        })
+      });
+    });
+  }
+
   function _updateCategory(opts, path, name, newCategory) {
     var url = opts.supabaseUrl + '/rest/v1/' + opts.auditTable;
     var actor = (typeof opts.getActor === 'function' && opts.getActor()) || 'staff';
@@ -1626,7 +1680,8 @@ window.DocLibrary = (function(){
       uploadCategory: opts.categories[0].key,
       uploading: false,
       error: null,
-      showArchived: false // when opts.canArchive: toggles the archived-files view
+      showArchived: false, // when opts.canArchive: toggles the archived-files view
+      showDeleted: false   // toggles the Recycle bin (soft-deleted files) view
     };
 
     // Build DOM once
@@ -1635,12 +1690,14 @@ window.DocLibrary = (function(){
     mountEl.appendChild(root);
 
     function render() {
-      // Archived files are hidden from the normal list everywhere; the archived
-      // view (and the archive/restore actions) is only offered when canArchive.
-      var activeFiles   = state.files.filter(function(f){ return !f.archived; });
-      var archivedFiles = state.files.filter(function(f){ return f.archived; });
-      var inArchived = !!(opts.canArchive && state.showArchived);
-      var viewFiles = inArchived ? archivedFiles : activeFiles;
+      // Soft-deleted files live in the Recycle bin; archived files in the archived
+      // view (only when canArchive). The normal list hides both.
+      var deletedFiles  = state.files.filter(function(f){ return f.deleted; });
+      var activeFiles   = state.files.filter(function(f){ return !f.archived && !f.deleted; });
+      var archivedFiles = state.files.filter(function(f){ return f.archived && !f.deleted; });
+      var inDeleted  = !!(state.showDeleted && !opts.readOnly);
+      var inArchived = !inDeleted && !!(opts.canArchive && state.showArchived);
+      var viewFiles  = inDeleted ? deletedFiles : (inArchived ? archivedFiles : activeFiles);
 
       var hasFiles = viewFiles.length > 0;
       var filtered = state.filter === 'all'
@@ -1654,23 +1711,34 @@ window.DocLibrary = (function(){
 
       // Header (+ optional archived-view toggle when the viewer may archive)
       var archiveToggleHTML = '';
-      if (opts.canArchive) {
+      if (opts.canArchive && !inDeleted) {
         archiveToggleHTML = inArchived
           ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-arch-toggle>\u2190 Back to active</button>'
           : (archivedFiles.length
               ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-arch-toggle>\uD83D\uDDC4 Archived ('+archivedFiles.length+')</button>'
               : '');
       }
+      // Recycle bin toggle \u2014 soft-deleted files, restorable. Offered whenever the
+      // viewer can delete (not read-only) and the bin has items, or while in it.
+      var recycleToggleHTML = '';
+      if (!opts.readOnly && !inArchived) {
+        recycleToggleHTML = inDeleted
+          ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-recycle-toggle>\u2190 Back to active</button>'
+          : (deletedFiles.length
+              ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-recycle-toggle>\uD83D\uDDD1\uFE0F Recycle bin ('+deletedFiles.length+')</button>'
+              : '');
+      }
       // Optional "Write Letter with AI" action (opt-in per library via
       // opts.aiLetters). Drafts a policy-grounded letter and files the PDF
       // back into THIS library. Hidden when read-only or archived.
-      var aiLetterBtnHTML = (opts.aiLetters && !opts.readOnly && !inArchived)
+      var aiLetterBtnHTML = (opts.aiLetters && !opts.readOnly && !inArchived && !inDeleted)
         ? '<button type="button" class="btn btn-ghost btn-sm" data-dl-ailetter><span style="color:var(--yellow);">\u2726</span> Write Letter with AI</button>'
         : '';
+      var titleSuffix = inDeleted ? ' \u00B7 Recycle bin' : (inArchived ? ' \u00B7 Archived' : '');
       var headerHTML =
         '<div class="std-table-hdr">' +
           '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">' +
-            '<h3 style="margin:0;font-size:15px;font-weight:700;">Documents' + (inArchived ? ' \u00B7 Archived' : '') + '</h3>' +
+            '<h3 style="margin:0;font-size:15px;font-weight:700;">Documents' + titleSuffix + '</h3>' +
             '<span class="std-table-count">' +
               (shownCount === totalCount ? totalCount + ' total' : shownCount + ' shown \u00B7 ' + totalCount + ' total') +
             '</span>' +
@@ -1678,12 +1746,13 @@ window.DocLibrary = (function(){
           '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' +
             aiLetterBtnHTML +
             (archiveToggleHTML || '') +
+            (recycleToggleHTML || '') +
           '</div>' +
         '</div>';
 
-      // Upload area (skipped when readOnly or viewing the archived list)
+      // Upload area (skipped when readOnly or viewing the archived/recycle list)
       var uploadHTML = '';
-      if (!opts.readOnly && !inArchived) {
+      if (!opts.readOnly && !inArchived && !inDeleted) {
         var catOptions = opts.categories.map(function(c){
           var sel = c.key === state.uploadCategory ? ' selected' : '';
           return '<option value="'+_escAttr(c.key)+'"'+sel+'>'+(c.icon?c.icon+' ':'')+_escHtml(c.label)+'</option>';
@@ -1726,8 +1795,11 @@ window.DocLibrary = (function(){
       if (state.loading) {
         bodyRows = '<tr class="empty-row"><td colspan="5">Loading\u2026</td></tr>';
       } else if (!hasFiles) {
-        bodyRows = '<tr class="empty-row"><td colspan="5">No documents yet.' +
-          (opts.readOnly ? '' : ' Upload your first file above.') + '</td></tr>';
+        bodyRows = '<tr class="empty-row"><td colspan="5">' +
+          (inDeleted ? 'The recycle bin is empty.'
+            : inArchived ? 'No archived documents.'
+            : ('No documents yet.' + (opts.readOnly ? '' : ' Upload your first file above.'))) +
+          '</td></tr>';
       } else if (!filtered.length) {
         bodyRows = '<tr class="empty-row"><td colspan="5">No documents match this filter.</td></tr>';
       } else {
@@ -1741,7 +1813,7 @@ window.DocLibrary = (function(){
                 'style="width:36px;height:36px;object-fit:cover;border-radius:4px;border:1px solid var(--border);display:none;">'
             : '<span style="font-size:16px;">'+_iconForType(f.type)+'</span>';
           var categoryCell;
-          if (opts.readOnly || inArchived) {
+          if (opts.readOnly || inArchived || inDeleted) {
             categoryCell = '<span class="std-pill std-pill-info">' + (cat.icon?cat.icon+' ':'') + _escHtml(cat.label) + '</span>';
           } else {
             var catOpts = opts.categories.map(function(c){
@@ -1764,12 +1836,15 @@ window.DocLibrary = (function(){
             '<td class="std-cell-right std-cell-mono">'+_fmtBytes(f.size)+'</td>' +
             '<td class="std-cell-tail" style="white-space:nowrap;">' +
               '<button class="btn btn-ghost btn-sm" data-dl-view="'+_escAttr(f.path)+'">View</button>' +
-              (inArchived
-                ? (opts.canArchive ? ' <button class="btn btn-ghost btn-sm" data-dl-restore="'+_escAttr(f.path)+'" data-dl-restore-name="'+_escAttr(f.name)+'">Restore</button>' : '')
-                : (
-                    (opts.canArchive ? ' <button class="btn btn-ghost btn-sm" data-dl-arch="'+_escAttr(f.path)+'" data-dl-arch-name="'+_escAttr(f.name)+'">Archive</button>' : '') +
-                    (opts.readOnly ? '' : ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-del="'+_escAttr(f.path)+'" data-dl-del-name="'+_escAttr(f.name)+'">Delete</button>')
-                  )
+              (inDeleted
+                ? (' <button class="btn btn-ghost btn-sm" data-dl-undel="'+_escAttr(f.path)+'" data-dl-undel-name="'+_escAttr(f.name)+'">Restore</button>' +
+                   ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-purge="'+_escAttr(f.path)+'" data-dl-purge-name="'+_escAttr(f.name)+'">Delete permanently</button>')
+                : inArchived
+                  ? (opts.canArchive ? ' <button class="btn btn-ghost btn-sm" data-dl-restore="'+_escAttr(f.path)+'" data-dl-restore-name="'+_escAttr(f.name)+'">Restore</button>' : '')
+                  : (
+                      (opts.canArchive ? ' <button class="btn btn-ghost btn-sm" data-dl-arch="'+_escAttr(f.path)+'" data-dl-arch-name="'+_escAttr(f.name)+'">Archive</button>' : '') +
+                      (opts.readOnly ? '' : ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-del="'+_escAttr(f.path)+'" data-dl-del-name="'+_escAttr(f.name)+'">Delete</button>')
+                    )
               ) +
             '</td>' +
           '</tr>';
@@ -1827,6 +1902,41 @@ window.DocLibrary = (function(){
       // Archived-view toggle
       var archToggle = root.querySelector('[data-dl-arch-toggle]');
       if (archToggle) archToggle.onclick = function(){ state.showArchived = !state.showArchived; state.filter = 'all'; render(); };
+      // Recycle-bin toggle
+      var recToggle = root.querySelector('[data-dl-recycle-toggle]');
+      if (recToggle) recToggle.onclick = function(){ state.showDeleted = !state.showDeleted; state.filter = 'all'; render(); };
+      // Restore a soft-deleted file from the Recycle bin
+      root.querySelectorAll('[data-dl-undel]').forEach(function(btn){
+        btn.onclick = function(){
+          var p = btn.getAttribute('data-dl-undel');
+          var n = btn.getAttribute('data-dl-undel-name');
+          btn.disabled = true;
+          _markUndeleted(opts, p, n).then(function(){
+            var file = state.files.find(function(f){ return f.path === p; });
+            if (file) file.deleted = false;
+            if (typeof opts.onChange === 'function') opts.onChange('undelete', file);
+            if (typeof window.showToast === 'function') window.showToast('Document restored.', {type:'info'});
+            render();
+          }).catch(function(){ _setError('Could not restore that document.'); btn.disabled = false; });
+        };
+      });
+      // Permanently delete from the Recycle bin (removes the object + closes the record)
+      root.querySelectorAll('[data-dl-purge]').forEach(function(btn){
+        btn.onclick = function(){
+          var p = btn.getAttribute('data-dl-purge');
+          var n = btn.getAttribute('data-dl-purge-name');
+          var disp = String(n || 'this file').replace(/^\d+_/, '');
+          var ok = (typeof window.confirm === 'function') ? window.confirm('Permanently delete "' + disp + '"? This cannot be undone.') : true;
+          if (!ok) return;
+          btn.disabled = true;
+          _purgeFile(opts, p, n).then(function(){
+            state.files = state.files.filter(function(f){ return f.path !== p; });
+            if (typeof opts.onChange === 'function') opts.onChange('purge', { path:p, name:n });
+            if (typeof window.showToast === 'function') window.showToast('Document permanently deleted.', {type:'info'});
+            render();
+          }).catch(function(){ _setError('Could not permanently delete that document.'); btn.disabled = false; });
+        };
+      });
       // Archive a file (soft-hide, recoverable)
       root.querySelectorAll('[data-dl-arch]').forEach(function(btn){
         btn.onclick = function(){
@@ -1949,15 +2059,25 @@ window.DocLibrary = (function(){
             document.body.removeChild(ov);
             btn.disabled = true;
           var file = state.files.find(function(f){ return f.path === p; }) || { path:p, name:n };
-          var deleteFlow;
+          var deleteFlow, softDeleted = false;
           if (typeof opts.customDelete === 'function') {
             deleteFlow = Promise.resolve(opts.customDelete(file));
           } else {
-            deleteFlow = _deleteObject(opts, p).then(function(){ return _markDeleted(opts, p, n); });
+            // Soft delete: KEEP the storage object, just mark it deleted so it
+            // moves to the Recycle bin and can be restored. Permanent removal
+            // (object + record) is a separate action inside the bin.
+            softDeleted = true;
+            deleteFlow = _markDeleted(opts, p, n);
           }
           deleteFlow
             .then(function(){
-              state.files = state.files.filter(function(f){ return f.path !== p; });
+              if (softDeleted) {
+                var ff = state.files.find(function(f){ return f.path === p; });
+                if (ff) ff.deleted = true;                 // moves it to the Recycle bin
+                else state.files = state.files.filter(function(f){ return f.path !== p; });
+              } else {
+                state.files = state.files.filter(function(f){ return f.path !== p; });
+              }
               // Stop tracking it as a pending upload so refresh() won't re-add it.
               if (state.pendingUploads) delete state.pendingUploads[p];
               if (typeof opts.onChange === 'function') opts.onChange('delete', file);
