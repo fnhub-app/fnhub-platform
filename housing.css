@@ -1891,6 +1891,16 @@ body.is-sow-only .modal-overlay { visibility: visible; }
   #addContractorModal .tic-hero .tic-close-btn { position: absolute; top: 14px; right: 16px; }
   #addContractorModal .tic-hero > .flex-gap8       { flex-direction: column; align-items: stretch; width: 100%; gap: 8px; }
   #addContractorModal .tic-hero > .flex-gap8 > .btn { width: 100%; justify-content: center; }
+  /* On phones the fixed hero + 6-tile strip + the CIC approval surface + footer
+     squeezed the scrolling .tic-body to near-zero height, so staff could not
+     scroll the Overview tab down to Key People / "+ Add Person" (worse mid-call,
+     where the viewport is shorter). Let the whole card grow to its content and
+     scroll as ONE column via the overlay (.modal-overlay already has
+     overflow-y:auto) — the same model .ct-modal-overlay uses. Scoped to this
+     modal so the TIC / Edit Unit cards keep their internal-body scroll. */
+  #addContractorModal            { padding: 0; }
+  #addContractorModal .tic-shell { max-height: none; }
+  #addContractorModal .tic-body  { flex: 0 0 auto; overflow: visible; }
 }
 .tic-close-btn:hover      { color: var(--text); border-color: var(--text); }
 
