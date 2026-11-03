@@ -9,12 +9,15 @@ function openModal(id,extra){
   var _mEl = document.getElementById(id);
   if (_mEl) {
     _mEl.style.display = ''; _mEl.classList.add('on');
-    // Keep-open finance dialogs (Journal Entry / Opening Balance / Collections
-    // Flag) stay open after Save and track the id of the entry they just created
-    // so a re-save UPDATES it instead of inserting a duplicate ledger row. A
-    // fresh open must start clean so the next entry is a new record.
-    if (id === 'modalJournalEntry' || id === 'modalOpeningBalance' || id === 'modalFlagCollections') {
-      if (_mEl.dataset) { delete _mEl.dataset.savedEntryId; delete _mEl.dataset.savedGroupRef; }
+    // Keep-open finance dialogs stay open after Save (the document-producing
+    // ones open their voucher/agreement over the still-open form). Each tracks
+    // the id(s) of the entry it just created so a re-save UPDATES it instead of
+    // inserting a duplicate ledger row. A fresh open must start clean so the
+    // next entry is a new record.
+    if (id === 'modalJournalEntry' || id === 'modalOpeningBalance' || id === 'modalFlagCollections'
+        || id === 'modalNewInvoice' || id === 'modalNewLoan' || id === 'modalNewArrangement'
+        || id === 'modalRentPayment' || id === 'modalArrPayment' || id === 'modalLoanPayment') {
+      if (_mEl.dataset) { delete _mEl.dataset.savedEntryId; delete _mEl.dataset.savedGroupRef; delete _mEl.dataset.savedEntryIds; }
     }
   }
   // Auto-init payment modal

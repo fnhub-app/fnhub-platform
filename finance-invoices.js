@@ -248,9 +248,13 @@ function saveInvoice() {
   var ref = glInfo.code+'-'+year+String(monthNum).padStart(2,'0')+'-'+tid.slice(-4).toUpperCase();
   var d = getData();
   var t = getTenant(tid);
+  // Keep-open: track the id of the invoice created a moment ago so a re-save of
+  // the same open form UPDATES it instead of posting a duplicate charge.
+  var _invModal = document.getElementById('modalNewInvoice');
+  var _invEditId = (_invModal && _invModal.dataset && _invModal.dataset.savedEntryId) || '';
 
-  // Check duplicate for rent invoices
-  if (gl==='rent') {
+  // Check duplicate for rent invoices (skip when updating our own just-saved row)
+  if (gl==='rent' && !_invEditId) {
     var exists = d.rentLedger.some(function(r){
       return r.tenantId===tid&&r.type==='invoice'&&r.date.slice(0,7)===dateStr.slice(0,7)&&r.status!=='reversed';
     });
@@ -261,7 +265,7 @@ function saveInvoice() {
   if (notes) finalDesc += ' ('+notes+')';
 
   var entry = {
-    id:uid(), tenantId:tid, date:dateStr,
+    id: _invEditId || uid(), tenantId:tid, date:dateStr,
     desc:finalDesc, charge:amount, payment:0,
     type:glInfo.type, gl:gl, glCode:glInfo.code,
     method:'', status:'approved', ref:ref,
@@ -269,14 +273,16 @@ function saveInvoice() {
     arrId:gl==='arrangement'?arrId:null,
   };
 
-  d.rentLedger.push(entry);
+  var _invIdx = _invEditId ? d.rentLedger.findIndex(function(r){ return r.id === _invEditId; }) : -1;
+  if (_invIdx >= 0) { d.rentLedger[_invIdx] = entry; } else { d.rentLedger.push(entry); }
   // Real finance_audit_log row \u2014 the old d.auditLog array was never persisted,
   // so invoice/charge postings left no audit trail at all.
   writeAuditEntry({action:'post_charge',entity_type:'charge',entity_id:entry.id,
     summary:'Charge posted GL'+glInfo.code+': '+(t?tenantName(t):tid)+' \u2014 '+finalDesc+' \u2014 '+fmt(amount),
     detail:{after:entry}});
   saveData(d);
-  closeModal('modalNewInvoice');
+  // Keep the form open behind the voucher; remember the row so a re-save updates it.
+  if (_invModal && _invModal.dataset) _invModal.dataset.savedEntryId = entry.id;
   renderDashboard();
   if (_stmtTid) renderStatementEntries();
   if (document.getElementById('page-tenants').classList.contains('on')) renderTenantProfile(tid);
