@@ -396,6 +396,14 @@
     var s = (window._appSettings && window._appSettings.support_launcher);
     return (typeof s === 'boolean') ? s : true;              // default ON
   }
+  // The nation's logo for the launcher, resolved like the app header (cached
+  // theme logo -> NATION_CONFIG.logo -> platform/CLFN build-time default). Never
+  // a hardcoded CLFN literal; '' falls back to the lifebuoy glyph.
+  function _launcherLogo() {
+    try { var c = sessionStorage.getItem('clfn_logo_cache'); if (c) return c; } catch (e) {}
+    if (window.NATION_CONFIG && window.NATION_CONFIG.logo) return window.NATION_CONFIG.logo;
+    return window.HLH_LOGO_DATA_URL || window.CLFN_LOGO_DATA_URL || '';
+  }
   // Idempotent: injects when the gate is on and the button is absent, and REMOVES
   // it when the gate turns off -- so the settings toggle applies live.
   function _injectLauncher() {
@@ -406,10 +414,12 @@
     var b = document.createElement('button');
     b.id = 'support_launcher';
     b.type = 'button';
-    b.textContent = '🛟';
     b.title = 'Help & Support';
     b.setAttribute('aria-label', 'Help and Support');
-    b.setAttribute('style', 'position:fixed;right:18px;bottom:18px;z-index:99998;width:56px;height:56px;padding:0;border-radius:50%;border:1px solid var(--border,#ccc6ba);background:var(--surface,#ffffff);color:var(--text,#1c1c1c);font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.25);');
+    b.setAttribute('style', 'position:fixed;right:18px;bottom:18px;z-index:99998;width:56px;height:56px;padding:0;border-radius:50%;border:1px solid var(--border,#ccc6ba);background:var(--surface,#ffffff);color:var(--text,#1c1c1c);font-size:26px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 6px 20px rgba(0,0,0,0.25);overflow:hidden;');
+    var logo = _launcherLogo();
+    if (logo) b.innerHTML = '<img src="' + logo + '" alt="Help" style="width:38px;height:38px;object-fit:contain;display:block;pointer-events:none;">';
+    else b.textContent = '🛟';
     b.onclick = openSupportWidget;
     document.body.appendChild(b);
   }
