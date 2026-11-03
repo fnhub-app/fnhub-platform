@@ -150,7 +150,22 @@ serve(async (req) => {
     messages.push({ role: 'user', content: message })
 
     const nationName = String(body.nation_name || '').slice(0, 120)
-    const faqText    = String(body.faq || '')
+
+    // Pull the nation's editable Support FAQ server-side (service role) so it
+    // applies to every audience, including the portals which do not load the
+    // app settings. Falls back to any client-passed faq.
+    let faqText = String(body.faq || '')
+    if (SUPABASE_SERVICE_KEY) {
+      try {
+        const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        const { data: frows } = await admin.from('housing_settings').select('value').eq('key', 'support_faq').limit(1)
+        if (frows && frows.length && frows[0].value) {
+          const v = frows[0].value
+          faqText = (typeof v === 'string') ? v : JSON.stringify(v)
+        }
+      } catch (_e) { /* fall back to the client-passed faq */ }
+    }
+
     const data = await callClaude(buildSystem(source, nationName, faqText), messages)
     const reply = (data.content as any)?.[0]?.text || 'Sorry, I could not answer that. Please use the "Report an issue to a person" button to reach the help desk.'
     return json({ reply })

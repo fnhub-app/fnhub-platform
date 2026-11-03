@@ -373,6 +373,55 @@ function saveMfaPolicyRole(sel) {
 }
 window.saveMfaPolicyRole = saveMfaPolicyRole;
 
+// ── Support FAQ (Help Assistant) — ED/super_user only ───────────────────────
+// Plain-text Q&A the in-app Help Assistant uses for this nation. Stored in
+// housing_settings key 'support_faq'; the support-chat Edge Function reads it
+// server-side so it applies to every audience (staff + both portals).
+function _supportFaqIsEd() {
+  var r = (window._realRole || window.currentRole || '');
+  return r === 'ed' || r === 'super_user';
+}
+function renderSupportFaqPanel() {
+  var el = document.getElementById('support_faq_panel_body');
+  if (!el) return;
+  if (!_supportFaqIsEd()) { el.innerHTML = ''; return; }
+  if (typeof moduleOn === 'function' && !moduleOn('support')) { el.innerHTML = ''; return; }
+  var faq = (window._appSettings && window._appSettings.support_faq) || '';
+  el.innerHTML =
+    '<div class="card card-flush-gold" style="margin-top:20px;">'
+    + '<div class="modal-hdr"><div>'
+    +   '<div class="lbl-yellow">&#128607; Support FAQ (Help Assistant)</div>'
+    +   '<div class="txt-sm-meta">Answers the in-app Help Assistant uses for your nation. Add common questions and answers in plain text &mdash; the assistant prefers these over its built-in knowledge. ED only.</div>'
+    + '</div></div>'
+    + '<div class="sec-pad">'
+    +   '<textarea id="support_faq_text" rows="10" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);resize:vertical;" placeholder="Q: How do I reset my password?&#10;A: On the sign-in screen, tap Forgot password and follow the email link.&#10;&#10;Q: Who do I call for an emergency repair?&#10;A: Call the housing office at (your number).">' + escapeHtml(faq) + '</textarea>'
+    +   '<div style="margin-top:10px;display:flex;justify-content:flex-end;">'
+    +     '<button type="button" onclick="saveSupportFaq()" class="btn btn-primary">Save FAQ</button>'
+    +   '</div>'
+    + '</div></div>';
+}
+window.renderSupportFaqPanel = renderSupportFaqPanel;
+
+function saveSupportFaq() {
+  if (!_supportFaqIsEd()) { showToast('Only the Executive Director can edit the Support FAQ.', { type: 'error' }); renderSupportFaqPanel(); return; }
+  var ta = document.getElementById('support_faq_text');
+  var val = (ta && ta.value) || '';
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.support_faq = val;
+  window._supportFaq = val;   // client hint; the Edge Function also reads it server-side
+  if (typeof saveSettingWithDraftFallback === 'function') {
+    saveSettingWithDraftFallback('support_faq', val).then(function (ok) {
+      if (ok) {
+        showToast('✓ Support FAQ saved', { type: 'info' });
+        if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'support_faq_updated', 'Support FAQ updated', (window._realRole || window.currentRole) || 'ed');
+      } else {
+        showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+      }
+    });
+  }
+}
+window.saveSupportFaq = saveSupportFaq;
+
 // Map each section ID to its parent group, used by showSettingsSection to
 // keep the top-tier group buttons + sub-tab row in sync when a section is
 // opened programmatically.
@@ -444,7 +493,7 @@ function showSettingsSection(section) {
     t.classList.toggle('active', tabSec===section);
   });
   if(section==='sec_users'       && typeof renderHousingUserTable==='function') renderHousingUserTable();
-  if(section==='sec_nation'      && typeof renderNationPanel==='function') renderNationPanel();
+  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
   if(section==='sec_app_scoring') {
     if(APPROVAL_AUTHORITY.can('editScoreModel', window.currentRole) && typeof renderV2ScoringEditor === 'function') {
       renderV2ScoringEditor();
