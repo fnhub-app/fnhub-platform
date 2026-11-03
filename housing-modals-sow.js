@@ -2784,7 +2784,12 @@ async function sowSaveClicked() {
   if (!ok) return;
   var doNext = autoApprove && (typeof conf === 'object' && conf !== null) ? !!conf.checked : false;
 
-  saveSOW();
+  // Keep the form OPEN on Submit too (like Save Draft / Save Changes): the
+  // request persists, the strip/lock/Save button re-sync to the submitted
+  // status, and the background worklist/approvals refresh — staff aren't
+  // redirected off the form. Any folded "issue now" action still runs below
+  // (RFQ navigates to rfq.html; a work order just generates its PDF).
+  saveSOW({keepOpen:true});
 
   // Folded action (approval off): the checkbox WAS the prompt, so act directly.
   if (doNext) {
