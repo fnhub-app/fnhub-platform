@@ -41,6 +41,9 @@
   var SB = window.SUPABASE_URL;
   var ANON = window.SUPABASE_ANON;
   var session = null;
+  // Adapter for the shared support widget (support-widget.js) so a signed-in
+  // contractor can report an issue. The widget reads phone from the JWT.
+  try { window.__supportHost = { source: 'contractor', getToken: function () { return (session && session.access_token) || ''; } }; } catch (e) {}
   var _resendTimer = null;
   var workOrders = [];   // last-loaded rows, indexed by the detail view
   var currentWO = null;  // the work order whose detail is open (for downloads)
