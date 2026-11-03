@@ -2699,6 +2699,18 @@ function _ctInvitePickModal(ct, invitees){
 }
 window._ctInvitePickModal = _ctInvitePickModal;
 
+// Distinct, valid-E.164 key contacts from a people[] list, as invite targets.
+function _collectPortalInvitees(people){
+  var seen = {}, out = [];
+  (people || []).forEach(function(p){
+    if(!p || !p.phone) return;
+    var e164 = (typeof _toE164 === 'function') ? _toE164(p.phone) : '';
+    if(!e164 || seen[e164]) return;
+    seen[e164] = true; out.push({ phone: e164, name: p.name || '' });
+  });
+  return out;
+}
+
 async function inviteContractorToPortal(ctId){
   try {
     if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
@@ -2707,14 +2719,21 @@ async function inviteContractorToPortal(ctId){
     var ct = ctId ? list.find(function(c){ return String(c.id) === String(ctId); }) : null;
     if(!ct && typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0) ct = list[window._ctEditIdx];
     if(!ct || !ct.id){ showToast('Save the contractor first, then invite to the portal.', {type:'error'}); return; }
-    // Collect distinct, valid E.164 phones from the saved key contacts.
-    var seen = {}, invitees = [];
-    (ct.people || []).forEach(function(p){
-      if(!p || !p.phone) return;
-      var e164 = (typeof _toE164 === 'function') ? _toE164(p.phone) : '';
-      if(!e164 || seen[e164]) return;
-      seen[e164] = true; invitees.push({ phone: e164, name: p.name || '' });
-    });
+    // Collect distinct, valid E.164 phones from the SAVED key contacts.
+    var invitees = _collectPortalInvitees(ct.people);
+    // If the saved record has no mobile but the OPEN edit form does, the staffer
+    // just typed a number without saving — persist the form first (so the phone
+    // lands on the contractor's people[], which the portal claim re-checks), then
+    // re-read the saved record. Otherwise they'd see "add a mobile first" with a
+    // mobile clearly on screen.
+    if(!invitees.length && typeof ctGetPeople === 'function'
+       && typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0
+       && _collectPortalInvitees(ctGetPeople()).length
+       && typeof saveContractor === 'function'){
+      if(saveContractor({keepOpen:true}) === false) return;   // save aborted (missing name / declined duplicate)
+      var _saved = (window._contractors || [])[window._ctEditIdx];
+      if(_saved){ ct = _saved; invitees = _collectPortalInvitees(ct.people); }
+    }
     if(!invitees.length){ showToast('Add a key contact with a mobile number first, then save.', {type:'error'}); return; }
     // Let the user choose which contacts get the sign-in text (default all).
     var selected = await _ctInvitePickModal(ct, invitees);
@@ -8655,7 +8674,12 @@ function _findDuplicateContractor(name, excludeId){
   return null;
 }
 
-function saveContractor(){
+function saveContractor(opts){
+  // opts.keepOpen: persist but DO NOT close the modal (the footer "Save
+  // Changes/Draft" button, and the invite save-first path, keep the form open
+  // so staff can keep working — e.g. then tap Invite to portal). The reno/SOW
+  // hand-off callers omit it, so those still close + hand off as before.
+  var keepOpen = !!(opts && opts.keepOpen);
   // Returns true on a completed save, false when it aborts (missing name,
   // declined duplicate warning). saveContractorAndFinalize keys off this —
   // finalizing after an aborted save used to flip the new-contractor form
@@ -8801,34 +8825,45 @@ function saveContractor(){
       } catch(e){ console.warn('Could not upload contractor file:',e); }
     });
   });
-  closeAddContractorModal();
-  if(!isEdit && window._rpAfterContractorSave) {
-    window._rpAfterContractorSave = false;
-    var inp = document.getElementById('rp_contractor');
-    var hid = document.getElementById('rp_contractor_id');
-    if(inp) inp.value = name;
-    if(hid) hid.value = id;
-    var prog = document.getElementById('renoProgressModal');
-    if(prog) prog.style.setProperty('display','flex','important');
-  } else if(window._sowAfterContractorSave) {
-    window._sowAfterContractorSave = false;
-    var sowInp = document.getElementById('sow_contractor');
-    var sowHid = document.getElementById('sow_contractor_id');
-    if(sowInp) sowInp.value = name;
-    if(sowHid) sowHid.value = id;
+  if(keepOpen){
+    // Footer Save (or invite save-first): keep the form open. Refresh the
+    // management list behind the modal so it reflects the save, but don't close
+    // or re-open the search modal. The caller (saveContractorAndFinalize) does
+    // the in-place hero/strip/notes refresh.
+    if(typeof renderContractorsView === 'function'
+       && typeof ROLE !== 'undefined' && ROLE.isManagement(window.currentRole || 'housing_employee_l1')){
+      renderContractorsView();
+    }
   } else {
-    // If the search modal is open (employee flow), refresh it; otherwise refresh management view
-    var searchModal = document.getElementById('contractorSearchModal');
-    var isSearchOpen = searchModal && searchModal.style.display !== 'none' && getComputedStyle(searchModal).display !== 'none';
-    if(isSearchOpen) {
-      contractorSearchFilter(document.getElementById('ct_search_input') ? document.getElementById('ct_search_input').value : '');
+    closeAddContractorModal();
+    if(!isEdit && window._rpAfterContractorSave) {
+      window._rpAfterContractorSave = false;
+      var inp = document.getElementById('rp_contractor');
+      var hid = document.getElementById('rp_contractor_id');
+      if(inp) inp.value = name;
+      if(hid) hid.value = id;
+      var prog = document.getElementById('renoProgressModal');
+      if(prog) prog.style.setProperty('display','flex','important');
+    } else if(window._sowAfterContractorSave) {
+      window._sowAfterContractorSave = false;
+      var sowInp = document.getElementById('sow_contractor');
+      var sowHid = document.getElementById('sow_contractor_id');
+      if(sowInp) sowInp.value = name;
+      if(sowHid) sowHid.value = id;
     } else {
-      // Re-open search modal in employee mode, otherwise re-render management view
-      var role = window.currentRole || 'housing_employee_l1';
-      if(ROLE.isManagement(role)) {
-        renderContractorsView();
+      // If the search modal is open (employee flow), refresh it; otherwise refresh management view
+      var searchModal = document.getElementById('contractorSearchModal');
+      var isSearchOpen = searchModal && searchModal.style.display !== 'none' && getComputedStyle(searchModal).display !== 'none';
+      if(isSearchOpen) {
+        contractorSearchFilter(document.getElementById('ct_search_input') ? document.getElementById('ct_search_input').value : '');
       } else {
-        openContractorSearch();
+        // Re-open search modal in employee mode, otherwise re-render management view
+        var role = window.currentRole || 'housing_employee_l1';
+        if(ROLE.isManagement(role)) {
+          renderContractorsView();
+        } else {
+          openContractorSearch();
+        }
       }
     }
   }
@@ -8841,7 +8876,7 @@ function saveContractorAndFinalize() {
   // used to flip the still-unsaved new-contractor form into edit mode pointed
   // at the last contractor in the directory, so the next Save overwrote that
   // unrelated record.
-  if (saveContractor() === false) return;
+  if (saveContractor({keepOpen:true}) === false) return;
   // After save, grab the record back and reveal the hero Print + Email
   // buttons (top-right doc-generation surface).
   try {
