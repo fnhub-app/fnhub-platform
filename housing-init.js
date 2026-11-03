@@ -2129,6 +2129,7 @@ window.HEADER_NAV = [
       { key:'inspections', label:'Inspections', module:'inspections',  svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>', run:function(){ window.location.href='inspections.html'; } },
       { key:'projects',    label:'Projects',    module:'projects',     svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>', run:function(){ window.location.href='projects.html'; } },
       { key:'mail',        label:'Email Intake', module:'email_intake', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>', run:function(){ window.location.href='mail.html'; } },
+      { key:'support',     label:'Support',      module:'support', roles:'ed,housing_manager,super_user', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>', run:function(){ window.location.href='support.html'; } },
       // ── Data Health — compliance / cleanup tools (moved from Quick Actions).
       // Management-only visibility (data-roles); each opener re-checks its own
       // gate. run functions are serialized into inline onclick strings, so
@@ -2262,6 +2263,7 @@ function _currentNavKey(){
   if(window.location.pathname.indexOf('inspections.html')  !== -1) return 'operations';
   if(window.location.pathname.indexOf('projects.html')     !== -1) return 'operations';
   if(window.location.pathname.indexOf('mail.html')         !== -1) return 'operations';
+  if(window.location.pathname.indexOf('support.html')      !== -1) return 'operations';
   if(window.location.pathname.indexOf('finance.html')      !== -1) return 'finance';
   if(vis('tenantsView'))      return 'tenants';
   if(vis('settingsView'))     return 'settings';
