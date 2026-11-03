@@ -91,6 +91,8 @@
       '#supportWidget .sw-msg{max-width:86%;padding:8px 11px;border-radius:12px;font-size:13px;line-height:1.45;white-space:pre-wrap;word-wrap:break-word;}',
       '#supportWidget .sw-msg-user{align-self:flex-end;background:var(--yellow,#26221c);color:var(--on-accent,#ffffff);border-bottom-right-radius:4px;}',
       '#supportWidget .sw-msg-bot{align-self:flex-start;background:var(--bg,#f4f1ea);color:var(--text,#1c1c1c);border:1px solid var(--border,#dcdcd4);border-bottom-left-radius:4px;}',
+      '#supportWidget .sw-msg strong{font-weight:700;}',
+      '#supportWidget .sw-msg code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;background:var(--surface,#ffffff);border:1px solid var(--border,#dcdcd4);border-radius:4px;padding:1px 4px;}',
       '#supportWidget .sw-row{display:flex;gap:8px;align-items:flex-end;margin-top:4px;}',
       '#supportWidget .sw-row textarea{flex:1;min-height:38px;max-height:120px;resize:none;}',
       '#supportWidget .sw-link{background:none;border:none;color:var(--muted,#777068);font-size:12px;text-decoration:underline;cursor:pointer;padding:10px 0 0;font-family:inherit;display:block;}',
@@ -177,11 +179,28 @@
 
   // ---- Chat ------------------------------------------------------------------
   function _chatMsgs() { return document.getElementById('support_chat_msgs'); }
+  // Render a SAFE, minimal subset of Markdown for assistant replies (the model
+  // answers in Markdown, which otherwise shows literal ** and - ). HTML is
+  // escaped FIRST so nothing the model returns can inject markup; newlines are
+  // preserved by the .sw-msg pre-wrap CSS, so no <br> is needed.
+  function _mdToHtml(text) {
+    var s = String(text == null ? '' : text);
+    s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    s = s.replace(/^[ \t]*[-*][ \t]+/gm, '• ');          // line-start bullets -> glyph
+    s = s.replace(/\*\*([^\n*]+)\*\*/g, '<strong>$1</strong>'); // **bold**
+    s = s.replace(/`([^\n`]+)`/g, '<code>$1</code>');          // `inline code`
+    return s;
+  }
+  function _chatSetText(el, role, text) {
+    if (!el) return;
+    if (role === 'user') el.textContent = text;               // user input: never interpret markup
+    else el.innerHTML = _mdToHtml(text);                      // assistant: light markdown
+  }
   function _chatAppend(role, text) {
     var el = _chatMsgs(); if (!el) return null;
     var d = document.createElement('div');
     d.className = 'sw-msg ' + (role === 'user' ? 'sw-msg-user' : 'sw-msg-bot');
-    d.textContent = text;
+    _chatSetText(d, role, text);
     el.appendChild(d); el.scrollTop = el.scrollHeight;
     return d;
   }
@@ -211,7 +230,7 @@
       });
       var d = await r.json().catch(function () { return {}; });
       var reply = d.reply || (r.status === 401 ? 'Please sign in to use the assistant.' : 'Sorry, something went wrong. You can still use “Report an issue to a person” below.');
-      if (typing) typing.textContent = reply; else _chatAppend('assistant', reply);
+      if (typing) _chatSetText(typing, 'assistant', reply); else _chatAppend('assistant', reply);
       _chat.push({ role: 'assistant', text: reply });
       var el = _chatMsgs(); if (el) el.scrollTop = el.scrollHeight;
     } catch (e) {

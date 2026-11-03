@@ -170,42 +170,22 @@ serve(async (req) => {
 
     const res = await callClaude(buildSystem(source, nationName, faqText), messages)
     const data = res.data || {}
-    // Robust text extraction: join ALL text blocks (not just content[0]), matching
-    // ai-chat, so a leading non-text block does not blank the answer.
+    // Join ALL text blocks (not just content[0]), matching ai-chat, so a leading
+    // non-text block does not blank the answer.
     let reply = ''
     try {
       const blocks: any[] = Array.isArray((data as any).content) ? (data as any).content : []
       reply = blocks.filter((b) => b && b.type === 'text').map((b) => String(b.text || '')).join('\n').trim()
     } catch (_e) { reply = '' }
-    if (res.ok && reply) return json({ reply })
-
-    // --- TEMPORARY DIAGNOSTICS -------------------------------------------------
-    // The chat was returning the empty-content fallback; this surfaces exactly
-    // what Anthropic returned (status, error, stop_reason, block types) so we can
-    // pin the cause from one test. Remove once diagnosed. Low-sensitivity fields.
-    const blocks: any[] = Array.isArray((data as any).content) ? (data as any).content : []
-    const diag = {
-      upstream_status: res.status,
-      anthropic_error: (data as any)?.error?.message || (data as any)?.error?.type || null,
-      stop_reason: (data as any)?.stop_reason || null,
-      model_echo: (data as any)?.model || null,
-      n_blocks: blocks.length,
-      block_types: blocks.map((b) => (b && b.type) || 'nil'),
-      has_key: !!ANTHROPIC_KEY,
-      source,
-      snippet: JSON.stringify(data).slice(0, 300),
+    if (!reply) {
+      // Non-200 from Anthropic, or an empty completion: log for ops and give a
+      // graceful fallback that points the user to the human help desk.
+      if (!res.ok) console.error('[support-chat] upstream ' + res.status + ' ' + JSON.stringify(data).slice(0, 200))
+      reply = res.ok
+        ? 'Sorry, I could not answer that. Please use the "Report an issue to a person" button to reach the help desk.'
+        : 'The help assistant is temporarily unavailable. Please use the "Report an issue to a person" button.'
     }
-    console.error('[support-chat] empty/failed reply ' + JSON.stringify(diag))
-    const human = res.ok
-      ? 'Sorry, I could not answer that. Please use the "Report an issue to a person" button to reach the help desk.'
-      : 'The help assistant is temporarily unavailable. Please use the "Report an issue to a person" button.'
-    const diagLine = '[diag status=' + diag.upstream_status
-      + (diag.anthropic_error ? ' err=' + diag.anthropic_error : '')
-      + ' stop=' + diag.stop_reason
-      + ' blocks=' + diag.n_blocks + '(' + diag.block_types.join(',') + ')'
-      + ' key=' + (diag.has_key ? 'y' : 'n')
-      + ' src=' + diag.source + ']'
-    return json({ reply: human + '\n\n' + diagLine, diag })
+    return json({ reply })
   } catch (e) {
     return json({ error: 'support-chat failed', detail: String((e as Error)?.message || e).slice(0, 300) }, 500)
   }
