@@ -1430,7 +1430,10 @@ window.DocLibrary = (function(){
     return fetch(url, {
       method: 'POST',
       headers: Object.assign({}, _storageHeaders(opts), { 'Content-Type':'application/json' }),
-      body: JSON.stringify({ expiresIn: 3600 })
+      // 24h, not 1h: staff open a document then come back to the tab / refresh
+      // it later, and a 1h token had expired by then ("InvalidJWT: exp claim
+      // timestamp check failed"). A full work day covers a normal session.
+      body: JSON.stringify({ expiresIn: 86400 })
     }).then(function(r){ return r.ok ? r.json() : null; })
       .then(function(d){
         if (!d || !d.signedURL && !d.signedUrl) return null;
@@ -2162,14 +2165,17 @@ window.DocLibrary = (function(){
 
   // Get a signed URL for a file (valid 1 hour)
   async function sbGetSignedUrl(path) {
-    // POST to Supabase Storage sign endpoint — returns a URL valid for 1 hour
-    // that can be opened directly in a browser tab without auth headers.
+    // POST to Supabase Storage sign endpoint — returns a URL valid for 24 hours
+    // that can be opened directly in a browser tab without auth headers. 24h
+    // (not 1h) so a document opened during a work session doesn't 400 with
+    // "InvalidJWT: exp claim timestamp check failed" when the tab is reopened
+    // or refreshed later in the day.
     try {
       var signUrl = window.SUPABASE_URL + '/storage/v1/object/sign/' + window.STORAGE_BUCKET + '/' + path;
       var res = await fetch(signUrl, {
         method: 'POST',
         headers: Object.assign({}, sbStorageHeaders(), { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ expiresIn: 3600 })
+        body: JSON.stringify({ expiresIn: 86400 })
       });
       if (res.ok) {
         var d = await res.json();
