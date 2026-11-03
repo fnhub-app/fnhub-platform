@@ -10307,13 +10307,28 @@ function getSigDataURL(canvasId) {
 function udpRenderFilePreviews(unitId){
   var mount = document.getElementById('udp_files_mount');
   if (!mount) return;
-  // Rebuild the library on each panel open so it targets the right tenant
+  // Rebuild the libraries on each panel open so they target the right unit.
   mount.innerHTML = '';
   if (!window.DocLibrary) {
     mount.innerHTML = '<div style="padding:12px;text-align:center;color:var(--muted);font-size:11px;">Document library unavailable.</div>';
     return;
   }
-  _udpFilesLib = window.DocLibrary.create(mount, {
+  // Two libraries surface on the unit card's Documents tab:
+  //  1. the tenant/unit document library (entity 'tenant', keyed by unit id) —
+  //     the same file set the Tenant card's Documents tab shows (leases, photos,
+  //     emailed-in docs, etc.), and
+  //  2. the unit's utility-bill library (entity 'unit', units/<id>/utility-bills),
+  //     which otherwise appears ONLY on the Tenant card's Utilities tab. Showing
+  //     it here cross-links every document connected to the unit in one place.
+  mount.innerHTML =
+      '<div id="udp_files_main_mount"></div>'
+    + '<div style="margin-top:20px;padding-top:16px;border-top:1px solid var(--border);">'
+    +   '<label style="font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;display:block;margin-bottom:8px;">Utility Bills</label>'
+    +   '<div id="udp_util_files_mount"></div>'
+    + '</div>';
+  var mainMount = document.getElementById('udp_files_main_mount');
+  var utilMount = document.getElementById('udp_util_files_mount');
+  _udpFilesLib = window.DocLibrary.create(mainMount, {
     entityType:    'tenant',
     entityId:      unitId,
     pathPrefix:    'tenants/' + unitId,
@@ -10329,6 +10344,27 @@ function udpRenderFilePreviews(unitId){
     aiAddress:       function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? ((u.num||'')+' '+(u.street||'')).trim() : String(unitId); },
     categories:    _HOUSING_TENANT_DOC_CATEGORIES
   });
+  // Utility-bill library — same entity/path the TIC Utilities tab uses, so a
+  // bill filed from either place surfaces in both.
+  if (utilMount) {
+    window.DocLibrary.create(utilMount, {
+      entityType:    'unit',
+      entityId:      unitId,
+      pathPrefix:    'units/' + unitId + '/utility-bills',
+      supabaseUrl:   SUPABASE_URL,
+      supabaseAnon:  SUPABASE_ANON,
+      storageBucket: STORAGE_BUCKET,
+      getAuthToken:  function(){ return (window.HOUSING_HEADERS && window.HOUSING_HEADERS['Authorization'] || '').replace('Bearer ',''); },
+      auditTable:    'housing_audit_log',
+      getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
+      categories: [
+        { key:'hydro_bill', label:'Hydro Bill', icon:'⚡' },
+        { key:'gas_bill',   label:'Gas Bill',   icon:'🔥' },
+        { key:'other',      label:'Other',      icon:'📎' }
+      ],
+      maxSizeMB: 25
+    });
+  }
 }
 
 async function udpRenderRfqSection(unitId) {
