@@ -61,5 +61,7 @@
   "shared-sow.js": 0,
   "shared-ui.js": 2,
   "shared.js": 31,
+  "support-init.js": 0,
+  "support-widget.js": 3,
   "tenants-init.js": 0
 }

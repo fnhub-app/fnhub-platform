@@ -38,6 +38,9 @@
   function getAT() { return localStorage.getItem(LS_AT) || ''; }
   function getRT() { return localStorage.getItem(LS_RT) || ''; }
   function setSession(at, rt) { if (at) localStorage.setItem(LS_AT, at); if (rt) localStorage.setItem(LS_RT, rt); }
+  // Adapter for the shared support widget (support-widget.js) so a signed-in
+  // member can report an issue. The widget reads email/phone from the JWT.
+  try { window.__supportHost = { source: 'member', getToken: getAT }; } catch (e) {}
   // One place for the client-side registry-number shape check + its generic,
   // non-disclosing error sentence (two hand-copies before).
   function _bandInvalidMsg(band) {
