@@ -480,25 +480,27 @@ var SETTINGS_GROUP_DEFAULT_SECTION = {
   app:   'sec_app_scoring'
 };
 
+// Expand/collapse a settings group's sub-list (accordion, closed by default).
+// Independent toggles -- opening one does not close the other. Revealing a
+// group's list does NOT auto-select a section; the user picks a sub-item.
+function toggleSettingsGroup(groupId) {
+  var row = document.getElementById('settings_subtabs_' + groupId);
+  if (!row) return;
+  var open = !row.classList.contains('open');
+  row.classList.toggle('open', open);
+  var hdr = document.getElementById('sgroup_' + groupId);
+  if (hdr) { hdr.classList.toggle('active', open); hdr.setAttribute('aria-expanded', open ? 'true' : 'false'); }
+}
+window.toggleSettingsGroup = toggleSettingsGroup;
+
+// Ensure a group's sub-list is EXPANDED. Called by showSettingsSection when a
+// section is opened (programmatically or by clicking its sub-tab) so that the
+// section's sub-tab is visible in its group. Never collapses the other group.
 function showSettingsGroup(groupId) {
-  // Toggle group-bar pill state
-  ['admin','app'].forEach(function(g){
-    var btn = document.getElementById('sgroup_' + g);
-    if (btn) btn.classList.toggle('active', g === groupId);
-    var row = document.getElementById('settings_subtabs_' + g);
-    if (row) row.classList.toggle('active', g === groupId);
-  });
-  // If the section currently visible doesn't belong to the new group, jump
-  // to that group's first tab. Direct calls from showSettingsSection (after
-  // the section was already chosen) skip this — guarded by _settingsSectionLock.
-  if (window._settingsSectionLock) return;
-  var defaultSec = SETTINGS_GROUP_DEFAULT_SECTION[groupId];
-  if (!defaultSec) return;
-  var current = document.querySelector('.settings-section[style*="block"]');
-  var currentId = current ? current.id : null;
-  if (!currentId || SETTINGS_SECTION_GROUPS[currentId] !== groupId) {
-    showSettingsSection(defaultSec);
-  }
+  var row = document.getElementById('settings_subtabs_' + groupId);
+  if (row) row.classList.add('open');
+  var hdr = document.getElementById('sgroup_' + groupId);
+  if (hdr) { hdr.classList.add('active'); hdr.setAttribute('aria-expanded', 'true'); }
 }
 
 function showSettingsSection(section) {
