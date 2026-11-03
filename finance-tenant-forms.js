@@ -334,10 +334,16 @@ function saveArrangement() {
 
   var d   = getData();
   var t   = getTenant(tid);
-  var ref = refInput || ('ARR-'+new Date().getFullYear()+'-'+String((d.arrangements||[]).length+1).padStart(3,'0'));
+  d.arrangements = d.arrangements||[];
+  // Keep-open: track the arrangement created a moment ago so a re-save of the
+  // same open form UPDATES it instead of creating a duplicate arrangement.
+  var _arrModal = document.getElementById('modalNewArrangement');
+  var _arrEditId = (_arrModal && _arrModal.dataset && _arrModal.dataset.savedEntryId) || '';
+  var _arrPrev = _arrEditId ? d.arrangements.find(function(a){ return a.id===_arrEditId; }) : null;
+  var ref = refInput || (_arrPrev ? _arrPrev.ref : ('ARR-'+new Date().getFullYear()+'-'+String(d.arrangements.length+1).padStart(3,'0')));
 
   var entry = {
-    id:uid(), tenantId:tid, ref:ref,
+    id: _arrEditId || uid(), tenantId:tid, ref:ref,
     totalOwing:totalOwing, monthlyPayment:payment,
     freq:freq, ledger:ledger,
     startDate:startDate, firstPaymentDate:firstPayDate,
@@ -345,16 +351,16 @@ function saveArrangement() {
     status:'pending-ed',
     submittedBy:CURRENT_USER, submittedAt:new Date().toISOString()
   };
-  d.arrangements = d.arrangements||[];
-  d.arrangements.push(entry);
+  if (_arrPrev) { d.arrangements[d.arrangements.indexOf(_arrPrev)] = entry; } else { d.arrangements.push(entry); }
   auditLog('create','arrangement',entry.id,
     'Arrangement submitted: '+(t?tenantName(t):tid)+' \u2014 '+fmt(totalOwing)+' over '+months+' months',
     null,entry);
   saveData(d);
-  closeModal('modalNewArrangement');
+  if (_arrModal && _arrModal.dataset) _arrModal.dataset.savedEntryId = entry.id;
   renderDashboard();
   if (_stmtTid) renderStatementEntries();
   if (document.getElementById('page-tenants').classList.contains('on')) renderTenantProfile(tid);
+  // Open the arrangement agreement \u2014 the form stays open behind it.
   previewArrangementAgreement(entry);
 }
 
@@ -370,18 +376,24 @@ function saveArrPayment() {
   if (!arrId) { toast('Please select an arrangement.'); return; }
   if (!amt)   { toast('Amount required.'); return; }
   if (!date)  { toast('Date required.'); return; }
+  // Keep-open (non-cash): the form stays open behind the voucher; track the
+  // payment id so a re-save UPDATES it instead of posting a duplicate. The cash
+  // path keeps its close -> cash-count chain (below), so no 3-way modal stacking.
+  var _apModal = document.getElementById('modalArrPayment');
+  var _apEditId = (_apModal && _apModal.dataset && _apModal.dataset.savedEntryId) || '';
   var doSave = function(cashTotal, denoms, receivedBy) {
     var finalAmt = cashTotal||amt;
     var d = getData(); var t = getTenant(tid);
     var a = d.arrangements.find(function(x){return x.id===arrId;});
-    var entry = {id:uid(),arrId:arrId,tenantId:tid,date:date,amount:finalAmt,
+    var entry = {id: _apEditId || uid(),arrId:arrId,tenantId:tid,date:date,amount:finalAmt,
       method:method,type:type,ref:'',notes:notes};
     if (denoms) { entry.denominations=denoms; entry.receivedBy=receivedBy; }
-    d.arrPayments.push(entry);
+    var _apIdx = _apEditId ? d.arrPayments.findIndex(function(p){return p.id===_apEditId;}) : -1;
+    if (_apIdx >= 0) { d.arrPayments[_apIdx] = entry; } else { d.arrPayments.push(entry); }
     writeAuditEntry({action:'post_arr_payment',entity_type:'arrPayment',entity_id:entry.id,
       summary:'Arrangement payment: '+(t?tenantName(t):tid)+' \u2014 '+fmt(finalAmt),detail:{after:entry}});
     saveData(d);
-    closeModal('modalArrPayment');
+    if (_apModal && _apModal.dataset) _apModal.dataset.savedEntryId = entry.id;
     renderDashboard();
     if (_stmtTid) renderStatementEntries();
     if (document.getElementById('page-tenants').classList.contains('on')) renderTenantProfile(tid);
@@ -437,8 +449,12 @@ function saveLoan() {
 
   var d = getData();
   var t = getTenant(tid);
+  // Keep-open: track the loan created a moment ago so a re-save of the same open
+  // form UPDATES it instead of creating a duplicate loan.
+  var _lnModal = document.getElementById('modalNewLoan');
+  var _lnEditId = (_lnModal && _lnModal.dataset && _lnModal.dataset.savedEntryId) || '';
   var loan = {
-    id: uid(), tenantId: tid,
+    id: _lnEditId || uid(), tenantId: tid,
     type: loanType, rateType: rateType, rate: rate,
     principal: principal, term: term, freq: freq,
     start: start, advanceDate: advanceDate, firstPaymentDate: firstPaymentDate,
@@ -448,15 +464,16 @@ function saveLoan() {
     submittedBy: CURRENT_USER, submittedAt: new Date().toISOString()
   };
   d.loanList = d.loanList || [];
-  d.loanList.push(loan);
+  var _lnIdx = _lnEditId ? d.loanList.findIndex(function(l){ return l.id === _lnEditId; }) : -1;
+  if (_lnIdx >= 0) { d.loanList[_lnIdx] = loan; } else { d.loanList.push(loan); }
   auditLog('create', 'loan', loan.id,
     'Loan submitted for ED approval: ' + (t?tenantName(t):tid) + ' \u2014 $' + principal.toFixed(2) + ' over ' + fmtTermLabel(term),
     null, loan);
   saveData(d);
+  if (_lnModal && _lnModal.dataset) _lnModal.dataset.savedEntryId = loan.id;
   renderDashboard();
   if (_stmtTid) renderStatementEntries();
-  // Open the loan agreement immediately
-  closeModal('modalNewLoan');
+  // Open the loan agreement (reads the form) \u2014 the form stays open behind it.
   previewLoanAgreement(null);
 }
 
@@ -471,18 +488,23 @@ function saveLoanPayment() {
   if (!loanId) { toast('Please select a loan.'); return; }
   if (!amt)    { toast('Amount required.'); return; }
   if (!date)   { toast('Date required.'); return; }
+  // Keep-open (non-cash): form stays open behind the voucher; track the payment
+  // id so a re-save UPDATES it. Cash keeps its close -> cash-count chain (below).
+  var _lpModal = document.getElementById('modalLoanPayment');
+  var _lpEditId = (_lpModal && _lpModal.dataset && _lpModal.dataset.savedEntryId) || '';
   var doSave = function(cashTotal, denoms, receivedBy) {
     var finalAmt = cashTotal||amt;
     var d = getData(); var t = getTenant(tid);
     var l = d.loanList.find(function(x){return x.id===loanId;});
-    var entry = {id:uid(),loanId:loanId,tenantId:tid,date:date,amount:finalAmt,
+    var entry = {id: _lpEditId || uid(),loanId:loanId,tenantId:tid,date:date,amount:finalAmt,
       method:method,notes:notes,status:'posted'};
     if (denoms) { entry.denominations=denoms; entry.receivedBy=receivedBy; }
-    d.loanPayments.push(entry);
+    var _lpIdx = _lpEditId ? d.loanPayments.findIndex(function(p){return p.id===_lpEditId;}) : -1;
+    if (_lpIdx >= 0) { d.loanPayments[_lpIdx] = entry; } else { d.loanPayments.push(entry); }
     writeAuditEntry({action:'post_loan_payment',entity_type:'loanPayment',entity_id:entry.id,
       summary:'Loan payment: '+(t?tenantName(t):tid)+' \u2014 '+fmt(finalAmt),detail:{after:entry}});
     saveData(d);
-    closeModal('modalLoanPayment');
+    if (_lpModal && _lpModal.dataset) _lpModal.dataset.savedEntryId = entry.id;
     renderDashboard();
     if (_stmtTid) renderStatementEntries();
     if (document.getElementById('page-tenants').classList.contains('on')) renderTenantProfile(tid);

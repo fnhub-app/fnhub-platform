@@ -22,17 +22,31 @@ function saveRentPayment() {
   var tName = t ? tenantName(t) : tid;
   var voucherAllocs = [];
   var voucherLines = [];
+  // Keep-open (non-cash): the form stays open behind the voucher; track the ids
+  // of the rows posted so a re-save removes them before re-posting (no duplicate
+  // across the rent / arrangement / loan ledgers). The cash path keeps its
+  // close -> cash-count chain below, so no 3-way modal stacking.
+  var _rpModal = document.getElementById('modalRentPayment');
+  var _rpPriorIds = [];
+  try { _rpPriorIds = JSON.parse((_rpModal && _rpModal.dataset && _rpModal.dataset.savedEntryIds) || '[]'); } catch(e){}
+  var _rpNewIds = [];
 
   var doSave = function(cashTotal, denoms, receivedBy) {
     var finalTotal = cashTotal || total;
     var d2 = getData();
+    _rpNewIds = [];
+    if (_rpPriorIds.length) {
+      d2.rentLedger   = (d2.rentLedger||[]).filter(function(e){ return _rpPriorIds.indexOf(e.id) === -1; });
+      d2.arrPayments  = (d2.arrPayments||[]).filter(function(e){ return _rpPriorIds.indexOf(e.id) === -1; });
+      d2.loanPayments = (d2.loanPayments||[]).filter(function(e){ return _rpPriorIds.indexOf(e.id) === -1; });
+    }
 
     // Post rent payment
     if (rentAmt > 0) {
       var rentEntry = {id:uid(),tenantId:tid,date:date,desc:'Rent Payment'+(notes?' ('+notes+')':''),
         charge:0,payment:rentAmt,type:'payment',method:method,status:'posted',ref:ref};
       if (denoms) { rentEntry.denominations=denoms; rentEntry.receivedBy=receivedBy; }
-      d2.rentLedger.push(rentEntry);
+      d2.rentLedger.push(rentEntry); _rpNewIds.push(rentEntry.id);
       if (!d2.auditLog) d2.auditLog=[];
       writeAuditEntry({action:'post_payment',entity_type:'payment',entity_id:rentEntry.id,summary:'Rent payment: '+tName+' \u2014 '+fmt(rentAmt),detail:{after:rentEntry}});
       voucherAllocs.push({label:'Rent', amount:rentAmt, invoices:[]});
@@ -46,7 +60,7 @@ function saveRentPayment() {
       if (arr) {
         var arrEntry = {id:uid(),arrId:arr.id,tenantId:tid,date:date,amount:arrAmt,method:method,type:'regular',ref:ref,notes:notes};
         if (denoms) { arrEntry.denominations=denoms; arrEntry.receivedBy=receivedBy; }
-        d2.arrPayments.push(arrEntry);
+        d2.arrPayments.push(arrEntry); _rpNewIds.push(arrEntry.id);
         if (!d2.auditLog) d2.auditLog=[];
         writeAuditEntry({action:'post_arr_payment',entity_type:'arrPayment',entity_id:arrEntry.id,summary:'Arrangement payment: '+tName+' \u2014 '+fmt(arrAmt),detail:{after:arrEntry}});
         voucherAllocs.push({label:'Arrangement ('+arr.ref+')', amount:arrAmt, invoices:[arr.ref]});
@@ -61,7 +75,7 @@ function saveRentPayment() {
       if (loan) {
         var loanEntry = {id:uid(),loanId:loan.id,tenantId:tid,date:date,amount:loanAmt,method:method,notes:notes,status:'posted'};
         if (denoms) { loanEntry.denominations=denoms; loanEntry.receivedBy=receivedBy; }
-        d2.loanPayments.push(loanEntry);
+        d2.loanPayments.push(loanEntry); _rpNewIds.push(loanEntry.id);
         if (!d2.auditLog) d2.auditLog=[];
         writeAuditEntry({action:'post_loan_payment',entity_type:'loanPayment',entity_id:loanEntry.id,summary:'Loan payment: '+tName+' \u2014 '+fmt(loanAmt),detail:{after:loanEntry}});
         voucherAllocs.push({label:'Loan ('+loan.type+')', amount:loanAmt, invoices:[loan.type]});
@@ -71,6 +85,7 @@ function saveRentPayment() {
 
     // Single save \u2014 all changes at once
     saveData(d2);
+    if (_rpModal && _rpModal.dataset) _rpModal.dataset.savedEntryIds = JSON.stringify(_rpNewIds);
     renderDashboard();
     if (_stmtTid) renderStatementEntries();
     if (document.getElementById('page-tenants').classList.contains('on')) renderTenantProfile(tid);
@@ -85,7 +100,7 @@ function saveRentPayment() {
       doSave(cashTotal, denoms, receivedBy);
     });
   } else {
-    closeModal('modalRentPayment');
+    // Keep the form open behind the voucher (non-cash).
     doSave(null,null,null);
   }
 }
