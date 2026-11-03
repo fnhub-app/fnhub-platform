@@ -387,13 +387,21 @@ function renderSupportFaqPanel() {
   if (!_supportFaqIsEd()) { el.innerHTML = ''; return; }
   if (typeof moduleOn === 'function' && !moduleOn('support')) { el.innerHTML = ''; return; }
   var faq = (window._appSettings && window._appSettings.support_faq) || '';
+  var launcherOn = (window._appSettings && typeof window._appSettings.support_launcher === 'boolean') ? window._appSettings.support_launcher : true;
   el.innerHTML =
     '<div class="card card-flush-gold" style="margin-top:20px;">'
     + '<div class="modal-hdr"><div>'
-    +   '<div class="lbl-yellow">&#128607; Support FAQ (Help Assistant)</div>'
-    +   '<div class="txt-sm-meta">Answers the in-app Help Assistant uses for your nation. Add common questions and answers in plain text &mdash; the assistant prefers these over its built-in knowledge. ED only.</div>'
+    +   '<div class="lbl-yellow">&#128607; Help &amp; Support</div>'
+    +   '<div class="txt-sm-meta">The in-app Help Assistant and the floating Help button. ED only.</div>'
     + '</div></div>'
     + '<div class="sec-pad">'
+    +   '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:6px;">'
+    +     '<input type="checkbox" id="support_launcher_toggle" ' + (launcherOn ? 'checked' : '') + ' onchange="saveSupportLauncherSetting(this.checked)" style="width:auto;margin:3px 0 0;transform:scale(1.2);flex:0 0 auto;">'
+    +     '<span style="font-size:13px;color:var(--text);">Show a floating <strong>Help</strong> button (bottom-right circle) on every page</span>'
+    +   '</label>'
+    +   '<div class="txt-sm-meta" style="margin:0 0 18px 32px;">Staff can always reach Help from the avatar menu; this adds a quick floating shortcut. Members and contractors on the portals always see it.</div>'
+    +   '<div class="lbl-yellow" style="margin-bottom:6px;">&#128269; Support FAQ (Help Assistant)</div>'
+    +   '<div class="txt-sm-meta" style="margin-bottom:8px;">Answers the Help Assistant uses for your nation. Add common questions and answers in plain text &mdash; the assistant prefers these over its built-in knowledge.</div>'
     +   '<textarea id="support_faq_text" rows="10" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);resize:vertical;" placeholder="Q: How do I reset my password?&#10;A: On the sign-in screen, tap Forgot password and follow the email link.&#10;&#10;Q: Who do I call for an emergency repair?&#10;A: Call the housing office at (your number).">' + escapeHtml(faq) + '</textarea>'
     +   '<div style="margin-top:10px;display:flex;justify-content:flex-end;">'
     +     '<button type="button" onclick="saveSupportFaq()" class="btn btn-primary">Save FAQ</button>'
@@ -401,6 +409,26 @@ function renderSupportFaqPanel() {
     + '</div></div>';
 }
 window.renderSupportFaqPanel = renderSupportFaqPanel;
+
+// Toggle the floating Help button for the staff app (nation setting, default ON).
+// Portals always show it regardless. Applies live via showSupportLauncher.
+function saveSupportLauncherSetting(enabled) {
+  if (!_supportFaqIsEd()) { showToast('Only the Executive Director can change this.', { type: 'error' }); renderSupportFaqPanel(); return; }
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.support_launcher = !!enabled;
+  if (typeof showSupportLauncher === 'function') showSupportLauncher();   // apply immediately
+  if (typeof saveSettingWithDraftFallback === 'function') {
+    saveSettingWithDraftFallback('support_launcher', !!enabled).then(function (ok) {
+      if (ok) {
+        showToast(enabled ? '✓ Floating Help button turned on' : '✓ Floating Help button turned off', { type: 'info' });
+        if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'support_launcher_updated', 'Floating Help button ' + (enabled ? 'enabled' : 'disabled'), (window._realRole || window.currentRole) || 'ed');
+      } else {
+        showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+      }
+    });
+  }
+}
+window.saveSupportLauncherSetting = saveSupportLauncherSetting;
 
 function saveSupportFaq() {
   if (!_supportFaqIsEd()) { showToast('Only the Executive Director can edit the Support FAQ.', { type: 'error' }); renderSupportFaqPanel(); return; }
