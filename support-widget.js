@@ -223,11 +223,9 @@
   function _supportShowChat() { _setView('chat'); var ci = document.getElementById('support_chat_input'); if (ci) try { ci.focus(); } catch (e) {} }
   function _supportShowForm() {
     _setView('form');
-    var body = document.getElementById('support_body');
-    if (body && !body.value && _chat.length) {
-      // Seed the details with the conversation so staff have context.
-      body.value = _chat.map(function (m) { return (m.role === 'user' ? 'You: ' : 'Assistant: ') + m.text; }).join('\n\n');
-    }
+    // Details box stays EMPTY for the user to write their own description. The
+    // chat is still attached to the ticket via `transcript`, so staff keep the
+    // context without the conversation cluttering the reporter's text box.
     var sub = document.getElementById('support_subject'); if (sub) setTimeout(function () { try { sub.focus(); } catch (e) {} }, 30);
   }
 
