@@ -31,6 +31,8 @@ const SENDGRID_API_KEY    = Deno.env.get("SENDGRID_API_KEY");
 
 const EMAIL_BRAND_COLOR   = Deno.env.get("EMAIL_BRAND_COLOR");    // optional per-nation header color (hex)
 const EMAIL_CONTACT_LINE  = Deno.env.get("EMAIL_CONTACT_LINE");   // optional footer contact line
+const EMAIL_LOGO_URL      = Deno.env.get("EMAIL_LOGO_URL");       // optional per-nation header logo (https)
+const APP_URL_ENV         = (Deno.env.get("APP_URL") || "").replace(/\/$/, "");
 
 const DEFAULT_REPLY_TO = "housing@clfn.on.ca";
 const DEFAULT_BRAND    = "Housing";
@@ -91,6 +93,17 @@ export function emailBrandColor(): string {
   const raw = String(EMAIL_BRAND_COLOR || "").trim();
   return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#1f2937";
 }
+// The nation's header logo URL: an explicit EMAIL_LOGO_URL secret wins, else the
+// app icon served at the nation's own APP_URL (so the branded shell carries the
+// logo without extra config once APP_URL is set). Must be https; '' = no logo
+// (shell renders the name only). Data: URIs are deliberately NOT used -- Gmail
+// and Outlook strip them, so a logo must be hosted.
+export function emailLogoUrl(): string {
+  const explicit = String(EMAIL_LOGO_URL || "").trim();
+  if (/^https:\/\//i.test(explicit)) return explicit;
+  if (APP_URL_ENV && /^https:\/\//i.test(APP_URL_ENV)) return APP_URL_ENV + "/icon-192.png";
+  return "";
+}
 // Brand-colour CTA button with luminance-picked text (a yellow brand needs
 // black text, a dark one white). The ONE surface a brand fill belongs on.
 export function emailButton(href: string, label: string): string {
@@ -125,6 +138,10 @@ function contactLineHtml(text: string): string {
 export function renderBrandedEmail(subject: string, innerHtml: string): string {
   const name = escapeHtml(emailBrand());
   const rule = emailBrandColor();
+  const logo = emailLogoUrl();
+  const logoImg = logo
+    ? '<img src="' + escapeHtml(logo) + '" alt="" width="42" height="42" style="display:block;border:0;outline:none;text-decoration:none;border-radius:10px;margin:0 0 10px;"/>'
+    : '';
   const contact = EMAIL_CONTACT_LINE ? (contactLineHtml(EMAIL_CONTACT_LINE) + "<br/>") : "";
   return '' +
 '<!doctype html><html><head><meta charset="utf-8"/>' +
@@ -133,7 +150,8 @@ export function renderBrandedEmail(subject: string, innerHtml: string): string {
 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;">' +
 '<tr><td align="center" style="padding:24px 12px;">' +
 '<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-'<tr><td style="background:#ffffff;padding:18px 28px;border-bottom:4px solid ' + rule + ';">' +
+'<tr><td style="background:#ffffff;padding:20px 28px 16px;border-bottom:4px solid ' + rule + ';">' +
+logoImg +
 '<span style="font-size:16px;font-weight:700;letter-spacing:.4px;color:#111827;">' + name + '</span>' +
 '</td></tr>' +
 '<tr><td style="padding:26px 28px 8px;">' +

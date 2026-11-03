@@ -36,6 +36,8 @@ const EMAIL_REPLY_TO       = Deno.env.get("EMAIL_REPLY_TO");
 const EMAIL_BRAND          = Deno.env.get("EMAIL_BRAND");
 const EMAIL_FROM           = Deno.env.get("EMAIL_FROM");
 const EMAIL_FROM_NAME      = Deno.env.get("EMAIL_FROM_NAME");
+const EMAIL_LOGO_URL       = Deno.env.get("EMAIL_LOGO_URL");
+const APP_URL_ENV          = (Deno.env.get("APP_URL") || "").replace(/\/$/, "");
 
 const GRAPH_TENANT_ID      = Deno.env.get("GRAPH_TENANT_ID");
 const GRAPH_CLIENT_ID      = Deno.env.get("GRAPH_CLIENT_ID");
@@ -230,10 +232,14 @@ function contactLineHtml(text: string): string {
 // from illegible). Fills are reserved for buttons (template CTAs).
 function brandedEmailShell(opts: {
   subject: string; innerHtml: string; nationName: string;
-  brandColor: string; contactLine: string; brandFooter: string;
+  brandColor: string; contactLine: string; brandFooter: string; logoUrl?: string;
 }): string {
   const rule    = opts.brandColor || "#1f2937";
   const name    = escapeHtml(opts.nationName || opts.brandFooter || "Housing");
+  const logo    = /^https:\/\//i.test(String(opts.logoUrl || "")) ? String(opts.logoUrl) : "";
+  const logoImg = logo
+    ? '<img src="' + escapeHtml(logo) + '" alt="" width="42" height="42" style="display:block;border:0;outline:none;text-decoration:none;border-radius:10px;margin:0 0 10px;"/>'
+    : '';
   const contact = opts.contactLine ? (contactLineHtml(opts.contactLine) + "<br/>") : "";
   return '' +
 '<!doctype html><html><head><meta charset="utf-8"/>' +
@@ -242,8 +248,9 @@ function brandedEmailShell(opts: {
 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;">' +
 '<tr><td align="center" style="padding:24px 12px;">' +
 '<table role="presentation" cellpadding="0" cellspacing="0" width="600" style="width:600px;max-width:100%;background:#ffffff;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Helvetica,Arial,sans-serif;">' +
-// Header: white, name in black, brand-colour rule beneath
-'<tr><td style="background:#ffffff;padding:18px 28px;border-bottom:4px solid ' + rule + ';">' +
+// Header: white, optional logo, name in black, brand-colour rule beneath
+'<tr><td style="background:#ffffff;padding:20px 28px 16px;border-bottom:4px solid ' + rule + ';">' +
+logoImg +
 '<span style="font-size:16px;font-weight:700;letter-spacing:.4px;color:#111827;">' + name + '</span>' +
 '</td></tr>' +
 // Body
@@ -394,9 +401,16 @@ serve(async (req: Request) => {
   const nationName  = (payload.nation_name as string) || brand || "Housing";
   const brandColor  = sanitizeHexColor(payload.brand_color) || "#1f2937";
   const contactLine = (payload.contact_line as string) || "";
+  // Logo (https only): client-supplied logo_url wins, else EMAIL_LOGO_URL secret,
+  // else the app icon at the nation's APP_URL. Data: URIs are rejected (mail
+  // clients strip them), so the app's data-URL logo never reaches here.
+  const payloadLogo = String((payload.logo_url as string) || "").trim();
+  const logoUrl = /^https:\/\//i.test(payloadLogo) ? payloadLogo
+    : (/^https:\/\//i.test(String(EMAIL_LOGO_URL || "")) ? String(EMAIL_LOGO_URL)
+    : (APP_URL_ENV && /^https:\/\//i.test(APP_URL_ENV) ? APP_URL_ENV + "/icon-192.png" : ""));
 
   const emailHtml = html ?? brandedEmailShell({
-    subject, innerHtml, nationName, brandColor, contactLine, brandFooter: brand,
+    subject, innerHtml, nationName, brandColor, contactLine, brandFooter: brand, logoUrl,
   });
 
   // Resolve the delivery method for THIS message. The client (nation config) may
