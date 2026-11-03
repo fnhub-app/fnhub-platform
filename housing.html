@@ -1134,36 +1134,35 @@
   </div>
 </div>
 
-<!-- Section group bar -->
-<div class="pill-tabs">
-  <button type="button" onclick="showSettingsGroup('admin')" id="sgroup_admin" class="pill-tab active">Admin</button>
-  <button type="button" onclick="showSettingsGroup('app')"   id="sgroup_app"   class="pill-tab">App Settings</button>
-</div>
+<!-- Settings groups: collapsible accordion (closed by default, expandable) -->
+<div class="settings-accordion">
+  <button type="button" onclick="toggleSettingsGroup('admin')" id="sgroup_admin" class="settings-acc-hd" aria-expanded="false"><span class="settings-acc-chev">&#9656;</span> Admin</button>
+  <!-- Admin sub-tabs -->
+  <div class="settings-subtabs" id="settings_subtabs_admin">
+    <button onclick="showSettingsSection('sec_users')" id="stab_users" class="tab-btn active">&#128101; Users</button>
+    <button onclick="showSettingsSection('sec_nation');renderNationPanel();" id="stab_nation" class="tab-btn">&#127760; Nation</button>
+    <button onclick="showSettingsSection('sec_themes');renderThemesPanel();" id="stab_themes" class="tab-btn">&#127912; Themes</button>
+    <button onclick="showSettingsSection('sec_notifications')" id="stab_notifications" class="tab-btn" data-roles="ed,super_user">&#128231; Email</button>
+    <button onclick="showSettingsSection('sec_terms')" id="stab_terms" class="tab-btn" data-roles="ed,super_user">&#128209; Terms &amp; Conditions</button>
+    <button onclick="showSettingsSection('sec_contracts');renderContractsTab();" id="stab_contracts" class="tab-btn" data-roles="ed,super_user">&#128196; Contracts</button>
+    <button onclick="showSettingsSection('sec_config')" id="stab_config" class="tab-btn" data-roles="ed,super_user">&#128295; Config</button>
+    <button onclick="showSettingsSection('sec_maint_qr');renderLabelsPanel();" id="stab_maint_qr" class="tab-btn" data-roles="ed,super_user">&#127991;&#65039; Unit Labels</button>
+    <button onclick="showSettingsSection('sec_audit');renderAuditLog();" id="stab_audit" class="tab-btn">&#128203; Audit Log</button>
+    <button onclick="showSettingsSection('sec_approval_authority');renderApprovalAuthorityPanel();" id="stab_approval_authority" class="tab-btn">&#128274; Approval Authority</button>
+  </div>
 
-<!-- Admin sub-tabs -->
-<div class="settings-subtabs active" id="settings_subtabs_admin">
-  <button onclick="showSettingsSection('sec_users')" id="stab_users" class="tab-btn active">&#128101; Users</button>
-  <button onclick="showSettingsSection('sec_nation');renderNationPanel();" id="stab_nation" class="tab-btn">&#127760; Nation</button>
-  <button onclick="showSettingsSection('sec_themes');renderThemesPanel();" id="stab_themes" class="tab-btn">&#127912; Themes</button>
-  <button onclick="showSettingsSection('sec_notifications')" id="stab_notifications" class="tab-btn" data-roles="ed,super_user">&#128231; Email</button>
-  <button onclick="showSettingsSection('sec_terms')" id="stab_terms" class="tab-btn" data-roles="ed,super_user">&#128209; Terms &amp; Conditions</button>
-  <button onclick="showSettingsSection('sec_contracts');renderContractsTab();" id="stab_contracts" class="tab-btn" data-roles="ed,super_user">&#128196; Contracts</button>
-  <button onclick="showSettingsSection('sec_config')" id="stab_config" class="tab-btn" data-roles="ed,super_user">&#128295; Config</button>
-  <button onclick="showSettingsSection('sec_maint_qr');renderLabelsPanel();" id="stab_maint_qr" class="tab-btn" data-roles="ed,super_user">&#127991;&#65039; Unit Labels</button>
-  <button onclick="showSettingsSection('sec_audit');renderAuditLog();" id="stab_audit" class="tab-btn">&#128203; Audit Log</button>
-  <button onclick="showSettingsSection('sec_approval_authority');renderApprovalAuthorityPanel();" id="stab_approval_authority" class="tab-btn">&#128274; Approval Authority</button>
-</div>
-
-<!-- App Settings sub-tabs -->
-<div class="settings-subtabs" id="settings_subtabs_app">
-  <button onclick="showSettingsSection('sec_app_scoring')" id="stab_app_scoring" class="tab-btn">&#11088; Application Scoring</button>
-  <button onclick="showSettingsSection('sec_required_fields');renderRequiredFieldsPanel();" id="stab_required_fields" class="tab-btn">&#128221; Required Fields</button>
-  <button onclick="showSettingsSection('sec_unit_match')" id="stab_unit_match" class="tab-btn">&#127968; Unit Matching</button>
-  <button onclick="showSettingsSection('sec_reno_score')" id="stab_reno_score" class="tab-btn">&#128296; Reno Priority</button>
-  <button onclick="showSettingsSection('sec_budget')" id="stab_budget" class="tab-btn">&#128176; Reno Budget</button>
-  <button onclick="showSettingsSection('sec_occupancy')" id="stab_occupancy" class="tab-btn">&#127960; Occupancy</button>
-  <button onclick="showSettingsSection('sec_rent_model');renderRentModelPanel();" id="stab_rent_model" class="tab-btn">&#128181; Rent Model</button>
-  <button onclick="showSettingsSection('sec_policy_rules');renderPolicyRulesPanel();" id="stab_policy_rules" class="tab-btn">&#9878;&#65039; Policy Rules</button>
+  <button type="button" onclick="toggleSettingsGroup('app')" id="sgroup_app" class="settings-acc-hd" aria-expanded="false"><span class="settings-acc-chev">&#9656;</span> App Settings</button>
+  <!-- App Settings sub-tabs -->
+  <div class="settings-subtabs" id="settings_subtabs_app">
+    <button onclick="showSettingsSection('sec_app_scoring')" id="stab_app_scoring" class="tab-btn">&#11088; Application Scoring</button>
+    <button onclick="showSettingsSection('sec_required_fields');renderRequiredFieldsPanel();" id="stab_required_fields" class="tab-btn">&#128221; Required Fields</button>
+    <button onclick="showSettingsSection('sec_unit_match')" id="stab_unit_match" class="tab-btn">&#127968; Unit Matching</button>
+    <button onclick="showSettingsSection('sec_reno_score')" id="stab_reno_score" class="tab-btn">&#128296; Reno Priority</button>
+    <button onclick="showSettingsSection('sec_budget')" id="stab_budget" class="tab-btn">&#128176; Reno Budget</button>
+    <button onclick="showSettingsSection('sec_occupancy')" id="stab_occupancy" class="tab-btn">&#127960; Occupancy</button>
+    <button onclick="showSettingsSection('sec_rent_model');renderRentModelPanel();" id="stab_rent_model" class="tab-btn">&#128181; Rent Model</button>
+    <button onclick="showSettingsSection('sec_policy_rules');renderPolicyRulesPanel();" id="stab_policy_rules" class="tab-btn">&#9878;&#65039; Policy Rules</button>
+  </div>
 </div>
 
 <!-- USERS -->

@@ -291,16 +291,42 @@
 /* ── Tab bar ── */
 #settingsView .tabs { overflow-x: auto; overflow-y: visible; margin-bottom: 20px; }
 
-/* ── Two-tier tab grouping (Admin / App Settings) ──
-   Group bar uses .pill-tabs / .pill-tab from shared.css.
-   .settings-subtabs is the second-tier underline-tab row, settings-only. */
-.settings-subtabs {
-  display: none; border-bottom: 2px solid var(--border);
-  margin-bottom: 20px; gap: 0;
-  overflow-x: auto; overflow-y: visible; scrollbar-width: none;
+/* ── Settings groups: collapsible accordion (Admin / App Settings) ──
+   Each group header toggles a vertical sub-list that is collapsed by default
+   and expandable. Replaces the old pill-bar + horizontal underline-tab row. */
+.settings-accordion {
+  margin-bottom: 20px; border: 1px solid var(--border); border-radius: 10px;
+  overflow: hidden;
 }
-.settings-subtabs::-webkit-scrollbar { display: none; }
-.settings-subtabs.active { display: flex; }
+.settings-acc-hd {
+  width: 100%; display: flex; align-items: center; gap: 8px;
+  background: var(--bg); border: none; border-top: 1px solid var(--border);
+  padding: 13px 16px; font-size: 14px; font-weight: 700; color: var(--text);
+  font-family: var(--sans); cursor: pointer; text-align: left;
+}
+.settings-accordion > .settings-acc-hd:first-child { border-top: none; }
+.settings-acc-hd:hover { background: var(--surface); }
+.settings-acc-chev {
+  display: inline-block; font-size: 12px; color: var(--muted);
+  transition: transform .18s ease;
+}
+.settings-acc-hd.active .settings-acc-chev { transform: rotate(90deg); }
+
+/* Sub-list: vertical, collapsed by default, revealed by .open. */
+.settings-subtabs {
+  display: none; flex-direction: column; gap: 0;
+  background: var(--surface); border-top: 1px solid var(--border);
+}
+.settings-subtabs.open { display: flex; }
+.settings-subtabs .tab-btn {
+  width: 100%; text-align: left; border-bottom: none; margin-bottom: 0;
+  border-radius: 0; padding: 11px 16px 11px 34px; white-space: normal;
+}
+.settings-subtabs .tab-btn + .tab-btn { border-top: 1px solid var(--border); }
+.settings-subtabs .tab-btn.active {
+  border-bottom: none; background: var(--bg); color: var(--text);
+  box-shadow: inset 3px 0 0 var(--accent-ink);
+}
 
 /* ── Sections ── */
 #settingsView .settings-section { padding: 0; display: none; }
