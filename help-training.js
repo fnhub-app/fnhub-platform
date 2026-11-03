@@ -32,12 +32,13 @@
   // BUMP THIS whenever the procedures are updated to match app changes so staff
   // can see how current the guidance is. A single doc may override it with its
   // own `rev` field once its content diverges from the rest of the set.
-  var SOP_REVISION = '2026-11-02';
+  var SOP_REVISION = '2026-11-03';
 
   // Revision history shown at the foot of every document. Add a new entry
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-03', change: 'Noted that a unit’s utility bills now also appear on the unit card’s Documents tab (cross-linked with the Tenant card’s Utilities tab).' },
     { date: '2026-11-02', change: 'Documented assigning a tenant from a unit’s new Matches tab; clarified that an emailed document filed via Email Intake also appears on the tenant’s profile.' },
     { date: '2026-11-02', change: 'Added a Two-Factor Authentication (2FA) procedure.' },
     { date: '2026-11-02', change: 'Expanded step-by-step detail for creating an application, adding a unit, creating a project / adding lots, and creating / issuing a Maintenance Request; added AI-assistant usage notes.' },
@@ -275,7 +276,7 @@
     <tr><td>Approvals</td><td>Budget indicator and the HM/ED signature blocks for the unit's renovation budget.</td></tr>
     <tr><td>Maintenance Requests</td><td>The unit's Maintenance Requests, with + New Maintenance Request.</td></tr>
     <tr><td>RFQs &amp; Contracts</td><td>RFQs linked to this unit.</td></tr>
-    <tr><td>Documents</td><td>The unit's document library.</td></tr>
+    <tr><td>Documents</td><td>The unit's document library, including its <strong>utility bills</strong> (which also appear on the Tenant card's Utilities tab).</td></tr>
     <tr><td>Map &amp; Photos</td><td>The unit's map location and photo uploader.</td></tr>
     </tbody></table>
     <h2>Add a new unit &mdash; step by step</h2>
