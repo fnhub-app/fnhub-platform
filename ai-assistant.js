@@ -301,6 +301,17 @@ function _removeTyping() {
   if (t) t.remove();
 }
 
+// Safe minimal Markdown -> HTML for assistant bubbles (the model answers in
+// Markdown; raw text shows literal ** and - ). HTML is escaped FIRST so model
+// output can't inject markup; newlines are preserved by the bubble's pre-wrap.
+function _aiMdToHtml(text) {
+  var s = String(text == null ? '' : text);
+  s = s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  s = s.replace(/^[ \t]*[-*][ \t]+/gm, '• ');           // line-start bullets -> glyph
+  s = s.replace(/\*\*([^\n*]+)\*\*/g, '<strong>$1</strong>'); // **bold**
+  s = s.replace(/`([^\n`]+)`/g, '<code>$1</code>');          // `inline code`
+  return s;
+}
 function _appendAIMessage(role, text, id) {
   var msgs = document.getElementById('ai_chat_messages');
   if (!msgs) return;
@@ -334,7 +345,8 @@ function _appendAIMessage(role, text, id) {
       ? 'background:var(--yellow);color:var(--dark);border-bottom-right-radius:3px;'
       : 'background:#2f3033;border:1px solid #444;color:#e8e8e5;border-bottom-left-radius:3px;',
   ].join('');
-  bubble.textContent = displayText;
+  if (isUser) bubble.textContent = displayText;             // user input: never interpret markup
+  else bubble.innerHTML = _aiMdToHtml(displayText);         // assistant: light markdown
 
   if (displayText || !charts.length) wrap.appendChild(bubble);
   charts.forEach(function (spec) { _aiRenderChart(wrap, spec); });
