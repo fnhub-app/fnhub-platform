@@ -232,6 +232,8 @@ declare var _SECONDARY_TYPES: any;
 declare var _appStampSaved: any;
 declare var _appSubmissions: any;
 declare var _contractorSubmissions: any;
+declare var _supportTickets: any;
+declare var _userTableLaSeq: any;
 declare var _arrearsCache: any;
 declare var _bcrRegistry: any;
 declare var _cardGrid: any;
