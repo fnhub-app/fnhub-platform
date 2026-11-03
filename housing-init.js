@@ -2622,6 +2622,7 @@ function _toggleAvatarPopover(){
   pop.innerHTML = '<div class="hap-head"><div class="hap-name">'+_esc(name)+'</div><div class="hap-role">'+_esc(label)+'</div></div>'
                 + viewAs
                 + '<button type="button" class="hap-action" data-hap="help">&#128218; Help &amp; Training</button>'
+                + ((typeof moduleOn !== 'function' || moduleOn('support')) ? '<button type="button" class="hap-action" data-hap="support">&#128607; Get Help / Report an Issue</button>' : '')
                 + '<button type="button" class="hap-action" data-hap="mfa">&#128274; Two-Factor Authentication</button>'
                 + '<button type="button" class="hap-action" data-hap="signout">Sign out</button>';
   document.body.appendChild(pop);
@@ -2779,6 +2780,7 @@ document.addEventListener('DOMContentLoaded', function(){
     if(hap){
       e.preventDefault();
       if(hap.getAttribute('data-hap')==='help'){ _closeAvatarPopover(); if(typeof openHelpTraining==='function') openHelpTraining(); return; }
+      if(hap.getAttribute('data-hap')==='support'){ _closeAvatarPopover(); if(typeof openSupportWidget==='function') openSupportWidget(); return; }
       if(hap.getAttribute('data-hap')==='mfa'){ _closeAvatarPopover(); if(typeof openMfaSetup==='function') openMfaSetup(); return; }
       if(hap.getAttribute('data-hap')==='signout'){ _closeAvatarPopover(); if(typeof headerSignOut==='function') headerSignOut(); else if(typeof doLogout==='function') doLogout(); }
       return;
