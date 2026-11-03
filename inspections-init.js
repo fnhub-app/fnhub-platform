@@ -610,7 +610,16 @@ async function saveInspection(approveAction) {
     // BOTH 'repair' (needs-repair) AND 'fail' items generate a request; previously
     // only 'repair' did, so an inspection with FAILED items produced no MR.
     var repairItems = _inspRepairItems(checklist);
-    closeInspectionModal();
+    // Keep the form OPEN on a plain save (not approve/revoke, and not when the
+    // save chains to a Maintenance Request for failed/repair items). Re-open in
+    // edit mode so a just-created record gains its Delete / Approve / PDF
+    // actions and a follow-up save PATCHes instead of inserting a duplicate.
+    var _inspKeepOpen = !approveAction && !(repairItems.length && status !== 'pass');
+    if (_inspKeepOpen) {
+      openInspectionModal(saved && saved.id ? saved.id : window._inspDocEntityId);
+    } else {
+      closeInspectionModal();
+    }
     renderInspectionsList();
 
     // Optional note on the tenant file when the report is approved (sign-off =
