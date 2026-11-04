@@ -2464,10 +2464,14 @@ async function _rfqBuildContractPdf(tokens, d, savedBody, numFmt) {
 // this RFQ's meta) with the doc-lib / attach-list refreshes and the final
 // toast. Extracted verbatim from generateContractorContract.
 async function _rfqFileContractPdf(blob, filename) {
+  // deferDownload: the orchestrator still has an await-email step after this,
+  // so it triggers the browser download itself as its final action (iPad: the
+  // download suspends the page, so it must run after every await).
   return window.fileContractPdf(blob, filename, {
     unitId: _rfqSowUnitId,
     entities: _rfqCurrentId ? [{ type: 'rfq', id: _rfqCurrentId }] : [],
     savedMsg: _rfqCurrentId ? 'Contract PDF saved - added to RFQ and unit documents' : 'Contract PDF saved - also added to unit documents',
+    deferDownload: true,
     onFiled: function(){
       if (_rfqDocLib && typeof _rfqDocLib.refresh === 'function') _rfqDocLib.refresh();
       if (typeof _rfqRefreshAttachList === 'function') _rfqRefreshAttachList();
@@ -2624,6 +2628,9 @@ async function generateContractorContract() {
       // Email the contract to the awarded contractor (confirm + uncheckable
       // recipient). Best-effort — the contract is already generated + filed.
       await _rfqEmailContract(blob, filename, ct, (d.ap_email || ''), rfqId, addr);
+      // Download LAST — after filing + email. On iPad the download suspends the
+      // page, so it must run only once every await above has completed.
+      if (typeof window.downloadBlobFile === 'function') window.downloadBlobFile(blob, filename);
   } catch(e) {
     console.error('[contract] generation failed:', e);
     if (typeof showToast === 'function') showToast('Contract PDF failed: ' + e.message, {type:'error'});

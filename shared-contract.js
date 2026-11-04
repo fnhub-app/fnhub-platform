@@ -253,17 +253,30 @@ window.buildContractPdf = async function(tokens, d, savedBody, numFmt, opts) {
       return new Blob([arr], {type:'application/pdf'});
 };
 
-// Download + file the contract PDF. Always files to the unit's docs (entity
-// 'tenant' + unitId) so it shows on the inventory unit card; opts.entities adds
-// extra file-meta rows (e.g. the RFQ or the SOW). opts.onFiled(storePath) runs
-// after a successful upload (doc-lib refreshes).
-window.fileContractPdf = async function(blob, filename, opts) {
-  opts = opts || {};
+// Trigger a browser download of an in-memory Blob. On iPad/iOS Safari this
+// navigates to / previews the file and SUSPENDS the page's JS, so callers must
+// invoke it LAST — after every await-upload / await-email has completed.
+window.downloadBlobFile = function(blob, filename) {
   var dlUrl = URL.createObjectURL(blob);
   var dlLink = document.createElement('a');
   dlLink.href = dlUrl; dlLink.download = filename; dlLink.click();
   setTimeout(function(){ URL.revokeObjectURL(dlUrl); }, 3000);
+};
 
+// Download + file the contract PDF. Always files to the unit's docs (entity
+// 'tenant' + unitId) so it shows on the inventory unit card; opts.entities adds
+// extra file-meta rows (e.g. the RFQ or the SOW). opts.onFiled(storePath) runs
+// after a successful upload (doc-lib refreshes).
+//
+// iPad/iOS Safari: triggering the browser download navigates/previews the file
+// and SUSPENDS this page's JS, so any await AFTER it may never run. This helper
+// therefore uploads + files FIRST (awaited), then triggers the download LAST.
+// Callers that must run their OWN awaits after filing (e.g. email the contract,
+// write an extra file-meta row) MUST pass opts.deferDownload:true and call
+// window.downloadBlobFile(blob, filename) themselves as their final step, so the
+// download can't suspend the page before those awaits complete.
+window.fileContractPdf = async function(blob, filename, opts) {
+  opts = opts || {};
   var unitId = opts.unitId;
   var entities = opts.entities || [];
   var extra = 0, storePath = '';
@@ -288,6 +301,10 @@ window.fileContractPdf = async function(blob, filename, opts) {
       ? 'Contract PDF saved - added to documents'
       : 'Contract PDF saved - also added to unit documents'), { type: 'info' });
   }
+  // Download last — after the upload has completed, so the iPad preview can't
+  // suspend the page before the file is safely in the library. A caller that
+  // still has its own awaits to run after filing defers this to itself.
+  if (!opts.deferDownload) window.downloadBlobFile(blob, filename);
   return storePath;
 };
 
