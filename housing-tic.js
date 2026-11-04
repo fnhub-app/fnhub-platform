@@ -4008,6 +4008,20 @@
     else if (res.ok)      showToast(docNoun + ' saved to the document library.', {type:'info'});
     else                  showToast(docNoun + ' downloaded, but saving to the document library FAILED. Check your connection and generate it again.', {type:'error'});
   }
+  // Trigger a browser download of a blob. Call this AFTER the library save: on
+  // iPad Safari the download can navigate/preview the PDF and suspend this
+  // page's JS, so anything after it may not run.
+  function _ticDownloadBlob(blob, filename) {
+    try {
+      var url = URL.createObjectURL(blob);
+      var link = document.createElement('a');
+      link.href = url; link.download = filename; link.rel = 'noopener';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      setTimeout(function(){ try { URL.revokeObjectURL(url); } catch(e){} }, 4000);
+    } catch(e) { console.warn('[tic] download failed:', e); }
+  }
 
   async function _ticGenerateLeasePdf() {
     // Hard gate — don't generate with a core term (fixed-term end date)
@@ -4187,12 +4201,11 @@
         var tenantSlug  = tokens.tenantName.replace(/\s+/g,'_') || 'Tenant';
         var filename    = nationShort + '_' + (_LEASE_FILE_SLUGS[_ticLeaseDocKey] || 'Occupancy_Agreement') + '_' + tenantSlug + '.pdf';
 
-        var url  = URL.createObjectURL(blob);
-        var link = document.createElement('a');
-        link.href = url; link.download = filename; link.click();
-        setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
-
+        // SAVE FIRST, then download. On iPad Safari the download navigates to /
+        // previews the PDF and suspends this page's JS, so any upload AFTER the
+        // download never ran -- the agreement generated but was never filed.
         var _res = await _ticFilePdf(blob, filename);
+        _ticDownloadBlob(blob, filename);
         var mo = document.getElementById('tic_lease_modal');
         if (mo) mo.remove();
         _ticFileResultToast(_res, 'Occupancy Agreement');
@@ -4360,12 +4373,9 @@
       var filledBytes = await pdfDoc.save();
       var blob = new Blob([filledBytes], { type: 'application/pdf' });
 
-      var url  = URL.createObjectURL(blob);
-      var link = document.createElement('a');
-      link.href = url; link.download = filename; link.click();
-      setTimeout(function(){ URL.revokeObjectURL(url); }, 3000);
-
+      // SAVE FIRST, then download (iPad Safari suspends JS on the download).
       var _res = await _ticFilePdf(blob, filename);
+      _ticDownloadBlob(blob, filename);
       var mo = document.getElementById('tic_lease_modal');
       if (mo) mo.remove();
       _ticFileResultToast(_res, 'Occupancy Agreement');
@@ -4789,34 +4799,33 @@
 
     // ── Output ────────────────────────────────────────────────────────────────
     var filename = 'HydroOne_Consent_' + (custName || 'Tenant').replace(/\s+/g, '_') + '.pdf';
+    var blob     = pdf.output('blob');
 
-    // Download to browser
-    pdf.save(filename);
-
-    // Save to tenant document library
+    // Save to the document library FIRST, then download. On iPad Safari the
+    // download suspends this page's JS, so an upload after it never ran.
     var unit = _ticState.unit || {};
     if (unit.id) {
       try {
-        var blob      = pdf.output('blob');
         var storePath = 'tenants/' + unit.id + '/' + Date.now() + '_' + filename;
         await window.sbUploadFile(storePath, blob);
         if (typeof window.sbSaveFileMeta === 'function') {
           await window.sbSaveFileMeta('tenant', String(unit.id), storePath, filename, blob.size, 'application/pdf');
         }
-        // Force doc-lib remount so the new file appears immediately
         _ticDocLibKey = null;
         _ticDocLib    = null;
-        // Close the modal now that the PDF is done
+        _ticDownloadBlob(blob, filename);
         var mo = document.getElementById('tic_hydroone_modal');
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ PDF saved to document library', {type:'info'});
       } catch (e) {
         console.warn('[tic] PDF upload to doc library failed:', e);
+        _ticDownloadBlob(blob, filename);
         var mo2 = document.getElementById('tic_hydroone_modal');
         if (mo2) mo2.remove();
         if (typeof showToast === 'function') showToast('✓ PDF downloaded (document library save failed — see console)', {type:'error'});
       }
     } else {
+      _ticDownloadBlob(blob, filename);
       var mo3 = document.getElementById('tic_hydroone_modal');
       if (mo3) mo3.remove();
       if (typeof showToast === 'function') showToast('✓ PDF generated', {type:'info'});
@@ -5100,29 +5109,31 @@
     var tenantSlug = (tenant || 'Tenant').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Tenant';
     var filename   = nationSh.replace(/[^a-z0-9]+/gi, '') + '_Inspection_Notice_' + tenantSlug + '.pdf';
 
-    // Download to browser
-    pdf.save(filename);
+    // Save to the document library FIRST, then download (iPad Safari suspends
+    // this page's JS on the download, which skipped the upload after it).
+    var blob = pdf.output('blob');
 
-    // Save to tenant document library
     var unit = _ticState.unit || {};
     var mo = document.getElementById('tic_inspnotice_modal');
     if (unit.id && typeof window.sbUploadFile === 'function') {
       try {
-        var blob      = pdf.output('blob');
         var storePath = 'tenants/' + unit.id + '/' + Date.now() + '_' + filename;
         await window.sbUploadFile(storePath, blob);
         if (typeof window.sbSaveFileMeta === 'function') {
           await window.sbSaveFileMeta('tenant', String(unit.id), storePath, filename, blob.size, 'application/pdf');
         }
         _ticDocLibKey = null; _ticDocLib = null; // force doc-lib remount so it appears
+        _ticDownloadBlob(blob, filename);
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ Notice saved to document library', {type:'info'});
       } catch (e) {
         console.warn('[tic] inspection notice upload failed:', e);
+        _ticDownloadBlob(blob, filename);
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ Notice downloaded (document library save failed — see console)', {type:'error'});
       }
     } else {
+      _ticDownloadBlob(blob, filename);
       if (mo) mo.remove();
       if (typeof showToast === 'function') showToast('✓ Notice generated', {type:'info'});
     }
@@ -5479,28 +5490,31 @@
     var tenantSlug = (tenant || 'Tenant').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Tenant';
     var filename   = nationSh.replace(/[^a-z0-9]+/gi, '') + '_Eviction_Notice_' + (immediate ? 'Immediate_' : 'Standard_') + tenantSlug + '.pdf';
 
-    pdf.save(filename);
+    // Save to the document library FIRST, then download (iPad Safari suspends
+    // this page's JS on the download, which skipped the upload after it).
+    var blob = pdf.output('blob');
 
-    // Save to tenant document library
     var unit = _ticState.unit || {};
     var mo = document.getElementById('tic_eviction_modal');
     if (unit.id && typeof window.sbUploadFile === 'function') {
       try {
-        var blob      = pdf.output('blob');
         var storePath = 'tenants/' + unit.id + '/' + Date.now() + '_' + filename;
         await window.sbUploadFile(storePath, blob);
         if (typeof window.sbSaveFileMeta === 'function') {
           await window.sbSaveFileMeta('tenant', String(unit.id), storePath, filename, blob.size, 'application/pdf');
         }
         _ticDocLibKey = null; _ticDocLib = null; // force doc-lib remount so it appears
+        _ticDownloadBlob(blob, filename);
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ Eviction notice saved to document library', {type:'info'});
       } catch (e) {
         console.warn('[tic] eviction notice upload failed:', e);
+        _ticDownloadBlob(blob, filename);
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ Notice downloaded (document library save failed — see console)', {type:'error'});
       }
     } else {
+      _ticDownloadBlob(blob, filename);
       if (mo) mo.remove();
       if (typeof showToast === 'function') showToast('✓ Eviction notice generated', {type:'info'});
     }
@@ -5925,26 +5939,30 @@
     var slug = (tenantName || 'Tenant').replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '') || 'Tenant';
     var nationSh = (typeof nationShort === 'function') ? nationShort() : (nc.short || 'Nation');
     var filename = nationSh.replace(/[^a-z0-9]+/gi, '') + '_Replacement_Lease_' + slug + '.pdf';
-    pdf.save(filename);
+    // Save to the document library FIRST, then download (iPad Safari suspends
+    // this page's JS on the download, which skipped the upload after it).
+    var blob = pdf.output('blob');
 
     var mo = document.getElementById('tic_rlease_modal');
     if (u.id && typeof window.sbUploadFile === 'function') {
       try {
-        var blob = pdf.output('blob');
         var storePath = 'tenants/' + u.id + '/' + Date.now() + '_' + filename;
         await window.sbUploadFile(storePath, blob);
         if (typeof window.sbSaveFileMeta === 'function') {
           await window.sbSaveFileMeta('tenant', String(u.id), storePath, filename, blob.size, 'application/pdf');
         }
         _ticDocLibKey = null; _ticDocLib = null;
+        _ticDownloadBlob(blob, filename);
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ Replacement lease saved to document library', {type:'info'});
       } catch (e) {
         console.warn('[tic] replacement lease upload failed:', e);
+        _ticDownloadBlob(blob, filename);
         if (mo) mo.remove();
         if (typeof showToast === 'function') showToast('✓ Lease downloaded (document library save failed — see console)', {type:'error'});
       }
     } else {
+      _ticDownloadBlob(blob, filename);
       if (mo) mo.remove();
       if (typeof showToast === 'function') showToast('✓ Replacement lease generated', {type:'info'});
     }
