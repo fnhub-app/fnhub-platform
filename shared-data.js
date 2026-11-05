@@ -2762,7 +2762,17 @@ async function inviteContractorToPortal(ctId){
     // Settings > Notifications). Fire-and-forget; silent skip if no email on file.
     var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
     if(typeof notifyContractorPortalInvite === 'function'){
-      notifyContractorPortalInvite(ct, ct.people || [], _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
+      // Email ONLY the contacts that were actually invited (the staffer may have
+      // unchecked some in the pick modal) -- not every person on file. An
+      // un-invited contact who got the email would follow the link and be
+      // rejected by contractor-claim ("no invite for this number").
+      var _invitedPhones = {};
+      invitees.forEach(function(x){ if(x && x.phone) _invitedPhones[x.phone] = true; });
+      var _invitedPeople = (ct.people || []).filter(function(p){
+        var e164 = (p && p.phone && typeof _toE164 === 'function') ? _toE164(p.phone) : '';
+        return e164 && _invitedPhones[e164];
+      });
+      notifyContractorPortalInvite(ct, _invitedPeople, _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
     }
     showToast('Invited ' + invitees.length + ' contact(s) to the portal (and emailed the sign-in link to any email on file). They sign in at ' + _portalLink, {type:'info'});
   } catch(e){ console.warn('[portal] inviteContractorToPortal threw:', e); if(typeof showToast === 'function') showToast('Invite failed: ' + (e && e.message || e), {type:'error'}); }
@@ -5125,15 +5135,20 @@ async function reactivateStaff(id, btn){
       showToast(newLogin ? ('Reactivated + login recreated — temporary password: '+pw) : 'Staff member reactivated', {type:'info'});
       auditEntry('SETTINGS','settings_user_reactivate','Staff reactivated (id='+id+')'+(newLogin?' + login recreated':''),window.currentRole||'ed');
       if(newLogin && email && typeof sendNotification==='function'){
-        try {
-          var portal = (window.NATION_CONFIG && NATION_CONFIG.portal_base) || location.origin;
-          var nname  = (window.NATION_CONFIG && (NATION_CONFIG.display_name||NATION_CONFIG.short)) || 'Housing';
-          sendNotification({ to: email, to_name: name, subject: 'Your '+nname+' Housing account is ready',
-            bodyHtml: '<p>Hello '+escapeHtml(name)+',</p><p>Your access to the '+escapeHtml(nname)+' Housing app has been restored.</p>'
-              + '<p><b>Sign in:</b> <a href="'+escapeHtml(portal)+'">'+escapeHtml(portal)+'</a><br>'
-              + '<b>Email:</b> '+escapeHtml(email)+'<br><b>Temporary password:</b> '+escapeHtml(pw)+'</p>'
-              + '<p>Please sign in and change your password from Settings.</p>' });
-        } catch(_we){}
+        var portal = (window.NATION_CONFIG && NATION_CONFIG.portal_base) || location.origin;
+        var nname  = (window.NATION_CONFIG && (NATION_CONFIG.display_name||NATION_CONFIG.short)) || 'Housing';
+        // Async + rejects on failure — chain it (a synchronous try/catch can't
+        // catch the rejection) and surface a failed send so the admin can relay
+        // the temporary password shown in the toast above by hand.
+        sendNotification({ to: email, to_name: name, subject: 'Your '+nname+' Housing account is ready',
+          bodyHtml: '<p>Hello '+escapeHtml(name)+',</p><p>Your access to the '+escapeHtml(nname)+' Housing app has been restored.</p>'
+            + '<p><b>Sign in:</b> <a href="'+escapeHtml(portal)+'">'+escapeHtml(portal)+'</a><br>'
+            + '<b>Email:</b> '+escapeHtml(email)+'<br><b>Temporary password:</b> '+escapeHtml(pw)+'</p>'
+            + '<p>Please sign in and change your password from Settings.</p>' })
+          .catch(function(_we){
+            console.warn('[reactivate] welcome email failed', _we);
+            if(typeof showToast==='function') showToast('Reactivated, but the account email to '+email+' could not be sent. Share the temporary password directly.', {type:'error'});
+          });
       }
       renderHousingUserTable();
     } else {

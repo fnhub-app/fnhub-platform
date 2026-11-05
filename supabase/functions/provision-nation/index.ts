@@ -220,8 +220,16 @@ serve(async (req) => {
   //       in). Nations that configure real SMTP can turn this back on.
   //     - disable_signup=false     -> Add-Staff creates logins via /auth/signup.
   // Needs ref + MGMT_TOKEN.
+  // Tracks whether the nation project's Site URL + redirect allowlist were set.
+  // Until this succeeds the project keeps GoTrue's default Site URL
+  // (http://localhost:3000), so every staff magic-link / password-reset email
+  // verifies and then bounces to a dead localhost page. The nation must NOT be
+  // marked 'active' until this is done (see the registry status + ok below).
+  let authCfgOk = false
+  const siteUrlForMsg = 'https://' + sub + '.fnhub.app'
+  const LOCALHOST_WARN = ' WARNING: until this is set the project keeps the default Site URL http://localhost:3000, so staff sign-in / password-reset links will bounce to a dead page. Set Auth > URL Configuration (Site URL ' + siteUrlForMsg + ' + redirect allowlist ' + siteUrlForMsg + '/**) in the nation project dashboard, then re-run provisioning.'
   if (ref && MGMT_TOKEN) {
-    const siteUrl = 'https://' + sub + '.fnhub.app'
+    const siteUrl = siteUrlForMsg
     const allow = siteUrl + ',' + siteUrl + '/**'
     try {
       const r = await fetch(MGMT_BASE + '/v1/projects/' + encodeURIComponent(ref) + '/config/auth', {
@@ -230,14 +238,15 @@ serve(async (req) => {
         body: JSON.stringify({ site_url: siteUrl, uri_allow_list: allow, mailer_autoconfirm: true, disable_signup: false }),
       })
       const txt = await r.text()
+      authCfgOk = r.ok
       step('auth_config', r.ok, r.ok ? ('Site URL/redirect set to ' + siteUrl + '; email auto-confirm ON; signups allowed.')
-        : ('Management API ' + r.status + ': ' + txt.slice(0, 200)))
-    } catch (e) { step('auth_config', false, 'Error: ' + String(e).slice(0, 200)) }
+        : ('Management API ' + r.status + ': ' + txt.slice(0, 200) + LOCALHOST_WARN))
+    } catch (e) { step('auth_config', false, 'Error: ' + String(e).slice(0, 200) + LOCALHOST_WARN) }
   } else {
     const miss: string[] = []
     if (!MGMT_TOKEN) miss.push('SB_MGMT_TOKEN secret')
     if (!ref)        miss.push('project ref or URL')
-    step('auth_config', false, 'Skipped: needs ' + miss.join(' + ') + '.')
+    step('auth_config', false, 'Skipped: needs ' + miss.join(' + ') + '.' + LOCALHOST_WARN)
   }
 
   // --- Step 5: upsert the control-plane registry row (platform) ---------------
@@ -253,7 +262,11 @@ serve(async (req) => {
       email_domain: nation.email_domain || null,
       housing_email: nation.housing_email || null,
       modules_licensed: (nation.modules_licensed && typeof nation.modules_licensed === 'object') ? nation.modules_licensed : {},
-      status: (targetUrl && target.anon) ? 'active' : 'provisioning',
+      // Stay 'provisioning' until the Site URL / redirect allowlist is set too
+      // (authCfgOk) -- a nation whose staff sign-in links point at localhost is
+      // not truly live. Re-running provisioning once auth_config succeeds flips
+      // it to 'active'.
+      status: (targetUrl && target.anon && authCfgOk) ? 'active' : 'provisioning',
       provisioned_by: actor,
       updated_at: new Date().toISOString(),
     }
@@ -273,7 +286,10 @@ serve(async (req) => {
     })
   } catch (_e) { /* never block on audit */ }
 
-  const allCore = registryOk
+  // ok requires BOTH the registry row AND the auth Site-URL config, so a run
+  // that left the project on localhost reports "finished with issues", never a
+  // clean success.
+  const allCore = registryOk && authCfgOk
   const out: Record<string, unknown> = { ok: allCore, subdomain: sub, steps }
   if (edPassword) out.ed_password = edPassword
   if (firstEd.email) out.ed_email = String(firstEd.email).toLowerCase()

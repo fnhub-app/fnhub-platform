@@ -213,6 +213,7 @@ async function sendPasswordReset() {
     // auth mailer, which this project doesn't configure — those emails never
     // arrived). Anti-enumeration is server-side: it answers ok either way.
     var viaFn = false;
+    var _fnStatus = 0;
     try {
       var _nc = window.NATION_CONFIG || {};
       var fr = await fetch(SUPABASE_URL + '/functions/v1/request-password-reset', {
@@ -225,13 +226,23 @@ async function sendPasswordReset() {
           brand_color: _nc.primary_color || ''
         })
       });
+      _fnStatus = fr.status;
       if (fr.ok) {
         var fd = await fr.json().catch(function(){ return {}; });
         if (fd && fd.ok) viaFn = true;
       }
-      // Not deployed yet (404), email unconfigured (503), or any other
-      // not-ok answer: fall through to the legacy Supabase recover mailer.
-    } catch(_fe) { /* function unreachable — legacy fallback below */ }
+    } catch(_fe) { _fnStatus = 0; /* function unreachable — legacy fallback below */ }
+    // The branded function ATTEMPTED a send and it failed (500): the legacy
+    // /auth/v1/recover endpoint below relies on Supabase's built-in mailer,
+    // which this project doesn't configure, so it returns 200 while delivering
+    // nothing. Claiming "a reset link has been sent" there would be a lie.
+    // Surface the failure honestly instead and stop. Fall through to /recover
+    // only when the function is NOT deployed (404) / unreachable (network) or
+    // reports email-unconfigured (503) — nations that rely on the Supabase mailer.
+    if (!viaFn && _fnStatus === 500) {
+      if (msgEl) { msgEl.textContent = 'Could not send the reset link right now. Please try again in a few minutes, or ask an administrator to reset it from Settings → Users.'; msgEl.style.color = '#fca5a5'; msgEl.style.background = '#3b0a0a'; msgEl.style.display = ''; }
+      return;
+    }
     if (!viaFn) {
       var r = await fetch(SUPABASE_URL + '/auth/v1/recover', {
         method:  'POST',
