@@ -2529,7 +2529,7 @@ function renoSearchFilter(q) {
   if((window.currentRole||'') === 'field_employee' && typeof sowHiddenFromCurrentFieldEmployee === 'function'){
     filtered = filtered.filter(function(u){
       var sows = (typeof getUnitSowList === 'function') ? getUnitSowList(u.id) : [];
-      return sows.some(function(s){ return s && !s.archived && !sowHiddenFromCurrentFieldEmployee(s); });
+      return sows.some(function(s){ return s && !s.archived && !s.cancelled && s.approval_status !== 'completed' && !sowHiddenFromCurrentFieldEmployee(s); });
     });
   }
 

@@ -3489,21 +3489,36 @@ async function _wlApproveContractorInvoice(id){
     var sow  = sows ? sows.find(function(x){ return x && String(x.project_number) === String(pn); }) : null;
     if(!sow) throw new Error('the work order (' + pn + ') was not found');
     if(!Array.isArray(sow.draws)) sow.draws = [];
-    sow.draws.push({
-      id: 'cwi_' + Date.now(), type: 'material',
-      label: 'Contractor invoice' + (s.file_name ? ' - ' + s.file_name : ''),
-      amount: amt, paid: false, paidDate: '',
-      invoice: (s.file_path ? { path: s.file_path, name: s.file_name || 'invoice' } : null),
-      submittedBy: 'contractor', submittedByName: s.created_by || '',
-      submittedAt: s.created_at || new Date().toISOString(),
-      approvedBy: (window.HOUSING_SESSION && HOUSING_SESSION.email) || '', approvedAt: new Date().toISOString()
+    // Idempotency: if a prior approval attempt already saved this submission's
+    // draw but then failed to mark the submission 'approved' (so it stayed in
+    // the worklist), do NOT add a second draw on retry -- that would pay the
+    // contractor twice. Keyed on the submission id (older draws lack it and are
+    // deduped on the stored invoice path as a fallback).
+    var _already = sow.draws.some(function(d){
+      return d && ((d.submissionId && d.submissionId === s.id) ||
+                   (s.file_path && d.invoice && d.invoice.path === s.file_path));
     });
-    var pr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId), {
-      method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
-      body: JSON.stringify({ data: data, updated_at: new Date().toISOString() })
-    });
-    if(!pr.ok) throw new Error('could not save the draw (HTTP ' + pr.status + ')');
-    if(window._sowCache) window._sowCache[unitId] = data;   // keep Payments tab in sync
+    if(!_already){
+      sow.draws.push({
+        id: 'cwi_' + Date.now(), submissionId: s.id, type: 'material',
+        label: 'Contractor invoice' + (s.file_name ? ' - ' + s.file_name : ''),
+        amount: amt, paid: false, paidDate: '',
+        invoice: (s.file_path ? { path: s.file_path, name: s.file_name || 'invoice' } : null),
+        submittedBy: 'contractor', submittedByName: s.created_by || '',
+        submittedAt: s.created_at || new Date().toISOString(),
+        approvedBy: (window.HOUSING_SESSION && HOUSING_SESSION.email) || '', approvedAt: new Date().toISOString()
+      });
+      // Refresh the stored paid-vs-PO mirror so it isn't left stale after a draw.
+      if(typeof sowPaymentInfo === 'function'){
+        try { var _pi = sowPaymentInfo(sow); sow.paymentProgress = { percent: _pi.percent, paid: _pi.paid, po: _pi.po, updatedAt: new Date().toISOString() }; } catch(_pe){}
+      }
+      var pr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId), {
+        method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ data: data, updated_at: new Date().toISOString() })
+      });
+      if(!pr.ok) throw new Error('could not save the draw (HTTP ' + pr.status + ')');
+      if(window._sowCache) window._sowCache[unitId] = data;   // keep Payments tab in sync
+    }
     await _sbResolveContractorSub(id, 'approved');
     if(typeof auditEntry === 'function') auditEntry('SOW:' + unitId, 'contractor_invoice_approved', 'Approved contractor invoice ' + money + ' on ' + pn, window.currentRole || 'staff');
     if(typeof showToast === 'function') showToast('Invoice approved — a ' + money + ' draw was added to ' + pn + '.', {type:'info'});
@@ -11321,8 +11336,17 @@ function _rfqApproveLinkedSow(unitId, projectNumber, role, contractor) {
   if (!unitId || typeof getUnitSowList !== 'function' || typeof saveSowData !== 'function') return;
   var list = getUnitSowList(unitId);
   if (!list.length) return;
-  var sow = (projectNumber ? list.find(function(s){ return s && s.project_number === projectNumber; }) : null) || list[0];
-  if (!sow) return;
+  // Match the RFQ's linked SOW by project number. Do NOT fall back to the
+  // unit's first SOW when a project number was specified but not found -- that
+  // would approve AND reassign the contractor to the WRONG maintenance request.
+  // list[0] is used only for a legacy single-SOW RFQ that carries no number.
+  var sow = projectNumber
+    ? list.find(function(s){ return s && String(s.project_number) === String(projectNumber); })
+    : list[0];
+  if (!sow) {
+    console.warn('[rfq] linked SOW not found (unit=' + unitId + ', project=' + projectNumber + ') -- skipping RFQ auto-approval, no fallback.');
+    return;
+  }
 
   // Assign the AWARDED contractor as the MR's work-order assignee, so the work
   // order + its emails/PDF go to the winning contractor. Previously the RFQ award
