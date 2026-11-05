@@ -34,7 +34,10 @@ const MAX_BYTES = 512 * 1024   // payload cap (defense in depth; docs go to Stor
 // Magic-link rate limits (we replace Supabase's built-in /otp throttle).
 const ML_WINDOW_MIN = 10
 const ML_EMAIL_MAX  = 3        // per email per window
-const ML_IP_MAX     = 15       // per source IP per window
+// Per source IP. Raised from 15 so a whole community behind one NAT/CGNAT
+// uplink (band office / reserve internet) isn't throttled after only a handful
+// of members request a sign-in link. Still bounded against abuse from one host.
+const ML_IP_MAX     = 40       // per source IP per window
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -356,9 +359,13 @@ serve(async (req) => {
       if (!(await portalEnabled(admin0))) return json({ error: PORTAL_CLOSED_MSG, portal_disabled: true }, 503)
       // Rate-limit BEFORE the band-number gate so prefix guessing burns the
       // same per-email/per-IP budget as link requests -- the gate can't be
-      // used as a free verification oracle. Generic success either way so we
-      // never reveal whether an address exists or that a throttle fired.
-      if (await magicLinkRateLimited(admin0, linkEmail, ip)) return json({ ok: true })
+      // used as a free verification oracle. A throttle fires regardless of
+      // whether the address exists, so answering honestly (429) does NOT reveal
+      // existence -- but it stops the UI showing a false "check your email" when
+      // nothing was sent (a legit member re-clicking, or a shared community IP).
+      if (await magicLinkRateLimited(admin0, linkEmail, ip)) {
+        return json({ error: 'Too many sign-in link requests. Please wait a few minutes and try again.' }, 429)
+      }
       // Front-door band-number gate (when the nation number is configured):
       // no sign-in link is sent unless the 10-digit registry number starts
       // with the nation's 3-digit band number. Errors never disclose the

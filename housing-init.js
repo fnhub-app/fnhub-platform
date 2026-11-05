@@ -1679,21 +1679,29 @@ async function submitAddHousingStaff() {
     // consultants get a magic link instead (via "Send Sign-in Link"), so skip
     // them; and skip when we adopted an existing auth user (password unknown).
     if(!isExternal && !alreadyInAuth && typeof sendNotification==='function'){
-      try {
-        var _portal = (window.NATION_CONFIG && NATION_CONFIG.portal_base) || location.origin;
-        var _nname  = (window.NATION_CONFIG && (NATION_CONFIG.display_name||NATION_CONFIG.short)) || 'Housing';
-        sendNotification({
-          to: email, to_name: name,
-          subject: 'Your ' + _nname + ' Housing account is ready',
-          bodyHtml: '<p>Hello ' + escapeHtml(name) + ',</p>'
-            + '<p>An account has been created for you in the ' + escapeHtml(_nname) + ' Housing app.</p>'
-            + '<p><b>Sign in:</b> <a href="' + escapeHtml(_portal) + '">' + escapeHtml(_portal) + '</a><br>'
-            + '<b>Email:</b> ' + escapeHtml(email) + '<br>'
-            + '<b>Temporary password:</b> ' + escapeHtml(defaultPassword) + '</p>'
-            + '<p>Please sign in and change your password from Settings after your first login.</p>'
-        });
+      var _portal = (window.NATION_CONFIG && NATION_CONFIG.portal_base) || location.origin;
+      var _nname  = (window.NATION_CONFIG && (NATION_CONFIG.display_name||NATION_CONFIG.short)) || 'Housing';
+      // sendNotification is async and REJECTS on failure (no provider, 403/502,
+      // etc.). It must be chained, not fired inside a synchronous try/catch
+      // (the catch can never see the rejection) — and the "sent" audit row must
+      // only be written when the send actually succeeds, so the log can't claim
+      // a welcome email was sent when it silently failed. On failure, tell the
+      // admin so they can relay the on-screen temporary password by hand.
+      sendNotification({
+        to: email, to_name: name,
+        subject: 'Your ' + _nname + ' Housing account is ready',
+        bodyHtml: '<p>Hello ' + escapeHtml(name) + ',</p>'
+          + '<p>An account has been created for you in the ' + escapeHtml(_nname) + ' Housing app.</p>'
+          + '<p><b>Sign in:</b> <a href="' + escapeHtml(_portal) + '">' + escapeHtml(_portal) + '</a><br>'
+          + '<b>Email:</b> ' + escapeHtml(email) + '<br>'
+          + '<b>Temporary password:</b> ' + escapeHtml(defaultPassword) + '</p>'
+          + '<p>Please sign in and change your password from Settings after your first login.</p>'
+      }).then(function(){
         if(typeof auditEntry==='function') auditEntry('SETTINGS','staff_welcome_email','Welcome email sent to '+email, window.currentRole||'ed');
-      } catch(_we){ console.warn('[add-staff] welcome email failed', _we); }
+      }).catch(function(_we){
+        console.warn('[add-staff] welcome email failed', _we);
+        if(typeof showToast==='function') showToast('Staff added, but the welcome email to '+email+' could not be sent ('+((_we&&_we.message)||_we)+'). Share the temporary password shown above directly.', {type:'error'});
+      });
     }
 
     // Refresh user table if visible
