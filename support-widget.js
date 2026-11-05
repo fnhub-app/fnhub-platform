@@ -349,6 +349,7 @@
       var saved = await r.json().catch(function () { return []; });
       var ticket = (saved && saved[0]) || row;
       if (src === 'staff') _supportNotify(ticket);
+      _supportForward(ticket);                             // mirror to the platform inbox (best-effort)
       _attach = [];                                        // clear attachments after a successful send
       var _tb = document.getElementById('support_thumbs'); if (_tb) _tb.innerHTML = '';
       var _fi = document.getElementById('support_files'); if (_fi) _fi.value = '';
@@ -381,6 +382,29 @@
         + '<p><small>Page: ' + _esc(ctxUrl) + '</small></p>';
       window.sendNotification({ to: to, subject: 'Support request: ' + (ticket.subject || catLabel), html: html })
         .catch(function (e) { console.warn('[support] notify failed:', e); });
+    } catch (e) { /* best-effort */ }
+  }
+
+  // Mirror the ticket to the control-plane aggregated inbox (admin panel ->
+  // Support) via the nation's `support-forward` Edge Function. Best-effort and
+  // non-blocking: the ticket is already stored on the nation, so a failed mirror
+  // costs nothing. Works for every surface (staff, member, contractor). No-op if
+  // the function isn't deployed / configured yet (it just 404s or returns ok:false).
+  function _supportForward(ticket) {
+    try {
+      if (!ticket || !ticket.id) return;
+      if (!_token()) return;
+      var sub = '';
+      try { sub = String(location.hostname || '').split('.')[0] || ''; } catch (e) {}
+      var nc = window.NATION_CONFIG || {};
+      var payload = {
+        ticketId: ticket.id,
+        subdomain: sub,
+        nationName: nc.display_name || nc.short || '',
+        attachmentCount: (ticket.attachments || []).length
+      };
+      fetch(SUPABASE_URL + '/functions/v1/support-forward', { method: 'POST', headers: _fnHeaders(), body: JSON.stringify(payload) })
+        .catch(function (e) { console.warn('[support] forward failed:', e); });
     } catch (e) { /* best-effort */ }
   }
 

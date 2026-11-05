@@ -39,6 +39,7 @@ on:
       - 'supabase/functions/enter-nation/**'
       - 'supabase/functions/gen-support-key/**'
       - 'supabase/functions/run-nation-migration/**'
+      - 'supabase/functions/platform-ticket-intake/**'
       - 'supabase/functions/_shared/**'
       - '.github/workflows/deploy-platform-functions.yml'
   workflow_dispatch:
@@ -94,4 +95,6 @@ jobs:
           supabase functions deploy gen-support-key --project-ref "$REF" --yes
           echo "──── Deploying run-nation-migration to $REF (JWT verify ON; fleet schema updates) ────"
           supabase functions deploy run-nation-migration --project-ref "$REF" --yes
+          echo "──── Deploying platform-ticket-intake to $REF (JWT verify OFF; x-inbox-secret gated) ────"
+          supabase functions deploy platform-ticket-intake --project-ref "$REF" --no-verify-jwt --yes
           echo "Platform functions deployed."

@@ -354,17 +354,21 @@
       +   tile('Est. monthly cost', _money(totCost))
       + '</div>'
       + '<div class="nic-tabs">'
-      +   tab('nations', 'Nations', true) + tab('provision', 'Provision') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
+      +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('provision', 'Provision') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
       + '</div>'
       + '<div class="nic-body">'
       +   panel('nations',   nationsCard(nations, usageBySub), true)
+      // Support renders lazily the first time its tab opens (fetches the
+      // aggregated inbox from the control plane).
+      +   panel('support',  '<div id="ps-root"><p class="sub" style="margin-top:14px;">Loading support inbox...</p></div>', false)
       // The wizard stays expanded; the three long reference guides collapse
       // into <details> cards so the tab is scannable (they had grown into one
       // very long scroll).
       +   panel('provision', provisionCard()
               + foldCard('Adding a nation — step by step', 'The full workflow across Supabase, GitHub, and Cloudflare', addNationStepsCard())
               + foldCard('Email delivery setup — Microsoft 365 (Graph) & Resend', 'Provider-side setup; day-to-day config lives in each nation\'s Email Config tab', emailSetupCard())
-              + foldCard('Support login setup — the "Enter" button', 'Per-nation signing keys for platform support sessions', supportLoginSetupCard()), false)
+              + foldCard('Support login setup — the "Enter" button', 'Per-nation signing keys for platform support sessions', supportLoginSetupCard())
+              + foldCard('Support inbox setup — Dashboard → Support', 'Mirror nations\' help requests into one aggregated worklist', supportInboxSetupCard()), false)
       +   panel('addnation', addNationCard(), false)
       +   panel('migrations', migrationsCard(nations), false)
       // Resellers renders lazily (reseller.js) the first time its tab opens.
@@ -617,6 +621,38 @@
       +   '<div>&bull; The nation\'s <b>ED is emailed</b> on every entry, via that nation\'s own email provider (skipped only if the nation hasn\'t set up email &mdash; the entry is still audited).</div>'
       +   '<div>&bull; A nation can <b>refuse</b> support login: their ED toggles <b>Settings &rarr; Admin &rarr; Config &rarr; Platform Support Access</b> off. Then Enter returns &ldquo;support login is turned off.&rdquo;</div>'
       +   '<div>&bull; Every entry is audited: <code>entered_nation</code> (control plane) + <code>support_session_started</code> (the nation\'s Audit Log). Access is a full super_user session that lapses the same day.</div>'
+      + '</div>';
+  }
+
+  // Setup reference for the aggregated Support inbox (Dashboard -> Support).
+  // Static guide -- the secret VALUE is chosen by the operator and lives only in
+  // Supabase Edge Function secrets, never here.
+  function supportInboxSetupCard(){
+    function numList(items){
+      return '<ol style="margin:8px 0 0;padding-left:20px;font-size:12px;color:var(--muted);line-height:1.6;">'
+        + items.map(function(t){ return '<li style="margin-bottom:5px;">' + t + '</li>'; }).join('')
+        + '</ol>';
+    }
+    var platFns = 'https://' + esc(_refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '&lt;platform-ref&gt;') + '.functions.supabase.co/platform-ticket-intake';
+    return '<p class="sub" style="margin:2px 0 6px;">When a staff member, community member, or contractor files a Help &amp; Support request on any nation, a <b>light copy</b> (no attachments or chat transcript) is mirrored into the control-plane <code>platform_support_tickets</code> table so you see one cross-nation worklist here under <b>Dashboard &rarr; Support</b>. Each nation\'s <code>support-forward</code> function pushes to the platform <code>platform-ticket-intake</code> function, authenticated by a <b>shared inbox secret</b>.</p>'
+      + '<div style="border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin-top:10px;">'
+      +   '<div style="font-weight:800;font-size:13px;">One-time platform setup</div>'
+      +   numList([
+              'Run <code>supabase/platform/support_inbox.sql</code> in the <b>platform</b> SQL Editor (creates <code>platform_support_tickets</code>, super-admin RLS).',
+              'Pick a strong random <b>inbox secret</b> (e.g. a 32+ char token). On the <b>platform</b> project &rarr; Edge Functions &rarr; Secrets set <code>SUPPORT_INBOX_SECRET</code> to it. (<code>platform-ticket-intake</code> deploys automatically from <code>main</code>, JWT verify OFF.)'
+            ])
+      +   '<div style="font-weight:800;font-size:13px;margin-top:12px;">Per-nation setup (once each)</div>'
+      +   numList([
+              'On the <b>nation</b> project &rarr; ' + extLink(LINKS.supaFns, 'Settings &rarr; Edge Functions &rarr; Secrets') + ' set <code>SUPPORT_INBOX_SECRET</code> to the <b>same</b> value as the platform, and <code>SUPPORT_INBOX_URL</code> to <code>' + platFns + '</code>.',
+              '<code>support-forward</code> deploys to each nation automatically on push to <code>main</code> (JWT verify ON). Nothing else to deploy by hand.'
+            ])
+      +   '<div style="font-size:12px;margin-top:8px;padding-top:8px;border-top:1px dashed var(--line);">Until a nation\'s two secrets are set, its tickets simply stay on that nation (its own Support page + landing worklist) and don\'t appear here &mdash; the widget\'s mirror call just no-ops. No data is ever lost.</div>'
+      + '</div>'
+      + '<div style="margin-top:12px;padding:11px 13px;background:var(--accent-light);border:1px solid var(--hair);border-radius:9px;font-size:12px;line-height:1.6;">'
+      +   '<div style="font-weight:800;margin-bottom:4px;">Good to know</div>'
+      +   '<div>&bull; Triage here (New &rarr; In progress &rarr; Resolved) is <b>platform-side only</b> and is never pushed back to the nation\'s own ticket.</div>'
+      +   '<div>&bull; Screenshots stay on the nation (they are not mirrored); the count is shown so you know to open the nation\'s Support page if you need them.</div>'
+      +   '<div>&bull; The mirror re-reads the ticket server-side, so only genuinely-filed tickets reach this inbox; a re-send updates content without resetting your triage state.</div>'
       + '</div>';
   }
 
@@ -1101,6 +1137,7 @@
     Array.prototype.forEach.call(document.querySelectorAll('.nic-tab'), function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
     Array.prototype.forEach.call(document.querySelectorAll('.nic-panel'), function(p){ p.classList.toggle('active', p.getAttribute('data-panel') === name); });
     if (name === 'resellers' && typeof window.renderResellers === 'function') window.renderResellers();
+    if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
   };
 
   window.saveNationConfig = async function(id){
@@ -1408,6 +1445,106 @@
     if (!r.ok || !d.public_jwk){ setMsg('cn-supportkey-msg', 'Failed: ' + (d.message || d.error || ('HTTP ' + r.status))); return; }
     await renderSupportKey(sub);
     setMsg('cn-supportkey-msg', (d.rotated ? 'Rotated' : 'Generated') + '. Copy the public key into the nation\'s SUPPORT_LOGIN_PUBKEY secret, then redeploy support-login.', 'ok');
+  };
+
+  // ---- Aggregated support inbox (Dashboard -> Support) -----------------------
+  // Reads the control-plane `platform_support_tickets` table (super-admin RLS),
+  // the mirror each nation's `support-forward` function pushes into. One cross-
+  // nation worklist with platform-side triage (new -> open -> resolved).
+  var _psTickets = [];
+  var _psFilter = 'openish';   // openish (new+open) | new | resolved | all
+  var PS_SRC = { staff:'Staff', member:'Member', contractor:'Contractor' };
+  function psPill(st){
+    var map = { 'new':'provisioning', 'open':'active', 'resolved':'suspended' };
+    var cls = map[st] || 'provisioning';
+    return '<span class="pill ' + cls + '">' + esc(st || 'new') + '</span>';
+  }
+  function psMatchesFilter(t){
+    var st = t.platform_status || 'new';
+    if (_psFilter === 'all') return true;
+    if (_psFilter === 'openish') return st === 'new' || st === 'open';
+    return st === _psFilter;
+  }
+  window.renderPlatformSupport = async function(){
+    var root = document.getElementById('ps-root'); if (!root) return;
+    root.innerHTML = '<p class="sub" style="margin-top:14px;">Loading support inbox...</p>';
+    var r = await api('GET', '/platform_support_tickets?select=*&order=received_at.desc&limit=300');
+    if (!r.ok){
+      // 404 = the table isn't created yet on the platform project.
+      var hint = (r.status === 404 || r.status === 400)
+        ? 'Run <code>supabase/platform/support_inbox.sql</code> in the platform SQL Editor to create the inbox table, then deploy <code>platform-ticket-intake</code> and set the secrets (see Provision -> Support inbox setup).'
+        : 'HTTP ' + r.status + ' reading the inbox.';
+      root.innerHTML = '<div class="card"><h3>Support</h3><p class="sub" style="margin-top:4px;">' + hint + '</p></div>';
+      return;
+    }
+    _psTickets = await r.json().catch(function(){ return []; });
+    psPaint();
+  };
+  function psPaint(){
+    var root = document.getElementById('ps-root'); if (!root) return;
+    var all = _psTickets || [];
+    var nNew = all.filter(function(t){ return (t.platform_status||'new') === 'new'; }).length;
+    var nOpen = all.filter(function(t){ return (t.platform_status||'new') === 'open'; }).length;
+    var nRes = all.filter(function(t){ return (t.platform_status||'new') === 'resolved'; }).length;
+    var rowsData = all.filter(psMatchesFilter);
+    var filt = function(k, l){ return '<option value="' + k + '"' + (_psFilter === k ? ' selected' : '') + '>' + l + '</option>'; };
+    var rows = rowsData.length ? rowsData.map(function(t){
+      var from = esc(t.reporter_name || t.reporter_email || '(unknown)');
+      var src = PS_SRC[t.source] || esc(t.source || '');
+      var st = t.platform_status || 'new';
+      var acts = '<button class="btn sm ghost" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">View</button>';
+      if (st === 'new' || st === 'open') acts += ' <button class="btn sm" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="resolved">Resolve</button>';
+      if (st === 'new') acts = '<button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Start</button> ' + acts;
+      if (st === 'resolved') acts += ' <button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Reopen</button>';
+      return '<tr>'
+        + '<td><div style="font-weight:600;">' + from + '</div><div style="font-size:11px;color:var(--muted);">' + src + (t.reporter_role ? (' &middot; ' + esc(t.reporter_role)) : '') + '</div></td>'
+        + '<td>' + esc(t.nation_name || t.subdomain || '') + '</td>'
+        + '<td>' + esc(t.category || '') + '</td>'
+        + '<td style="max-width:220px;"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(t.subject || '(no subject)') + '</div></td>'
+        + '<td style="white-space:nowrap;">' + esc(timeAgo(t.received_at)) + '</td>'
+        + '<td>' + psPill(st) + '</td>'
+        + '<td><div class="row-actions">' + acts + '</div></td>'
+        + '</tr>';
+    }).join('') : '<tr><td colspan="7" class="empty">No tickets with this filter.</td></tr>';
+    root.innerHTML =
+      '<div class="card"><h3>Support inbox'
+      +   '<button class="btn sm ghost" type="button" data-act="ps-refresh">&#8635; Refresh</button></h3>'
+      +   '<p class="sub" style="margin:2px 0 10px;">Help requests and issue reports mirrored from every nation. Triage here is platform-side only and is never pushed back to the nation.</p>'
+      +   '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">'
+      +     '<div><div style="font-size:22px;font-weight:700;">' + nNew + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">New</div></div>'
+      +     '<div><div style="font-size:22px;font-weight:700;">' + nOpen + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">In progress</div></div>'
+      +     '<div><div style="font-size:22px;font-weight:700;">' + nRes + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Resolved</div></div>'
+      +   '</div>'
+      +   '<label for="ps-filter" style="margin:0 0 5px;">Show</label>'
+      +   '<select id="ps-filter" style="max-width:260px;">' + filt('openish','Open (new + in progress)') + filt('new','New only') + filt('resolved','Resolved') + filt('all','All') + '</select>'
+      +   '<div style="overflow-x:auto;"><table><thead><tr><th>From</th><th>Nation</th><th>Category</th><th>Subject</th><th>Received</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '</div>';
+    var sel = document.getElementById('ps-filter');
+    if (sel) sel.addEventListener('change', function(){ _psFilter = sel.value || 'openish'; psPaint(); });
+  }
+  window.psView = function(id){
+    var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
+    if (!t) return;
+    var ctxUrl = (t.context && t.context.url) || '';
+    var lines = ''
+      + 'From: ' + (t.reporter_name || '(unknown)') + (t.reporter_email ? (' <' + t.reporter_email + '>') : '') + '\n'
+      + (t.reporter_phone ? ('Phone: ' + t.reporter_phone + '\n') : '')
+      + 'Nation: ' + (t.nation_name || t.subdomain || '') + '   Source: ' + (PS_SRC[t.source] || t.source || '') + (t.reporter_role ? (' (' + t.reporter_role + ')') : '') + '\n'
+      + 'Category: ' + (t.category || '') + '\n'
+      + (t.attachment_count ? (t.attachment_count + ' screenshot(s) attached - view on the nation\'s Support page.\n') : '')
+      + (ctxUrl ? ('Page: ' + ctxUrl + '\n') : '')
+      + '\n' + (t.body || '(no details)');
+    dlgAlert(lines, { title: t.subject || 'Support request' });
+  };
+  window.psSetStatus = async function(id, status){
+    var patch = { platform_status: status, updated_at: new Date().toISOString() };
+    if (status === 'resolved'){ patch.resolved_by = jwtEmail(); patch.resolved_at = new Date().toISOString(); }
+    else { patch.resolved_by = null; patch.resolved_at = null; }
+    var r = await api('PATCH', '/platform_support_tickets?id=eq.' + encodeURIComponent(id), patch, 'return=minimal');
+    if (!r.ok){ dlgAlert('Could not update the ticket (HTTP ' + r.status + ').', { title: 'Support' }); return; }
+    var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
+    if (t){ t.platform_status = status; t.resolved_by = patch.resolved_by; t.resolved_at = patch.resolved_at; }
+    psPaint();
   };
 
   function renderProvisionResults(d){
@@ -2901,6 +3038,9 @@
       case 'bill-run':      window.runNationBilling(el.getAttribute('data-sub') || ''); break;
       case 'logo-clear':    { var _lh = document.getElementById('cn-logo'); var _lp = document.getElementById('cn-logo-preview'); var _lf = document.getElementById('cn-logo-file'); if (_lh) _lh.value = ''; if (_lp) _lp.style.backgroundImage = ''; if (_lf) _lf.value = ''; break; }
       case 'inv-interest':  window.invAddInterest(el.getAttribute('data-id') || '', el.getAttribute('data-sub') || ''); break;
+      case 'ps-refresh':    window.renderPlatformSupport(); break;
+      case 'ps-view':       window.psView(id); break;
+      case 'ps-status':     window.psSetStatus(id, el.getAttribute('data-status') || ''); break;
     }
   });
 
