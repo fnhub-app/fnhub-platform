@@ -304,9 +304,28 @@
     var movLogP = tenantName
       ? _ticGet('tenant_movement_log?tenant_name=eq.' + encodeURIComponent(tenantName) + '&order=move_out_date.desc')
       : Promise.resolve([]);
+    // Notes can be split across a person's several `tenants` rows: the sync
+    // trigger mints one row per assignment, and workflow notes (move-in /
+    // inspection / SOW completion) save under the lowest-id non-merged row via
+    // sbResolveTenantId, while the card may open a DIFFERENT row (by unit, by
+    // application, or a merged-away one). Load notes for EVERY tenant row
+    // matching this person's name so none are hidden. Falls back to the single
+    // id when there's no name (a virtual/applicant card).
+    var notesP;
+    if(tenantName){
+      notesP = _ticGet(TIC_T.tenants + '?' + TIC_C.full_name + '=eq.' + encodeURIComponent(tenantName) + '&select=' + TIC_C.tenant_pk)
+        .then(function(rows){
+          var ids = _ticIsArray(rows) ? rows.map(function(r){ return r && r[TIC_C.tenant_pk]; }).filter(Boolean) : [];
+          if(tenantId && ids.indexOf(tenantId) === -1) ids.push(tenantId);
+          if(!ids.length) return [];
+          return _ticGet(TIC_T.tenant_notes + '?' + TIC_C.tenant_fk + '=in.(' + ids.join(',') + ')&select=*&order=' + TIC_C.created_at + '.desc');
+        });
+    } else {
+      notesP = _ticGet(TIC_T.tenant_notes + '?' + TIC_C.tenant_fk + '=eq.' + fk + '&select=*&order=' + TIC_C.created_at + '.desc');
+    }
     return Promise.all([
       _ticGet(TIC_T.rent_ledger  + '?' + TIC_C.tenant_fk + '=eq.' + fk + '&select=*&limit=1'),
-      _ticGet(TIC_T.tenant_notes + '?' + TIC_C.tenant_fk + '=eq.' + fk + '&select=*&order=' + TIC_C.created_at + '.desc'),
+      notesP,
       movLogP
     ]).then(function(res){
       _ticState.ledger      = _ticIsArray(res[0]) ? (res[0][0] || null) : res[0];
@@ -347,7 +366,23 @@
       // becomes a tenant.
       return appPromise.then(function(){
         if(typeof window.sbLoadAppNotes !== 'function') return;
-        return window.sbLoadAppNotes(appId).then(function(rows){
+        // Union: load notes for EVERY application belonging to this person
+        // (intake + file-update + transfer), not just the one the card resolved
+        // -- otherwise a note on an earlier application silently never shows.
+        var appIds = [appId];
+        try {
+          var _nk = (typeof window.normNameKey === 'function') ? window.normNameKey : function(s){ return String(s||'').trim().toLowerCase(); };
+          var nm = _nk((_ticState.tenant && _ticState.tenant[TIC_C.full_name]) || '');
+          var localApps = (typeof applications !== 'undefined' && applications && applications.length) ? applications : (window.SP_APPLICATIONS || []);
+          if(nm){
+            localApps.forEach(function(a){
+              if(!a || !a.id) return;
+              var an = _nk((((a.fn||'') + ' ' + (a.ln||'')).trim()) || a.applicant_name || '');
+              if(an && an === nm && appIds.indexOf(a.id) === -1) appIds.push(a.id);
+            });
+          }
+        } catch(e){}
+        return window.sbLoadAppNotes(appIds).then(function(rows){
           _ticState.applicationNotes = Array.isArray(rows) ? rows : [];
         }).catch(function(){ _ticState.applicationNotes = []; });
       });
@@ -2277,10 +2312,11 @@
 
     var merged = tenantNotes.concat(normalizedAppNotes);
     merged.sort(function(a, b){
-      var aT = a[TIC_C.created_at] || '';
-      var bT = b[TIC_C.created_at] || '';
-      if(aT === bT) return 0;
-      return aT < bT ? 1 : -1; // newest first
+      // Parse to epoch -- tenant_notes store '...Z' and app notes store
+      // '...+00:00'; a raw string compare mis-orders the two formats.
+      var aT = Date.parse(a[TIC_C.created_at] || '') || 0;
+      var bT = Date.parse(b[TIC_C.created_at] || '') || 0;
+      return bT - aT; // newest first
     });
 
     var html = '<div class="tic-section">'
