@@ -82,12 +82,15 @@ serve(async (req: Request) => {
   const filename      = safeName(body.filename);
   const contentType   = String(body.contentType ?? "").trim().toLowerCase();
   let   dataBase64     = String(body.dataBase64 ?? "");
-  const amount        = Number(String(body.amount ?? "").replace(/[^0-9.\-]/g, "")) || 0;
+  // Non-negative only: the old regex kept '-', so a contractor could submit a
+  // negative invoice that would offset the payment total if approved.
+  const amount        = Math.max(0, Number(String(body.amount ?? "").replace(/[^0-9.]/g, "")) || 0);
   const noteText      = String(body.text ?? "").trim();
   const percent       = Math.max(0, Math.min(100, Math.round(Number(body.percent))));
 
   if (!unitId || !projectNumber) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
   if (ALLOWED_KINDS.indexOf(kind) === -1) return jsonResponse({ error: "Invalid kind" }, 400);
+  if (kind === "invoice" && !(amount > 0)) return jsonResponse({ error: "Invoice amount must be greater than zero" }, 400);
   if (kind === "note") {
     if (!noteText) return jsonResponse({ error: "Empty note" }, 400);
     if (noteText.length > MAX_NOTE_LEN) return jsonResponse({ error: "Note too long" }, 413);

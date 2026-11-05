@@ -1225,6 +1225,18 @@ function saveRenoProgress() {
       }
     }
     if(touched) saveSowList(unitId, list);
+    // Free the unit when a 100% completion left no active SOWs -- mirror the
+    // Mark-Complete and Cancel paths (both revert under-renovation). Without
+    // this the unit stays stuck in the Renovations pipeline after its last
+    // request is completed from the progress form.
+    if(pct >= 100){
+      var _pu = (typeof getAllUnits === 'function' ? getAllUnits() : (window.housingUnits || [])).find(function(x){ return x && x.id === unitId; });
+      if(_pu && typeof hasActiveSows === 'function' && !hasActiveSows(unitId)
+         && typeof revertUnitFromRepair === 'function' && revertUnitFromRepair(_pu)
+         && typeof saveUnitWithDraftFallback === 'function'){
+        saveUnitWithDraftFallback(_pu);
+      }
+    }
   })();
 
   closeRenoProgress();
@@ -1963,8 +1975,12 @@ window._raSetView = function(v){
 
 function raQuickApprove(unitId, approver, projectNumber) {
   // Defense-in-depth: re-check the approval authority here so a stale or
-  // mutated DOM cannot bypass the row-level gate.
-  var _qaRole = window.currentRole || 'staff';
+  // mutated DOM cannot bypass the row-level gate. Use the REAL role, not the
+  // effective (view-as) role -- approving acts as the real ED, so an ED who left
+  // "View as -> Housing Manager" active must still be able to ED-approve, and
+  // the sign-off must be attributed to them (every other SOW-approval path keys
+  // off _realRole for the same reason).
+  var _qaRole = window._realRole || window.currentRole || 'staff';
   var _needAuthority = approver === 'ed' ? 'approveSowOverThreshold' : 'approveSowUnderThreshold';
   if(!APPROVAL_AUTHORITY.can(_needAuthority, _qaRole)){
     showToast('You do not have authority to approve this Maintenance Request.', {type:'info'});
@@ -1973,7 +1989,7 @@ function raQuickApprove(unitId, approver, projectNumber) {
   var units = getAllUnits().slice();
   var idx=units.findIndex(function(u){return u.id===unitId;});
   if(idx<0){showToast('Unit not found', {type:'error'});return;}
-  var u=units[idx]; var role=window.currentRole||'staff'; var today=new Date().toISOString().split('T')[0];
+  var u=units[idx]; var role=window._realRole||window.currentRole||'staff'; var today=new Date().toISOString().split('T')[0];
   var addr=u.num+' '+u.street;
   var label=CLFN_PERMS.roleLabel(approver==='hm' ? ROLE.HOUSING_MANAGER : ROLE.ED);
   var projLabel = projectNumber ? ' ('+projectNumber+')' : '';
@@ -2000,10 +2016,11 @@ function raQuickApprove(unitId, approver, projectNumber) {
     // New per-SOW approval: update the specific SOW's approval_status so multi-SOW approvals track independently.
     if(projectNumber && typeof saveSowList === 'function'){
       var list = getUnitSowList(unitId);
-      var touched = false;
+      var touched = false; var _approvedSow = null; var _prevStatus = '';
       for(var i=0; i<list.length; i++){
         if(list[i].project_number !== projectNumber) continue;
         if(list[i].approval_status === 'completed') break;  // don't overwrite completed
+        _prevStatus = list[i].approval_status || '';
         if(approver === 'hm'){
           list[i].approval_status = 'hm_approved';
           list[i].hmName = role; list[i].hmDate = today;
@@ -2011,10 +2028,23 @@ function raQuickApprove(unitId, approver, projectNumber) {
           list[i].approval_status = 'ed_approved';
           list[i].edName = role; list[i].edDate = today;
         }
+        _approvedSow = list[i];
         touched = true;
         break;
       }
-      if(touched) saveSowList(unitId, list);
+      if(touched){
+        saveSowList(unitId, list);
+        // Flip the unit to Under Renovations on the approval transition, same as
+        // saveSOW / _wlApproveSow -- otherwise a request first approved from this
+        // quick-approve button never surfaces in the under-repair list.
+        try {
+          if(_approvedSow && typeof maybeAutoFlipUnitForSow === 'function'
+             && maybeAutoFlipUnitForSow(u, _approvedSow, _prevStatus)
+             && typeof saveUnitWithDraftFallback === 'function'){
+            saveUnitWithDraftFallback(u);
+          }
+        } catch(e){ console.warn('[raQuickApprove] unit flip threw:', e); }
+      }
     }
 
     showToast('✓ '+addr+projLabel+' Maintenance Request approved', {type:'info'});
