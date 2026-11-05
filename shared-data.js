@@ -1072,12 +1072,19 @@ async function sbLoadMyRecentActivity(limit) {
 // Append-only internal staff notes on a housing application. DB enforces
 // no-update / no-delete (RLS + trigger). Returns newest-first.
 async function sbLoadAppNotes(appId) {
-  if (!appId) return [];
+  // Accept a single id OR an array of ids -- a person can have several
+  // applications (intake / file update / transfer) and notes on any of them
+  // should surface together, so callers pass the whole set.
+  var ids = Array.isArray(appId) ? appId.filter(Boolean) : (appId ? [appId] : []);
+  if (!ids.length) return [];
   try {
+    var filter = ids.length === 1
+      ? 'app_id=eq.' + encodeURIComponent(ids[0])
+      : 'app_id=in.(' + ids.map(encodeURIComponent).join(',') + ')';
     var r = await fetch(
       SUPABASE_URL + '/rest/v1/housing_application_notes'
-        + '?select=*&app_id=eq.' + encodeURIComponent(appId)
-        + '&order=created_at.desc&limit=500',
+        + '?select=*&' + filter
+        + '&order=created_at.desc&limit=2000',
       { headers: HOUSING_HEADERS }
     );
     if (!r.ok) { console.warn('[SB] load app notes failed:', r.status); return []; }
@@ -2556,7 +2563,7 @@ function _cwoDetailFromSow(sow, unit){
     documents:        docs,
     // Notes the contractor has posted on this work order (newest last). Capped
     // so the projection row stays small; written by the contractor-upload fn.
-    contractorNotes:  Array.isArray(sow.contractorNotes) ? sow.contractorNotes.slice(-20) : [],
+    contractorNotes:  Array.isArray(sow.contractorNotes) ? sow.contractorNotes.slice(-200) : [],   // was -20: hid older notes in the portal/preview while the SOW Overview showed all
     // Work-progress % (0-100). Mirrors sow.progress.percent so the contractor
     // sees it in the portal; the contractor can update it (contractor-upload
     // kind=progress), which writes back to sow.progress AND this projection.

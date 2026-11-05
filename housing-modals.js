@@ -3554,6 +3554,16 @@ function confirmApprovalAction() {
     'Status changed from ' + oldStatus + ' to ' + action + (notes ? ' — ' + notes : ''),
     window.currentRole || 'staff');
 
+  // Also record the reviewer's decision note in the application notes list, so
+  // it shows on the Internal Notes tab AND the Tenant card. Previously the note
+  // lived only on the signature block + audit log and never appeared as a file
+  // note -- a reviewer typing an explanation (incl. a mandatory decline reason)
+  // would find it "missing" from the notes panel.
+  if (notes && typeof sbAddAppNote === 'function') {
+    var _actLbl = ({ mgr_approved:'Recommended', hm_approved:'Approved', ed_approved:'Approved (ED)', declined:'Declined', returned:'Returned for info', submitted:'Returned to queue' })[action] || action;
+    try { Promise.resolve(sbAddAppNote(app.id, '[' + _actLbl + '] ' + notes)).catch(function(e){ console.warn('[approval] note write failed', e); }); } catch(e){ console.warn('[approval] note write threw', e); }
+  }
+
   // Update scorecard display
   window._currentScorecardApp = applications[idx];
 
