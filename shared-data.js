@@ -3548,6 +3548,20 @@ async function _wlViewContractorSub(id){
 }
 window._wlViewContractorSub = _wlViewContractorSub;
 
+// Open the maintenance request (SOW) a submission is filed against, so staff can
+// see the full scope / Payments tab before approving an invoice. Opens the SOW
+// modal in place when it's loaded (housing.html landing page); otherwise deep-
+// links to the unit's inventory card (which auto-opens the Maintenance Requests tab).
+function _wlOpenContractorSubSow(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s){ return; }
+  var unitId = s.unit_id, pn = s.sow_project_number;
+  if(!unitId){ if(typeof showToast==='function') showToast('No linked work order on this submission.', {type:'error'}); return; }
+  if(typeof openSowModal === 'function'){ try { openSowModal(unitId, pn); return; } catch(e){ console.warn('[contractor-sub] openSowModal failed:', e); } }
+  window.location.href = 'inventory.html?unit=' + encodeURIComponent(unitId);
+}
+window._wlOpenContractorSubSow = _wlOpenContractorSubSow;
+
 // Parse the photo_path column (JSON array of Storage paths; tolerates a bare
 // single path string from any older row) into an array of paths.
 function _tenantMrPhotoPaths(s){
@@ -8306,15 +8320,24 @@ function renderWorklist() {
       var who = s.address || s.unit_id || '';
       var pillTxt = isInvoice ? 'PENDING' : 'NEW';
       var pillColor = isInvoice ? 'var(--warn-amber-text)' : 'var(--muted)';
-      // Two actions per row: approve/reject (invoice) or view/mark-read (flag).
-      var btnA, btnB;
+      // "Open" affordances so staff can review before deciding: the linked SOW
+      // (maintenance request) via card/row tap, and the submitted file itself.
+      var openSowFn  = s.unit_id   ? ('_wlOpenContractorSubSow(\'' + idJs + '\')') : '';
+      var viewFileFn = s.file_path ? ('_wlViewContractorSub(\'' + idJs + '\')') : '';
+      // Actions: approve/reject (invoice) or view/mark-read (flag), plus an
+      // explicit "open the document" action for invoices with a file on them.
+      var acts = [];
       if (isInvoice) {
-        btnA = { t:'✓ Approve', fn:'_wlApproveContractorInvoice(\'' + idJs + '\')', primary:true };
-        btnB = { t:'Reject',    fn:'_wlRejectContractorInvoice(\'' + idJs + '\')', primary:false };
+        acts.push({ t:'✓ Approve', fn:'_wlApproveContractorInvoice(\'' + idJs + '\')', primary:true });
+        acts.push({ t:'Reject',    fn:'_wlRejectContractorInvoice(\'' + idJs + '\')', primary:false });
+        if (viewFileFn) acts.push({ t:'📄 Invoice', fn: viewFileFn, primary:false });
       } else {
-        btnA = { t:'View',      fn:'_wlViewContractorSub(\'' + idJs + '\')', primary:true };
-        btnB = { t:'Mark read', fn:'_wlMarkContractorSubRead(\'' + idJs + '\')', primary:false };
+        acts.push({ t:'View',      fn:'_wlViewContractorSub(\'' + idJs + '\')', primary:true });
+        acts.push({ t:'Mark read', fn:'_wlMarkContractorSubRead(\'' + idJs + '\')', primary:false });
       }
+      // Card/row tap opens the maintenance request when one is linked; else the
+      // first action. (Previously an invoice card tap fired Approve — unsafe.)
+      var openTap = openSowFn || (acts[0] && acts[0].fn) || '';
       function btnHtml(b){
         var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
         var col = b.primary ? 'var(--dark)' : 'var(--text)';
@@ -8325,13 +8348,16 @@ function renderWorklist() {
                + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who) + '</span>'
                + '<span style="font-size:11px;color:var(--muted);width:150px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(kindLbl + (subtitle ? ' · ' + subtitle : '')) + '</span>'
                + '<span style="font-size:10px;font-weight:800;color:' + pillColor + ';width:66px;flex-shrink:0;">' + pillTxt + '</span>';
+      var infoWrap = openSowFn
+        ? '<div onclick="' + openSowFn + '" title="Open the maintenance request" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">' + info + '</div>'
+        : '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + info + '</div>';
       csRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);">'
-        + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + info + '</div>'
-        + btnHtml(btnA) + btnHtml(btnB)
+        + infoWrap
+        + acts.map(btnHtml).join('')
         + '</div>';
-      csCards += wlCard({ title: who, pill:{ text: pillTxt, color: pillColor }, open: btnA.fn,
+      csCards += wlCard({ title: who, pill:{ text: pillTxt, color: pillColor }, open: openTap,
         metas:[{k:'Type',v:kindLbl},{k:(isInvoice?'Amount':'Detail'),v:(subtitle ? String(subtitle).slice(0,60) : '—')},{k:'Project',v:s.sow_project_number||''}],
-        actions:[{text:btnA.t,onclick:btnA.fn},{text:btnB.t,ghost:true,onclick:btnB.fn}] });
+        actions: acts.map(function(a){ return { text:a.t, ghost:!a.primary, onclick:a.fn }; }) });
     });
     html += sectionWrap('🛠️', 'Contractor Submissions', ctSubItems.length, '', _view === 'cards' ? wlGrid(csCards) : csRows, 0);
   }
