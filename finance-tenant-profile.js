@@ -265,7 +265,16 @@ function renderTenantProfile(tid) {
     var notesEl = s1.appendChild(document.createElement('div'));
     notesEl.className = 'ibox yellow';
     notesEl.style.marginTop = '4px';
-    notesEl.textContent = '\uD83D\uDCDD ' + t.notes;
+    // Label this as the finance-side note and point to the one canonical home
+    // for the person's full notes history (Notes UX audit - Batch 4, unify).
+    var _nlbl = notesEl.appendChild(document.createElement('div'));
+    _nlbl.style.cssText = 'font-size:11px;font-weight:700;color:var(--muted);margin-bottom:3px;';
+    _nlbl.textContent = 'Finance note';
+    var _nbody = notesEl.appendChild(document.createElement('div'));
+    _nbody.textContent = '\uD83D\uDCDD ' + t.notes;
+    var _nptr = notesEl.appendChild(document.createElement('div'));
+    _nptr.style.cssText = 'font-size:11px;color:var(--muted);margin-top:5px;';
+    _nptr.textContent = 'Full notes history for this person is on their Tenant Card (Housing).';
   }
 
   // \u2500\u2500 SECTION 3: Detail tabs (Transaction History + Documents) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
@@ -929,11 +938,18 @@ function buildLedgerTable(entries, type) {
     var isReversed = (typeof finIsVoided === 'function') ? finIsVoided(e) : (e.status === 'reversed');
     var desc = e.desc || e.memo || e.notes || '\u2014';
     var eid  = e.id;
+    // First-class payment note: a staff note was previously SWALLOWED whenever a
+    // system desc/memo existed (it was only the fallback). Show it as its own
+    // sub-line so a cheque number / "partial - balance next month" is never hidden.
+    // (Notes UX audit - Batch 4.)
+    var _noteExtra = (e.notes && String(e.notes).trim() && String(e.notes).trim() !== String(desc).trim()) ? String(e.notes).trim() : '';
+    var _escFn = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
 
     var descCell = isReversed
       ? '<span style="text-decoration:line-through;color:var(--muted);">' + desc + '</span>'
       : '<a href="#" style="color:var(--text);text-decoration:underline;text-underline-offset:2px;" ' +
           'onclick="event.preventDefault();openEntryVoucher(\'' + eid + '\')">' + desc + '</a>';
+    if (_noteExtra) descCell += '<div style="font-size:11px;color:var(--muted);margin-top:2px;">\ud83d\udcdd ' + _escFn(_noteExtra) + '</div>';
 
     var actions = !isReversed
       ? '<button class="btn btn-ghost btn-sm" style="font-size:10px;padding:2px 6px;" ' +
