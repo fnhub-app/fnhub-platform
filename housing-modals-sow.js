@@ -372,6 +372,7 @@ function _buildSowModalHTML() {
             '</div>' +
             '<div class="f"><label>Accountability Notes</label>' +
               '<textarea id="sow_accountability_notes" rows="2" placeholder="Details on tenant responsibility, incident dates, report numbers…"></textarea>' +
+              '<span style="display:block;font-size:11px;color:var(--muted);margin-top:4px;">Saved with this maintenance request.</span>' +
             '</div>' +
           '</div>' +
         '</div>' +
@@ -382,6 +383,7 @@ function _buildSowModalHTML() {
             '<div class="tic-section-h">Additional Notes</div>' +
             '<div class="f"><label>Special Instructions / Access Requirements</label>' +
               '<textarea id="sow_notes" rows="3" placeholder="Any additional context, access requirements, tenant considerations…"></textarea>' +
+              '<span style="display:block;font-size:11px;color:var(--muted);margin-top:4px;">Saved with this maintenance request.</span>' +
             '</div>' +
           '</div>' +
           // Notes the assigned contractor posted via the Contractor Portal.
@@ -502,7 +504,8 @@ function _buildSowModalHTML() {
           '<div class="tic-section">' +
             '<div class="tic-section-h">Field Employee Notes</div>' +
             '<div class="f"><label>Notes from the field</label>' +
-              '<textarea id="sow_wo_field_notes" rows="3" placeholder="Observations, issues found, follow-up needed…"></textarea></div>' +
+              '<textarea id="sow_wo_field_notes" rows="3" placeholder="Observations, issues found, follow-up needed…"></textarea>' +
+              '<span style="display:block;font-size:11px;color:var(--muted);margin-top:4px;">Saved with this maintenance request&rsquo;s work order.</span></div>' +
           '</div>' +
           '<div class="tic-section">' +
             '<div id="sow_wo_meta" class="txt-muted-xs"></div>' +
