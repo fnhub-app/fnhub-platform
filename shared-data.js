@@ -3562,6 +3562,56 @@ async function _wlMarkContractorSubRead(id){
 }
 window._wlMarkContractorSubRead = _wlMarkContractorSubRead;
 
+// Mark a whole film-strip batch of contractor photos read in one action (the
+// "Mark all read" button on a grouped photo row). Resolves each submission
+// sequentially, then re-renders the worklist once.
+async function _wlMarkContractorPhotosRead(idsCsv){
+  var ids = String(idsCsv||'').split(',').map(function(x){ return x.trim(); }).filter(Boolean);
+  if(!ids.length) return;
+  var ok = true;
+  if(typeof showConfirm === 'function'){
+    ok = await showConfirm({ title: 'Mark ' + ids.length + ' photos as read?', message: 'They stay filed on the unit’s Documents — this just clears them from your worklist.', confirmText: 'Mark all read' });
+  }
+  if(!ok) return;
+  var done = 0, failed = 0;
+  for(var i=0;i<ids.length;i++){
+    try { await _sbResolveContractorSub(ids[i], 'read'); done++; }
+    catch(e){ failed++; }
+  }
+  if(typeof showToast==='function') showToast(failed ? (done + ' marked read, ' + failed + ' failed.') : ('✓ ' + done + ' photos marked read.'), { type: failed ? 'error' : 'info' });
+  renderWorklist();
+}
+window._wlMarkContractorPhotosRead = _wlMarkContractorPhotosRead;
+
+// Lazy-load the signed-URL thumbnails for any contractor photo film strips in
+// the worklist (the HTML renders placeholders; signed URLs are async). Cached
+// per path for the session (URLs are valid 24h) so re-renders don't re-fetch.
+// A small worker pool keeps it from bursting the Storage sign endpoint.
+async function _wlHydrateContractorThumbs(){
+  if(typeof sbGetSignedUrl !== 'function') return;
+  var els = Array.prototype.slice.call(document.querySelectorAll('.wl-ctthumb[data-ctthumb-path]:not([data-ctthumb-done])'));
+  if(!els.length) return;
+  window._wlThumbCache = window._wlThumbCache || {};
+  var i = 0;
+  async function worker(){
+    while(i < els.length){
+      var el = els[i++];
+      var path = el.getAttribute('data-ctthumb-path');
+      el.setAttribute('data-ctthumb-done','1');
+      if(!path) continue;
+      try {
+        var url = window._wlThumbCache[path];
+        if(!url){ url = await sbGetSignedUrl(path); if(url) window._wlThumbCache[path] = url; }
+        if(url) el.style.backgroundImage = "url('" + String(url).replace(/'/g, '%27') + "')";
+      } catch(e){ /* leave the placeholder tile */ }
+    }
+  }
+  var pool = [];
+  for(var k=0;k<4;k++) pool.push(worker());
+  try { await Promise.all(pool); } catch(e){ /* non-fatal */ }
+}
+window._wlHydrateContractorThumbs = _wlHydrateContractorThumbs;
+
 // View a flagged submission: open the file (photo/invoice) via a signed URL, or
 // show the note text. Does NOT mark it read — staff do that explicitly.
 async function _wlViewContractorSub(id){
@@ -8257,6 +8307,7 @@ function renderWorklist() {
       +   (badges ? '<div style="margin-top:4px;">' + badges + '</div>' : '')
       +   metas
       + '</div>'
+      + (o.bodyHtml || '')
       + (actions ? '<div style="display:flex;gap:6px;margin-top:10px;">' + actions + '</div>' : '')
       + '</div>';
   }
@@ -8343,12 +8394,65 @@ function renderWorklist() {
     var _csKindLbl = { invoice:'Invoice', photo:'Photo', note:'Note', wsib:'WSIB proof', insurance:'Insurance proof' };
     var _csKindIcon = { invoice:'🧾', note:'📝', photo:'📷', wsib:'🛡️', insurance:'🛡️' };
     var csRows = '', csCards = '';
-    // Pending invoices first (they need a decision), then flagged photos/notes.
-    ctSubItems.slice().sort(function(a,b){
+    function csBtnHtml(b){
+      var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
+      var col = b.primary ? 'var(--dark)' : 'var(--text)';
+      var bd = b.primary ? 'none' : '1px solid var(--border)';
+      return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
+    }
+    // Collapse a contractor's PHOTO uploads for the SAME property + work order
+    // into one "film strip" row, so a batch of site photos doesn't flood the
+    // queue with one row each, and staff can clear them all with a single
+    // "Mark all read". Invoices (each needs its own approve/reject) and notes
+    // stay individual; a group of ONE photo renders as a normal single row.
+    var _csPhotoGroups = {};
+    var _csRenderList = [];
+    ctSubItems.forEach(function(s){
+      if (s.kind === 'photo' && s.file_path) {
+        var gk = String(s.unit_id||'') + '|' + String(s.sow_project_number||'') + '|' + String(s.contractor_id||'');
+        var g = _csPhotoGroups[gk];
+        if (!g) { g = { _photoGroup:true, kind:'photo', items:[], unit_id:s.unit_id, address:s.address, sow_project_number:s.sow_project_number, created_at:s.created_at }; _csPhotoGroups[gk] = g; _csRenderList.push(g); }
+        g.items.push(s);
+        if (String(s.created_at||'') > String(g.created_at||'')) g.created_at = s.created_at;
+      } else {
+        _csRenderList.push(s);
+      }
+    });
+    // Pending invoices first (they need a decision), then newest-first.
+    _csRenderList.sort(function(a,b){
       var ap = (a.kind==='invoice')?0:1, bp = (b.kind==='invoice')?0:1;
       if(ap!==bp) return ap-bp;
       return String(b.created_at||'').localeCompare(String(a.created_at||''));
     }).forEach(function(s){
+      // ── Multi-photo group -> film strip + a single "Mark all read" ────────
+      if (s._photoGroup && s.items.length > 1) {
+        var gWho = s.address || s.unit_id || '';
+        var gN = s.items.length;
+        var gIdsJs = esc(s.items.map(function(x){ return x.id; }).join(',')).replace(/'/g, "\\'");
+        var openSowG = s.unit_id ? ('_wlOpenContractorSubSow(\'' + esc(s.items[0].id).replace(/'/g,"\\'") + '\')') : '';
+        // Thumbnails hydrate after render (signed URLs are async) — each tile
+        // carries its storage path + opens the full photo on click.
+        var strip = s.items.map(function(x){
+          return '<div class="wl-ctthumb" data-ctthumb-path="' + esc(x.file_path) + '" onclick="_wlViewContractorSub(\'' + esc(x.id).replace(/'/g,"\\'") + '\')" title="' + esc(x.file_name||'photo') + '" style="height:58px;width:58px;flex-shrink:0;border-radius:6px;border:1px solid var(--border);background:var(--bg) center center/cover no-repeat;cursor:pointer;"></div>';
+        }).join('');
+        var gHead = '<span style="font-size:14px;flex-shrink:0;">📷</span>'
+          + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(gWho) + '</span>'
+          + '<span style="font-size:11px;color:var(--muted);flex-shrink:0;">' + gN + ' photos</span>'
+          + '<span style="font-size:10px;font-weight:800;color:var(--muted);width:50px;flex-shrink:0;text-align:right;">NEW</span>';
+        var gHeadWrap = openSowG
+          ? '<div onclick="' + openSowG + '" title="Open the maintenance request" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">' + gHead + '</div>'
+          : '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + gHead + '</div>';
+        csRows += '<div style="display:flex;flex-direction:column;gap:7px;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface);">'
+          + '<div style="display:flex;align-items:center;gap:8px;">' + gHeadWrap + csBtnHtml({ t:'✓ Mark all read', fn:'_wlMarkContractorPhotosRead(\'' + gIdsJs + '\')', primary:true }) + '</div>'
+          + '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;">' + strip + '</div>'
+          + '</div>';
+        csCards += wlCard({ title: gWho, pill:{ text:(gN + ' photos'), color:'var(--muted)' }, open: openSowG,
+          metas:[{k:'Type',v:'Photos'},{k:'Project',v:s.sow_project_number||''}],
+          bodyHtml:'<div style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 2px;">' + strip + '</div>',
+          actions:[{text:'✓ Mark all read', onclick:'_wlMarkContractorPhotosRead(\'' + gIdsJs + '\')'}] });
+        return;
+      }
+      if (s._photoGroup) s = s.items[0];   // unwrap a single-photo group to a normal row
       var idJs = esc(s.id).replace(/'/g, "\\'");
       var isInvoice = (s.kind === 'invoice');
       var kindLbl = _csKindLbl[s.kind] || 'Submission';
@@ -8738,6 +8842,9 @@ function renderWorklist() {
   }
 
   body.innerHTML = html;
+  // Film-strip thumbnails for grouped contractor photos load their signed URLs
+  // after the HTML is in the DOM (idempotent; skips already-hydrated tiles).
+  if (typeof _wlHydrateContractorThumbs === 'function') { try { _wlHydrateContractorThumbs(); } catch(e){ /* non-fatal */ } }
 }
 
 function resetRenoScoreModel() {
