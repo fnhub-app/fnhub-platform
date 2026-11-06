@@ -2327,6 +2327,7 @@
              +   '</div>'
              + '</div>';
     html += '<div class="tic-section tic-section-spaced"><div class="tic-section-h">Notes &amp; History</div>';
+    html += '<div style="font-size:11px;color:var(--muted);margin:-4px 0 8px;">Every note about this person in one place &mdash; staff file notes, application/intake notes, and workflow notes (move-in, inspections, work-order completion).</div>';
     html += '<div id="tic_notes_list">';
     if(tenantNotesErrored && !merged.length){
       html += '<div class="tic-error-inline">Unable to load notes.</div>';
