@@ -233,6 +233,8 @@ declare var _appStampSaved: any;
 declare var _appSubmissions: any;
 declare var _contractorSubmissions: any;
 declare var _wlThumbCache: any;
+declare var _appNoteCounts: any;
+declare var _ctNoteCounts: any;
 declare var _supportTickets: any;
 declare var _userTableLaSeq: any;
 declare var _arrearsCache: any;
