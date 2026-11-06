@@ -1076,6 +1076,22 @@
       <div id="sc_ed_content"></div>
     </div>
 
+    <!-- Internal Notes — the application's staff notes (housing_application_notes)
+         plus the HM/ED sign-off notes, shown AT the decision point so an approver
+         doesn't have to open the editor or the Tenant Card to read the file's
+         notes. Quick-add writes to the same append-only log. (Notes UX - Batch 1) -->
+    <div id="sc_notes_section">
+      <div class="sc-docs-hdr">
+        <div class="sc-docs-title">&#128221; Internal Notes</div>
+        <div class="sc-docs-actions"><span id="sc_notes_count" class="txt-sm-muted"></span></div>
+      </div>
+      <div style="display:flex;gap:8px;margin:8px 0;align-items:flex-start;">
+        <textarea id="sc_note_input" rows="2" placeholder="Add an internal note — saved to the application file and shown in the Tenant Card..." style="flex:1;min-height:44px;border:1px solid var(--border);border-radius:6px;padding:8px;font-family:inherit;font-size:13px;background:var(--surface);color:var(--text);resize:vertical;"></textarea>
+        <button id="sc_note_add_btn" class="btn btn-ghost" style="flex-shrink:0;" onclick="if(typeof scAddNote==='function')scAddNote();">Add note</button>
+      </div>
+      <div id="sc_notes_mount"></div>
+    </div>
+
     <!-- Application Documents — rendered by DocLibrary factory.
          The "Assign Files" flow stays outside the factory because it
          operates on a cross-app shared folder (applications/APP-/)
