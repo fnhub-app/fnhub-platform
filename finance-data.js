@@ -365,6 +365,7 @@ function _loanPaymentToRow(p){
     interest_paid: 0,
     method: p.method || null,
     reference: p.ref || null,
+    notes: p.notes || null,     // requires the finance_loan_payments.notes column (migration)
     voids_id: p.voidsId || null,
     void_reason: p.voidReason || null,
     created_by: p.createdBy || _ACTOR()
@@ -375,7 +376,7 @@ function _loanPaymentFromRow(r){
     id: r.id, loanId: r.loan_id, tenantId: '',  // tenantId derived via loan lookup at render
     date: r.payment_date,
     amount: Number(r.principal_paid||0) + Number(r.interest_paid||0),
-    method: r.method || '', notes: '',
+    method: r.method || '', notes: r.notes || '',   // was hardcoded '' -- dropped the note on every reload
     voidsId: r.voids_id, voidReason: r.void_reason, createdBy: r.created_by
   };
 }
@@ -421,6 +422,7 @@ function _arrPaymentToRow(p){
     amount: Number(p.amount||0),
     method: p.method || null,
     reference: p.ref || null,
+    notes: p.notes || null,     // requires the finance_arr_payments.notes column (migration)
     voids_id: p.voidsId || null,
     void_reason: p.voidReason || null,
     created_by: p.createdBy || _ACTOR()
@@ -433,7 +435,7 @@ function _arrPaymentFromRow(r){
     tenantId: '',    // derived via arrangement lookup at render
     date: r.payment_date, amount: Number(r.amount||0),
     method: r.method || '', type: 'regular',
-    ref: r.reference || '', notes: '',
+    ref: r.reference || '', notes: r.notes || '',   // was hardcoded '' -- dropped the note on every reload
     voidsId: r.voids_id, voidReason: r.void_reason, createdBy: r.created_by
   };
 }
@@ -456,7 +458,6 @@ function _collectionToRow(c){
   else if (c.status === 'approved' || c.status === 'pending-ed' || !c.status) stage = (_COLLECTION_STAGES.indexOf(c.stage) >= 0) ? c.stage : 'flagged';
   else stage = (_COLLECTION_STAGES.indexOf(c.stage) >= 0) ? c.stage : 'flagged';
   var notes = c.notes || '';
-  if (c.agency) notes = 'Agency: ' + c.agency + (notes ? '\n' + notes : '');
   return {
     id: c.id, nation_id: _NATION(),
     tenant_id: c._rawTenantId || c.tenantId,  // preserve DB pointer across a person-merge
@@ -465,6 +466,7 @@ function _collectionToRow(c){
     stage: stage,
     amount_at_open: Number(c.amountAtOpen || c.amountAtReferral || c.amount || 0),
     amount_current: c.amountCurrent != null ? Number(c.amountCurrent) : null,
+    agency: c.agency || null,   // dedicated column (migration); no longer packed into notes
     notes: notes || null,
     archived: !!c.archived,
     created_by: c.createdBy || _ACTOR(),
@@ -473,9 +475,17 @@ function _collectionToRow(c){
 }
 function _collectionFromRow(r){
   var rawNotes = r.notes || '';
-  var agency = '';
-  var m = /^Agency: ([^\n]*)\n?/.exec(rawNotes);
-  if (m) { agency = m[1]; rawNotes = rawNotes.slice(m[0].length); }
+  var agency;
+  if (Object.prototype.hasOwnProperty.call(r, 'agency')) {
+    // Dedicated column present (migration applied) -- trust it and NEVER strip,
+    // so a user note that merely starts with "Agency: " is no longer eaten.
+    agency = r.agency || '';
+  } else {
+    // Legacy pre-migration rows packed the agency as a synthetic first line.
+    agency = '';
+    var m = /^Agency: ([^\n]*)\n?/.exec(rawNotes);
+    if (m) { agency = m[1]; rawNotes = rawNotes.slice(m[0].length); }
+  }
   var terminal = (r.stage === 'resolved' || r.stage === 'closed' || r.stage === 'written_off');
   var amt = Number(r.amount_at_open||0);
   return {
