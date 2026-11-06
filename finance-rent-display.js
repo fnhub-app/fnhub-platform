@@ -636,6 +636,12 @@ function renderLoanDetail(ln, d, t){
         (!isPending ? '<button class="btn btn-ghost btn-sm" onclick="editLoanNextPayDate(\''+ln.id+'\')">&#128197; Set Next Payment Date</button>' : '')+
       '</div>'+
 
+      // HM verification note -- a permanent home for it. Previously ln.hmNotes
+      // showed ONLY in the transient "Pending ED" banner and vanished once the
+      // loan was approved; now it stays visible on the loan card. Skipped while
+      // pending-ED (the banner above already shows it). (Notes UX audit - Batch 2)
+      ((ln.hmNotes && String(ln.hmNotes).trim() && !isPendingED) ? '<div class="ibox" style="margin-bottom:14px;font-size:12px;"><strong>HM note:</strong> ' + escapeHtml(ln.hmNotes) + '</div>' : '')+
+
       // Next payment date banner (approved loans only)
       (!isPending ? '<div style="background:var(--dark2);border-radius:8px;padding:10px 16px;margin-bottom:14px;display:flex;align-items:center;justify-content:space-between;">'+
         '<div style="font-size:12px;color:var(--gray);">Next Payment Due</div>'+

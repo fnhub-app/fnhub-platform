@@ -3083,6 +3083,33 @@ function _ctRenderFlow(status, ct, prefix) {
   } else if(returned) {
     flow.innerHTML += '<div style="margin-left:12px;padding:4px 10px;background:var(--info-blue-bg);border-radius:6px;font-size:10px;font-weight:700;color:var(--info-blue);">Returned'+(ct.returnedAt?' '+ct.returnedAt.slice(0,10):'')+'</div>';
   }
+
+  // Approval DECISION NOTES — hmNotes / edNotes / returnedNotes / declinedReason
+  // were written on every HM-recommend / ED-approve / return / decline but
+  // displayed NOWHERE (the stepper above shows dates only). Render them in an
+  // idempotent sibling block below the stepper so the reasons aren't lost.
+  // (Notes UX audit -- Batch 2.)
+  var _ctnId = prefix + '_flow_notes';
+  var notesEl = document.getElementById(_ctnId);
+  if(!notesEl && flow.parentNode){
+    notesEl = document.createElement('div');
+    notesEl.id = _ctnId;
+    flow.parentNode.insertBefore(notesEl, flow.nextSibling);
+  }
+  if(notesEl){
+    var escC = (typeof escapeHtml==='function') ? escapeHtml : function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+    var ctApprNotes = [];
+    if(ct.returnedNotes && String(ct.returnedNotes).trim()) ctApprNotes.push({lbl:'Returned'+(ct.returnedBy?' by '+ct.returnedBy:''), body:ct.returnedNotes});
+    if(ct.declinedReason && String(ct.declinedReason).trim()) ctApprNotes.push({lbl:'Declined'+(ct.declinedBy?' by '+ct.declinedBy:''), body:ct.declinedReason});
+    if(ct.edNotes && String(ct.edNotes).trim()) ctApprNotes.push({lbl:'Final approval note'+(ct.edActionBy?' ('+ct.edActionBy+')':''), body:ct.edNotes});
+    if(ct.hmNotes && String(ct.hmNotes).trim()) ctApprNotes.push({lbl:'HM verification note'+(ct.hmActionBy?' ('+ct.hmActionBy+')':''), body:ct.hmNotes});
+    notesEl.style.marginTop = ctApprNotes.length ? '12px' : '0';
+    notesEl.innerHTML = ctApprNotes.map(function(n){
+      return '<div style="border-left:3px solid var(--yellow);background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:6px;">'
+        + '<div style="font-size:10px;font-weight:700;color:var(--text);">'+escC(n.lbl)+'</div>'
+        + '<div style="font-size:12px;color:var(--text);white-space:pre-wrap;margin-top:2px;">'+escC(n.body)+'</div></div>';
+    }).join('');
+  }
 }
 // Inline Export dropdown toggle — pair with .export-dropdown markup
 // (see shared.css). Pass `this` from the button onclick. Closes on
