@@ -3083,6 +3083,33 @@ function _ctRenderFlow(status, ct, prefix) {
   } else if(returned) {
     flow.innerHTML += '<div style="margin-left:12px;padding:4px 10px;background:var(--info-blue-bg);border-radius:6px;font-size:10px;font-weight:700;color:var(--info-blue);">Returned'+(ct.returnedAt?' '+ct.returnedAt.slice(0,10):'')+'</div>';
   }
+
+  // Approval DECISION NOTES — hmNotes / edNotes / returnedNotes / declinedReason
+  // were written on every HM-recommend / ED-approve / return / decline but
+  // displayed NOWHERE (the stepper above shows dates only). Render them in an
+  // idempotent sibling block below the stepper so the reasons aren't lost.
+  // (Notes UX audit -- Batch 2.)
+  var _ctnId = prefix + '_flow_notes';
+  var notesEl = document.getElementById(_ctnId);
+  if(!notesEl && flow.parentNode){
+    notesEl = document.createElement('div');
+    notesEl.id = _ctnId;
+    flow.parentNode.insertBefore(notesEl, flow.nextSibling);
+  }
+  if(notesEl){
+    var escC = (typeof escapeHtml==='function') ? escapeHtml : function(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); };
+    var ctApprNotes = [];
+    if(ct.returnedNotes && String(ct.returnedNotes).trim()) ctApprNotes.push({lbl:'Returned'+(ct.returnedBy?' by '+ct.returnedBy:''), body:ct.returnedNotes});
+    if(ct.declinedReason && String(ct.declinedReason).trim()) ctApprNotes.push({lbl:'Declined'+(ct.declinedBy?' by '+ct.declinedBy:''), body:ct.declinedReason});
+    if(ct.edNotes && String(ct.edNotes).trim()) ctApprNotes.push({lbl:'Final approval note'+(ct.edActionBy?' ('+ct.edActionBy+')':''), body:ct.edNotes});
+    if(ct.hmNotes && String(ct.hmNotes).trim()) ctApprNotes.push({lbl:'HM verification note'+(ct.hmActionBy?' ('+ct.hmActionBy+')':''), body:ct.hmNotes});
+    notesEl.style.marginTop = ctApprNotes.length ? '12px' : '0';
+    notesEl.innerHTML = ctApprNotes.map(function(n){
+      return '<div style="border-left:3px solid var(--yellow);background:var(--bg);border-radius:6px;padding:7px 10px;margin-bottom:6px;">'
+        + '<div style="font-size:10px;font-weight:700;color:var(--text);">'+escC(n.lbl)+'</div>'
+        + '<div style="font-size:12px;color:var(--text);white-space:pre-wrap;margin-top:2px;">'+escC(n.body)+'</div></div>';
+    }).join('');
+  }
 }
 // Inline Export dropdown toggle — pair with .export-dropdown markup
 // (see shared.css). Pass `this` from the button onclick. Closes on
@@ -10968,6 +10995,9 @@ function showScorecard(app){
     else edSec.style.display='none';
   }
   _scv.scrollTop=0;
+  // Internal Notes — show the file's notes + HM/ED sign-off notes right here,
+  // so an approver never has to open the editor or Tenant Card to read them.
+  if(typeof scRenderNotes === 'function') scRenderNotes(app);
   // Load application documents from Supabase Storage
   scLoadDocs(app);
   // Wire Assign Files button
@@ -10985,6 +11015,68 @@ function showScorecard(app){
   // Render role-appropriate approval action buttons
   if(typeof renderScorecardActions === 'function') renderScorecardActions(app);
 }
+
+// Internal Notes on the approval scorecard (Notes UX audit — Batch 1). Shows the
+// HM/ED sign-off notes (otherwise invisible from here) pinned on top, then the
+// application's append-only housing_application_notes, newest-first. So the
+// approver reads the file's notes AT the decision point. Quick-add writes to the
+// same log and the Tenant Card surfaces it too.
+async function scRenderNotes(app){
+  var mount = document.getElementById('sc_notes_mount');
+  var countEl = document.getElementById('sc_notes_count');
+  if(!mount || !app) return;
+  function esc2(s){ return (typeof escapeHtml==='function') ? escapeHtml(s) : String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
+  mount.innerHTML = '<div class="txt-sm-muted" style="padding:6px 0;">Loading notes...</div>';
+  // Sign-off notes pinned on top (these have no other view on the scorecard).
+  var pinned = [];
+  try {
+    if(app.hmSig && app.hmSig.notes && String(app.hmSig.notes).trim()) pinned.push({ lbl:'HM sign-off', who:(app.hmSig.name||''), body:String(app.hmSig.notes).trim() });
+    if(app.edSig && app.edSig.notes && String(app.edSig.notes).trim()) pinned.push({ lbl:'ED sign-off', who:(app.edSig.name||''), body:String(app.edSig.notes).trim() });
+  } catch(e){}
+  var rows = [];
+  try { rows = (typeof sbLoadAppNotes === 'function') ? await sbLoadAppNotes(app.id) : []; }
+  catch(e){ rows = []; }
+  if(!Array.isArray(rows)) rows = [];
+  // Guard against a slow load racing a scorecard switch.
+  if(window._currentScorecardApp && window._currentScorecardApp.id !== app.id) return;
+  var total = pinned.length + rows.length;
+  if(countEl) countEl.textContent = total ? (total + ' note' + (total!==1?'s':'')) : '';
+  var html = '';
+  pinned.forEach(function(p){
+    html += '<div style="border-left:3px solid var(--yellow);background:var(--bg);border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
+      + '<div style="font-size:11px;font-weight:700;color:var(--text);">' + esc2(p.lbl) + (p.who ? ' &middot; ' + esc2(p.who) : '') + '</div>'
+      + '<div style="font-size:13px;color:var(--text);white-space:pre-wrap;margin-top:2px;">' + esc2(p.body) + '</div></div>';
+  });
+  rows.forEach(function(n){
+    var when = String(n.created_at||'').slice(0,10);
+    var who = n.author_name || n.author_email || n.author_role || '';
+    html += '<div style="border:1px solid var(--border);background:var(--surface);border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
+      + '<div style="font-size:13px;color:var(--text);white-space:pre-wrap;">' + esc2(n.body) + '</div>'
+      + '<div style="font-size:11px;color:var(--muted);margin-top:4px;">' + esc2(who) + (who && when ? ' &middot; ' : '') + esc2(when) + '</div></div>';
+  });
+  if(!html) html = '<div class="txt-sm-muted" style="padding:6px 0;">No notes yet. Add one above &mdash; it saves to the application file and shows in the Tenant Card.</div>';
+  mount.innerHTML = html;
+}
+window.scRenderNotes = scRenderNotes;
+
+// Quick-add a note from the scorecard (append-only; same log the editor + Tenant
+// Card read). Clear feedback so staff know exactly where it went.
+async function scAddNote(){
+  var app = window._currentScorecardApp; if(!app) return;
+  var inp = document.getElementById('sc_note_input'); if(!inp) return;
+  var body = (inp.value||'').trim();
+  if(!body){ if(typeof showToast==='function') showToast('Type a note first.', {type:'error'}); return; }
+  var btn = document.getElementById('sc_note_add_btn'); if(btn) btn.disabled = true;
+  try {
+    if(typeof sbAddAppNote === 'function') await sbAddAppNote(app.id, body);
+    inp.value = '';
+    if(typeof showToast==='function') showToast('✓ Note added to the application file — also shows in the Tenant Card.', {type:'info'});
+    await scRenderNotes(app);
+  } catch(e){
+    if(typeof showToast==='function') showToast('Could not add the note: ' + (e&&e.message||e), {type:'error'});
+  } finally { if(btn) btn.disabled = false; }
+}
+window.scAddNote = scAddNote;
 
 // ── Panel helpers — used by housing.html and renos.html ─────────────────────
 
