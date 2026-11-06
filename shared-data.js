@@ -1119,12 +1119,57 @@ async function sbAddAppNote(appId, body) {
       throw new Error('add note failed ('+r.status+'): '+e);
     }
     var data = await r.json();
+    // Keep the list "has notes" badge live without a refetch (Notes UX Batch 2b).
+    try { window._appNoteCounts = window._appNoteCounts || {}; var _c = window._appNoteCounts[String(appId)] || {n:0,latest:''}; _c.n++; _c.latest = new Date().toISOString(); window._appNoteCounts[String(appId)] = _c; } catch(e){}
     return Array.isArray(data) ? data[0] : data;
   } catch(e) {
     console.warn('[SB] add app note error:', e);
     throw e;
   }
 }
+
+// ── Note-count cache for list "has notes" badges (Notes UX audit - Batch 2b) ──
+// One lightweight column-only fetch per table at boot builds {id:{n,latest}} so
+// worklist/list rows can show a "has notes" chip at a glance (with the last-note
+// age in its tooltip) without a per-row query. Kept live by bumping on add
+// (sbAddAppNote above / cicSaveNote). Management-only; fire-and-forget safe.
+window._appNoteCounts = window._appNoteCounts || {};
+window._ctNoteCounts  = window._ctNoteCounts  || {};
+async function sbLoadNoteCounts(){
+  function _tally(rows, idKey){
+    var m = {};
+    (Array.isArray(rows)?rows:[]).forEach(function(x){
+      var k = x && x[idKey]; if(!k) return; k = String(k);
+      if(!m[k]) m[k] = {n:0, latest:''};
+      m[k].n++;
+      var c = x.created_at || '';
+      if(c > m[k].latest) m[k].latest = c;
+    });
+    return m;
+  }
+  try {
+    var r = await fetch(SUPABASE_URL + '/rest/v1/housing_application_notes?select=app_id,created_at&limit=20000', { headers: HOUSING_HEADERS });
+    if(r.ok) window._appNoteCounts = _tally(await r.json(), 'app_id');
+  } catch(e){ /* non-fatal */ }
+  try {
+    var r2 = await fetch(SUPABASE_URL + '/rest/v1/contractor_notes?select=contractor_id,created_at&limit=20000', { headers: HOUSING_HEADERS });
+    if(r2.ok) window._ctNoteCounts = _tally(await r2.json(), 'contractor_id');
+  } catch(e){ /* non-fatal */ }
+  return true;
+}
+window.sbLoadNoteCounts = sbLoadNoteCounts;
+
+// "Has notes" chip for a list row. info = {n, latest}. Returns '' when no notes.
+// The count is the glance signal; the last-note age rides the tooltip so the row
+// stays compact. Pass the map entry, e.g. _noteBadge(window._appNoteCounts[id]).
+function _noteBadge(info){
+  if(!info || !info.n) return '';
+  var age = '';
+  if(info.latest){ var d = Math.floor((Date.now() - Date.parse(info.latest)) / 86400000); if(!isNaN(d)) age = (d <= 0 ? 'today' : (d === 1 ? '1 day ago' : (d + ' days ago'))); }
+  return '<span title="' + info.n + ' note' + (info.n!==1?'s':'') + (age ? (' · last ' + age) : '') + '" '
+    + 'style="flex-shrink:0;font-size:10px;font-weight:700;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:1px 7px;white-space:nowrap;">📝 ' + info.n + '</span>';
+}
+window._noteBadge = _noteBadge;
 
 // ── Tenant notes (workflow prompts) ──────────────────────────────────────────
 // Reusable helpers so common flows (move-in, inspection, work-order complete)
@@ -2341,6 +2386,8 @@ function cicSaveNote(){
   if(!ctId || typeof sbSaveContractorNote !== 'function') return;
   sbSaveContractorNote(ctId, body).then(function(added){
     if(!added) return;
+    // Keep the worklist "has notes" badge live (Notes UX Batch 2b).
+    try { window._ctNoteCounts = window._ctNoteCounts || {}; var _cc = window._ctNoteCounts[String(ctId)] || {n:0,latest:''}; _cc.n++; _cc.latest = new Date().toISOString(); window._ctNoteCounts[String(ctId)] = _cc; } catch(e){}
     var list = document.getElementById('cic_notes_list');
     if(list){
       var empty = list.querySelector('.tic-empty');
@@ -8277,7 +8324,7 @@ function renderWorklist() {
       + 'onmouseover="this.style.background=\'var(--bg)\'" '
       + 'onmouseout="this.style.background=\'var(--surface)\'">'
       + '<a href="' + esc(href) + '"' + refOnclick + ' style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;color:inherit;">'
-      + cols.map(function(c){ return '<span style="' + (c.style||'flex:1;font-size:12px;') + '">' + esc(c.text||'') + '</span>'; }).join('')
+      + cols.map(function(c){ return c.html != null ? c.html : '<span style="' + (c.style||'flex:1;font-size:12px;') + '">' + esc(c.text||'') + '</span>'; }).join('')
       + '</a>'
       + '<a href="' + esc((btn && btn.href) || href) + '"' + refOnclick + ' '
       + 'style="flex-shrink:0;background:var(--yellow);color:var(--dark);border-radius:6px;'
@@ -8622,8 +8669,10 @@ function renderWorklist() {
       var btnHref = (_wlReviewStatuses.indexOf(a.status) >= 0)
         ? 'housing.html?openScorecard=' + encodeURIComponent(a.id)
         : 'housing.html?openApp=' + encodeURIComponent(a.id);
+      var _nb = (typeof _noteBadge === 'function') ? _noteBadge(window._appNoteCounts && window._appNoteCounts[a.id]) : '';
       return actionRow(btnHref, [
         { text: name, style: 'flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;' },
+        { html: _nb },
         { text: lbl,  style: 'font-size:11px;color:var(--muted);width:170px;flex-shrink:0;' },
         { text: score,style: 'font-size:11px;color:var(--muted);width:55px;text-align:right;flex-shrink:0;' }
       ], { text: (appBtnText[a.status] || 'Open') + ' →', href: btnHref });
@@ -8636,7 +8685,8 @@ function renderWorklist() {
         ? 'housing.html?openScorecard=' + encodeURIComponent(a.id)
         : 'housing.html?openApp=' + encodeURIComponent(a.id);
       var open = 'window.location.href=\'' + btnHref + '\'';
-      return wlCard({ title:name, pill:{text:lbl}, open:open,
+      var _nbC = (typeof _noteBadge === 'function') ? _noteBadge(window._appNoteCounts && window._appNoteCounts[a.id]) : '';
+      return wlCard({ title:name, pill:{text:lbl}, open:open, badges:(_nbC?[_nbC]:[]),
         metas:[{k:'Type',v:_appTypeLabel[a.appType]||''},{k:'Score',v:score},{k:'Tier',v:(a.tier?a.tier.replace(' Priority',''):'')}],
         actions:[{text:(appBtnText[a.status]||'Open')+' →',onclick:open}] });
     }).join('');
@@ -8755,6 +8805,7 @@ function renderWorklist() {
         + 'onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--surface)\'">'
         + '<div onclick="' + ctNav + '" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">'
         +   '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + escapeHtml(c.name) + '</span>'
+        +   ((typeof _noteBadge === 'function') ? _noteBadge(window._ctNoteCounts && window._ctNoteCounts[c.id]) : '')
         +   '<span style="font-size:11px;color:var(--muted);width:120px;flex-shrink:0;">' + escapeHtml(c.trade) + '</span>'
         +   '<span style="font-size:11px;color:var(--muted);width:180px;flex-shrink:0;">' + escapeHtml(ctStatusLabel[c.status] || c.status) + '</span>'
         + '</div>'
@@ -8765,7 +8816,8 @@ function renderWorklist() {
     }).join('');
     var ctCards = ctItems.map(function(c) {
       var ctNav = 'if(typeof setNavReferrer===\'function\')setNavReferrer(\'home\');window.location.href=\'contractors.html?openContractor=' + encodeURIComponent(c.id) + '\';';
-      return wlCard({ title:c.name, pill:{text:ctStatusLabel[c.status] || c.status, color:'#b45309', bg:'var(--warn-amber-bg)'}, open:ctNav,
+      var _nbCt = (typeof _noteBadge === 'function') ? _noteBadge(window._ctNoteCounts && window._ctNoteCounts[c.id]) : '';
+      return wlCard({ title:c.name, pill:{text:ctStatusLabel[c.status] || c.status, color:'#b45309', bg:'var(--warn-amber-bg)'}, open:ctNav, badges:(_nbCt?[_nbCt]:[]),
         metas:[{k:'Trade',v:c.trade},{k:'Submitted',v:(c.submitted?String(c.submitted).slice(0,10):'')}],
         actions:[{text:ctBtnText[c.status] || 'Review →',onclick:ctNav}] });
     }).join('');
