@@ -1830,6 +1830,7 @@ async function loadHousingData() {
       (_isMgmt && typeof sbLoadTenantMrSubmissions === 'function') ? Promise.resolve(sbLoadTenantMrSubmissions()).catch(function(){}) : null,
       (_isMgmt && typeof sbLoadApplicationSubmissions === 'function') ? Promise.resolve(sbLoadApplicationSubmissions()).catch(function(){}) : null,
       (_isMgmt && typeof sbLoadContractorSubmissions === 'function') ? Promise.resolve(sbLoadContractorSubmissions()).catch(function(){}) : null,
+      (_isMgmt && typeof sbLoadContractorPeopleRequests === 'function') ? Promise.resolve(sbLoadContractorPeopleRequests()).catch(function(){}) : null,
       (_isMgmt && typeof sbLoadSupportTickets === 'function') ? Promise.resolve(sbLoadSupportTickets()).catch(function(){}) : null,
       (_isMgmt && typeof sbLoadNoteCounts === 'function') ? Promise.resolve(sbLoadNoteCounts()).catch(function(){}) : null
     ]);

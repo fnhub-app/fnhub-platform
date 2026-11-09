@@ -93,6 +93,13 @@
     .cp-prog-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
     .cp-prog-range { flex:1 1 auto; width:auto; margin:0; accent-color:var(--cp-accent); }
     .cp-prog-val { flex:0 0 auto; min-width:48px; text-align:right; font-size:18px; font-weight:800; color:var(--ink); }
+    /* "My team" request form */
+    .cp-team { margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
+    .cp-team input { margin-top:8px; }
+    .cp-tm-send { width:100%; margin-top:14px; padding:12px 14px; font-size:15px; font-weight:700;
+                  border:0; border-radius:8px; background:var(--cp-accent); color:var(--cp-accent-ink); cursor:pointer; }
+    .cp-tm-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line); }
+    .cp-tm-row .cp-sub-name { flex:1 1 auto; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     .hidden { display:none; }
   </style>
 </head>
@@ -136,6 +143,18 @@
       <h1>My Work Orders</h1>
       <div class="cp-count" id="cp_count"></div>
       <div id="cp_list"></div>
+
+      <!-- Request to add a key person to this contractor's portal access. -->
+      <div class="cp-team">
+        <h3 class="cp-h3">My team</h3>
+        <p class="cp-note">Need to give a colleague access to this portal? Request it below. The housing office reviews it, and once approved the person can sign in with their own mobile number.</p>
+        <input id="cp_tm_name" type="text" placeholder="Full name" autocomplete="off"/>
+        <input id="cp_tm_phone" type="tel" inputmode="tel" placeholder="Mobile number" autocomplete="off"/>
+        <input id="cp_tm_role" type="text" placeholder="Role / trade (optional)" autocomplete="off"/>
+        <button id="cp_tm_send" type="button" class="cp-tm-send" data-cp-addperson="1">Request access for this person</button>
+        <div class="cp-msg" id="cp_tm_msg"></div>
+        <div id="cp_tm_list"></div>
+      </div>
     </div>
 
     <!-- Work-order detail (shown when a work order is tapped) -->

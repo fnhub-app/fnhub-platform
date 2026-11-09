@@ -2538,14 +2538,17 @@ function getAllSowsForContractor(contractorId) {
 // warn and never throw into the SOW save / award / invite paths. Gated by the
 // contractor_portal module so nations that don't use it never write these rows.
 
-// Work-order lifecycle -> portal status. 'closed' hides a job from the active
-// lists; 'in_process' is work underway; 'active' is assigned-but-not-started.
+// Work-order lifecycle -> portal status. 'closed' is a job staff have finished
+// (completed) or cancelled; 'awaiting_signoff' is a job the contractor reported
+// 100% on but staff have NOT yet signed off (completion stays a staff decision,
+// so a contractor can't self-close by dragging to 100%); 'in_process' is work
+// underway; 'active' is assigned-but-not-started.
 function _cwoStatusForSow(sow){
   if(!sow) return 'active';
   if(sow.cancelled) return 'closed';
   if(sow.approval_status === 'completed') return 'closed';
   var pct = (sow.progress && typeof sow.progress.percent !== 'undefined') ? (parseFloat(sow.progress.percent) || 0) : 0;
-  if(pct >= 100) return 'closed';
+  if(pct >= 100) return 'awaiting_signoff';   // was 'closed' — contractor-reported 100% no longer self-closes the job
   if(pct > 0) return 'in_process';
   return 'active';
 }
@@ -2906,7 +2909,7 @@ function _ctPortalPreviewRenderList(){
             + '</div>';
         }).join('');
   }
-  var listHtml = section('Active','active') + section('In process','in_process') + section('Closed','closed');
+  var listHtml = section('Active','active') + section('In process','in_process') + section('Awaiting sign-off','awaiting_signoff') + section('Closed','closed');
   if(!listHtml) listHtml = '<div style="color:var(--muted);font-size:14px;padding:16px 0;">No work orders assigned to this contractor yet.</div>';
   var countTxt = rows.length + (rows.length === 1 ? ' work order' : ' work orders');
   _ctPortalPreviewShell(
@@ -3506,6 +3509,27 @@ async function sbLoadContractorSubmissions(){
 }
 window.sbLoadContractorSubmissions = sbLoadContractorSubmissions;
 
+// Pending "add a key person" requests from the Contractor Portal, for the
+// landing-page worklist. Same boot pattern as sbLoadContractorSubmissions: no
+// moduleOn() gate (settings not hydrated yet in the boot Promise.all); the
+// _isMgmt call-site gate scopes it to management, and a nation without the table
+// just 404s -> [].
+async function sbLoadContractorPeopleRequests(){
+  try {
+    var url = SUPABASE_URL + '/rest/v1/contractor_people_requests?status=eq.pending&order=created_at.desc&limit=200';
+    var r = await fetch(url, { headers: HOUSING_HEADERS });
+    if(!r.ok){ window._contractorPeopleRequests = window._contractorPeopleRequests || []; return window._contractorPeopleRequests; }
+    var rows = await r.json();
+    window._contractorPeopleRequests = Array.isArray(rows) ? rows : [];
+    return window._contractorPeopleRequests;
+  } catch(e){
+    console.warn('[contractor-people] load failed:', e);
+    window._contractorPeopleRequests = window._contractorPeopleRequests || [];
+    return window._contractorPeopleRequests;
+  }
+}
+window.sbLoadContractorPeopleRequests = sbLoadContractorPeopleRequests;
+
 // Open Help & Support tickets (status new|open) for the landing-page worklist.
 // Same boot-time pattern as sbLoadContractorSubmissions: no moduleOn() gate here
 // (settings aren't hydrated yet in the boot Promise.all); the _isMgmt call-site
@@ -3625,6 +3649,87 @@ async function _wlRejectContractorInvoice(id){
   renderWorklist();
 }
 window._wlRejectContractorInvoice = _wlRejectContractorInvoice;
+
+// PATCH a people-request's status + reviewer stamp, and drop it from the open
+// queue. Mirrors _sbResolveContractorSub.
+async function _sbResolvePeopleRequest(id, status){
+  var actor = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || '';
+  var r = await fetch(SUPABASE_URL + '/rest/v1/contractor_people_requests?id=eq.' + encodeURIComponent(id), {
+    method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+    body: JSON.stringify({ status: status, reviewed_by: actor, reviewed_at: new Date().toISOString() })
+  });
+  if(!r.ok) throw new Error(await r.text());
+  window._contractorPeopleRequests = (window._contractorPeopleRequests || []).filter(function(x){ return x.id !== id; });
+  return true;
+}
+
+// Approve a contractor's "add a key person" request: add the person to the
+// contractor's people[] AND create a contractor_invites row for their phone (the
+// two conditions the portal claim re-checks), then email the invite. Once both
+// are in place the person can sign in with their own mobile (phone OTP).
+async function _wlApproveContractorPerson(id){
+  var pr = (window._contractorPeopleRequests || []).find(function(x){ return x.id === id; });
+  if(!pr){ if(typeof showToast==='function') showToast('Request not found', {type:'error'}); return; }
+  var ct = (window._contractors || []).find(function(c){ return String(c.id) === String(pr.contractor_id); });
+  if(!ct){ if(typeof showToast==='function') showToast('The contractor for this request was not found. Reload and try again.', {type:'error'}); return; }
+  var e164 = (typeof _toE164 === 'function') ? _toE164(pr.phone) : String(pr.phone || '');
+  if(!e164){ if(typeof showToast==='function') showToast('That mobile number is not valid, so a sign-in cannot be created.', {type:'error'}); return; }
+  if(typeof showConfirm !== 'function') return;
+  var ok = await showConfirm({
+    title:       'Approve ' + (pr.name || 'this person') + '?',
+    message:     'Adds <strong>' + escapeHtml(pr.name || '') + '</strong> (' + escapeHtml(e164) + ')'
+                 + ' to <strong>' + escapeHtml(ct.name || 'the contractor') + '</strong> and lets them sign in to the portal with their mobile number.',
+    confirmText: 'Approve & grant access'
+  });
+  if(!ok) return;
+  try {
+    // 1) Add to people[] (dedup by normalized phone).
+    ct.people = Array.isArray(ct.people) ? ct.people : [];
+    var dup = ct.people.some(function(p){ return p && p.phone && typeof _toE164==='function' && _toE164(p.phone) === e164; });
+    if(!dup) ct.people.push({ name: pr.name || '', phone: pr.phone || '', email: pr.email || '', role: pr.role || '' });
+    if(typeof sbSaveContractor === 'function'){
+      var okSave = await sbSaveContractor(ct);
+      if(okSave === false) throw new Error('could not update the contractor record');
+    }
+    // 2) Create the portal invite authorizing this phone (30-day window).
+    var expires = new Date(Date.now() + 30*24*60*60*1000).toISOString();
+    var invitedBy = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || 'staff';
+    var inv = await fetch(SUPABASE_URL + '/rest/v1/contractor_invites', {
+      method: 'POST', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+      body: JSON.stringify([{ phone: e164, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires }])
+    });
+    if(!inv.ok) throw new Error('could not create the sign-in invite (HTTP ' + inv.status + ')');
+    // 3) Mark the request approved.
+    await _sbResolvePeopleRequest(id, 'approved');
+    if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_person_approved', 'Approved portal access for ' + (pr.name || e164), window.currentRole || 'staff');
+    // 4) Courtesy invite email with the portal link (fire-and-forget).
+    var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
+    if(typeof notifyContractorPortalInvite === 'function'){
+      try { notifyContractorPortalInvite(ct, [{ name: pr.name || '', phone: pr.phone || '', email: pr.email || '' }], _portalLink).catch(function(){}); } catch(_e){}
+    }
+    if(typeof showToast === 'function') showToast('✓ ' + (pr.name || 'Contact') + ' approved — they can now sign in at the portal with their mobile number.', {type:'info'});
+  } catch(e){
+    console.warn('[contractor-people] approve failed:', e);
+    if(typeof showToast === 'function') showToast('Could not approve: ' + (e && e.message || e), {type:'error'});
+  }
+  renderWorklist();
+}
+window._wlApproveContractorPerson = _wlApproveContractorPerson;
+
+async function _wlRejectContractorPerson(id){
+  var pr = (window._contractorPeopleRequests || []).find(function(x){ return x.id === id; });
+  if(!pr){ return; }
+  if(typeof showConfirm !== 'function') return;
+  var ok = await showConfirm({ title: 'Reject this request?', message: 'The person will NOT be given portal access. The contractor is not notified automatically.', confirmText: 'Reject', danger: true });
+  if(!ok) return;
+  try {
+    await _sbResolvePeopleRequest(id, 'rejected');
+    if(typeof auditEntry === 'function') auditEntry('CT:' + pr.contractor_id, 'contractor_person_rejected', 'Rejected portal access request for ' + (pr.name || pr.phone || ''), window.currentRole || 'staff');
+    if(typeof showToast === 'function') showToast('Request rejected.', {type:'info'});
+  } catch(e){ if(typeof showToast==='function') showToast('Could not reject: ' + (e && e.message || e), {type:'error'}); }
+  renderWorklist();
+}
+window._wlRejectContractorPerson = _wlRejectContractorPerson;
 
 // Mark a flagged photo/note as read (clears it from the worklist flag).
 async function _wlMarkContractorSubRead(id){
@@ -8575,6 +8680,44 @@ function renderWorklist() {
         actions: acts.map(function(a){ return { text:a.t, ghost:!a.primary, onclick:a.fn }; }) });
     });
     html += sectionWrap('🛠️', 'Contractor Submissions', ctSubItems.length, '', _view === 'cards' ? wlGrid(csCards) : csRows, 0);
+  }
+
+  // Contractor Team Requests — a contractor asked (from the portal) to give a
+  // colleague portal access. Management approves (adds the person + creates the
+  // sign-in invite) or rejects. Gated by the contractor_portal module (hydrated
+  // by render time) in addition to management.
+  var ctPplItems = (isManagement && (typeof moduleOn !== 'function' || moduleOn('contractor_portal'))) ? (window._contractorPeopleRequests || []) : [];
+  if (ctPplItems.length) {
+    var cprRows = '', cprCards = '';
+    function cprBtnHtml(b){
+      var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
+      var col = b.primary ? 'var(--dark)' : 'var(--text)';
+      var bd = b.primary ? 'none' : '1px solid var(--border)';
+      return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
+    }
+    ctPplItems.slice().sort(function(a,b){ return String(b.created_at||'').localeCompare(String(a.created_at||'')); }).forEach(function(p){
+      var idJs = esc(p.id).replace(/'/g, "\\'");
+      var ct = (window._contractors || []).find(function(c){ return String(c.id) === String(p.contractor_id); });
+      var ctName = (ct && ct.name) || p.contractor_id || '';
+      var who = p.name || '(no name)';
+      var sub = (p.phone || '') + (p.role ? ' · ' + p.role : '');
+      var acts = [
+        { t:'✓ Approve', fn:'_wlApproveContractorPerson(\'' + idJs + '\')', primary:true },
+        { t:'Reject',          fn:'_wlRejectContractorPerson(\'' + idJs + '\')', primary:false }
+      ];
+      var info = '<span style="font-size:14px;flex-shrink:0;">👤</span>'
+               + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who) + '</span>'
+               + '<span style="font-size:11px;color:var(--muted);width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(sub) + '</span>'
+               + '<span style="font-size:11px;color:var(--muted);width:120px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(ctName) + '</span>';
+      cprRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);">'
+        + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + info + '</div>'
+        + acts.map(cprBtnHtml).join('')
+        + '</div>';
+      cprCards += wlCard({ title: who, pill:{ text:'NEW', color:'var(--muted)' }, open:'_wlApproveContractorPerson(\'' + idJs + '\')',
+        metas:[{k:'Mobile',v:p.phone||''},{k:'Role',v:p.role||'—'},{k:'Contractor',v:ctName}],
+        actions: acts.map(function(a){ return { text:a.t, ghost:!a.primary, onclick:a.fn }; }) });
+    });
+    html += sectionWrap('👥', 'Contractor Team Requests', ctPplItems.length, '', _view === 'cards' ? wlGrid(cprCards) : cprRows, 0);
   }
 
   // Support Tickets — open Help & Support tickets (status new|open) filed from

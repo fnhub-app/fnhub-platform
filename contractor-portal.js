@@ -184,6 +184,7 @@
       var rows = await r.json();
       renderWorkOrders(Array.isArray(rows) ? rows : []);
       hide('cp_login'); show('cp_app');
+      loadPeopleRequests();
     } catch (e) { setMsg('Could not load your work orders: ' + e.message, true); }
   }
 
@@ -205,7 +206,8 @@
              + '<span class="cp-wo-chev">&rsaquo;</span></div>';
       }).join('');
     }
-    var html = section('Active', 'active') + section('In process', 'in_process') + section('Closed', 'closed');
+    var html = section('Active', 'active') + section('In process', 'in_process')
+             + section('Awaiting sign-off', 'awaiting_signoff') + section('Closed', 'closed');
     el('cp_list').innerHTML = html || '<div class="cp-empty">No work orders assigned to you yet.</div>';
   }
 
@@ -360,7 +362,10 @@
     if (!w) return;
     currentWO = w;
     var d = w.data || {};
-    var statusLabel = ({ active: 'Active', in_process: 'In process', closed: 'Closed' })[w.status || 'active'] || (w.status || '');
+    var statusLabel = ({ active: 'Active', in_process: 'In process', awaiting_signoff: 'Awaiting sign-off', closed: 'Closed' })[w.status || 'active'] || (w.status || '');
+    // A completed / cancelled job is locked for progress, but invoices, photos
+    // and notes stay open (the final invoice is sent after the work is done).
+    var isClosed = ((w.status || 'active') === 'closed');
     function field(label, val) {
       if (!val) return '';
       return '<div class="cp-field"><div class="cp-field-l">' + esc(label) + '</div><div class="cp-field-v">' + esc(val) + '</div></div>';
@@ -414,14 +419,18 @@
       + docsHtml
       + '<div class="cp-msg" id="cp_detail_msg"></div>'
       + '<h3 class="cp-h3">Progress</h3>'
-      + '<div class="cp-prog-row">'
-      +   '<input type="range" id="cp_prog_range" min="0" max="100" step="5" value="' + progPct + '" class="cp-prog-range" aria-label="Percent complete"/>'
-      +   '<span class="cp-prog-val" id="cp_prog_val">' + progPct + '%</span>'
-      + '</div>'
-      + '<div class="cp-upload-row"><button type="button" class="cp-upbtn" data-cp-progress="1">Update progress</button></div>'
-      + '<div class="cp-msg" id="cp_prog_msg"></div>'
+      + (isClosed
+          ? '<div class="cp-note">This job is marked complete &mdash; ' + progPct + '% reported. Progress can no longer be changed.</div>'
+          : ('<div class="cp-prog-row">'
+            +   '<input type="range" id="cp_prog_range" min="0" max="100" step="5" value="' + progPct + '" class="cp-prog-range" aria-label="Percent complete"/>'
+            +   '<span class="cp-prog-val" id="cp_prog_val">' + progPct + '%</span>'
+            + '</div>'
+            + '<div class="cp-note">Report how far along the work is. Setting 100% tells the housing office it’s ready for their final sign-off &mdash; they mark the job complete.</div>'
+            + '<div class="cp-upload-row"><button type="button" class="cp-upbtn" data-cp-progress="1">Update progress</button></div>'
+            + '<div class="cp-msg" id="cp_prog_msg"></div>'))
       + notesReadHtml
       + '<div id="cp_sub_status"></div>'
+      + (isClosed ? '<div class="cp-note">✓ This job is marked complete. You can still send your <strong>final invoice</strong>, photos, or a note below.</div>' : '')
       + '<h3 class="cp-h3">Submit to the housing office</h3>'
       + '<div class="cp-upload-row">'
       +   '<button type="button" class="cp-upbtn" data-cp-upload="photo">&#128247; Add photos</button>'
@@ -496,6 +505,63 @@
 
   function backToWorkOrders() { hide('cp_detail'); show('cp_app'); }
 
+  // ── "My team" — request to add a key person ───────────────────────────────
+  function tmMsg(m, isErr) {
+    var e = el('cp_tm_msg'); if (!e) return;
+    e.textContent = m || ''; e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
+  }
+
+  // Submit a request for staff to grant a colleague portal access. Posts to
+  // contractor-upload (kind=add_person); the Edge Function resolves THIS
+  // contractor server-side and files a pending request to the staff worklist.
+  function submitAddPerson() {
+    if (!session || !session.access_token) return;
+    var name  = (el('cp_tm_name')  || {}).value || '';
+    var phone = (el('cp_tm_phone') || {}).value || '';
+    var role  = (el('cp_tm_role')  || {}).value || '';
+    name = name.trim(); phone = phone.trim(); role = role.trim();
+    if (!name)  { tmMsg('Enter the person’s full name.', true); return; }
+    if (!e164(phone)) { tmMsg('Enter a valid mobile number.', true); return; }
+    tmMsg('Sending request…');
+    fetch(SB + '/functions/v1/contractor-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ kind: 'add_person', personName: name, personPhone: e164(phone), personRole: role })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+    }).then(function (res) {
+      if (res.ok && res.d && res.d.ok) {
+        tmMsg('✓ Request sent to the housing office. We’ll let you know once it’s approved.');
+        ['cp_tm_name', 'cp_tm_phone', 'cp_tm_role'].forEach(function (id) { var i = el(id); if (i) i.value = ''; });
+        loadPeopleRequests();
+      } else {
+        tmMsg((res.d && res.d.error) || 'Could not send the request. Please try again.', true);
+      }
+    }).catch(function () { tmMsg('Could not send the request. Please try again.', true); });
+  }
+
+  // Reflect back this contractor's own requests (RLS returns only their rows).
+  function loadPeopleRequests() {
+    var mount = el('cp_tm_list');
+    if (!mount || !session || !session.access_token) return;
+    fetch(SB + '/rest/v1/contractor_people_requests?select=name,phone,role,status,created_at&order=created_at.desc&limit=25', {
+      headers: { 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token }
+    }).then(function (r) { return r.ok ? r.json() : []; })
+      .then(function (rows) {
+        if (!Array.isArray(rows) || !rows.length) { mount.innerHTML = ''; return; }
+        var lbl = { pending: 'Awaiting review', approved: 'Approved', rejected: 'Not approved' };
+        var cls = { pending: 'cp-st-pending', approved: 'cp-st-ok', rejected: 'cp-st-no' };
+        mount.innerHTML = '<h3 class="cp-h3">Your requests</h3>' + rows.map(function (p) {
+          var when = p.created_at ? String(p.created_at).slice(0, 10) : '';
+          return '<div class="cp-tm-row">'
+            + '<span class="cp-sub-name">' + esc((p.name || '') + (p.role ? ' · ' + p.role : '')) + '</span>'
+            + '<span class="cp-sub-when">' + esc(when) + '</span>'
+            + '<span class="cp-sub-st ' + (cls[p.status] || '') + '">' + esc(lbl[p.status] || p.status || '') + '</span>'
+            + '</div>';
+        }).join('');
+      }).catch(function () { /* non-fatal */ });
+  }
+
   function init() {
     if (!SB || !ANON) { setMsg('Portal is not configured for this nation.', true); return; }
     var s = el('cp_send'); if (s) s.addEventListener('click', requestCode);
@@ -504,6 +570,12 @@
     var b = el('cp_back'); if (b) b.addEventListener('click', function () {
       if (_resendTimer) { clearInterval(_resendTimer); _resendTimer = null; }
       hide('cp_step_code'); show('cp_step_phone'); setMsg('');
+    });
+    // "My team" — request to add a key person (delegated: the button lives in
+    // cp_app alongside the work-order list).
+    var appEl = el('cp_app');
+    if (appEl) appEl.addEventListener('click', function (e) {
+      if (e.target && e.target.closest && e.target.closest('[data-cp-addperson]')) submitAddPerson();
     });
     // Tap a work order -> detail; delegated so it survives list re-renders.
     var listEl = el('cp_list');

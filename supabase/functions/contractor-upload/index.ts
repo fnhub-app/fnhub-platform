@@ -28,7 +28,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const STORAGE_BUCKET       = Deno.env.get("STORAGE_BUCKET") || "housing-files";
 const MAX_B64_LEN          = 14000000;              // ~10 MB raw
 const MAX_NOTE_LEN         = 4000;
-const ALLOWED_KINDS        = ["photo", "invoice", "note", "progress", "wsib", "insurance"];
+const ALLOWED_KINDS        = ["photo", "invoice", "note", "progress", "wsib", "insurance", "add_person"];
 // Compliance proofs file to the CONTRACTOR record (not a unit), under the same
 // contractors/<id>/<bucket>/ path the Contractor card reads back.
 const COMPLIANCE_KINDS     = ["wsib", "insurance"];
@@ -54,6 +54,18 @@ function safeName(s: unknown): string {
 
 function isAllowedType(ct: string): boolean {
   return /^image\//.test(ct) || ct === "application/pdf";
+}
+
+// Mirror of _cwoStatusForSow (shared-data.js): map a SOW's lifecycle + progress
+// to the portal projection status. Keep in sync with the client helper. A
+// contractor-reported 100% is "awaiting_signoff" (NOT closed) -- completion stays
+// a staff decision, so dragging the slider to 100 can't self-close the job.
+function cwoStatusFor(sow: Record<string, unknown>, percent: number): string {
+  if (sow && sow.cancelled) return "closed";
+  if (sow && sow.approval_status === "completed") return "closed";
+  if (percent >= 100) return "awaiting_signoff";
+  if (percent > 0) return "in_process";
+  return "active";
 }
 
 serve(async (req: Request) => {
@@ -87,8 +99,14 @@ serve(async (req: Request) => {
   const amount        = Math.max(0, Number(String(body.amount ?? "").replace(/[^0-9.]/g, "")) || 0);
   const noteText      = String(body.text ?? "").trim();
   const percent       = Math.max(0, Math.min(100, Math.round(Number(body.percent))));
+  // "add_person" fields: a contractor asking staff to grant a colleague access.
+  const personName    = String(body.personName ?? "").trim().slice(0, 120);
+  const personPhone   = String(body.personPhone ?? "").trim().slice(0, 40);
+  const personRole    = String(body.personRole ?? "").trim().slice(0, 80);
+  const personEmail   = String(body.personEmail ?? "").trim().slice(0, 160);
 
-  if (!unitId || !projectNumber) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
+  // add_person is account-level (no work order), so it does not require unitId.
+  if (kind !== "add_person" && (!unitId || !projectNumber)) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
   if (ALLOWED_KINDS.indexOf(kind) === -1) return jsonResponse({ error: "Invalid kind" }, 400);
   if (kind === "invoice" && !(amount > 0)) return jsonResponse({ error: "Invoice amount must be greater than zero" }, 400);
   if (kind === "note") {
@@ -96,6 +114,9 @@ serve(async (req: Request) => {
     if (noteText.length > MAX_NOTE_LEN) return jsonResponse({ error: "Note too long" }, 413);
   } else if (kind === "progress") {
     if (!Number.isFinite(Number(body.percent))) return jsonResponse({ error: "Invalid percent" }, 400);
+  } else if (kind === "add_person") {
+    if (!personName || !personPhone) return jsonResponse({ error: "Name and mobile number are required" }, 400);
+    if (personPhone.replace(/[^0-9]/g, "").length < 10) return jsonResponse({ error: "Enter a valid mobile number" }, 400);
   } else {
     if (!isAllowedType(contentType)) return jsonResponse({ error: "Only images and PDFs are allowed" }, 415);
     // Strip a data: URI prefix if the client left one on.
@@ -116,6 +137,36 @@ serve(async (req: Request) => {
   const cu = cuRows && (cuRows[0] as Record<string, unknown> | undefined);
   if (!cu || cu.is_active === false) return jsonResponse({ error: "Not a linked contractor" }, 403);
   const contractorId = String(cu.contractor_id);
+
+  // add_person: account-level (no work order). Record a pending request for staff
+  // to approve on the landing-page worklist. Staff approval adds the person to the
+  // contractor's people[] AND creates the portal invite; nothing here grants
+  // access on its own. Handled BEFORE the work-order ownership check below.
+  if (kind === "add_person") {
+    const nowIso = new Date().toISOString();
+    const { error } = await admin.from("contractor_people_requests").insert({
+      contractor_id: contractorId,
+      requested_by:  user.phone || contractorId,
+      name:          personName,
+      phone:         personPhone,
+      role:          personRole || null,
+      email:         personEmail || null,
+      status:        "pending",
+      created_at:    nowIso,
+    });
+    if (error) return jsonResponse({ error: "Could not submit the request. Please try again." }, 500);
+    try {
+      await admin.from("housing_audit_log").insert({
+        entity_type: "contractor", entity_id: contractorId, action: "contractor_person_requested",
+        detail: JSON.stringify({
+          name: personName, phone: personPhone, role: personRole,
+          source: "contractor_portal", actor_name: user.phone || contractorId,
+        }),
+        actor: user.phone || user.id, created_at: nowIso,
+      });
+    } catch (_e) { /* non-fatal: the request row above is the authoritative record */ }
+    return jsonResponse({ ok: true, kind: "add_person" });
+  }
 
   // 2) Confirm the work order is THEIRS.
   const { data: woRows } = await admin
@@ -199,6 +250,7 @@ serve(async (req: Request) => {
   // staff reno-progress update can still override it (last write wins).
   if (kind === "progress") {
     const nowIso = new Date().toISOString();
+    let newStatus = "in_process";
     try {
       const { data: sowRows } = await admin.from("housing_sow").select("data").eq("unit_id", unitId).limit(1);
       const sowRow = sowRows && (sowRows[0] as Record<string, unknown> | undefined);
@@ -206,20 +258,29 @@ serve(async (req: Request) => {
       const sows = data && Array.isArray(data.sows) ? data.sows as Array<Record<string, unknown>> : null;
       const sow = sows ? sows.find((s) => s && String(s.project_number) === projectNumber) : null;
       if (!data || !sow) return jsonResponse({ error: "Work order not found" }, 404);
+      // A completed or cancelled job is locked for progress: staff own the final
+      // state. Notes / photos / invoices stay open on it (handled by the other
+      // kinds below); only the work-progress slider is frozen.
+      if (sow.approval_status === "completed" || sow.cancelled) {
+        return jsonResponse({ error: "This job is marked complete. Progress can no longer be changed, but you can still send a final invoice, photos or a note." }, 409);
+      }
       const prevProgress = (sow.progress && typeof sow.progress === "object") ? sow.progress as Record<string, unknown> : {};
       sow.progress = Object.assign({}, prevProgress, {
         percent: percent, updatedAt: nowIso, by: "contractor", byName: user.phone || contractorId,
       });
       await admin.from("housing_sow").update({ data: data, updated_at: nowIso }).eq("unit_id", unitId);
+      newStatus = cwoStatusFor(sow, percent);
     } catch (_e) {
       return jsonResponse({ error: "Could not save progress" }, 500);
     }
-    // Mirror onto the projection so the contractor's portal reflects it on reload
-    // (best-effort; the SOW write above is authoritative and drives staff views).
+    // Mirror onto the projection so the contractor's portal reflects it on reload,
+    // including the recomputed lifecycle status so the job moves between the
+    // portal's Active / In process / Awaiting sign-off sections live, without
+    // waiting for a staff save. (Best-effort; the SOW write above is authoritative.)
     try {
       const woData = (wo.data && typeof wo.data === "object") ? wo.data as Record<string, unknown> : {};
       woData.progressPercent = percent;
-      await admin.from("contractor_work_orders").update({ data: woData, updated_at: nowIso }).eq("id", wo.id);
+      await admin.from("contractor_work_orders").update({ data: woData, status: newStatus, updated_at: nowIso }).eq("id", wo.id);
     } catch (_e) { /* non-fatal */ }
     try {
       await admin.from("housing_audit_log").insert({
@@ -228,7 +289,7 @@ serve(async (req: Request) => {
         actor: user.phone || user.id, created_at: nowIso,
       });
     } catch (_e) { /* non-fatal */ }
-    return jsonResponse({ ok: true, kind: "progress", percent: percent });
+    return jsonResponse({ ok: true, kind: "progress", percent: percent, status: newStatus });
   }
 
   // 3) Decode (size already bounded above).

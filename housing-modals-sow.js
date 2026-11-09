@@ -2253,6 +2253,19 @@ window._wlApproveSow = _wlApproveSow;
 // manual save + manual close — five steps for one action). Confirming marks
 // the request complete, saves the note if one was typed, CLOSES the modal,
 // and refreshes the lists behind it.
+// Keep the Contractor Portal projection (contractor_work_orders) in step after a
+// state change that does NOT go through saveSOW -- mark-complete, cancel, reopen.
+// Without this the portal shows a stale status/scope (e.g. a completed job still
+// listed as active, or a reopened job still "closed"). No-op unless the module is
+// on and the job is contractor-assigned (sbSyncContractorWorkOrder gates both).
+function _sowSyncPortalProjection(sow){
+  try {
+    if(typeof window.sbSyncContractorWorkOrder !== 'function' || !sow) return;
+    var u = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x.id === _sowUnitId; });
+    window.sbSyncContractorWorkOrder(Object.assign({}, sow, { unitId: _sowUnitId }), u);
+  } catch(e){ console.warn('[SOW] portal projection sync threw:', e); }
+}
+
 function markSowComplete(){
   if(!_sowUnitId || !window._sowEditingProjectNumber){
     showToast('Save the request before marking complete.', {type:'error'});
@@ -2302,6 +2315,7 @@ function _sowDoComplete(pn, tenantName, note){
   sow.completed_at = new Date().toISOString();
   sow.completed_by = window.currentUserName || _realRoleForPermissions();
   upsertSowInList(_sowUnitId, sow);
+  _sowSyncPortalProjection(sow);
   auditEntry('SOW:'+_sowUnitId, 'sow_completed', 'SOW '+pn+' marked Completed', _realRoleForPermissions());
   // If this completion drained the last active SOW on the unit, revert the
   // unit's status back to whatever it was before the renovation kicked in.
@@ -2356,6 +2370,7 @@ function reopenSow(){
     sow.reopened_at = new Date().toISOString();
     sow.reopened_by = window.currentUserName || _realRoleForPermissions();
     upsertSowInList(_sowUnitId, sow);
+    _sowSyncPortalProjection(sow);
     window._sowCurrentSowMeta = {approval_status: sow.approval_status, system_approved: sow.system_approved, archived: sow.archived, cancelled: sow.cancelled};
     auditEntry('SOW:'+_sowUnitId, 'sow_reopened', 'SOW '+pn+(_wasCancelled?' un-cancelled and reopened':' reopened for editing'), _realRoleForPermissions());
     if(typeof renderWorklist === 'function' && document.getElementById('worklist_body')) renderWorklist();
@@ -2419,6 +2434,7 @@ function cancelSow(){
     sow.cancelled_at = new Date().toISOString();
     sow.cancelled_by = window.currentUserName || _realRoleForPermissions();
     upsertSowInList(_sowUnitId, sow);
+    _sowSyncPortalProjection(sow);
     window._sowCurrentSowMeta = {approval_status: sow.approval_status, system_approved: sow.system_approved, archived: sow.archived, cancelled: true};
     auditEntry('SOW:'+_sowUnitId, 'sow_cancelled', 'MR '+pn+' cancelled'+(doNotify?' — contractor notified':''), _realRoleForPermissions());
 
