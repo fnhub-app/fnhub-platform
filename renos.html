@@ -1225,6 +1225,16 @@ function saveRenoProgress() {
       }
     }
     if(touched) saveSowList(unitId, list);
+    // Keep the Contractor Portal projection in step with staff progress edits so
+    // the contractor sees the new % / status without waiting for a full SOW save.
+    if(touched && typeof window.sbSyncContractorWorkOrder === 'function'){
+      var _rpUnit = (window.housingUnits || []).find(function(u){ return u && u.id === unitId; });
+      list.forEach(function(s){
+        if(s && s.assignedTeam === 'contractor' && s.contractorId){
+          try { window.sbSyncContractorWorkOrder(Object.assign({}, s, { unitId: unitId }), _rpUnit); } catch(e){}
+        }
+      });
+    }
     // Free the unit when a 100% completion left no active SOWs -- mirror the
     // Mark-Complete and Cancel paths (both revert under-renovation). Without
     // this the unit stays stuck in the Renovations pipeline after its last
