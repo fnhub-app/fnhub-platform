@@ -2161,6 +2161,16 @@ window.HEADER_NAV = [
       { key:'dh_archived',  label:'Archived Applications',   module:null, roles:'ed,housing_manager,super_user', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 8v13H3V8"/><path d="M1 3h22v5H1z"/><path d="M10 12h4"/></svg>', run:function(){ if(typeof showArchivedApplications==='function') showArchivedApplications(); else window.location.href='housing.html?view=archived-apps'; } },
     ]
   },
+  // ── Resources — Help & Training + the shareable nation-branded fact sheets.
+  // Both are self-injecting modals available on every page, so the run()s just
+  // open them in place (no navigation). Moved here out of the avatar menu.
+  { key:'resources', label:'Resources', isGroup:true,
+    svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>',
+    children: [
+      { key:'res_help',   label:'Help & Training',      module:null, svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>', run:function(){ if(typeof openHelpTraining==='function') openHelpTraining(); } },
+      { key:'res_sheets', label:'Shareable Resources',  module:null, svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>', run:function(){ if(typeof openResources==='function') openResources(); } },
+    ]
+  },
   { key:'tenants',      label:'Tenants',      module:'tenants',      svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',                                                                                                       run:function(){ if(typeof showTenants==='function') showTenants(); else window.location.href='tenants.html'; } },
   { key:'finance',      label:'Finance',      module:'finance',      roles:'ed,cfo,finance_l1,super_user', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>',                                                                                                                                                               run:function(){ if(typeof showFinance==='function') showFinance(); else window.location.href='finance.html'; } },
   { key:'settings',     label:'Settings',     module:null,           drawerOnly:true, roles:'ed,housing_manager,super_user', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>', run:function(){ if(typeof showSettings==='function') showSettings(); else window.location.href='housing.html?view=settings'; } }
@@ -2642,8 +2652,6 @@ function _toggleAvatarPopover(){
   }
   pop.innerHTML = '<div class="hap-head"><div class="hap-name">'+_esc(name)+'</div><div class="hap-role">'+_esc(label)+'</div></div>'
                 + viewAs
-                + '<button type="button" class="hap-action" data-hap="help">&#128218; Help &amp; Training</button>'
-                + '<button type="button" class="hap-action" data-hap="resources">&#128196; Shareable Resources</button>'
                 + ((typeof moduleOn !== 'function' || moduleOn('support')) ? '<button type="button" class="hap-action" data-hap="support">&#128607; Get Help / Report an Issue</button>' : '')
                 + '<button type="button" class="hap-action" data-hap="mfa">&#128274; Two-Factor Authentication</button>'
                 + '<button type="button" class="hap-action" data-hap="signout">Sign out</button>';
