@@ -2348,6 +2348,23 @@
       });
     } catch(e){ /* applicant-comment surfacing is best-effort */ }
 
+    // Surface contractor notes posted on THIS person's unit's work orders (they
+    // live on sow.contractorNotes, written by the portal), so the Tenant Card
+    // shows them too. Display-only; the SOW stays the source (no duplication).
+    try {
+      var _uid = (_ticState.unit && _ticState.unit.id) || '';
+      var _raw = (_uid && window._sowCache && window._sowCache[_uid]) || null;
+      var _sows = _raw && Array.isArray(_raw.sows) ? _raw.sows : [];
+      _sows.forEach(function(s){
+        var cns = (s && Array.isArray(s.contractorNotes)) ? s.contractorNotes : [];
+        cns.forEach(function(n){
+          var txt = (n && n.text != null) ? String(n.text) : '';
+          if(!txt.trim()) return;
+          threadNotes.push({ author: 'Contractor', role: (s.project_number ? ('MR ' + s.project_number) : 'work order'), text: txt, at: (n && n.at) || '' });
+        });
+      });
+    } catch(e){ /* contractor-note surfacing is best-effort */ }
+
     // Thread first (newest at the bottom), then the composer underneath.
     var html = '<div class="tic-section"><div class="tic-section-h">Notes &amp; History</div>';
     html += '<div style="font-size:11px;color:var(--muted);margin:-4px 0 8px;">Every note about this person in one place &mdash; staff file notes, application/intake notes, and workflow notes (move-in, inspections, work-order completion).</div>';
