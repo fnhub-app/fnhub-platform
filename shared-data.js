@@ -4078,26 +4078,49 @@ function openApplicationSubmissionReview(id){
   var flags = [p.homeless ? 'Homeless / no fixed address' : '', p.haveHouse ? 'Has house on reserve' : ''].filter(Boolean).join(' · ');
   var co = p.hasCoApp && p.coApp ? [p.coApp.fn, p.coApp.ln].filter(Boolean).join(' ') : '';
 
-  // Candidate existing applications to merge into (email exact, or name+DOB) —
-  // for update/transfer submissions, and as a duplicate warning for new ones.
+  // Candidate existing applications to merge into, RANKED by match strength so
+  // the strongest sits first and becomes the default merge target. This is the
+  // fix for the "approve created a second application instead of updating the
+  // existing one" bug: a confident match (rank >= 3: exact email, or name + DOB)
+  // pre-fills the link box so the primary button reads "Merge into APP-xxx" by
+  // default — on ANY submission type, including a brand-new one that duplicates
+  // an existing file. A mobile match or a name-only match is still surfaced as a
+  // chip to pick, but never auto-selected (a phone can be shared and names
+  // aren't unique). Matching is case-insensitive; phones compare on last 10 digits.
   var pEmail = String(p.email || '').toLowerCase();
-  var cands = (window.applications || []).filter(function(a){
-    if(!a || a.archived || a.appType === 'commercial') return false;
+  var _d10 = function(v){ return String(v==null?'':v).replace(/[^0-9]/g,'').slice(-10); };
+  var pPhone = _d10(p.phone);
+  var _scored = [];
+  (window.applications || []).forEach(function(a){
+    if(!a || a.archived || a.appType === 'commercial') return;
     var em = String(a.email || '').toLowerCase();
-    if(pEmail && em && em === pEmail) return true;
-    if(p.fn && p.ln && String(a.fn||'').toLowerCase() === String(p.fn).toLowerCase() && String(a.ln||'').toLowerCase() === String(p.ln).toLowerCase()){
-      if(!p.dob || !a.dob || a.dob === p.dob) return true;
-    }
-    return false;
-  }).slice(0, 6);
+    var nameEq  = !!(p.fn && p.ln && String(a.fn||'').toLowerCase() === String(p.fn).toLowerCase() && String(a.ln||'').toLowerCase() === String(p.ln).toLowerCase());
+    var dobEq   = !!(p.dob && a.dob && String(a.dob) === String(p.dob));
+    var emailEq = !!(pEmail && em && em === pEmail);
+    var phoneEq = !!(pPhone.length === 10 && _d10(a.phone) === pPhone);
+    var rank = emailEq ? 4 : ((nameEq && dobEq) ? 3 : (phoneEq ? 2 : (nameEq ? 1 : 0)));
+    if(!rank) return;
+    _scored.push({ a: a, rank: rank });
+  });
+  _scored.sort(function(x,y){ return y.rank - x.rank; });
+  var cands = _scored.slice(0, 6).map(function(x){ return x.a; });
+  var hasStrong = !!(_scored.length && _scored[0].rank >= 3);
   var isUpdateType = (s.submission_type === 'update' || s.submission_type === 'transfer');
-  var preselect = (isUpdateType && cands.length) ? cands[0].id : '';
+  // Default the merge target to the strongest match when one is confident
+  // (hasStrong), or — as before — for any update/transfer that has a candidate.
+  var preselect = (hasStrong || (isUpdateType && cands.length)) ? ((cands[0] && cands[0].id) || '') : '';
   var candChips = cands.map(function(a){
     var nm = ((a.fn||'') + ' ' + (a.ln||'')).trim();
     return '<button type="button" onclick="_appSubPickLink(\'' + e(a.id) + '\')" class="btn btn-ghost" style="font-size:12px;padding:3px 9px;margin:2px 4px 2px 0;">' + e(a.id) + (nm ? ' &middot; ' + e(nm) : '') + '</button>';
   }).join('');
+  var _linkHint = hasStrong
+    ? '<span style="color:var(--warn-amber-text);">(recommended &mdash; likely the same applicant)</span>'
+    : (isUpdateType ? '<span style="color:var(--warn-amber-text);">(recommended for ' + e(s.submission_type) + ')</span>' : '(optional)');
   var linkSection =
-      '<div class="tic-field-lbl" style="margin-top:14px;">Link to existing application ' + (isUpdateType ? '<span style="color:var(--warn-amber-text);">(recommended for ' + e(s.submission_type) + ')</span>' : '(optional)') + '</div>'
+      '<div class="tic-field-lbl" style="margin-top:14px;">Link to existing application ' + _linkHint + '</div>'
+    + (hasStrong
+        ? '<div style="font-size:12px;color:var(--warn-amber-text);margin-bottom:6px;">This looks like an existing applicant &mdash; it will <strong>merge into ' + e(preselect) + '</strong> and update that file. Clear the box below only if this is genuinely a different person who needs a new application.</div>'
+        : '')
     + (cands.length
         ? '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Possible match' + (cands.length>1?'es':'') + ': ' + candChips + '</div>'
         : '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Blank = create a new application. Enter an APP id to merge these changes into it.</div>')
