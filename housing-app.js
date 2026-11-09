@@ -2358,24 +2358,12 @@ function renderAppNotes() {
       listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--muted);font-size:12px;">No notes yet. Add the first one above.</div>';
       return;
     }
-    var html = '';
-    notes.forEach(function(n) {
-      var author = n.author_name || n.author_email || 'Unknown';
-      var role   = _roleLabel(n.author_role || '');
-      var ts     = _formatNoteTs(n.created_at);
-      var body   = escapeHtml(n.body || '');
-      html += '<div style="padding:14px 18px;border-bottom:1px solid var(--border);">'
-        +    '<div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:6px;">'
-        +      '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-        +        '<span style="font-size:12px;font-weight:700;color:var(--text);">'+escapeHtml(author)+'</span>'
-        +        (role ? '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:var(--bg);border:1px solid var(--border);color:var(--muted);">'+escapeHtml(role)+'</span>' : '')
-        +      '</div>'
-        +      '<span style="font-size:11px;color:var(--muted);">'+escapeHtml(ts)+'</span>'
-        +    '</div>'
-        +    '<div style="font-size:13px;line-height:1.55;color:var(--text);white-space:pre-wrap;">'+body+'</div>'
-        +  '</div>';
-    });
-    listEl.innerHTML = html;
+    // Shared chat-style thread (newest at the bottom), carrying each author's role.
+    listEl.innerHTML = (typeof window.notesThreadHtml === 'function')
+      ? window.notesThreadHtml(notes.map(function(n){
+          return { author: n.author_name || n.author_email || 'Unknown', role: _roleLabel(n.author_role || ''), text: n.body || '', at: n.created_at || '' };
+        }), { order:'asc', emptyText:'No notes yet. Add the first one above.' })
+      : '';
   }).catch(function(e) {
     console.warn('[notes] render failed:', e);
     listEl.innerHTML = '<div style="padding:24px;text-align:center;color:var(--danger);font-size:12px;">Failed to load notes. Try refreshing.</div>';

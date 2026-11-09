@@ -2353,26 +2353,27 @@ function cicRenderNotes(contractorId){
       + '<div class="tic-empty">Save the contractor first to start adding notes.</div></div>';
     return;
   }
+  // Thread first (newest at the bottom), then the composer underneath.
   mount.innerHTML =
-      '<div class="tic-section"><div class="tic-section-h">Add a Note</div>'
+      '<div class="tic-section"><div class="tic-section-h">Notes &amp; History</div>'
+    +   '<div id="cic_notes_list"><div class="tic-empty">Loading…</div></div>'
+    + '</div>'
+    + '<div class="tic-section tic-section-spaced"><div class="tic-section-h">Add a Note</div>'
     +   '<textarea id="cic_note_input" class="tic-textarea" placeholder="Type your note…"></textarea>'
     +   '<div class="tic-form-actions" style="margin-top:8px;"><button type="button" class="btn btn-primary" onclick="cicSaveNote()">Add Note</button></div>'
-    + '</div>'
-    + '<div class="tic-section tic-section-spaced"><div class="tic-section-h">Notes &amp; History</div>'
-    +   '<div id="cic_notes_list"><div class="tic-empty">Loading…</div></div>'
     + '</div>';
   // Any legacy single-field ct.notes value is shown read-only so nothing is lost.
   var legacy = (window._ctLastSaved && window._ctLastSaved.notes) ? String(window._ctLastSaved.notes).trim() : '';
   function _render(notes){
     var list = document.getElementById('cic_notes_list');
     if(!list) return;
-    var html = '';
-    (notes || []).forEach(function(n){ html += _cicNoteHtml(n); });
-    if(legacy){
-      html += '<div class="tic-note"><div class="tic-note-meta"><span class="tic-note-author">Legacy note</span></div>'
-            + '<div class="tic-note-body">' + esc(legacy) + '</div></div>';
-    }
-    list.innerHTML = html || '<div class="tic-empty">No notes yet.</div>';
+    var threadNotes = (notes || []).map(function(n){
+      return { author: n.author_name || 'Unknown', text: n.note_body || '', at: n.created_at || '' };
+    });
+    if(legacy) threadNotes.push({ author: 'Legacy note', text: legacy, at: '' });
+    list.innerHTML = (typeof window.notesThreadHtml === 'function')
+      ? window.notesThreadHtml(threadNotes, { order:'asc', emptyText:'No notes yet.' })
+      : '<div class="tic-empty">No notes yet.</div>';
   }
   if(typeof sbLoadContractorNotes === 'function'){
     sbLoadContractorNotes(contractorId).then(_render).catch(function(){ _render([]); });
@@ -2388,13 +2389,9 @@ function cicSaveNote(){
     if(!added) return;
     // Keep the worklist "has notes" badge live (Notes UX Batch 2b).
     try { window._ctNoteCounts = window._ctNoteCounts || {}; var _cc = window._ctNoteCounts[String(ctId)] || {n:0,latest:''}; _cc.n++; _cc.latest = new Date().toISOString(); window._ctNoteCounts[String(ctId)] = _cc; } catch(e){}
-    var list = document.getElementById('cic_notes_list');
-    if(list){
-      var empty = list.querySelector('.tic-empty');
-      if(empty) list.innerHTML = '';
-      list.insertAdjacentHTML('afterbegin', _cicNoteHtml(added));
-    }
     if(inp) inp.value = '';
+    // Re-render the thread so the new note lands at the bottom (chat order).
+    if(typeof cicRenderNotes === 'function') cicRenderNotes(ctId);
     if(typeof showToast === 'function') showToast('Note added.', {type:'info'});
   });
 }
@@ -2976,12 +2973,9 @@ function _ctPortalPreviewOpen(i){
   var cnotes = Array.isArray(d.contractorNotes) ? d.contractorNotes : [];
   var notesReadHtml = cnotes.length
     ? '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">Contractor notes</div>'
-      + cnotes.slice().reverse().map(function(n){
-          var when = n && n.at ? String(n.at).slice(0,10) : '';
-          return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);">'
-            + '<div style="color:var(--text);font-size:13px;white-space:pre-wrap;word-break:break-word;">' + esc((n && n.text) || '') + '</div>'
-            + (when ? '<div style="color:var(--muted);font-size:11px;margin-top:3px;">' + esc(when) + '</div>' : '') + '</div>';
-        }).join('')
+      + (typeof window.notesThreadHtml === 'function'
+          ? window.notesThreadHtml(cnotes.map(function(n){ return { author:'Contractor', text:(n && n.text) || '', at:(n && n.at) || '' }; }), { order:'asc' })
+          : '')
     : '';
   _ctPortalPreviewShell(
     '<button type="button" onclick="_ctPortalPreviewRenderList()" class="btn btn-ghost btn-sm" style="margin-bottom:12px;">← Back to work orders</button>'
@@ -11265,13 +11259,12 @@ async function scRenderNotes(app){
       + '<div style="font-size:11px;font-weight:700;color:var(--text);">' + esc2(p.lbl) + (p.who ? ' &middot; ' + esc2(p.who) : '') + '</div>'
       + '<div style="font-size:13px;color:var(--text);white-space:pre-wrap;margin-top:2px;">' + esc2(p.body) + '</div></div>';
   });
-  rows.forEach(function(n){
-    var when = String(n.created_at||'').slice(0,10);
-    var who = n.author_name || n.author_email || n.author_role || '';
-    html += '<div style="border:1px solid var(--border);background:var(--surface);border-radius:6px;padding:8px 10px;margin-bottom:6px;">'
-      + '<div style="font-size:13px;color:var(--text);white-space:pre-wrap;">' + esc2(n.body) + '</div>'
-      + '<div style="font-size:11px;color:var(--muted);margin-top:4px;">' + esc2(who) + (who && when ? ' &middot; ' : '') + esc2(when) + '</div></div>';
-  });
+  // Application notes log as the shared chat-style thread (newest at the bottom).
+  if(rows.length && typeof window.notesThreadHtml === 'function'){
+    html += window.notesThreadHtml(rows.map(function(n){
+      return { author: n.author_name || n.author_email || n.author_role || 'Unknown', text: n.body || '', at: n.created_at || '' };
+    }), { order:'asc' });
+  }
   if(!html) html = '<div class="txt-sm-muted" style="padding:6px 0;">No notes yet. Add one above &mdash; it saves to the application file and shows in the Tenant Card.</div>';
   mount.innerHTML = html;
 }

@@ -143,26 +143,27 @@ function udpRenderUnitNotes(unitId){
   if(!mount) return;
   var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
   window._ueNotesUnitId = unitId;
+  // Thread first (newest at the bottom), then the composer underneath.
   mount.innerHTML =
-      '<div class="tic-section"><div class="tic-section-h">Add a Note</div>'
+      '<div class="tic-section"><div class="tic-section-h">Notes &amp; History</div>'
+    +   '<div id="ue_notes_list"><div class="tic-empty">Loading…</div></div>'
+    + '</div>'
+    + '<div class="tic-section tic-section-spaced"><div class="tic-section-h">Add a Note</div>'
     +   '<textarea id="ue_note_input" class="tic-textarea" placeholder="Type your note…"></textarea>'
     +   '<div class="tic-form-actions" style="margin-top:8px;"><button type="button" class="btn btn-primary" onclick="udpSaveUnitNote()">Add Note</button></div>'
-    + '</div>'
-    + '<div class="tic-section tic-section-spaced"><div class="tic-section-h">Notes &amp; History</div>'
-    +   '<div id="ue_notes_list"><div class="tic-empty">Loading…</div></div>'
     + '</div>';
   var u = (typeof getAllUnits === 'function') ? getAllUnits().find(function(x){ return x && x.id === unitId; }) : null;
   var legacy = u && u.notes ? String(u.notes).trim() : '';
   function _render(notes){
     var list = document.getElementById('ue_notes_list');
     if(!list) return;
-    var html = '';
-    (notes || []).forEach(function(n){ html += _udpUnitNoteHtml(n); });
-    if(legacy){
-      html += '<div class="tic-note"><div class="tic-note-meta"><span class="tic-note-author">Legacy note</span></div>'
-            + '<div class="tic-note-body">' + esc(legacy) + '</div></div>';
-    }
-    list.innerHTML = html || '<div class="tic-empty">No notes yet.</div>';
+    var threadNotes = (notes || []).map(function(n){
+      return { author: n.author_name || 'Unknown', text: n.note_body || '', at: n.created_at || '' };
+    });
+    if(legacy) threadNotes.push({ author: 'Legacy note', text: legacy, at: '' });
+    list.innerHTML = (typeof window.notesThreadHtml === 'function')
+      ? window.notesThreadHtml(threadNotes, { order:'asc', emptyText:'No notes yet.' })
+      : '<div class="tic-empty">No notes yet.</div>';
   }
   if(typeof sbLoadUnitNotes === 'function'){
     sbLoadUnitNotes(unitId).then(_render).catch(function(){ _render([]); });
@@ -176,13 +177,9 @@ function udpSaveUnitNote(){
   if(!unitId || typeof sbSaveUnitNote !== 'function') return;
   sbSaveUnitNote(unitId, body).then(function(added){
     if(!added) return;
-    var list = document.getElementById('ue_notes_list');
-    if(list){
-      var empty = list.querySelector('.tic-empty');
-      if(empty) list.innerHTML = '';
-      list.insertAdjacentHTML('afterbegin', _udpUnitNoteHtml(added));
-    }
     if(inp) inp.value = '';
+    // Re-render the thread so the new note lands at the bottom (chat order).
+    if(typeof udpRenderUnitNotes === 'function') udpRenderUnitNotes(unitId);
     if(typeof showToast === 'function') showToast('Note added.', {type:'info'});
   });
 }
