@@ -160,6 +160,22 @@ function udpRenderUnitNotes(unitId){
     var threadNotes = (notes || []).map(function(n){
       return { author: n.author_name || 'Unknown', text: n.note_body || '', at: n.created_at || '' };
     });
+    // Also surface notes contractors posted on THIS unit's work orders (they
+    // live on sow.contractorNotes, written by the portal), so the unit's Notes
+    // tab shows them alongside staff notes. Display-only; the SOW stays the
+    // source, so nothing is duplicated into unit_notes.
+    try {
+      var _raw = (window._sowCache && window._sowCache[unitId]) || null;
+      var _sows = _raw && Array.isArray(_raw.sows) ? _raw.sows : [];
+      _sows.forEach(function(s){
+        var cns = (s && Array.isArray(s.contractorNotes)) ? s.contractorNotes : [];
+        cns.forEach(function(n){
+          var txt = (n && n.text != null) ? String(n.text) : '';
+          if(!txt.trim()) return;
+          threadNotes.push({ author: 'Contractor', role: (s.project_number ? ('MR ' + s.project_number) : 'work order'), text: txt, at: (n && n.at) || '' });
+        });
+      });
+    } catch(e){ /* best-effort */ }
     if(legacy) threadNotes.push({ author: 'Legacy note', text: legacy, at: '' });
     list.innerHTML = (typeof window.notesThreadHtml === 'function')
       ? window.notesThreadHtml(threadNotes, { order:'asc', emptyText:'No notes yet.' })
