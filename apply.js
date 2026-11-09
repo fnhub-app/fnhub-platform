@@ -115,9 +115,25 @@
   }
 
   // Call the intake function, refreshing the token once on 401.
+  // The nation's own branding, read from NATION_CONFIG + the current origin, so
+  // emails the public edge functions send (applicant confirmation, staff
+  // "new submission" notice, maintenance intake) carry the SAME header colour +
+  // logo as the staff app — without per-nation email secrets. The edge function
+  // validates these (hex colour, https logo) before use. No CLFN literals: every
+  // value comes from config / the live origin.
+  function _brandParams() {
+    var C = window.NATION_CONFIG || NC || {};
+    var origin = (window.location && window.location.origin) || '';
+    var out = {};
+    var nm = C.display_name || C.short || '';
+    if (nm) out.brand = nm + ' Housing';
+    if (C.primary_color) out.brand_color = C.primary_color;
+    if (/^https:\/\//i.test(origin)) out.logo_url = origin + '/icon-192.png';
+    return out;
+  }
   async function api(action, extra) {
     var doCall = function () {
-      return fetch(FN, { method: 'POST', headers: authHeaders(), body: JSON.stringify(Object.assign({ action: action }, extra || {})) });
+      return fetch(FN, { method: 'POST', headers: authHeaders(), body: JSON.stringify(Object.assign({ action: action }, _brandParams(), extra || {})) });
     };
     var r = await doCall();
     if (r.status === 401 && await refreshSession()) r = await doCall();

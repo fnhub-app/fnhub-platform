@@ -37,7 +37,24 @@ const APP_URL_ENV         = (Deno.env.get("APP_URL") || "").replace(/\/$/, "");
 const DEFAULT_REPLY_TO = "housing@clfn.on.ca";
 const DEFAULT_BRAND    = "Housing";
 
-export function emailBrand(): string  { return EMAIL_BRAND || DEFAULT_BRAND; }
+// Per-request branding overrides. The public functions (applicant-intake,
+// tenant-mr, request-password-reset) have no user JWT and don't go through
+// send-notification, so they can't read the nation's live NATION_CONFIG. The
+// CLIENT that invokes them DOES have it, so it passes brand / brand_color /
+// logo_url in the request body and the function calls setBrandOverrides() once
+// at the top. These win over the EMAIL_* secrets, so an email looks identically
+// branded whether it came from the staff app or a public portal -- without
+// needing per-nation email secrets. Values are validated (hex colour, https
+// logo) before use; anything missing falls back to the secret then the default.
+let _ovBrand = "", _ovColor = "", _ovLogo = "", _ovContact = "";
+export function setBrandOverrides(o: { brand?: unknown; brandColor?: unknown; logoUrl?: unknown; contactLine?: unknown }): void {
+  const b = String((o && o.brand) ?? "").trim();          if (b) _ovBrand = b.slice(0, 80);
+  const c = String((o && o.brandColor) ?? "").trim();     if (/^#[0-9a-fA-F]{6}$/.test(c)) _ovColor = c;
+  const l = String((o && o.logoUrl) ?? "").trim();        if (/^https:\/\//i.test(l)) _ovLogo = l;
+  const t = String((o && o.contactLine) ?? "").trim();    if (t) _ovContact = t.slice(0, 200);
+}
+
+export function emailBrand(): string  { return _ovBrand || EMAIL_BRAND || DEFAULT_BRAND; }
 export function emailReplyTo(): string { return EMAIL_REPLY_TO || DEFAULT_REPLY_TO; }
 
 // True only if the configured provider has all its secrets. Lets callers skip
@@ -90,6 +107,7 @@ export function readableTextColor(hex: string): string {
 // The nation's brand colour from the EMAIL_BRAND_COLOR secret (validated
 // hex), neutral dark-slate fallback.
 export function emailBrandColor(): string {
+  if (_ovColor) return _ovColor;
   const raw = String(EMAIL_BRAND_COLOR || "").trim();
   return /^#[0-9a-fA-F]{6}$/.test(raw) ? raw : "#1f2937";
 }
@@ -99,6 +117,7 @@ export function emailBrandColor(): string {
 // (shell renders the name only). Data: URIs are deliberately NOT used -- Gmail
 // and Outlook strip them, so a logo must be hosted.
 export function emailLogoUrl(): string {
+  if (_ovLogo) return _ovLogo;
   const explicit = String(EMAIL_LOGO_URL || "").trim();
   if (/^https:\/\//i.test(explicit)) return explicit;
   if (APP_URL_ENV && /^https:\/\//i.test(APP_URL_ENV)) return APP_URL_ENV + "/icon-192.png";
@@ -142,7 +161,8 @@ export function renderBrandedEmail(subject: string, innerHtml: string): string {
   const logoImg = logo
     ? '<img src="' + escapeHtml(logo) + '" alt="" width="42" height="42" style="display:block;border:0;outline:none;text-decoration:none;border-radius:10px;margin:0 0 10px;"/>'
     : '';
-  const contact = EMAIL_CONTACT_LINE ? (contactLineHtml(EMAIL_CONTACT_LINE) + "<br/>") : "";
+  const contactLine = _ovContact || EMAIL_CONTACT_LINE || "";
+  const contact = contactLine ? (contactLineHtml(contactLine) + "<br/>") : "";
   return '' +
 '<!doctype html><html><head><meta charset="utf-8"/>' +
 '<meta name="viewport" content="width=device-width,initial-scale=1"/></head>' +

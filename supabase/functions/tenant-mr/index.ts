@@ -12,7 +12,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   emailConfigured, isValidEmail, escapeHtml, renderBrandedEmail, emailBrand,
-  sendEmail, sendEmailSerially,
+  sendEmail, sendEmailSerially, setBrandOverrides,
 } from '../_shared/email.ts'
 import { uploadMrPhotos, mrSubject, resolveStaffRecipients } from '../_shared/mr.ts'
 
@@ -115,6 +115,8 @@ serve(async (req) => {
 
     const body   = await req.json().catch(() => ({}))
     const action = String(body.action || '')
+    // Brand emails with the nation identity the client (NATION_CONFIG) passes.
+    setBrandOverrides({ brand: body.brand, brandColor: body.brand_color, logoUrl: body.logo_url, contactLine: body.contact_line })
 
     // --- resolve_slug: map a short /u/<slug> code to its unit + token so the
     // report form can proceed. The slug is enumerable, so the token returned
