@@ -327,7 +327,7 @@ window._supReopen = _supReopen;
     if (typeof updateRoleSwitcherVisibility === 'function') updateRoleSwitcherVisibility();
     if (typeof renderHeaderNav              === 'function') renderHeaderNav();
     if (typeof applyRoleVisibility          === 'function') applyRoleVisibility(role);
-    if (typeof setHeaderNavActive           === 'function') setHeaderNavActive('operations');
+    if (typeof setHeaderNavActive           === 'function') setHeaderNavActive('admin');
     if (document.body) document.body.style.opacity = '1';
 
     if (typeof loadHousingData === 'function') { try { await loadHousingData(); } catch (e) {} }

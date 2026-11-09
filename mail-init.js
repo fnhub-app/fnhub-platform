@@ -481,7 +481,7 @@ window.dismissEmailIntake = dismissEmailIntake;
     if (typeof updateRoleSwitcherVisibility === 'function') updateRoleSwitcherVisibility();
     if (typeof renderHeaderNav              === 'function') renderHeaderNav();
     if (typeof applyRoleVisibility          === 'function') applyRoleVisibility(role);
-    if (typeof setHeaderNavActive           === 'function') setHeaderNavActive('operations');
+    if (typeof setHeaderNavActive           === 'function') setHeaderNavActive('admin');
     // Reveal the shell immediately (progressive render); the list fills as data loads.
     if (document.body) document.body.style.opacity = '1';
 
