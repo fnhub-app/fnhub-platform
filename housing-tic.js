@@ -2311,42 +2311,32 @@
     });
 
     var merged = tenantNotes.concat(normalizedAppNotes);
-    merged.sort(function(a, b){
-      // Parse to epoch -- tenant_notes store '...Z' and app notes store
-      // '...+00:00'; a raw string compare mis-orders the two formats.
-      var aT = Date.parse(a[TIC_C.created_at] || '') || 0;
-      var bT = Date.parse(b[TIC_C.created_at] || '') || 0;
-      return bT - aT; // newest first
+    // Normalise to the shared notes-thread shape; the shared renderer orders
+    // ascending (newest at the bottom, chat-style).
+    var threadNotes = merged.map(function(n){
+      return { author: n[TIC_C.author_name] || 'Unknown', text: n[TIC_C.note_body] || '', at: n[TIC_C.created_at] || '' };
     });
 
-    var html = '<div class="tic-section">'
-             +   '<div class="tic-section-h">Add a Note</div>'
-             +   '<textarea id="tic_note_input" class="tic-textarea" placeholder="Type your note…"></textarea>'
-             +   '<div class="tic-form-actions">'
-             +     '<button type="button" class="btn btn-primary" data-tic-action="note-save">Add Note</button>'
-             +   '</div>'
-             + '</div>';
-    html += '<div class="tic-section tic-section-spaced"><div class="tic-section-h">Notes &amp; History</div>';
+    // Thread first (newest at the bottom), then the composer underneath.
+    var html = '<div class="tic-section"><div class="tic-section-h">Notes &amp; History</div>';
     html += '<div style="font-size:11px;color:var(--muted);margin:-4px 0 8px;">Every note about this person in one place &mdash; staff file notes, application/intake notes, and workflow notes (move-in, inspections, work-order completion).</div>';
     html += '<div id="tic_notes_list">';
-    if(tenantNotesErrored && !merged.length){
+    if(tenantNotesErrored && !threadNotes.length){
       html += '<div class="tic-error-inline">Unable to load notes.</div>';
-    } else if(!merged.length){
-      html += '<div class="tic-empty">No notes yet.</div>';
+    } else if(typeof window.notesThreadHtml === 'function'){
+      html += window.notesThreadHtml(threadNotes, { order:'asc', emptyText:'No notes yet.' });
     } else {
-      merged.forEach(function(n){
-        html += _ticNoteHtml(n);
-      });
+      html += '<div class="tic-empty">No notes yet.</div>';
     }
-    html += '</div>';
-    html += '</div>';
-    _ticEl('tic_panel_notes').innerHTML = html;
-  }
-  function _ticNoteHtml(n){
-    return '<div class="tic-note">'
-         +   '<div class="tic-note-meta"><span class="tic-note-author">' + _ticEsc(n[TIC_C.author_name]||'Unknown') + '</span> · ' + _ticEsc(_ticFmtDT(n[TIC_C.created_at])) + '</div>'
-         +   '<div class="tic-note-body">' + _ticEsc(n[TIC_C.note_body]||'') + '</div>'
+    html += '</div></div>';
+    html += '<div class="tic-section tic-section-spaced">'
+         +   '<div class="tic-section-h">Add a Note</div>'
+         +   '<textarea id="tic_note_input" class="tic-textarea" placeholder="Type your note…"></textarea>'
+         +   '<div class="tic-form-actions">'
+         +     '<button type="button" class="btn btn-primary" data-tic-action="note-save">Add Note</button>'
+         +   '</div>'
          + '</div>';
+    _ticEl('tic_panel_notes').innerHTML = html;
   }
 
   // ── Render: Unit History ──────────────────────────────────────────────────
@@ -2485,12 +2475,9 @@
       return _ticWrite('POST', TIC_T.tenant_notes, payload).then(function(rows){
         var added = (rows && rows[0]) || payload;
         _ticState.notes.unshift(added);
-        var list = _ticEl('tic_notes_list');
-        if(list){
-          if(list.querySelector('.tic-empty')) list.innerHTML = '';
-          list.insertAdjacentHTML('afterbegin', _ticNoteHtml(added));
-        }
         if(inp) inp.value = '';
+        // Re-render the thread so the new note lands at the bottom (chat order).
+        _ticRenderNotes();
         if(typeof _ticRenderHero === 'function') _ticRenderHero();  // refresh last-note badge
         _ticAudit('tic_note_add', 'Added note (' + body.length + ' chars)');
         if(typeof showToast === 'function') showToast('Note added.', {type:'info'});

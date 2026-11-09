@@ -1079,14 +1079,12 @@ function _sowRenderContractorNotes(saved){
   if(!sec || !body) return;
   var notes = (saved && Array.isArray(saved.contractorNotes)) ? saved.contractorNotes : [];
   if(!notes.length){ sec.style.display = 'none'; body.innerHTML = ''; return; }
-  var esc = function(s){ return String(s==null?'':s).replace(/[&<>"]/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'})[c]; }); };
-  body.innerHTML = notes.slice().reverse().map(function(n){
-    var when = (n && n.at) ? String(n.at).slice(0,10) : '';
-    return '<div style="border:1px solid var(--border);border-radius:8px;padding:9px 11px;margin-bottom:6px;background:var(--bg);">'
-      + '<div style="white-space:pre-wrap;word-break:break-word;color:var(--text);font-size:13px;">' + esc((n && n.text) || '') + '</div>'
-      + '<div style="color:var(--muted);font-size:11px;margin-top:3px;">' + (when ? esc(when) + ' · ' : '') + 'From contractor</div>'
-      + '</div>';
-  }).join('');
+  // Shared chat-style thread (newest at the bottom). All of these come from the
+  // contractor in the portal, so they're attributed "Contractor".
+  var threadNotes = notes.map(function(n){ return { author:'Contractor', role:'from the portal', text:(n && n.text) || '', at:(n && n.at) || '' }; });
+  body.innerHTML = (typeof window.notesThreadHtml === 'function')
+    ? window.notesThreadHtml(threadNotes, { order:'asc' })
+    : '';
   sec.style.display = '';
 }
 window._sowRenderContractorNotes = _sowRenderContractorNotes;

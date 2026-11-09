@@ -2411,3 +2411,26 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 @media (max-width: 640px) {
   #clfn_msgbox { top: 88px; right: 8px; left: 8px; width: auto; }
 }
+
+/* ============================================================
+ * Notes thread — shared chat-style notes component (shared.js
+ * notesThreadHtml / renderNotesThread). Theme tokens only.
+ * ============================================================ */
+.notes-thread { display:flex; flex-direction:column; gap:12px; }
+.notes-thread-empty { color:var(--muted); font-size:13px; padding:8px 0; }
+.note-msg { display:flex; gap:10px; align-items:flex-start; }
+.note-avatar {
+  flex:0 0 auto; width:30px; height:30px; border-radius:50%;
+  background:var(--bg); border:1px solid var(--border); color:var(--text);
+  display:flex; align-items:center; justify-content:center;
+  font-weight:700; font-size:12px; text-transform:uppercase; line-height:1;
+}
+.note-main { min-width:0; flex:1 1 auto; }
+.note-head { font-size:11.5px; color:var(--muted); margin-bottom:3px; line-height:1.3; }
+.note-head .note-author { font-weight:700; color:var(--text); }
+.note-bubble {
+  background:var(--bg); border:1px solid var(--border);
+  border-radius:4px 14px 14px 14px; padding:8px 12px;
+  font-size:13.5px; line-height:1.5; color:var(--text);
+  white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
+}

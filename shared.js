@@ -476,6 +476,71 @@ window.formatCurrency = function(n){
 };
 
 // ═══════════════════════════════════════════════════════════════════════
+// Notes thread — ONE shared chat-style renderer for every notes surface
+// (TIC, approval scorecard, contractor card, maintenance requests, finance,
+// contractor portal). Styled like a messaging thread: an avatar initial, a
+// "Name · Role · time" header, and a message bubble. Theme-token styles live
+// in shared.css (.notes-thread / .note-msg / .note-avatar / .note-bubble).
+//
+//   window.notesThreadHtml(notes, opts)      -> HTML string (for string builders)
+//   window.renderNotesThread(mountEl, notes, opts)  -> sets mountEl.innerHTML
+//
+// `notes` is an array of loosely-shaped objects; each is normalised to
+//   { author, role, text, at }  reading common field aliases, so a caller can
+//   pass tenant_notes rows, SOW contractorNotes, finance notes, etc. as-is.
+// opts: { order:'asc'(default, newest at bottom)|'desc', emptyText, maxLen }.
+// ═══════════════════════════════════════════════════════════════════════
+window._notesEsc = function(s){
+  return String(s == null ? '' : s).replace(/[&<>"]/g, function(c){
+    return ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;' })[c];
+  });
+};
+window._notesFmtDT = function(at){
+  if(!at) return '';
+  var t = Date.parse(at);
+  if(isNaN(t)) return String(at);
+  try {
+    return new Date(t).toLocaleString('en-CA', { month:'short', day:'numeric', hour:'numeric', minute:'2-digit' });
+  } catch(e){ return String(at).slice(0,16).replace('T',' '); }
+};
+window.notesThreadHtml = function(notes, opts){
+  opts = opts || {};
+  var esc = window._notesEsc;
+  var list = (Array.isArray(notes) ? notes : []).filter(Boolean).map(function(n){
+    return {
+      author: n.author || n.author_name || n.by || n.byName || n.author_email || 'Unknown',
+      role:   n.role || n.author_role || '',
+      text:   (n.text != null ? n.text : (n.body != null ? n.body : (n.note != null ? n.note : ''))),
+      at:     n.at || n.created_at || n.createdAt || n.date || n.savedAt || ''
+    };
+  }).filter(function(n){ return String(n.text).trim() !== ''; });
+  var asc = (opts.order !== 'desc');
+  list.sort(function(a, b){ var at = Date.parse(a.at)||0, bt = Date.parse(b.at)||0; return asc ? at - bt : bt - at; });
+  if(!list.length){
+    return '<div class="notes-thread-empty">' + esc(opts.emptyText || 'No notes yet.') + '</div>';
+  }
+  return '<div class="notes-thread">' + list.map(function(n){
+    var who = String(n.author || 'Unknown');
+    var initial = who.trim().charAt(0) || '?';
+    var when = window._notesFmtDT(n.at);
+    return '<div class="note-msg">'
+      + '<div class="note-avatar" aria-hidden="true">' + esc(initial) + '</div>'
+      + '<div class="note-main">'
+      +   '<div class="note-head"><span class="note-author">' + esc(who) + '</span>'
+      +     (n.role ? '<span class="note-role"> &middot; ' + esc(n.role) + '</span>' : '')
+      +     (when   ? '<span class="note-time"> &middot; ' + esc(when) + '</span>' : '')
+      +   '</div>'
+      +   '<div class="note-bubble">' + esc(n.text) + '</div>'
+      + '</div></div>';
+  }).join('') + '</div>';
+};
+window.renderNotesThread = function(mountEl, notes, opts){
+  if(typeof mountEl === 'string') mountEl = document.getElementById(mountEl);
+  if(!mountEl) return;
+  mountEl.innerHTML = window.notesThreadHtml(notes, opts);
+};
+
+// ═══════════════════════════════════════════════════════════════════════
 // fmtCurrency — input-side live formatter (called from oninput).
 // Strips non-numeric chars while the user types, keeps at most one
 // decimal point and two fraction digits, emits e.g. "1,234.56" WITHOUT
