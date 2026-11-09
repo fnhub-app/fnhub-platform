@@ -177,6 +177,14 @@ var APPROVAL_AUTHORITY = (function() {
     // across its linked units and rewrites each unit's Construction Cost.
     allocateProjectCosts:     ['ed'],
 
+    // ── Documents & Files ─────────────────────────────────────────────────
+    // Who can DELETE, ARCHIVE or permanently purge documents and photos in the
+    // shared Document library (application docs, tenant/unit files, inspection
+    // and work-order photos, RFQ docs, finance profiles, etc). Uploading and
+    // viewing are NOT gated by this — only the destructive actions. Restoring a
+    // file from the recycle bin / archive stays available (recovery is safe).
+    deleteDocuments:          ['housing_manager', 'ed'],
+
   };
 
   // ── LIVE CONFIG (defaults + any saved overrides) ──────────────────────
@@ -459,6 +467,7 @@ var APPROVAL_AUTHORITY = (function() {
       accessLeadershipDashboard:'Access the Chief &amp; Council dashboard',
       manageProjects:           'Create / edit capital projects',
       allocateProjectCosts:     'Allocate project costs to units',
+      deleteDocuments:          'Delete / archive documents &amp; photos',
     },
 
     /** Group labels for the Settings UI sections */
@@ -477,6 +486,7 @@ var APPROVAL_AUTHORITY = (function() {
       'Finance':              ['viewFinanceCard','recordPayment','createInvoice','createArrangement','manageLoan','reverseTransaction'],
       'Leadership Dashboard': ['accessLeadershipDashboard'],
       'Capital Projects':     ['manageProjects','allocateProjectCosts'],
+      'Documents & Files':    ['deleteDocuments'],
     },
 
   };

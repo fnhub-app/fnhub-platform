@@ -1699,6 +1699,20 @@ window.DocLibrary = (function(){
       var inArchived = !inDeleted && !!(opts.canArchive && state.showArchived);
       var viewFiles  = inDeleted ? deletedFiles : (inArchived ? archivedFiles : activeFiles);
 
+      // Settings > Approval Authority gate: who may DELETE / ARCHIVE / purge a
+      // file. Uploading, viewing and RESTORING stay available to any non-readOnly
+      // viewer; only the destructive actions are gated. Fail-open where the auth
+      // layer isn't loaded (e.g. a public portal page) or the role is unknown, so
+      // document management never breaks on a page without the staff auth layer.
+      var canDeleteDocs = (function(){
+        try {
+          if (typeof APPROVAL_AUTHORITY === 'undefined' || !APPROVAL_AUTHORITY.can) return true;
+          var role = (typeof window !== 'undefined' && window.currentRole) || '';
+          if (!role) return true;
+          return APPROVAL_AUTHORITY.can('deleteDocuments', role);
+        } catch(e){ return true; }
+      })();
+
       var hasFiles = viewFiles.length > 0;
       var filtered = state.filter === 'all'
         ? viewFiles
@@ -1838,12 +1852,12 @@ window.DocLibrary = (function(){
               '<button class="btn btn-ghost btn-sm" data-dl-view="'+_escAttr(f.path)+'">View</button>' +
               (inDeleted
                 ? (' <button class="btn btn-ghost btn-sm" data-dl-undel="'+_escAttr(f.path)+'" data-dl-undel-name="'+_escAttr(f.name)+'">Restore</button>' +
-                   ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-purge="'+_escAttr(f.path)+'" data-dl-purge-name="'+_escAttr(f.name)+'">Delete permanently</button>')
+                   (canDeleteDocs ? ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-purge="'+_escAttr(f.path)+'" data-dl-purge-name="'+_escAttr(f.name)+'">Delete permanently</button>' : ''))
                 : inArchived
                   ? (opts.canArchive ? ' <button class="btn btn-ghost btn-sm" data-dl-restore="'+_escAttr(f.path)+'" data-dl-restore-name="'+_escAttr(f.name)+'">Restore</button>' : '')
                   : (
-                      (opts.canArchive ? ' <button class="btn btn-ghost btn-sm" data-dl-arch="'+_escAttr(f.path)+'" data-dl-arch-name="'+_escAttr(f.name)+'">Archive</button>' : '') +
-                      (opts.readOnly ? '' : ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-del="'+_escAttr(f.path)+'" data-dl-del-name="'+_escAttr(f.name)+'">Delete</button>')
+                      ((opts.canArchive && canDeleteDocs) ? ' <button class="btn btn-ghost btn-sm" data-dl-arch="'+_escAttr(f.path)+'" data-dl-arch-name="'+_escAttr(f.name)+'">Archive</button>' : '') +
+                      ((opts.readOnly || !canDeleteDocs) ? '' : ' <button class="btn btn-ghost btn-sm" style="color:var(--danger);" data-dl-del="'+_escAttr(f.path)+'" data-dl-del-name="'+_escAttr(f.name)+'">Delete</button>')
                     )
               ) +
             '</td>' +

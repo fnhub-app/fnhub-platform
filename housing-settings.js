@@ -39,8 +39,10 @@ function renderApprovalAuthorityPanel() {
   var rolesMgmt    = _aaRoleSet(MGMT_ROLES);
   var rolesFinance = _aaRoleSet(MGMT_ROLES.concat(['cfo', 'finance_l1']));
   var rolesField   = _aaRoleSet(MGMT_ROLES.concat(['field_employee']));
-  // Groups where Field Employee is a selectable role.
-  var FIELD_GROUPS = ['Housing Application', 'Maintenance Request & Renovation', 'Contractors', 'Inspections'];
+  // Groups where Field Employee is a selectable role. Documents & Files is
+  // included because the maintenance crew handles inspection / work-order photos,
+  // so the ED may want to let (or stop) them deleting those.
+  var FIELD_GROUPS = ['Housing Application', 'Maintenance Request & Renovation', 'Contractors', 'Inspections', 'Documents & Files'];
 
   var groups   = APPROVAL_AUTHORITY.groups;
   var labels   = APPROVAL_AUTHORITY.labels;
