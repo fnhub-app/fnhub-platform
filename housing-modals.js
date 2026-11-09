@@ -2876,11 +2876,15 @@ function renderEditUnitPhotoPreview(unitId) {
   if(!container) return;
   var photos = getUnitPhotos(unitId);
   if(!photos.length){ container.innerHTML='<span style="font-size:12px;color:var(--muted);font-style:italic;">No photos yet</span>'; return; }
+  // Settings > Approval Authority gate for deleting a unit photo (fail-open where
+  // the auth layer isn't loaded). Mirrors the shared Document library's gate.
+  var _canDelPhoto = true;
+  try { if(typeof APPROVAL_AUTHORITY !== 'undefined' && APPROVAL_AUTHORITY.can && window.currentRole) _canDelPhoto = APPROVAL_AUTHORITY.can('deleteDocuments', window.currentRole); } catch(e){}
   var html = '';
   photos.forEach(function(p, i){
     html += '<div style="position:relative;flex-shrink:0;">'
       +'<img src="'+p.data+'" style="width:70px;height:55px;object-fit:cover;border-radius:6px;border:1px solid var(--border);" data-ue-uid="'+unitId+'" data-ue-idx="'+i+'"/>'
-      +'<button type="button" data-ue-del-uid="'+unitId+'" data-ue-del-idx="'+i+'" style="position:absolute;top:-5px;right:-5px;background:var(--danger);border:none;color:#fff;width:16px;height:16px;border-radius:50%;cursor:pointer;font-size:9px;line-height:16px;text-align:center;padding:0;">✕</button>'
+      +(_canDelPhoto ? '<button type="button" data-ue-del-uid="'+unitId+'" data-ue-del-idx="'+i+'" style="position:absolute;top:-5px;right:-5px;background:var(--danger);border:none;color:#fff;width:16px;height:16px;border-radius:50%;cursor:pointer;font-size:9px;line-height:16px;text-align:center;padding:0;">✕</button>' : '')
       +'</div>';
   });
   container.innerHTML = html;
