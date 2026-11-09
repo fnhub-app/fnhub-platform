@@ -2317,6 +2317,37 @@
       return { author: n[TIC_C.author_name] || 'Unknown', text: n[TIC_C.note_body] || '', at: n[TIC_C.created_at] || '' };
     });
 
+    // Surface the APPLICANT'S OWN note from their application(s) — the free-text
+    // "anything else you'd like us to know" (applicantComments) they entered on
+    // the portal/application. It's a field, not a note row, so it would otherwise
+    // never appear here; pull it from the resolved app plus any same-person apps
+    // in memory and show it attributed to the applicant.
+    try {
+      var _nk = (typeof window.normNameKey === 'function') ? window.normNameKey : function(s){ return String(s||'').trim().toLowerCase(); };
+      var _nm = _nk((_ticState.tenant && _ticState.tenant[TIC_C.full_name]) || '');
+      var _apps = [];
+      if(_ticState.application) _apps.push(_ticState.application);
+      var _local = (typeof applications !== 'undefined' && applications && applications.length) ? applications : (window.SP_APPLICATIONS || []);
+      (_local || []).forEach(function(a){
+        if(!a) return;
+        var an = _nk((((a.fn||'') + ' ' + (a.ln||'')).trim()) || a.applicant_name || '');
+        if(_nm && an === _nm) _apps.push(a);
+      });
+      var _seen = {};
+      _apps.forEach(function(a){
+        var c = (a && a.applicantComments != null) ? String(a.applicantComments).trim() : '';
+        if(!c) return;
+        var key = (a.id || '') + '|' + c;
+        if(_seen[key]) return; _seen[key] = true;
+        threadNotes.push({
+          author: (((a.fn||'') + ' ' + (a.ln||'')).trim()) || a.applicant_name || 'Applicant',
+          role:   'Applicant',
+          text:   c,
+          at:     a.submittedAt || a.appDate || a.created_at || a.appDate || ''
+        });
+      });
+    } catch(e){ /* applicant-comment surfacing is best-effort */ }
+
     // Thread first (newest at the bottom), then the composer underneath.
     var html = '<div class="tic-section"><div class="tic-section-h">Notes &amp; History</div>';
     html += '<div style="font-size:11px;color:var(--muted);margin:-4px 0 8px;">Every note about this person in one place &mdash; staff file notes, application/intake notes, and workflow notes (move-in, inspections, work-order completion).</div>';
