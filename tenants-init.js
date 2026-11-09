@@ -38,5 +38,9 @@
     if (ticId && typeof openTenantCard === 'function') {
       setTimeout(function(){ openTenantCard(ticId); }, 80);
     }
+    // Deep link from the Admin nav "Merge Duplicate Tenants" item.
+    if (qp.get('merge') === '1' && typeof openTenantMergeManager === 'function') {
+      setTimeout(function(){ openTenantMergeManager(); }, 80);
+    }
   } catch (e) { /* harmless */ }
 }());
