@@ -28,7 +28,7 @@
 
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { sendEmail, renderBrandedEmail, emailConfigured, isValidEmail, escapeHtml, isSafeRedirect, readableTextColor } from '../_shared/email.ts'
+import { sendEmail, renderBrandedEmail, emailConfigured, isValidEmail, escapeHtml, isSafeRedirect, readableTextColor, setBrandOverrides } from '../_shared/email.ts'
 
 const SUPABASE_URL         = Deno.env.get('SUPABASE_URL')
 const SUPABASE_SERVICE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')
@@ -60,6 +60,7 @@ serve(async (req) => {
     if (!emailConfigured()) return json({ ok: false, error: 'Email is not configured for this nation.' }, 503)
 
     const body = await req.json().catch(() => ({}))
+    setBrandOverrides({ brand: body.brand || body.nation_name, brandColor: body.brand_color, logoUrl: body.logo_url, contactLine: body.contact_line })
     const email = String(body.email || '').toLowerCase().trim()
     if (!isValidEmail(email)) return json({ error: 'A valid email is required.' }, 400)
     // Host-allowlisted like the sibling functions (shared isSafeRedirect) --

@@ -223,7 +223,9 @@ async function sendPasswordReset() {
           email: email,
           redirect_to: redirectTo,
           nation_name: _nc.display_name || _nc.short || '',
-          brand_color: _nc.primary_color || ''
+          brand: (_nc.display_name || _nc.short) ? ((_nc.display_name || _nc.short) + ' Housing') : '',
+          brand_color: _nc.primary_color || '',
+          logo_url: (/^https:\/\//i.test((window.location && window.location.origin) || '')) ? (window.location.origin + '/icon-192.png') : ''
         })
       });
       _fnStatus = fr.status;

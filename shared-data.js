@@ -4353,6 +4353,14 @@ function _appSubSendInvite(email, appId){
   var base = (typeof nationPortalBase === 'function') ? nationPortalBase() : location.origin;
   var body = { action: 'invite', email: email, redirect_to: base + '/apply.html' };
   if(appId) body.app_id = appId;
+  // Brand the invite email with the nation's identity (same header colour + logo
+  // as every other app email); validated server-side.
+  try {
+    var _nc = window.NATION_CONFIG || {}; var _og = (window.location && window.location.origin) || '';
+    var _nm = _nc.display_name || _nc.short || ''; if(_nm) body.brand = _nm + ' Housing';
+    if(_nc.primary_color) body.brand_color = _nc.primary_color;
+    if(/^https:\/\//i.test(_og)) body.logo_url = _og + '/icon-192.png';
+  } catch(e){}
   return fetch(SUPABASE_URL + '/functions/v1/applicant-intake', {
     method: 'POST', headers: Object.assign({}, HOUSING_HEADERS, { 'Content-Type':'application/json' }), body: JSON.stringify(body)
   }).then(function(r){ return r.json().catch(function(){ return {}; }).then(function(d){ return { ok: r.ok, data: d }; }); });

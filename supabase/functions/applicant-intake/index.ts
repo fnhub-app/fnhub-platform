@@ -14,7 +14,7 @@ import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 import {
   emailConfigured, isValidEmail, escapeHtml, renderBrandedEmail, emailBrand,
-  sendEmail, sendEmailSerially, isSafeRedirect, emailButton,
+  sendEmail, sendEmailSerially, isSafeRedirect, emailButton, setBrandOverrides,
 } from '../_shared/email.ts'
 import { uploadMrPhotos, mrSubject, resolveStaffRecipients } from '../_shared/mr.ts'
 
@@ -303,6 +303,11 @@ serve(async (req) => {
 
     const body   = await req.json().catch(() => ({}))
     const action = String(body.action || '')
+
+    // Brand every email this request sends with the nation's own identity passed
+    // by the client (NATION_CONFIG), so public-portal emails match the staff app
+    // without needing per-nation email secrets. Validated inside the helper.
+    setBrandOverrides({ brand: body.brand, brandColor: body.brand_color, logoUrl: body.logo_url, contactLine: body.contact_line })
 
     // --- portal_info: PRE-LOGIN. Tells the sign-in screen whether the portal
     // is open and whether a band number is required. Never discloses the

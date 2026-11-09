@@ -31,8 +31,20 @@
       + '<p class="sub">' + esc(msg || 'This code is invalid or has expired. Please contact the Housing office.') + '</p></div>';
   }
 
+  // Nation branding for the edge function's emails (same header colour + logo as
+  // the staff app); values come from NATION_CONFIG + origin, validated server-side.
+  function _brand() {
+    var C = window.NATION_CONFIG || NC || {};
+    var origin = (window.location && window.location.origin) || '';
+    var out = {};
+    var nm = C.display_name || C.short || '';
+    if (nm) out.brand = nm + ' Housing';
+    if (C.primary_color) out.brand_color = C.primary_color;
+    if (/^https:\/\//i.test(origin)) out.logo_url = origin + '/icon-192.png';
+    return out;
+  }
   async function call(action, extra) {
-    var payload = Object.assign({ action: action, unit_id: unit, token: token }, extra || {});
+    var payload = Object.assign({ action: action, unit_id: unit, token: token }, _brand(), extra || {});
     var r = await fetch(FN, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + ANON },
