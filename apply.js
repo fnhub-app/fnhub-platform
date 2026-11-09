@@ -557,7 +557,11 @@
       +   '<div style="font-size:14px;white-space:pre-wrap;margin-top:6px;">' + esc(m.description || '') + '</div>'
       + '</div>'
       + (m.review_notes
-          ? '<div class="card"><h3>Housing office note</h3><div style="font-size:14px;white-space:pre-wrap;margin-top:6px;">' + esc(m.review_notes) + '</div></div>'
+          ? '<div class="card"><h3>Housing office note</h3>'
+            + '<div class="note-msg"><div class="note-avatar">H</div><div class="note-main">'
+            +   '<div class="note-head"><span class="note-author">Housing office</span></div>'
+            +   '<div class="note-bubble">' + esc(m.review_notes) + '</div>'
+            + '</div></div></div>'
           : '')
       + '<p class="sub" style="margin-top:14px;">This request is locked \u2014 if something changed, report a new problem or contact the Housing office.</p>';
   };
