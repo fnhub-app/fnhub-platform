@@ -385,12 +385,17 @@
         + '</div>'
       : '';
     var cnotes = Array.isArray(d.contractorNotes) ? d.contractorNotes : [];
+    // Shared chat-style thread (newest at the bottom) — these are the notes the
+    // contractor posted, so they're attributed "You". Falls back to the old list
+    // if shared.js's renderer isn't available for any reason.
     var notesReadHtml = cnotes.length
-      ? '<h3 class="cp-h3">Your notes</h3>' + cnotes.slice().reverse().map(function (n) {
-          var when = n && n.at ? String(n.at).slice(0, 10) : '';
-          return '<div class="cp-your-note">' + esc((n && n.text) || '')
-               + (when ? '<div class="cp-your-note-at">' + esc(when) + '</div>' : '') + '</div>';
-        }).join('')
+      ? '<h3 class="cp-h3">Your notes</h3>' + (typeof window.notesThreadHtml === 'function'
+          ? window.notesThreadHtml(cnotes.map(function (n) { return { author: 'You', text: (n && n.text) || '', at: (n && n.at) || '' }; }), { order: 'asc' })
+          : cnotes.slice().reverse().map(function (n) {
+              var when = n && n.at ? String(n.at).slice(0, 10) : '';
+              return '<div class="cp-your-note">' + esc((n && n.text) || '')
+                   + (when ? '<div class="cp-your-note-at">' + esc(when) + '</div>' : '') + '</div>';
+            }).join(''))
       : '';
     var docs = Array.isArray(d.documents) ? d.documents : [];
     var docsHtml = '<h3 class="cp-h3">Documents</h3>' + (docs.length

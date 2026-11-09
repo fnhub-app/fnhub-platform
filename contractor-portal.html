@@ -93,6 +93,22 @@
     .cp-prog-row { display:flex; align-items:center; gap:12px; margin-bottom:8px; }
     .cp-prog-range { flex:1 1 auto; width:auto; margin:0; accent-color:var(--cp-accent); }
     .cp-prog-val { flex:0 0 auto; min-width:48px; text-align:right; font-size:18px; font-weight:800; color:var(--ink); }
+    /* Shared chat-style notes thread (mirrors shared.css .notes-thread;
+       the portal loads shared.js but not shared.css, so restate it here with
+       the portal's own tokens). */
+    .notes-thread { display:flex; flex-direction:column; gap:12px; }
+    .notes-thread-empty { color:var(--muted); font-size:13px; padding:8px 0; }
+    .note-msg { display:flex; gap:10px; align-items:flex-start; }
+    .note-avatar { flex:0 0 auto; width:30px; height:30px; border-radius:50%;
+      background:var(--bg); border:1px solid var(--line); color:var(--ink);
+      display:flex; align-items:center; justify-content:center;
+      font-weight:700; font-size:12px; text-transform:uppercase; line-height:1; }
+    .note-main { min-width:0; flex:1 1 auto; }
+    .note-head { font-size:11.5px; color:var(--muted); margin-bottom:3px; line-height:1.3; }
+    .note-head .note-author { font-weight:700; color:var(--ink); }
+    .note-bubble { background:var(--bg); border:1px solid var(--line);
+      border-radius:4px 14px 14px 14px; padding:8px 12px; font-size:13.5px;
+      line-height:1.5; color:var(--ink); white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere; }
     /* "My team" request form */
     .cp-team { margin-top:24px; padding-top:18px; border-top:1px solid var(--line); }
     .cp-team input { margin-top:8px; }

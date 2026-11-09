@@ -68,6 +68,10 @@ interface Window {
   sendSms: (...args: any[]) => any;              // shared-data.js (SMS Edge Function wrapper)
   _toE164: (raw: any) => string;                 // shared-data.js (phone -> E.164 for SMS)
   sbSyncContractorWorkOrder: (...args: any[]) => any; // shared-data.js (Contractor Portal projection upsert)
+  notesThreadHtml: (...args: any[]) => any;      // shared.js (shared chat-style notes renderer -> HTML)
+  renderNotesThread: (...args: any[]) => any;    // shared.js (shared chat-style notes renderer -> mount)
+  _notesEsc: (s: any) => string;                 // shared.js (notes-thread HTML escaper)
+  _notesFmtDT: (at: any) => string;              // shared.js (notes-thread date formatter)
   backfillContractorWorkOrders: (...args: any[]) => any; // shared-data.js (one-time portal projection backfill)
   inviteContractorToPortal: (...args: any[]) => any;  // shared-data.js (write a contractor_invites row)
 
