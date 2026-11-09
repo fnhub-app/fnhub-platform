@@ -38,6 +38,7 @@
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-09', change: 'Added step-flow and approval-chain infographics to every SOP — the two end-to-end guides, each module, and each Settings tab — so key workflows read at a glance.' },
     { date: '2026-11-09', change: 'Added a Notes & File Records SOP: where each kind of note is stored, the Tenant Card as the single place that shows every note about a person, the new “has notes” worklist chips, destination hints on note fields, and Internal Notes shown on the approval scorecard.' },
     { date: '2026-11-03', change: 'Noted that a unit’s utility bills now also appear on the unit card’s Documents tab (cross-linked with the Tenant card’s Utilities tab).' },
     { date: '2026-11-02', change: 'Documented assigning a tenant from a unit’s new Matches tab; clarified that an emailed document filed via Email Intake also appears on the tenant’s profile.' },
@@ -156,6 +157,15 @@
     + '<h2>Purpose &amp; Scope</h2>'
     + '<p>The Contractor Module manages external contractors end to end &mdash; onboarding, compliance, and work-order assignment &mdash; and gives each approved contractor a phone-based <strong>Contractor Portal</strong> to see their jobs and submit photos, invoices, notes, progress, and insurance proof.</p>'
     + '<p><strong>This procedure covers:</strong> onboarding and approving a contractor, inviting them to the portal, assigning work orders, what the contractor does in the portal, reviewing their submissions, and paying invoices.</p>'
+    + '<div class="ht-fig"><div class="ht-flow">'
+    +   '<div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Onboard</div><div class="ht-fsub">Create the record + compliance (WSIB, insurance).</div></div>'
+    +   '<div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Approve</div><div class="ht-fsub">HM or ED approves &mdash; becomes an active contractor.</div></div>'
+    +   '<div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Invite to portal</div><div class="ht-fsub">Text a sign-in link to a key contact.</div></div>'
+    +   '<div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Assign work order</div><div class="ht-fsub">Pick the contractor &mdash; the job syncs to their portal.</div></div>'
+    +   '<div class="ht-fstep"><span class="ht-fnum">5</span><div class="ht-fttl">Contractor works</div><div class="ht-fsub">Photos, % complete, invoice, notes.</div></div>'
+    +   '<div class="ht-fstep"><span class="ht-fnum">6</span><div class="ht-fttl">Review</div><div class="ht-fsub">Approve invoices into payment draws.</div></div>'
+    +   '<div class="ht-fstep"><span class="ht-fnum">7</span><div class="ht-fttl">Pay &amp; close</div><div class="ht-fsub">Pay the draws, then Mark Job Complete.</div></div>'
+    + '</div></div>'
 
     + '<h2>Roles &amp; Responsibilities</h2>'
     + '<table><thead><tr><th>Role</th><th>Responsibilities in the contractor workflow</th></tr></thead><tbody>'
@@ -223,6 +233,13 @@
 
   var MOD_APPLICATIONS = `
     <p>Applications are the heart of the Housing app. This covers taking an application, the three types, submitting it, and moving it through approval. Placing an approved applicant into a unit is in the Match procedure.</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 4px;">Approval chain (an approver can Return or Decline at any stage):</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Submitted</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Manager recommended</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">HM approved</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">ED approved</span>
+    </div></div>
     <h2>Who does what</h2>
     <table><thead><tr><th>Role</th><th>Can do</th></tr></thead><tbody>
     <tr><td>Housing Employee (L1/L2)</td><td>Create and edit applications, submit them.</td></tr>
@@ -278,6 +295,12 @@
 
   var MOD_INVENTORY = `
     <p>Inventory is the register of every housing unit the nation owns. Each unit has one tabbed card (the Edit Unit modal) holding its details, tenant, approvals, maintenance history, documents, and map location.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Add unit</div><div class="ht-fsub">Unit number + street address.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Set details</div><div class="ht-fsub">Beds / baths / type / funder / rent.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Finish on the card</div><div class="ht-fsub">Assignment type, map, approvals, inspection dates.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Assign a tenant</div><div class="ht-fsub">From the Matches tab on a vacant unit.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul>
     <li>Housing staff can view and (for most roles) edit units.</li>
@@ -337,6 +360,12 @@
 
   var MOD_TENANTS = `
     <p>The Tenants page lists everyone housed by the nation. Each tenant has a full-screen <strong>Tenant Information Card (TIC)</strong> holding their details, utilities, documents, notes, and unit history, and generating their occupancy agreement.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the Tenant Card</div><div class="ht-fsub">From a tenant row or the worklist.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Keep details current</div><div class="ht-fsub">Contact info, utilities, documents.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Add file notes</div><div class="ht-fsub">The hero badge flags stale files.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Generate the agreement</div><div class="ht-fsub">Occupancy / lease PDF from the card.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Housing staff can open and edit the TIC. <strong>Field employees</strong> see it read-only.</li></ul>
     <h2>The TIC tabs</h2>
@@ -381,6 +410,12 @@
 
   var MOD_WORKLIST = `
     <p>My Worklist is the action queue on the landing page. It groups everything waiting for you into sections so you can clear the day's work from one screen. What you see depends on your role and your approval authority.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the landing page</div><div class="ht-fsub">Each section shows its count.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Work top to bottom</div><div class="ht-fsub">Click an item to open it where you act.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Act in place</div><div class="ht-fsub">Approvals often resolve inline.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Queue refreshes</div><div class="ht-fsub">Cleared items drop off automatically.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Every staff member sees a worklist tailored to their role. Field employees see a Work Orders to Complete section; management sees approval queues.</li></ul>
     <h2>The sections</h2>
@@ -411,6 +446,12 @@
 
   var MOD_MATCH = `
     <p>The Match page lists approved applicants ready to be placed into a vacant unit, ranked in the order your nation wants to house them, and is where staff assign an applicant to a unit.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Approved applicant</div><div class="ht-fsub">Scored (New Housing / Transfer), not yet placed.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Ranked</div><div class="ht-fsub">By Match Priority: has-match, unit type, reserve, house.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Assign</div><div class="ht-fsub">Pick the unit; oversized picks need ED override.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Housed</div><div class="ht-fsub">Unit becomes occupied; agreement generated.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Staff with match/assignment authority (typically HM/ED). Oversized-unit placements require ED override.</li></ul>
     <h2>Who appears on Match</h2>
@@ -453,6 +494,14 @@
 
   var MOD_RENOS = `
     <p>A Maintenance Request (internally a Scope of Work) captures the work needed on a unit, routes it for approval, assigns it to crew or a contractor, tracks progress and payments, and closes out. Enabling Renovations also enables the Contractors registry.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Create</div><div class="ht-fsub">Scope, work items, fund source, H&amp;S flags.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Submit</div><div class="ht-fsub">Goes to Renovations Waiting Approval.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Approve</div><div class="ht-fsub">HM up to the budget limit; larger goes to ED.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Issue work order</div><div class="ht-fsub">In-house crew or a contractor.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">5</span><div class="ht-fttl">Progress &amp; pay</div><div class="ht-fsub">Track % and pay down the PO draws.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">6</span><div class="ht-fttl">Complete</div><div class="ht-fsub">Mark complete; frees the unit.</div></div>
+    </div></div>
     <h2>Who does what</h2>
     <table><thead><tr><th>Role</th><th>Can do</th></tr></thead><tbody>
     <tr><td>Field employee</td><td>Create/edit requests, complete work orders, edit progress (sees only in-house jobs assigned to them).</td></tr>
@@ -522,6 +571,12 @@
 
   var MOD_RFQ = `
     <p>An RFQ (Request for Quotes) links a Maintenance Request to one or more contractors invited to bid, records their bids, awards the work, and generates the contract. It is how larger jobs are tendered.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Create &amp; issue</div><div class="ht-fsub">Link the request, pick recipients, Issue.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Bids received</div><div class="ht-fsub">Enter each bid; lowest is highlighted.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Award</div><div class="ht-fsub">Winner emailed; linked request auto-approved.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Contract</div><div class="ht-fsub">Fill Contracting, sign, Generate Contract.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li><strong>Edit:</strong> Housing Manager and ED only. Everyone else gets a read-only view (a View only banner).</li></ul>
     <h2>The status flow</h2>
@@ -570,6 +625,13 @@
 
   var MOD_CONTRACTORS = `
     <p>The Contractors registry holds the businesses the nation hires for renovation and maintenance work. Each contractor has a card with their trade, key contacts, compliance documents, and work history. It is enabled automatically when Renovations is on.</p>
+    <p style="font-size:12px;color:var(--muted);margin:0 0 4px;">Contractor approval chain:</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Draft</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Pending review</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">HM recommended</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Approved</span>
+    </div></div>
     <h2>Who does what</h2>
     <table><thead><tr><th>Role</th><th>Can do</th></tr></thead><tbody>
     <tr><td>Housing Employee L2 / HM</td><td>Add contractors and recommend them for approval.</td></tr>
@@ -612,6 +674,13 @@
 
   var MOD_PORTAL = `
     <p>The Contractor Portal is a contractor-facing site where an invited contractor signs in by phone, sees only their own assigned work orders, and submits photos, invoices, notes, and percent-complete. Staff review those in the app. The module is <strong>off by default</strong> and must be enabled per nation.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Invite</div><div class="ht-fsub">Staff text a sign-in link to a key contact.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Sign in</div><div class="ht-fsub">Contractor enters their phone + one-time code.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">See jobs</div><div class="ht-fsub">Only their own assigned work orders.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Submit</div><div class="ht-fsub">Photos, invoice, notes, % complete.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">5</span><div class="ht-fttl">Staff review</div><div class="ht-fsub">Approve invoices; view photos and notes.</div></div>
+    </div></div>
     <h2>Who does what</h2>
     <table><thead><tr><th>Who</th><th>Does</th></tr></thead><tbody>
     <tr><td>HM / ED</td><td>Invite a contractor's key contact, assign work to that contractor.</td></tr>
@@ -658,6 +727,13 @@
 
   var MOD_INSPECTIONS = `
     <p>Inspections record a unit's condition room-by-room &mdash; move-in, move-out, annual, routine, or emergency. A failed inspection can spawn a Maintenance Request, and a completed report generates a PDF. The module is gated in Settings &rarr; Nation &rarr; Modules.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">New inspection</div><div class="ht-fsub">Unit, type, date, inspector.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Checklist</div><div class="ht-fsub">Room-by-room: pass / fail / needs-repair.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Photos &amp; notes</div><div class="ht-fsub">Attach photos; write general notes.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Approve report</div><div class="ht-fsub">Authorized approver stamps the sign-off.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">5</span><div class="ht-fttl">Spawn repairs</div><div class="ht-fsub">A fail can open a Maintenance Request.</div></div>
+    </div></div>
     <h2>Who does what</h2>
     <ul><li>Housing staff can create and fill inspections. <strong>Sign-off</strong> requires the Approve Inspection authority (default HM/ED).</li></ul>
     <h2>Run an inspection</h2>
@@ -691,6 +767,14 @@
 
   var MOD_PROJECTS = `
     <p>Capital Projects track funded initiatives &mdash; developing lots, building houses, infrastructure &mdash; with milestones, budget-vs-actual costs, grants, funder payment requests (claims), lots, and unit creation. Reference numbers are CP-YYYY-NN. (This is distinct from a Maintenance Request's internal SOW- "Project #".)</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Create (CP#)</div><div class="ht-fsub">Name, type, dates; first save assigns the number.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Grants &amp; milestones</div><div class="ht-fsub">Add grants; set milestone budgets.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Log costs</div><div class="ht-fsub">Expenses with invoice / EFT / bank docs.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Claim</div><div class="ht-fsub">Payment request to a funder (docs gated).</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">5</span><div class="ht-fttl">Lots &amp; units</div><div class="ht-fsub">Add lots; create units from lots.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">6</span><div class="ht-fttl">Allocate</div><div class="ht-fsub">Split costs across the units (ED).</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul>
     <li><strong>Create/edit, lots, units:</strong> Manage Projects authority (HM/ED default).</li>
@@ -755,6 +839,12 @@
 
   var MOD_FINANCE = `
     <p>The Finance module manages the money side of housing &mdash; rent ledgers, loans, invoices, payment arrangements, collections, the journal, and hydro/gas. It shares tenant records with the housing side so each person's history aggregates under one profile.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Find the tenant</div><div class="ht-fsub">Search is deduped &mdash; one person, one row.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Open their ledger</div><div class="ht-fsub">Charges, payments, running balance.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Record the entry</div><div class="ht-fsub">Payment, invoice, loan or arrangement.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Balance updates</div><div class="ht-fsub">Posted and written to the finance audit.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>CFO and Finance staff (gated per finance table). ED has access.</li></ul>
     <h2>What it covers</h2>
@@ -797,6 +887,12 @@
 
   var MOD_EMAIL_INTAKE = `
     <p>Email Intake lets staff forward an email to the nation's intake address and have it land in a triage queue, where it is filed to a unit or tenant. It is triage-first &mdash; nothing is filed automatically. Gated by the Email Intake module.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Forward the email</div><div class="ht-fsub">From a staff work email to the intake address.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Lands in triage</div><div class="ht-fsub">Shows as &ldquo;Needs filing&rdquo;.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Review &amp; assign</div><div class="ht-fsub">Check the attachment, pick the unit.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Files to Documents</div><div class="ht-fsub">On the unit &mdash; and the tenant&rsquo;s profile.</div></div>
+    </div></div>
     <h2>Email a document to a tenant's file</h2>
     <p>This is the quickest way to get a PDF, photo, or scanned letter onto a tenant's file without logging in and uploading &mdash; just email it in:</p>
     <ol>
@@ -834,6 +930,12 @@
 
   var MOD_AI = `
     <p>The AI Assistant is a staff chat helper that answers questions about applications, units, maintenance requests, renovations, contractors, inspections, capital projects, policy, and how-to procedures &mdash; and can draft professional decision notes. It is available on every page via the AI button.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the AI panel</div><div class="ht-fsub">The ✦ button in the header.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Ask in plain language</div><div class="ht-fsub">Counts, lists, or how-to questions.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">It reads (never writes)</div><div class="ht-fsub">Within your role&rsquo;s data limits.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">You decide</div><div class="ht-fsub">Review any drafted note before saving.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Staff. What it can read is limited by the signed-in staff member's role (finance tables only for ED/CFO/Finance; applications hidden from field employees).</li></ul>
     <h2>The two ways to use it</h2>
@@ -864,6 +966,12 @@
 
   var MOD_LEADERSHIP = `
     <p>The Leadership Dashboard is a read-only, at-a-glance view of the nation's housing picture for Chief &amp; Council. It summarizes data already in the app &mdash; no new queries, and no data leaves the nation's control.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open Council</div><div class="ht-fsub">From the top navigation.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Read the KPI cards</div><div class="ht-fsub">Units, occupancy, waitlist, renos.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Show the charts</div><div class="ht-fsub">Trends by tier, type and pipeline.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Drill down</div><div class="ht-fsub">Go to the source page for detail.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Configurable, not hardcoded. Access is controlled by the <strong>Access Leadership Dashboard</strong> authority (default ED and Housing Manager) in Settings &rarr; Approval Authority. The ED can grant it to Council members' roles.</li></ul>
     <h2>How to open it</h2>
@@ -890,6 +998,12 @@
 
   var MOD_HELP = `
     <p>Help &amp; Training is this library &mdash; the in-app standard operating procedures (and, in time, training videos). It opens as a full-screen reader, styled in the nation's own branding, so staff can look up how to do something without leaving the app.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the avatar menu</div><div class="ht-fsub">Top-right, then Help &amp; Training.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Pick a category</div><div class="ht-fsub">Guides, Modules or Settings.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Search or browse</div><div class="ht-fsub">Filter the sidebar by keyword.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Read the procedure</div><div class="ht-fsub">In your nation&rsquo;s branding.</div></div>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Everyone. It is available on every page.</li></ul>
     <h2>How to open it</h2>
@@ -919,6 +1033,12 @@
 
   var MOD_2FA = `
     <p>Two-factor authentication (2FA) adds a second step to staff sign-in: after your email and password, you enter a 6-digit code from an authenticator app on your phone. It is opt-in &mdash; if you do not turn it on, you sign in exactly as before.</p>
+    <p class="ht-fig-note" style="font-size:12px;color:var(--muted);margin:0 0 4px;">Sign-in with 2FA on:</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Email &amp; password</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">6-digit code</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Signed in</span>
+    </div></div>
     <h2>Who can use it</h2>
     <ul><li>Any staff member can turn it on for their own account from the avatar menu. It affects only your own sign-in.</li></ul>
     <h2>What you need</h2>
@@ -958,6 +1078,12 @@
 
   var SET_NATION = `
     <p>The Nation &amp; Modules tab shows which nation the app is running for and which optional modules are turned on. Identity and contact details are <strong>read-only</strong> here (set at app setup); module on/off toggles are the one thing a super user changes day-to-day.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open Nation</div><div class="ht-fsub">Scroll to the Modules list.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Find the module</div><div class="ht-fsub">One row per optional module.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Toggle On / Off</div><div class="ht-fsub">Saves at once, writes to the audit.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Appears next load</div><div class="ht-fsub">Nav tiles show or hide.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul>
     <li><strong>Open and view:</strong> any staff member with Settings access.</li>
@@ -1004,6 +1130,11 @@
 
   var SET_THEMES = `
     <p>The Themes tab customizes the app's brand colours and logo. Changes apply <strong>live to every page</strong>, including printed PDF reports, the moment you save &mdash; no deploy or reload needed.</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Pick colour &amp; logo</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Save</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Live on every page &amp; PDF</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>Super user / ED. Other staff can see the tab but should not change branding without approval.</li></ul>
     <h2>What you can change</h2>
@@ -1034,6 +1165,11 @@
 
   var SET_CONFIG = `
     <p>The Config tab is a <strong>read-only reference</strong> of the values your app was configured with at setup time &mdash; the database connection, email provider, storage, and other platform settings. You come here to check a value, not to change it.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open Config</div><div class="ht-fsub">Read the configured value.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Change elsewhere</div><div class="ht-fsub">In the linked admin console.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Confirm here</div><div class="ht-fsub">Return to verify the new value.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / super user only. It is hidden from other roles.</li></ul>
     <h2>When to use it</h2>
@@ -1065,6 +1201,12 @@
 
   var SET_LABELS = `
     <p>The Unit Labels tab configures and prints real <strong>2" &times; 1" physical labels</strong> for units. Each label carries a scan-to-report <strong>QR code</strong>, emergency contact details, and unit identification. Tenants scan the QR with a phone camera to report a maintenance issue without logging in.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Configure</div><div class="ht-fsub">Contacts, format, units.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Print &amp; apply</div><div class="ht-fsub">On matching 2&times;1 stock.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Tenant scans QR</div><div class="ht-fsub">No app, no login.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Lands in the queue</div><div class="ht-fsub">Tied to the right unit.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / super user only.</li></ul>
     <h2>What the QR code does</h2>
@@ -1096,6 +1238,12 @@
 
   var SET_USERS = `
     <p>The Users tab manages the staff who can sign in and what role each has. This is where you add a new employee, change a role, and deactivate someone who has left.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Look up the email</div><div class="ht-fsub">Search before adding.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Add &amp; set role</div><div class="ht-fsub">Lowest role for the job.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">They sign in</div><div class="ht-fsub">Landing on their role&rsquo;s home.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Deactivate on exit</div><div class="ht-fsub">Keeps their history.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul>
     <li><strong>View the staff list:</strong> any staff member with Settings access.</li>
@@ -1141,6 +1289,12 @@
 
   var SET_APPROVAL = `
     <p>Approval Authority is the single control panel for <strong>which roles can perform each action</strong> &mdash; who approves applications, who signs off renovations, who can match an applicant, who can edit the scoring model, and so on. It is the one place to delegate authority without changing any code.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Pick an action</div><div class="ht-fsub">Grouped by area.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Tick the roles</div><div class="ht-fsub">Allowed to do it.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Save Changes</div><div class="ht-fsub">By role, not by person.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Applies app-wide</div><div class="ht-fsub">Everywhere it checks &ldquo;allowed?&rdquo;</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED only. Changes take effect immediately for everyone.</li></ul>
     <h2>How it works</h2>
@@ -1182,6 +1336,12 @@
 
   var SET_EMAIL = `
     <p>The Email tab edits the <strong>subject, body, and recipients</strong> of every automatic workflow email the app sends &mdash; application confirmations, approval notices, work orders, RFQ awards, and so on. Changes apply immediately to the next email sent.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Find the event</div><div class="ht-fsub">About 19 workflow emails.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Edit subject &amp; body</div><div class="ht-fsub">Keep the tokens in place.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Choose recipients</div><div class="ht-fsub">Primary roles + optional CC.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Next send uses it</div><div class="ht-fsub">Applies immediately.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED only.</li></ul>
     <h2>How it works</h2>
@@ -1216,6 +1376,11 @@
 
   var SET_TERMS = `
     <p>The Terms &amp; Conditions tab edits the terms-and-conditions text printed onto <strong>housing applications and contractor work orders</strong>. It is a rich-text editor and you can paste directly from Word.</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Edit the terms</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Save</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Prints on the next document</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED only.</li></ul>
     <h2>Edit the terms</h2>
@@ -1235,6 +1400,12 @@
 
   var SET_CONTRACTS = `
     <p>The Contracts tab edits the <strong>full text of lease agreements and other contracts</strong> the app generates &mdash; the residential occupancy agreement, temporary and commercial agreements, and related documents. The text supports token substitution so each generated contract is filled in with real details.</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Choose contract type</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Edit clauses (keep tokens)</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Save</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Next contract uses it</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED only.</li></ul>
     <h2>How it works</h2>
@@ -1260,6 +1431,12 @@
 
   var SET_AUDIT = `
     <p>The Audit Log is the full activity trail for the app &mdash; applications, approvals, unit edits, maintenance requests, file uploads, AI queries, and system changes. It is read-only and append-only: entries can be viewed and exported but never edited or deleted.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the log</div><div class="ht-fsub">Newest entries first.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Read with the Legend</div><div class="ht-fsub">Decode the event codes.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Refresh</div><div class="ht-fsub">Pull the latest entries.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Export</div><div class="ht-fsub">CSV or Excel for an auditor.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>Staff with Settings access can view it. Export is available from the tab.</li></ul>
     <h2>What each column means</h2>
@@ -1293,6 +1470,16 @@
 
   var SET_SCORING = `
     <p>This tab controls two separate things: the <strong>Application Scoring Model</strong> (how much need/urgency each applicant earns, which ranks the waitlist) and <strong>Match Priority</strong> (who gets placed into a vacant unit first). Scoring measures need; match priority decides placement order.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><div class="ht-fttl">Application Scoring</div><div class="ht-fsub">How urgent is the need? &mdash; ranks the waitlist.</div></div>
+    <div class="ht-fstep"><div class="ht-fttl">Match Priority</div><div class="ht-fsub">Who do we house first? &mdash; sets placement order.</div></div>
+    </div></div>
+    <p class="ht-fig-note" style="font-size:12px;color:var(--muted);margin:0 0 4px;">After editing the scoring model:</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Edit factor points</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Adjust tier thresholds</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Rescore all applications</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED only.</li></ul>
     <h2>Part 1 &mdash; Application Scoring Model</h2>
@@ -1328,6 +1515,11 @@
 
   var SET_REQUIRED = `
     <p>The Required Fields tab lets you choose which application fields are <strong>mandatory</strong>. A required field shows a red asterisk (*) and the application cannot be submitted while it is blank.</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Toggle a field required</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Red * on the form</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Blank blocks submission</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / management.</li></ul>
     <h2>How it works</h2>
@@ -1353,6 +1545,12 @@
 
   var SET_UNITMATCH = `
     <p>The Unit Matching tab sets the <strong>point values</strong> used to score how well an applicant fits a particular unit. These points drive the <strong>match %</strong> shown on the Match Scorecard when staff place an applicant into a vacant unit.</p>
+    <p class="ht-fig-note" style="font-size:12px;color:var(--muted);margin:0 0 4px;">How the match % is built:</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Points earned</span><span class="ht-carrow">&divide;</span>
+    <span class="ht-cpill">Maximum score</span><span class="ht-carrow">&times; 100 =</span>
+    <span class="ht-cpill ht-on">Match %</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / management (gated by the Scoring approval authority).</li></ul>
     <h2>How the score works</h2>
@@ -1378,6 +1576,11 @@
 
   var SET_RENOPRIO = `
     <p>The Reno Priority tab sets the <strong>point values used to rank units for renovation</strong>. The resulting Renovation Priority Score helps staff decide which units to renovate first, drawing on unit condition, the maintenance request data, and tenant factors.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Category conditions met</div><div class="ht-fsub">Condition, hazard, overcrowding.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Points add up per unit</div><div class="ht-fsub">From request &amp; condition data.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Higher = renovate first</div><div class="ht-fsub">Ranks the units, not applicants.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / management (gated by the Scoring approval authority).</li></ul>
     <h2>How the score works</h2>
@@ -1403,6 +1606,11 @@
 
   var SET_BUDGET = `
     <p>The Reno Budget tab records your <strong>annual renovation funding by source</strong>, sets the <strong>Housing Manager spending limit</strong> before ED approval is required, and sets the <strong>FNCFS dependant age</strong> used to decide FNCFS fund eligibility.</p>
+    <p class="ht-fig-note" style="font-size:12px;color:var(--muted);margin:0 0 4px;">The HM Limit routes approvals:</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><div class="ht-fttl">At or under the HM Limit</div><div class="ht-fsub">Housing Manager can approve.</div></div>
+    <div class="ht-fstep"><div class="ht-fttl">Over the HM Limit</div><div class="ht-fsub">Escalates to the ED.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / management.</li></ul>
     <h2>The controls at the top</h2>
@@ -1438,6 +1646,11 @@
 
   var SET_OCCUPANCY = `
     <p>The Occupancy tab sets the <strong>National Occupancy Standard (NOS)</strong> &mdash; the maximum number of people that can appropriately live in a unit of a given bedroom count. The app uses it to automatically calculate <strong>overcrowding</strong> on applications.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Set the NOS max</div><div class="ht-fsub">Persons per bedroom count.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Household exceeds it</div><div class="ht-fsub">= overcrowded.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Feeds the score</div><div class="ht-fsub">+1 point per extra person, max 10.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED only.</li></ul>
     <h2>How it works</h2>
@@ -1462,6 +1675,11 @@
 
   var SET_RENTMODEL = `
     <p>The Rent Model tab defines how the app <strong>calculates rent</strong>. It holds two pathways: a standard <strong>market-rent discount</strong> and the <strong>Ontario Works / ODSP shelter-allowance</strong> tables. The app picks the pathway automatically from the applicant's income type.</p>
+    <p class="ht-fig-note" style="font-size:12px;color:var(--muted);margin:0 0 4px;">Income type picks the pathway:</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><div class="ht-fttl">Employment / pension / other</div><div class="ht-fsub">Market-rent discount model.</div></div>
+    <div class="ht-fstep"><div class="ht-fttl">Ontario Works / ODSP</div><div class="ht-fsub">Shelter-allowance tables.</div></div>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / management.</li></ul>
     <h2>The two pathways</h2>
@@ -1486,6 +1704,11 @@
 
   var SET_POLICY = `
     <p>The Policy Rules tab holds your nation's <strong>housing-policy parameters</strong> &mdash; the eligibility windows and arrears good-standing timing the app actually enforces. Editing them here changes the app's behaviour <strong>without a software deploy</strong>.</p>
+    <div class="ht-fig"><div class="ht-chain">
+    <span class="ht-cpill">Edit a policy value</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill">Save</span><span class="ht-carrow">&rarr;</span>
+    <span class="ht-cpill ht-on">Enforced at the decision point</span>
+    </div></div>
     <h2>Who can use this tab</h2>
     <ul><li>ED / management.</li></ul>
     <h2>What it controls</h2>
