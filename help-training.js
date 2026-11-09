@@ -32,12 +32,13 @@
   // BUMP THIS whenever the procedures are updated to match app changes so staff
   // can see how current the guidance is. A single doc may override it with its
   // own `rev` field once its content diverges from the rest of the set.
-  var SOP_REVISION = '2026-11-03';
+  var SOP_REVISION = '2026-11-09';
 
   // Revision history shown at the foot of every document. Add a new entry
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-09', change: 'Added a Notes & File Records SOP: where each kind of note is stored, the Tenant Card as the single place that shows every note about a person, the new “has notes” worklist chips, destination hints on note fields, and Internal Notes shown on the approval scorecard.' },
     { date: '2026-11-03', change: 'Noted that a unit’s utility bills now also appear on the unit card’s Documents tab (cross-linked with the Tenant card’s Utilities tab).' },
     { date: '2026-11-02', change: 'Documented assigning a tenant from a unit’s new Matches tab; clarified that an emailed document filed via Email Intake also appears on the tenant’s profile.' },
     { date: '2026-11-02', change: 'Added a Two-Factor Authentication (2FA) procedure.' },
@@ -1491,11 +1492,57 @@
     <li>Keep your written housing policy and these settings aligned. Changes are recorded in the Audit Log.</li>
     </ul>`;
 
+  // ---- GUIDES: Notes & File Records ----------------------------------------
+  var NOTES_SOP = ''
+    + '<h2>Purpose</h2>'
+    + '<p>Notes are the running record of a file &mdash; the calls, the context, the decisions behind each step. This procedure explains the kinds of notes the app keeps, <strong>where each one is stored</strong>, and <strong>where to go to read them later</strong>. The short version: a note is always saved with the record you were working on, and every note about a <em>person</em> also gathers in one place &mdash; the Tenant Card.</p>'
+
+    + '<h2>The one place to see everything about a person</h2>'
+    + '<p>Open the <strong>Tenant Card</strong> (the person card &mdash; from a tenant row, or from the worklist) and go to <strong>Notes &amp; History</strong>. It shows <strong>every</strong> note about that person in one list, newest first: staff file notes, application / intake notes, and workflow notes (move-in, inspection sign-off, work-order completion). When you are not sure where a note went, this is where to look.</p>'
+    + '<ul>'
+    + '<li>The card gathers notes across <strong>all</strong> of a person&rsquo;s records &mdash; every tenancy row and every application they have &mdash; so a note is never hidden on a duplicate record.</li>'
+    + '<li>The hero shows a <strong>last-note age</strong> badge (it turns red when there are no notes, or the newest is over 90 days old) so you can tell at a glance whether a file is current.</li>'
+    + '</ul>'
+
+    + '<h2>Where you add a note, and where it lands</h2>'
+    + '<table><thead><tr><th>Where you add it</th><th>What it is</th><th>Where it is stored / shown</th></tr></thead><tbody>'
+    + '<tr><td>Tenant Card &rarr; Notes tab (&ldquo;Add a Note&rdquo;)</td><td>A staff note on the person&rsquo;s file.</td><td>The tenant file. Shows on the Tenant Card.</td></tr>'
+    + '<tr><td>Application &rarr; Internal Notes tab; and the quick-add on the approval scorecard</td><td>A staff note on an application.</td><td>The application file. Also appears on the Tenant Card.</td></tr>'
+    + '<tr><td>Approval decision note (Approve / Return / Decline)</td><td>The reviewer&rsquo;s reason for a decision.</td><td>Saved to the application file <em>and</em> the sign-off record. Shown on the scorecard&rsquo;s Internal Notes.</td></tr>'
+    + '<tr><td>Edit Unit &rarr; Notes tab</td><td>A note about the property / unit.</td><td>The unit record. Shows on the unit card.</td></tr>'
+    + '<tr><td>Contractor card &rarr; Notes tab</td><td>A staff note about a contractor.</td><td>The contractor record. Shows on the contractor card.</td></tr>'
+    + '<tr><td>Maintenance Request note fields (Additional / Accountability / Field notes)</td><td>Context on a repair request.</td><td>Saved with that Maintenance Request.</td></tr>'
+    + '<tr><td>Finance &rarr; payment or opening-balance notes</td><td>A note on a money transaction.</td><td>Saved on that entry; shows in the tenant&rsquo;s ledger.</td></tr>'
+    + '<tr><td>Contractor Portal (the contractor types a note)</td><td>The contractor&rsquo;s own site note on a work order.</td><td>Saved on the work order; surfaces on its Overview and in the Contractor Submissions queue.</td></tr>'
+    + '</tbody></table>'
+
+    + '<h2>Every note answers three questions</h2>'
+    + '<ul>'
+    + '<li><strong>Did it save?</strong> You get a confirmation &mdash; the note appears in the list right away, or a message confirms it.</li>'
+    + '<li><strong>Where did it go?</strong> Each note field states its destination (for example, a Maintenance Request note reads &ldquo;Saved with this maintenance request&rdquo;; a payment note &ldquo;shows in the tenant&rsquo;s ledger&rdquo;).</li>'
+    + '<li><strong>Where do I read it later?</strong> On the record itself, and &mdash; for anything about a person &mdash; on the Tenant Card.</li>'
+    + '</ul>'
+
+    + '<h2>Finding notes at a glance</h2>'
+    + '<ul>'
+    + '<li><strong>Worklist chips.</strong> Application and Contractor rows in My Worklist show a <strong>&#128221; N</strong> chip when the file already has notes; hover (or tap) for the last-note age. No chip means no notes yet.</li>'
+    + '<li><strong>On the approval scorecard.</strong> Before you decide, the scorecard shows the application&rsquo;s Internal Notes <em>and</em> the HM/ED sign-off notes, and lets you add a note right there &mdash; so you never approve without seeing the file&rsquo;s history.</li>'
+    + '</ul>'
+
+    + '<h2>Rules &amp; cautions</h2>'
+    + '<ul>'
+    + '<li><strong>Notes are a permanent log.</strong> Tenant, application, unit and contractor notes are <strong>append-only</strong> &mdash; timestamped, attributed to the author, and they cannot be edited or deleted. To correct or update, write a new note.</li>'
+    + '<li><strong>Decision reasons are kept.</strong> A note typed when approving, returning or declining (including a required decline reason) is saved to the file, not only the Audit Log.</li>'
+    + '<li><strong>Legacy notes.</strong> Older single-field notes on a unit, contractor or finance profile are shown read-only and labelled <em>Legacy note</em> or <em>Finance note</em> so nothing is lost; add new notes through the Notes tab.</li>'
+    + '<li><strong>Entity vs. person.</strong> Unit, contractor and Maintenance-Request notes live with that record &mdash; they are about the property, the company or the job &mdash; and are read there, not on a person&rsquo;s Tenant Card.</li>'
+    + '</ul>';
+
   // DOCS registry. cat drives the sidebar grouping; order within a category is
   // the array order. Keep each html in sync with its Claude Doc master.
   var DOCS = [
     { id: 'housing',    cat: 'Guides',   title: 'Housing Department SOP', sub: 'Application to inspection', html: HOUSING_SOP },
     { id: 'contractor', cat: 'Guides',   title: 'Contractor Module SOP',  sub: 'Onboarding to payment',    html: CONTRACTOR_SOP },
+    { id: 'notes',      cat: 'Guides',   title: 'Notes & File Records',   sub: 'Where notes live and how to find them', html: NOTES_SOP },
 
     { id: 'mod-applications', cat: 'Modules', title: 'Applications',                  html: MOD_APPLICATIONS },
     { id: 'mod-inventory',    cat: 'Modules', title: 'Inventory (Units)',             html: MOD_INVENTORY },
