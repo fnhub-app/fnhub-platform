@@ -2458,7 +2458,7 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
   background: var(--yellow); color: var(--dark);
   font-size: 12px; font-weight: 700; letter-spacing: .3px; padding: 10px 16px;
 }
-.score-tip-bd               { padding: 10px 16px; }
+.score-tip-bd               { display: block; padding: 10px 16px; }
 .score-tip-row {
   display: flex; justify-content: space-between; align-items: baseline; gap: 18px;
   font-size: 12px; line-height: 1.5; color: var(--text); padding: 1px 0;
@@ -2471,5 +2471,5 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
   border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; font-weight: 700;
 }
 .score-tip-foot {
-  font-size: 10px; color: var(--muted); padding: 8px 16px 10px; border-top: 1px solid var(--border);
+  display: block; font-size: 10px; color: var(--muted); padding: 8px 16px 10px; border-top: 1px solid var(--border);
 }
