@@ -411,6 +411,13 @@
     if(status) badges.push('<span class="std-pill std-pill-info">' + _ticEsc(status) + '</span>');
     var band   = t[TIC_C.band_membership] || ((_ticState.application || {}).band) || '';
     if(band) badges.push('<span class="std-pill std-pill-info">' + _ticEsc(band) + '</span>');
+    // Internal application score (scored app types only) — click opens the
+    // scoring sheet, hover shows the breakdown. The TIC is staff-only.
+    var _scApp = _ticState.application;
+    if(_scApp && (_scApp.appType === 'new_housing' || _scApp.appType === 'transfer_request') && _scApp.score != null){
+      var _scBd = (typeof _appFormScoreBreakdownText === 'function') ? _appFormScoreBreakdownText(_scApp) : 'Click to open the scoring sheet.';
+      badges.push('<span class="std-pill" onclick="window._ticOpenScoreSheet && window._ticOpenScoreSheet()" title="' + _ticEsc(_scBd) + '" style="background:var(--yellow);color:var(--dark);font-weight:700;cursor:pointer;">Score ' + _ticEsc(String(_scApp.score)) + ' pts</span>');
+    }
     // BCR / ineligibility flag — prominent so staff see it before any action.
     if(typeof bcrLookup === 'function'){
       var _bcr = bcrLookup(name);
@@ -425,6 +432,16 @@
     if(_na){ badges.push(_na.badge); }
     _ticEl('tic_hero_badges').innerHTML = badges.join('');
   }
+  // Click the hero Score chip -> open the scoring sheet for this application.
+  // On pages that host the scorecard view (housing.html) open it in place;
+  // elsewhere (tenants.html has no #scorecardView) deep-link to it.
+  function _ticOpenScoreSheet(){
+    var app = _ticState.application;
+    if(!app) return;
+    if(document.getElementById('scorecardView') && typeof showScorecard === 'function'){ showScorecard(app); return; }
+    window.location.href = 'housing.html?openScorecard=' + encodeURIComponent(app.id);
+  }
+  window._ticOpenScoreSheet = _ticOpenScoreSheet;
   // Newest note across tenant_notes (_ticState.notes) + intake application notes
   // (_ticState.applicationNotes) — both carry `created_at`. Returns a badge HTML
   // string; null only if the state isn't ready. Stale threshold = 90 days.
