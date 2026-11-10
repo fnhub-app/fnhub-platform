@@ -78,6 +78,7 @@ interface Window {
   _openScoreSheetFromForm: (...args: any[]) => any; // housing-app.js (click score -> scorecard)
   _appFormScoreAppId: any;                       // housing-app.js (app id backing the form score stat)
   _ticOpenScoreSheet: (...args: any[]) => any;   // housing-tic.js (hero Score chip -> scoring sheet)
+  _scoreTipHtml: (...args: any[]) => any;         // housing-app.js (branded score-breakdown tooltip HTML)
 
   // --- Nation identity / branding ---
   NATIONS_DIRECTORY: Record<string, NationConfig>;

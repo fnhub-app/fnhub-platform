@@ -2434,3 +2434,42 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
   font-size:13.5px; line-height:1.5; color:var(--text);
   white-space:pre-wrap; word-break:break-word; overflow-wrap:anywhere;
 }
+
+/* ── Branded score-breakdown tooltip ──────────────────────────────────────────
+   The internal application-score chip (app form header + TIC hero) shows a
+   styled, on-brand breakdown on hover instead of the plain OS title tooltip.
+   Theme tokens only (color-guard clean); var(--shadow) for elevation. */
+.score-chip                 { position: relative; outline: none; }
+.score-chip .score-tip {
+  position: absolute; z-index: 70; top: calc(100% + 8px); left: 0;
+  display: block; min-width: 236px; max-width: 320px;
+  background: var(--surface); color: var(--text);
+  border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow); overflow: hidden;
+  white-space: normal; text-align: left; font-weight: 400; cursor: default;
+  opacity: 0; visibility: hidden; transform: translateY(-4px);
+  transition: opacity .12s ease, transform .12s ease; pointer-events: none;
+}
+.score-chip:hover .score-tip,
+.score-chip:focus-visible .score-tip,
+.score-chip:focus-within .score-tip { opacity: 1; visibility: visible; transform: none; }
+.score-tip-hd {
+  display: flex; justify-content: space-between; align-items: center; gap: 12px;
+  background: var(--yellow); color: var(--dark);
+  font-size: 12px; font-weight: 700; letter-spacing: .3px; padding: 8px 12px;
+}
+.score-tip-bd               { padding: 8px 12px; }
+.score-tip-row {
+  display: flex; justify-content: space-between; align-items: baseline; gap: 16px;
+  font-size: 12px; line-height: 1.5; color: var(--text); padding: 1px 0;
+}
+.score-tip-sec              { font-weight: 700; margin-top: 6px; }
+.score-tip-bd > .score-tip-sec:first-child { margin-top: 0; }
+.score-tip-sub              { color: var(--muted); padding-left: 12px; }
+.score-tip-num              { font-variant-numeric: tabular-nums; font-weight: 600; white-space: nowrap; }
+.score-tip-total {
+  border-top: 1px solid var(--border); margin-top: 8px; padding-top: 8px; font-weight: 700;
+}
+.score-tip-foot {
+  font-size: 10px; color: var(--muted); padding: 6px 12px 9px; border-top: 1px solid var(--border);
+}

@@ -415,8 +415,8 @@
     // scoring sheet, hover shows the breakdown. The TIC is staff-only.
     var _scApp = _ticState.application;
     if(_scApp && (_scApp.appType === 'new_housing' || _scApp.appType === 'transfer_request') && _scApp.score != null){
-      var _scBd = (typeof _appFormScoreBreakdownText === 'function') ? _appFormScoreBreakdownText(_scApp) : 'Click to open the scoring sheet.';
-      badges.push('<span class="std-pill" onclick="window._ticOpenScoreSheet && window._ticOpenScoreSheet()" title="' + _ticEsc(_scBd) + '" style="background:var(--yellow);color:var(--dark);font-weight:700;cursor:pointer;">Score ' + _ticEsc(String(_scApp.score)) + ' pts</span>');
+      var _scTip = (typeof _scoreTipHtml === 'function') ? _scoreTipHtml(_scApp) : '';
+      badges.push('<span class="std-pill score-chip" tabindex="0" onclick="window._ticOpenScoreSheet && window._ticOpenScoreSheet()" style="background:var(--yellow);color:var(--dark);font-weight:700;cursor:pointer;">Score ' + _ticEsc(String(_scApp.score)) + ' pts' + _scTip + '</span>');
     }
     // BCR / ineligibility flag — prominent so staff see it before any action.
     if(typeof bcrLookup === 'function'){
@@ -436,9 +436,15 @@
   // On pages that host the scorecard view (housing.html) open it in place;
   // elsewhere (tenants.html has no #scorecardView) deep-link to it.
   function _ticOpenScoreSheet(){
-    var app = _ticState.application;
+    var app = _ticState.application;   // read before closing (close doesn't clear it)
     if(!app) return;
-    if(document.getElementById('scorecardView') && typeof showScorecard === 'function'){ showScorecard(app); return; }
+    if(document.getElementById('scorecardView') && typeof showScorecard === 'function'){
+      // Close the TIC first, or the scorecard view opens hidden behind this
+      // full-screen modal and the click looks like a no-op.
+      try { _ticClose(); } catch(e){}
+      showScorecard(app);
+      return;
+    }
     window.location.href = 'housing.html?openScorecard=' + encodeURIComponent(app.id);
   }
   window._ticOpenScoreSheet = _ticOpenScoreSheet;
