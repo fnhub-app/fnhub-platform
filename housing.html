@@ -376,6 +376,11 @@
           <div style="display:flex;align-items:center;gap:20px;">
             <div><div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Application Number</div><div id="appNumCard" style="font-size:18px;font-weight:700;color:var(--accent-ink);">—</div></div>
             <div><div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Classification</div><div id="classificationCard" style="font-size:15px;font-weight:600;color:var(--txt-on-dark);">—</div></div>
+            <!-- Score (INTERNAL ONLY) — shown for scored apps; hover for the breakdown, click to open the scoring sheet. Populated by _setAppFormScore(). -->
+            <div id="appScoreWrap" style="display:none;cursor:pointer;" onclick="_openScoreSheetFromForm()" title="">
+              <div style="font-size:9px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:var(--muted);margin-bottom:4px;">Score <span style="font-weight:400;text-transform:none;letter-spacing:0;">— internal</span></div>
+              <div id="appScoreCard" style="font-size:18px;font-weight:700;color:var(--yellow);text-decoration:underline;text-underline-offset:3px;">—</div>
+            </div>
           </div>
         </div>
       </div>

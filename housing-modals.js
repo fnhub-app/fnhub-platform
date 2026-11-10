@@ -3272,6 +3272,8 @@ window.openEditModal = function(appId) {
   // Update the app ID display
   var appNumCard = document.getElementById('appNumCard');
   if(appNumCard) appNumCard.textContent = app.id;
+  // Internal-only score stat next to the number (click -> scoring sheet, hover -> breakdown).
+  if(typeof _setAppFormScore === 'function') _setAppFormScore(app);
 
   // Show an "editing" banner in the form header
   var secHdr = document.querySelector('#step0 .sec-hdr p');

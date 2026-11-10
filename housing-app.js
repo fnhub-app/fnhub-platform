@@ -119,7 +119,61 @@ function initAppId(){
   if(!currentAppId)currentAppId=generateAppId();
   const el=document.getElementById('appNumCard');
   if(el)el.textContent=currentAppId;
+  // A brand-new application has no score yet — keep the internal Score stat hidden.
+  _setAppFormScore(null);
 }
+
+// ── Internal-only Score stat on the application form header (step 0) ─────────
+// Staff-facing only: housing.html is behind staff auth (applicants use the
+// separate portal). Shows the total for a scored application next to its
+// number; hover reveals the breakdown, click opens the scoring sheet.
+function _appFormScoreBreakdownText(app){
+  var bd = (app && app.scoreBreakdown && app.scoreBreakdown.sectionA) ? app.scoreBreakdown : null;
+  if(!bd && app && typeof scoreApplicationLocally === 'function'){
+    try { var r = scoreApplicationLocally(app); bd = r && r.breakdown; } catch(e){}
+  }
+  if(!bd || !bd.sectionA) return 'Click to open the scoring sheet for the full breakdown.';
+  var A = bd.sectionA || {}, B = bd.sectionB || {};
+  var lines = [];
+  lines.push('SECTION A — Need: ' + (A.total||0));
+  lines.push('   Urgent need: ' + (A.urgent||0));
+  lines.push('   Health & safety: ' + (A.health||0));
+  lines.push('   Overcrowding: ' + (A.overcrowding||0));
+  lines.push('   Household: ' + (A.household||0));
+  lines.push('   Accessibility: ' + (A.accessibility||0));
+  lines.push('   Waitlist: ' + (A.waitlist||0));
+  lines.push('SECTION B — Tenancy: ' + (B.total||0));
+  lines.push('   Rent: ' + (B.rent||0));
+  lines.push('   Condition: ' + (B.condition||0));
+  lines.push('   Conduct: ' + (B.conduct||0));
+  lines.push('   Income: ' + (B.income||0));
+  if(bd.arrears)      lines.push('Arrears: ' + bd.arrears);
+  if(bd.edAdjustment) lines.push('ED adjustment: ' + bd.edAdjustment);
+  lines.push('---------------------------');
+  lines.push('TOTAL: ' + (app.score!=null ? app.score : ((A.total||0)+(B.total||0))) + ' pts   (click to open the scoring sheet)');
+  return lines.join('\n');
+}
+function _setAppFormScore(app){
+  var wrap = document.getElementById('appScoreWrap');
+  var el   = document.getElementById('appScoreCard');
+  if(!wrap || !el) return;
+  // Only the two scored app types carry a meaningful score; file updates don't.
+  var scored = app && (app.appType === 'new_housing' || app.appType === 'transfer_request') && app.score != null;
+  if(!scored){ wrap.style.display = 'none'; wrap.title = ''; window._appFormScoreAppId = null; return; }
+  window._appFormScoreAppId = app.id;
+  el.textContent = app.score + ' pts';
+  wrap.title = _appFormScoreBreakdownText(app);
+  wrap.style.display = '';
+}
+window._setAppFormScore = _setAppFormScore;
+// Click the Score stat -> open the scoring sheet (scorecard) for that app.
+function _openScoreSheetFromForm(){
+  var id = window._appFormScoreAppId;
+  if(!id) return;
+  var app = (typeof applications !== 'undefined' ? applications : []).find(function(a){ return a.id === id; });
+  if(app && typeof showScorecard === 'function') showScorecard(app);
+}
+window._openScoreSheetFromForm = _openScoreSheetFromForm;
 
 function showStepErrors(step, errs, bannerId) {
   // Clear previous field highlights in this step
