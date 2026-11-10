@@ -165,7 +165,16 @@ export function renderBrandedEmail(subject: string, innerHtml: string): string {
   const contact = contactLine ? (contactLineHtml(contactLine) + "<br/>") : "";
   return '' +
 '<!doctype html><html><head><meta charset="utf-8"/>' +
-'<meta name="viewport" content="width=device-width,initial-scale=1"/></head>' +
+'<meta name="viewport" content="width=device-width,initial-scale=1"/>' +
+// Opt the email OUT of a mail client's automatic dark-mode inversion. This is a
+// deliberately LIGHT design (white card, black text, brand-colour rule); without
+// these declarations Apple Mail / Outlook force-darken it, which muddies the card
+// AND drops the logo's contrast so it reads as an empty box. Declaring light-only
+// keeps it rendering as designed on every client that honours color-scheme.
+'<meta name="color-scheme" content="light"/>' +
+'<meta name="supported-color-schemes" content="light"/>' +
+'<style>:root{color-scheme:light;supported-color-schemes:light;}</style>' +
+'</head>' +
 '<body style="margin:0;padding:0;background:#f4f5f7;">' +
 '<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f4f5f7;">' +
 '<tr><td align="center" style="padding:24px 12px;">' +
