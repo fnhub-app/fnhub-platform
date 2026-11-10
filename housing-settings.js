@@ -516,7 +516,9 @@ function _wireSettingsCollapsibles() {
     var hdr = card.querySelector(':scope > .modal-hdr');
     if (!hdr) return;
     card.dataset.stgWired = '1';
-    card.classList.add('stg-collapse');   // collapsed by default (no .stg-open)
+    // Collapsible, but EXPANDED by default (.stg-open) so a section's content is
+    // visible on open; the chevron still collapses any card on click.
+    card.classList.add('stg-collapse', 'stg-open');
     // Chevron at the start of the header (left side, so it never overlaps any
     // right-aligned header buttons like Export/Refresh).
     if (!hdr.querySelector('.stg-chev')) {
