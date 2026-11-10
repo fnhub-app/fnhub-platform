@@ -167,7 +167,10 @@ function _scoreTipHtml(app){
     body += '<span class="score-tip-row"><span>Open the scoring sheet for the full breakdown.</span></span>';
   }
   body += row('Total', total + ' pts', 'score-tip-total');
-  return '<span class="score-tip" role="tooltip">'
+  // Inline hide so the tip stays hidden + out of flow even if shared.css hasn't
+  // applied yet (stale-while-revalidate first load); the CSS :hover rule reveals
+  // it with !important. Without this the breakdown spills inline across the hero.
+  return '<span class="score-tip" role="tooltip" style="position:absolute;left:0;top:calc(100% + 8px);opacity:0;visibility:hidden;pointer-events:none;">'
     + '<span class="score-tip-hd"><span>Score breakdown</span><span>' + total + ' pts</span></span>'
     + '<span class="score-tip-bd">' + body + '</span>'
     + '<span class="score-tip-foot">Click to open the scoring sheet</span>'
