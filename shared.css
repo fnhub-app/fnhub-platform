@@ -2452,7 +2452,7 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 }
 .score-chip:hover .score-tip,
 .score-chip:focus-visible .score-tip,
-.score-chip:focus-within .score-tip { opacity: 1; visibility: visible; transform: none; }
+.score-chip:focus-within .score-tip { opacity: 1 !important; visibility: visible !important; transform: none; }
 .score-tip-hd {
   display: flex; justify-content: space-between; align-items: center; gap: 12px;
   background: var(--yellow); color: var(--dark);
