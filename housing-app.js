@@ -127,51 +127,78 @@ function initAppId(){
 // Staff-facing only: housing.html is behind staff auth (applicants use the
 // separate portal). Shows the total for a scored application next to its
 // number; hover reveals the breakdown, click opens the scoring sheet.
-function _appFormScoreBreakdownText(app){
+// Normalized V2 breakdown for an app (stored if present, else recomputed), or null.
+function _scoreBreakdownObj(app){
   var bd = (app && app.scoreBreakdown && app.scoreBreakdown.sectionA) ? app.scoreBreakdown : null;
   if(!bd && app && typeof scoreApplicationLocally === 'function'){
     try { var r = scoreApplicationLocally(app); bd = r && r.breakdown; } catch(e){}
   }
-  if(!bd || !bd.sectionA) return 'Click to open the scoring sheet for the full breakdown.';
-  var A = bd.sectionA || {}, B = bd.sectionB || {};
-  var lines = [];
-  lines.push('SECTION A — Need: ' + (A.total||0));
-  lines.push('   Urgent need: ' + (A.urgent||0));
-  lines.push('   Health & safety: ' + (A.health||0));
-  lines.push('   Overcrowding: ' + (A.overcrowding||0));
-  lines.push('   Household: ' + (A.household||0));
-  lines.push('   Accessibility: ' + (A.accessibility||0));
-  lines.push('   Waitlist: ' + (A.waitlist||0));
-  lines.push('SECTION B — Tenancy: ' + (B.total||0));
-  lines.push('   Rent: ' + (B.rent||0));
-  lines.push('   Condition: ' + (B.condition||0));
-  lines.push('   Conduct: ' + (B.conduct||0));
-  lines.push('   Income: ' + (B.income||0));
-  if(bd.arrears)      lines.push('Arrears: ' + bd.arrears);
-  if(bd.edAdjustment) lines.push('ED adjustment: ' + bd.edAdjustment);
-  lines.push('---------------------------');
-  lines.push('TOTAL: ' + (app.score!=null ? app.score : ((A.total||0)+(B.total||0))) + ' pts   (click to open the scoring sheet)');
-  return lines.join('\n');
+  return (bd && bd.sectionA) ? bd : null;
 }
+// Branded hover-tooltip markup for the score breakdown (shared by the app form
+// header and the TIC hero chip). Returns a .score-tip <span>; the trigger wraps
+// it and carries the .score-chip class (see shared.css). Labels are static, so
+// no escaping is needed. Styled with theme tokens only.
+function _scoreTipHtml(app){
+  var bd = _scoreBreakdownObj(app);
+  var total = (app && app.score != null) ? app.score
+            : (bd ? ((bd.sectionA.total||0) + ((bd.sectionB&&bd.sectionB.total)||0)) : 0);
+  function row(label, val, cls){
+    return '<span class="score-tip-row' + (cls ? ' ' + cls : '') + '"><span>' + label + '</span><span class="score-tip-num">' + val + '</span></span>';
+  }
+  var body = '';
+  if(bd){
+    var A = bd.sectionA || {}, B = bd.sectionB || {};
+    body += row('Section A &mdash; Need', (A.total||0), 'score-tip-sec');
+    body += row('Urgent need',     (A.urgent||0),       'score-tip-sub');
+    body += row('Health &amp; safety', (A.health||0),   'score-tip-sub');
+    body += row('Overcrowding',    (A.overcrowding||0), 'score-tip-sub');
+    body += row('Household',       (A.household||0),    'score-tip-sub');
+    body += row('Accessibility',   (A.accessibility||0),'score-tip-sub');
+    body += row('Waitlist',        (A.waitlist||0),     'score-tip-sub');
+    body += row('Section B &mdash; Tenancy', (B.total||0), 'score-tip-sec');
+    body += row('Rent',      (B.rent||0),      'score-tip-sub');
+    body += row('Condition', (B.condition||0), 'score-tip-sub');
+    body += row('Conduct',   (B.conduct||0),   'score-tip-sub');
+    body += row('Income',    (B.income||0),    'score-tip-sub');
+    if(bd.arrears)      body += row('Arrears', bd.arrears, '');
+    if(bd.edAdjustment) body += row('ED adjustment', bd.edAdjustment, '');
+  } else {
+    body += '<span class="score-tip-row"><span>Open the scoring sheet for the full breakdown.</span></span>';
+  }
+  body += row('Total', total + ' pts', 'score-tip-total');
+  return '<span class="score-tip" role="tooltip">'
+    + '<span class="score-tip-hd"><span>Score breakdown</span><span>' + total + ' pts</span></span>'
+    + '<span class="score-tip-bd">' + body + '</span>'
+    + '<span class="score-tip-foot">Click to open the scoring sheet</span>'
+    + '</span>';
+}
+window._scoreTipHtml = _scoreTipHtml;
 function _setAppFormScore(app){
   var wrap = document.getElementById('appScoreWrap');
   var el   = document.getElementById('appScoreCard');
   if(!wrap || !el) return;
   // Only the two scored app types carry a meaningful score; file updates don't.
   var scored = app && (app.appType === 'new_housing' || app.appType === 'transfer_request') && app.score != null;
-  if(!scored){ wrap.style.display = 'none'; wrap.title = ''; window._appFormScoreAppId = null; return; }
+  var oldTip = wrap.querySelector('.score-tip'); if(oldTip) oldTip.remove();
+  if(!scored){ wrap.style.display = 'none'; window._appFormScoreAppId = null; return; }
   window._appFormScoreAppId = app.id;
   el.textContent = app.score + ' pts';
-  wrap.title = _appFormScoreBreakdownText(app);
+  wrap.removeAttribute('title');                 // replaced by the branded hover tip
+  wrap.insertAdjacentHTML('beforeend', _scoreTipHtml(app));
   wrap.style.display = '';
 }
 window._setAppFormScore = _setAppFormScore;
-// Click the Score stat -> open the scoring sheet (scorecard) for that app.
+// Click the Score stat -> open the scoring sheet (scorecard) for that app. Hide
+// the form overlay first, or the scorecard view opens behind it (looks dead).
 function _openScoreSheetFromForm(){
   var id = window._appFormScoreAppId;
   if(!id) return;
   var app = (typeof applications !== 'undefined' ? applications : []).find(function(a){ return a.id === id; });
-  if(app && typeof showScorecard === 'function') showScorecard(app);
+  if(!app || typeof showScorecard !== 'function') return;
+  var em = document.getElementById('editModal');  if(em) em.classList.remove('on');
+  var al = document.getElementById('appLayout');  if(al) al.style.display = 'none';
+  showScorecard(app);
 }
 window._openScoreSheetFromForm = _openScoreSheetFromForm;
 
