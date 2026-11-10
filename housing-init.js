@@ -1398,6 +1398,18 @@ function showAddHousingStaff() {
     + '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Role</label>'
     + '<select id="hs-role" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;">'+roleOptions+'</select></div>'
     + '</div>'
+    // Cell phone for text notifications (sms_notifications module only, mirrors
+    // the staff-edit form). Saved to staff.sms_number (E.164); SMS only sends to
+    // an opted-in number (CASL) -- the shared _wireSmsNumberField disables the
+    // consent box until a valid mobile is entered.
+    + ((window.moduleOn && window.moduleOn('sms_notifications')) ? (
+        '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Cell Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;">&mdash; for text notifications; saved as +1&hellip;</span></label>'
+        + '<input id="hs-sms" type="tel" placeholder="+1 807 555 1234" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;">'
+        + '<div id="hs-sms-hint" style="font-size:11px;margin-top:4px;min-height:14px;"></div></div>'
+        + '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">'
+        + '<input type="checkbox" id="hs-sms-optin" style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:2px 0 0;">'
+        + '<span><strong>Consent to receive text notifications (SMS)</strong> &mdash; only tick this if they have agreed to be texted. They can reply STOP to any message to opt out.</span></label>'
+      ) : '')
     + '<div id="hs-pwnote" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;color:var(--muted);">'
     + '&#128274; A login account is created automatically. Default password: <strong>' + (window.NATION_CONFIG && NATION_CONFIG.short || '') + ' + FirstName + 2026!</strong>'
     + '</div>'
@@ -1433,6 +1445,9 @@ function showAddHousingStaff() {
   }
   if(extEl) extEl.addEventListener('change', _hsSyncExternal);
   _hsSyncExternal();
+  // Live E.164 feedback for the cell-phone field (shared with the staff-edit
+  // form); disables the SMS consent box until a valid mobile is entered.
+  if(typeof _wireSmsNumberField === 'function' && document.getElementById('hs-sms')) _wireSmsNumberField('hs-sms','hs-sms-optin','hs-sms-hint');
 }
 
 function closeStaffModal() {
@@ -1470,6 +1485,8 @@ async function submitAddHousingStaff() {
   var email = ((document.getElementById('hs-email')||{}).value||'').trim().toLowerCase();
   var dept  = (document.getElementById('hs-dept')||{}).value||'';
   var role  = (document.getElementById('hs-role')||{}).value||'housing_employee_l1';
+  var smsRaw   = ((document.getElementById('hs-sms')||{}).value||'').trim();
+  var smsOptIn = !!(document.getElementById('hs-sms-optin') && document.getElementById('hs-sms-optin').checked);
   var btn   = document.getElementById('hs-submit-btn');
   var res   = document.getElementById('hs-result');
 
@@ -1633,6 +1650,23 @@ async function submitAddHousingStaff() {
       }
       if(btn){btn.disabled=false;btn.textContent='+ Add to Staff Directory';}
       return;
+    }
+
+    // Cell phone for text notifications. Best-effort, SEPARATE PATCH (keyed by
+    // email) so a nation that hasn't run the SMS migration -- the sms_number
+    // column missing -- can't fail the whole add / orphan the auth user. The
+    // number is normalized to E.164; CASL consent (sms_opt_in + timestamp) is
+    // written only when a valid number is present AND the consent box is ticked.
+    var _smsE164 = (typeof window._toE164 === 'function') ? window._toE164(smsRaw) : '';
+    if(_smsE164){
+      try {
+        var _smsPatch = { sms_number: _smsE164 };
+        if(smsOptIn){ _smsPatch.sms_opt_in = true; _smsPatch.sms_opt_in_at = new Date().toISOString(); }
+        await fetch(SUPABASE_URL+'/rest/v1/staff?email=eq.'+encodeURIComponent(email), {
+          method:'PATCH', headers:Object.assign({},HOUSING_HEADERS,{'Prefer':'return=minimal'}),
+          body:JSON.stringify(_smsPatch)
+        });
+      } catch(e){ console.warn('[add-staff] sms_number PATCH failed — run the SMS migration', e); }
     }
 
     // External consultant: enable passwordless magic-link sign-in + restrict to
