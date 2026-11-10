@@ -174,6 +174,8 @@
       try { S.expenses = await getJson('/reseller_expenses?select=*&order=approved_date'); S.v2missing = false; }
       catch (e2){ S.expenses = []; S.v2missing = true; }
       S.v4missing = (K().nations() || []).length ? !('sold_by' in K().nations()[0]) : false;
+      if (S.agreements.length) S.v5missing = !('owner_sale_share_pct' in S.agreements[0]);
+      else { try { await getJson('/reseller_agreements?select=owner_sale_share_pct&limit=1'); S.v5missing = false; } catch (e5){ S.v5missing = true; } }
       // reseller_v3.sql adds the signature columns; select=* shows whether they exist.
       if (S.agreements.length) S.v3missing = !('owner_signature' in S.agreements[0]);
       else { try { await getJson('/reseller_agreements?select=owner_signature&limit=1'); S.v3missing = false; } catch (e3){ S.v3missing = true; } }
@@ -211,7 +213,7 @@
   // by termination. Null for non-exclusive agreements.
   function exclusivityEnd(a){
     if (!a.exclusive || !a.effective_date) return null;
-    var end = addDays(addMonths(a.effective_date, a.exclusivity_months || 12), -1);
+    var end = addDays(addMonths(a.effective_date, a.exclusivity_months || 18), -1);
     return a.terminated_date && a.terminated_date < end ? a.terminated_date : end;
   }
   function exclusiveNow(a){ var e = exclusivityEnd(a); return !!(e && a.status !== 'draft' && a.effective_date <= today() && e >= today()); }
@@ -241,6 +243,7 @@
       return;
     }
     var todo = [];
+    if (S.v5missing) todo.push('<code>supabase/platform/reseller_v5.sql</code> (18-month exclusivity default, commission share on tagged Owner sales)');
     if (S.v4missing) todo.push('<code>supabase/platform/reseller_v4.sql</code> (record who sold each nation)');
     if (S.v2missing) todo.push('<code>supabase/platform/reseller_v2.sql</code> (exclusivity, extensions, marketing expenses)');
     if (S.v3missing) todo.push('<code>supabase/platform/reseller_v3.sql</code> (signing in the panel)');
@@ -401,7 +404,8 @@
       owner_sign_name: o.signatory_name || o.legal_name || null, owner_sign_title: o.signatory_title || null,
       reseller_sign_name: r.contact_name || (r.entity_type === 'individual' ? r.legal_name : null), reseller_sign_title: r.contact_title || null,
       created_by: K().jwtEmail() };
-    if (!S.v2missing) Object.assign(b, { exclusive: true, exclusivity_months: 12, exclusivity_territory: 'Canada', expense_claim_days: 60 });
+    if (!S.v2missing) Object.assign(b, { exclusive: true, exclusivity_months: 18, exclusivity_territory: 'Canada', expense_claim_days: 60 });
+    if (!S.v5missing) b.owner_sale_share_pct = 50;
     var res = await K().api('POST', '/reseller_agreements', b, 'return=representation');
     if (!res.ok){ K().setMsg('rs-r-msg', 'Could not create: ' + (await res.text()).slice(0, 200)); return; }
     var row = (await res.json())[0]; S.agreements.push(row);
@@ -452,9 +456,11 @@
             [['never', 'Never - no discounts or non-standard terms'], ['with_approval', 'Only with the Owner\'s prior written approval']], { dis: !draft, full: true })
       +   (S.v2missing ? '' :
             sel('Exclusivity (s.3)', 'rs-a-exclusive', a.exclusive === false ? 'no' : 'yes', [['yes', 'Exclusive for the Exclusivity Period'], ['no', 'Non-exclusive']], { dis: !draft })
-          + fld('Exclusivity period, months (s.3.5)', 'rs-a-exclusivity_months', a.exclusivity_months == null ? 12 : a.exclusivity_months, { type: 'number', min: 1, dis: !draft })
+          + fld('Exclusivity period, months (s.3.5)', 'rs-a-exclusivity_months', a.exclusivity_months == null ? 18 : a.exclusivity_months, { type: 'number', min: 1, dis: !draft })
           + fld('Exclusive territory (s.3.4)', 'rs-a-exclusivity_territory', a.exclusivity_territory == null ? 'Canada' : a.exclusivity_territory, { dis: !draft, ph: 'e.g. Canada, or Ontario' })
           + fld('Expense claims due within, days (s.9.8)', 'rs-a-expense_claim_days', a.expense_claim_days == null ? 60 : a.expense_claim_days, { type: 'number', min: 1, dis: !draft }))
+      +   (S.v5missing ? '' : fld('Share of commission on tagged Owner sales, % (s.7.5)', 'rs-a-owner_sale_share_pct', a.owner_sale_share_pct == null ? 50 : a.owner_sale_share_pct,
+            { type: 'number', step: '0.01', min: 0, dis: !draft, hint: 'Paid on Owner direct sales you tag as shared with this reseller (Nation &rarr; Sold by). 50% of a 33% commission = 16.5% of Net Revenue.' }))
       +   fld('Pricing summary (s.6.1)', 'rs-a-pricing_note', (draft && !a.pricing_note) ? K().feeScheduleSummary() : a.pricing_note, { area: true, full: true, dis: !draft,
             hint: 'Defaults to the current fee schedule (the same catalog the invoices use).' + (draft ? ' ' + '<a href="#" data-act="rs-agr-pricing-reset" style="color:#1d4ed8;font-weight:600;">Reset to the current fee schedule</a>' : '') })
       + '</div>'
@@ -572,7 +578,7 @@
   // Terms a signature binds to: changing any of these after signing clears it.
   var SIGNED_TERMS = ['effective_date','commission_rate','payment_days','initial_term_months','renewal_term_months','nonrenewal_notice_days',
     'termination_notice_days','cure_days','nonsolicit_months','confidentiality_years','liability_months','governing_law','discount_authority',
-    'pricing_note','exclusive','exclusivity_months','exclusivity_territory','expense_claim_days'];
+    'pricing_note','exclusive','exclusivity_months','exclusivity_territory','expense_claim_days','owner_sale_share_pct'];
   function termsChanged(a, b){
     return SIGNED_TERMS.some(function(k){ return k in b && String(a[k] == null ? '' : a[k]) !== String(b[k] == null ? '' : b[k]); });
   }
@@ -589,7 +595,8 @@
     if (b.renewal_term_months < 1) b.renewal_term_months = 12;
     if (!S.v2missing){
       b.exclusive = v('rs-a-exclusive') !== 'no';
-      b.exclusivity_months = n('rs-a-exclusivity_months') || 12;
+      b.exclusivity_months = n('rs-a-exclusivity_months') || 18;
+      if (!S.v5missing) b.owner_sale_share_pct = n('rs-a-owner_sale_share_pct');
       b.exclusivity_territory = v('rs-a-exclusivity_territory') || 'Canada';
       b.expense_claim_days = n('rs-a-expense_claim_days') || 60;
     }
@@ -696,6 +703,7 @@
     var o = S.owner || {}, r = reseller(a.reseller_id) || {};
     var keep = ['reseller_id','commission_rate','initial_term_months','renewal_term_months','nonrenewal_notice_days','termination_notice_days','cure_days','payment_days',
       'nonsolicit_months','confidentiality_years','liability_months','governing_law','discount_authority','exclusive','exclusivity_territory','expense_claim_days'];
+    if (!S.v5missing) keep.push('owner_sale_share_pct');
     var b = {}; keep.forEach(function(k){ b[k] = a[k]; });
     Object.assign(b, { agreement_number: nextAgreementNumber(), status: 'draft', effective_date: start, exclusivity_months: 12, extends_agreement_id: a.id,
       pricing_note: K().feeScheduleSummary(), owner_sign_name: o.signatory_name || o.legal_name || null, owner_sign_title: o.signatory_title || null,
@@ -763,14 +771,14 @@
     var natOpts = [['', '— not in the registry yet —']].concat(nations.map(function(x){ return [x.subdomain, x.display_name + ' (' + x.subdomain + ')']; }));
     var rows = list.length ? list.map(function(cu){
       var nat = cu.subdomain ? nationBySub(cu.subdomain) : null;
-      var acts = cu.status === 'submitted'
+      var acts = cu.status === 'shared' ? '' : cu.status === 'submitted'
         ? btn('Register', 'rs-cust-status', ' data-id="' + esc(cu.id) + '" data-status="registered"') + btn('Decline', 'rs-cust-status', ' data-id="' + esc(cu.id) + '" data-status="declined"', 'ghost')
         : btn('Reset', 'rs-cust-status', ' data-id="' + esc(cu.id) + '" data-status="submitted"', 'ghost');
       return '<tr><td><b>' + esc(cu.prospect_name) + '</b>' + (cu.notes ? '<div style="font-size:11px;color:var(--muted);">' + esc(cu.notes) + '</div>' : '') + '</td>'
         + '<td>' + (nat ? esc(nat.display_name) : (cu.subdomain ? esc(cu.subdomain) : '<span class="empty">not linked</span>'))
         +   ' ' + btn('Link', 'rs-cust-link', ' data-id="' + esc(cu.id) + '"', 'ghost') + '</td>'
         + '<td>' + esc(cu.submitted_date) + '</td>'
-        + '<td>' + pill(cu.status) + (cu.decision_date ? '<div style="font-size:11px;color:var(--muted);">' + esc(cu.decision_date) + '</div>' : '') + '</td>'
+        + '<td>' + (cu.status === 'shared' ? pill('issued', 'Owner sale · ' + (a.owner_sale_share_pct == null ? 50 : Number(a.owner_sale_share_pct)) + '% share') : pill(cu.status)) + (cu.decision_date ? '<div style="font-size:11px;color:var(--muted);">' + esc(cu.decision_date) + '</div>' : '') + '</td>'
         + '<td><div class="row-actions">' + acts + btn('✕', 'rs-cust-del', ' data-id="' + esc(cu.id) + '" title="Remove"', 'ghost') + '</div></td></tr>';
     }).join('') : '<tr><td colspan="5" class="empty">No leads submitted yet.</td></tr>';
     var locked = a.terminated_date && a.terminated_date <= today();
@@ -975,7 +983,9 @@
     var start = monthStart(m), end = monthEnd(m), stop = commissionEnd(a);
     if (a.effective_date > start) start = a.effective_date;
     if (stop && stop < end) end = stop;
-    var custs = agrCustomers(a.id).filter(function(x){ return x.status === 'registered' && x.subdomain; });
+    // Registered reseller sales earn the full rate; Owner sales tagged 'shared' (s.7.5) earn owner_sale_share_pct of it.
+    var custs = agrCustomers(a.id).filter(function(x){ return (x.status === 'registered' || x.status === 'shared') && x.subdomain; });
+    var fullRate = Number(a.commission_rate) || 0, shareRate = r2(fullRate * (a.owner_sale_share_pct == null ? 50 : Number(a.owner_sale_share_pct)) / 100);
     // Amounts already counted on other statements (partial payments that later
     // complete would otherwise be counted twice).
     var prior = {};
@@ -1001,7 +1011,8 @@
       });
       var gross = r2(counted.reduce(function(s, i){ return s + i.collected; }, 0));
       var taxes = r2(counted.reduce(function(s, i){ return s + i.tax; }, 0));
-      return { customer_id: cu.id, subdomain: cu.subdomain, name: nat ? nat.display_name : cu.prospect_name, invoices: counted,
+      return { customer_id: cu.id, subdomain: cu.subdomain, name: (nat ? nat.display_name : cu.prospect_name) + (cu.status === 'shared' ? ' (Owner sale, shared)' : ''),
+        shared: cu.status === 'shared', rate: cu.status === 'shared' ? shareRate : fullRate, invoices: counted,
         gross: gross, hosting: gross > 0 && nat ? K().estCost(nat, u).total : 0, processing: 0, taxes: taxes, refunds: 0 };
     });
     // Carry an unrecovered negative balance from the previous statement (s.9.2).
@@ -1018,7 +1029,7 @@
     var rate = Number(st.commission_rate) || 0, gross = 0, ded = 0, net = 0, com = 0;
     (st.lines || []).forEach(function(l){
       l.net = r2((Number(l.gross) || 0) - (Number(l.hosting) || 0) - (Number(l.processing) || 0) - (Number(l.taxes) || 0) - (Number(l.refunds) || 0));
-      l.commission = r2(Math.max(0, l.net) * rate / 100);
+      l.commission = r2(Math.max(0, l.net) * (l.rate == null ? rate : Number(l.rate)) / 100);
       gross += Number(l.gross) || 0; ded += (Number(l.gross) || 0) - l.net; net += l.net; com += l.commission;
     });
     st.gross_revenue = r2(gross); st.deductions = r2(ded); st.net_revenue = r2(net); st.commission = r2(com);
@@ -1047,7 +1058,7 @@
     var cell = function(i, k){ return '<td class="num"><input class="st-in" type="number" step="0.01" data-line="' + i + '" data-k="' + k + '" value="' + (Number(st.lines[i][k]) || 0).toFixed(2) + '"' + dis + '/></td>'; };
     var rows = (st.lines || []).length ? st.lines.map(function(l, i){
       var invs = (l.invoices || []).map(function(x){ return esc(x.number) + ' (' + esc(x.paid_date || '') + ', ' + money(x.collected) + ')'; }).join(', ');
-      return '<tr><td><b>' + esc(l.name) + '</b><div style="font-size:11px;color:var(--muted);">' + (invs || 'no recurring collections this month') + '</div></td>'
+      return '<tr><td><b>' + esc(l.name) + '</b><div style="font-size:11px;color:var(--muted);">' + (l.rate != null ? Number(l.rate) + '% rate' + (l.shared ? ' (s.7.5 share)' : '') + ' &middot; ' : '') + (invs || 'no recurring collections this month') + '</div></td>'
         + cell(i, 'gross') + cell(i, 'hosting') + cell(i, 'processing') + cell(i, 'taxes') + cell(i, 'refunds')
         + '<td class="num" data-out="net-' + i + '">' + money(l.net) + '</td><td class="num" data-out="com-' + i + '"><b>' + money(l.commission) + '</b></td></tr>';
     }).join('') : '<tr><td colspan="8" class="empty">No registered, nation-linked customers on this agreement, so nothing is owed this month.</td></tr>';
@@ -1055,7 +1066,7 @@
     host.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--accent);">'
       + '<h3 style="margin:0 0 4px;">Statement &middot; ' + esc(fmtMonth(st.period_month)) + ' ' + pill(st.status) + '</h3>'
       + '<p class="note" style="margin-top:0;">Gross = recurring Subscription Fees collected (incl. tax), taken from invoices paid this month. Setup, consulting, travel and interest are excluded (s.7.3). Hosting is pre-filled from the nation\'s estimated platform cost. Check every figure before issuing.</p>'
-      + '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th class="num">Gross collected</th><th class="num">Hosting</th><th class="num">Processing</th><th class="num">Taxes</th><th class="num">Refunds / credits</th><th class="num">Net revenue</th><th class="num">Commission ' + Number(st.commission_rate) + '%</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th class="num">Gross collected</th><th class="num">Hosting</th><th class="num">Processing</th><th class="num">Taxes</th><th class="num">Refunds / credits</th><th class="num">Net revenue</th><th class="num">Commission</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '<div class="rs-grid3">'
       +   fld('Clawback / offset (s.9.2)', 'rs-s-clawback', (Number(st.clawback) || 0).toFixed(2), { type: 'number', step: '0.01', dis: !draft })
       +   fld('Clawback note', 'rs-s-clawback_note', st.clawback_note, { dis: !draft, ph: 'e.g. Refund on HLH-2026-07' })
@@ -1194,9 +1205,10 @@
     var oName = o.legal_name || '[OWNER LEGAL NAME]', rName = r.legal_name || '[RESELLER LEGAL NAME]';
     var product = o.product_name ? 'marketed as "' + o.product_name + '" ' : '';
     var rate = Number(a.commission_rate), law = a.governing_law || 'Ontario';
-    var excl = a.exclusive === true, terr = a.exclusivity_territory || 'Canada', xMonths = a.exclusivity_months || 12;
+    var excl = a.exclusive === true, terr = a.exclusivity_territory || 'Canada', xMonths = a.exclusivity_months || 18;
     var xEndTxt = a.effective_date ? ' (ending ' + fmtLong(addDays(addMonths(a.effective_date, xMonths), -1)) + ')' : '';
     var claimDays = a.expense_claim_days || 60;
+    var shareP = a.owner_sale_share_pct == null ? 50 : Number(a.owner_sale_share_pct);
     var prior = a.extends_agreement_id ? agreement(a.extends_agreement_id) : null;
     var eff = a.effective_date ? fmtLong(a.effective_date) : '____________________';
     var exGross = 1000, exHost = 120, exProc = 30, exNet = exGross - exHost - exProc, exCom = r2(exNet * rate / 100);
@@ -1219,6 +1231,7 @@
       '-"Customer" means an organization that enters into a Customer Subscription Agreement with the Owner.',
       '-"Customer Subscription Agreement" means the subscription contract between the Owner and a Customer for use of the Platform.',
       '-"Reseller Customer" means a Customer that the Reseller sourced and that the Owner has registered to the Reseller under Section 7.',
+      '-"Shared Owner Sale" has the meaning in Section 7.5.',
       '-"Subscription Fees" means the recurring fees a Customer actually pays the Owner for the Platform.',
       '-"Gross Revenue" means Subscription Fees actually collected by the Owner from a Reseller Customer in a given month.',
       '-"Net Revenue" has the meaning in Section 8.',
@@ -1267,6 +1280,7 @@
       '7.2 Duration. The Commission is payable for each month in which both (a) the Reseller Customer remains subscribed and pays Subscription Fees, and (b) this Agreement remains in effect. On termination of this Agreement, the Commission ceases under Section 10.',
       '7.3 Recurring fees only. Commission is calculated on recurring Subscription Fees only. One-time fees (for example, setup, data migration, or training) are excluded unless the Parties agree otherwise in writing for a specific Customer.',
       '7.4 Attribution. The Owner will register a prospect as a Reseller Customer where the Reseller is the first to submit that prospect through the Owner\'s process and the prospect was not already in discussions with the Owner. If attribution is disputed, the Owner\'s reasonable, good-faith determination from its records governs.',
+      '7.5 Shared Owner sales. Where the Owner sells the Platform directly to a Customer and designates that Customer in writing as shared with the Reseller (a "Shared Owner Sale"), the Owner will pay the Reseller ' + shareP + '% of the Commission that would otherwise be payable under Section 7.1 on that Customer (that is, ' + r2(rate * shareP / 100) + '% of Net Revenue), calculated and paid in the same way under Sections 7.2, 7.3, 8, and 9. Whether to designate a direct sale as a Shared Owner Sale is in the Owner\'s sole discretion; a Shared Owner Sale is not a sale by the Reseller and does not make the Customer a Reseller Customer for any other purpose.',
       '##8. Net Revenue',
       '"Net Revenue" for a Reseller Customer in a month means the Gross Revenue actually collected from that Customer that month, minus, without duplication:',
       '-8.1 Hosting and infrastructure costs reasonably attributable to that Customer (for example, hosting, database, and platform services such as Supabase and Cloudflare);',
@@ -1440,13 +1454,16 @@
     var link = S.customers.filter(function(cu){ return cu.subdomain === sub && cu.status === 'registered'; })[0];
     if (link){ var a = agreement(link.agreement_id); return { type: 'reseller', link: link, agreement: a, reseller: a ? reseller(a.reseller_id) : null }; }
     var n = nationRow(sub);
-    if (n && n.sold_by === 'owner') return { type: 'owner' };
+    if (n && n.sold_by === 'owner'){
+      var sh = S.customers.filter(function(cu){ return cu.subdomain === sub && cu.status === 'shared'; })[0], sa = sh ? agreement(sh.agreement_id) : null;
+      return { type: 'owner', shared: sh || null, sharedAgreement: sa, sharedReseller: sa ? reseller(sa.reseller_id) : null };
+    }
     return null;
   }
   function ownerLabel(){ var o = S.owner || {}; return (o.operating_as || o.legal_name || 'Owner') + ' (direct sale)'; }
   function sellerLabel(sl){
     if (!sl) return '';
-    if (sl.type === 'owner') return ownerLabel();
+    if (sl.type === 'owner') return ownerLabel() + (sl.shared && sl.sharedReseller ? ' · ' + (sl.sharedAgreement.owner_sale_share_pct == null ? 50 : Number(sl.sharedAgreement.owner_sale_share_pct)) + '% commission shared with ' + sl.sharedReseller.legal_name : '');
     return ((sl.reseller || {}).legal_name || 'Reseller') + (sl.agreement ? ' · ' + sl.agreement.agreement_number : '');
   }
 
@@ -1469,6 +1486,10 @@
       +   '<div><label for="cn-seller-sel">Seller</label><select id="cn-seller-sel">' + opts.map(function(o){ return '<option value="' + esc(o[0]) + '"' + (o[0] === cur ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('') + '</select></div>'
       +   '<div><label for="cn-seller-date">Sale date</label><input id="cn-seller-date" type="date" value="' + esc(n.sold_date || (sl && sl.link ? sl.link.submitted_date : '') || '') + '"/></div>'
       + '</div>'
+      + (S.v5missing ? '' : '<div id="cn-share-wrap" style="margin-top:10px;' + (cur === 'owner' ? '' : 'display:none;') + '"><label for="cn-share-sel">Share commission with (s.7.5)</label><select id="cn-share-sel">'
+          + [['', '— No reseller share —']].concat(open.map(function(a){ var r = reseller(a.reseller_id) || {}; return [a.id, r.legal_name + ' · ' + a.agreement_number + ' · ' + (a.owner_sale_share_pct == null ? 50 : Number(a.owner_sale_share_pct)) + '% of their commission']; }))
+              .map(function(o){ return '<option value="' + esc(o[0]) + '"' + (sl && sl.shared && sl.shared.agreement_id === o[0] ? ' selected' : '') + '>' + esc(o[1]) + '</option>'; }).join('')
+          + '</select><div class="sub" style="margin:4px 0 0;font-size:11px;">Optional. Tag this direct sale as shared and that reseller earns their agreement\'s share of the normal commission on it (e.g. 50% &times; 33% = 16.5% of Net Revenue).</div></div>')
       + (pend.length ? '<p class="sub" style="margin:6px 0 0;font-size:12px;">Lead submitted by ' + pend.map(function(cu){ var a = agreement(cu.agreement_id), r = a ? reseller(a.reseller_id) : null; return esc((r ? r.legal_name : '?') + ' on ' + cu.submitted_date); }).join(', ') + ' &mdash; not yet registered.</p>' : '')
       + (!open.length ? '<p class="sub" style="margin:6px 0 0;font-size:12px;">No active reseller agreements. Add one in <b>Resellers</b>.</p>' : '')
       + '<div style="display:flex;gap:10px;align-items:center;margin-top:12px;flex-wrap:wrap;">'
@@ -1506,12 +1527,23 @@
         var row = (await res.json())[0];
         S.customers = S.customers.filter(function(x){ return x.id !== row.id; }).concat([row]);
       } else {
+        links = links.filter(function(cu){ return cu.status !== 'shared'; });
         var reg = links.filter(function(cu){ return cu.status === 'registered'; });
         if (links.length){
           var la = agreement(links[0].agreement_id), lr = la ? reseller(la.reseller_id) : null;
           if (!await K().dlgConfirm(n.display_name + ' is linked to ' + (lr ? lr.legal_name : 'a reseller') + ' (' + (la ? la.agreement_number : '?') + ').\n\n' + (choice === 'owner' ? 'Record it as a direct Owner sale instead?' : 'Clear the seller?') + (reg.length ? ' Commission stops from now on; statements already issued are unchanged.' : ''), { title: 'Change seller', okText: 'Confirm' })) return;
           await decline(links, choice === 'owner' ? 'Reassigned to Owner (direct sale)' : 'Seller cleared');
         }
+      }
+      // s.7.5 shared Owner sale: one 'shared' row on the chosen agreement; any other share closes.
+      var shareTo = choice === 'owner' ? v('cn-share-sel') : '';
+      var shared = S.customers.filter(function(cu){ return cu.subdomain === sub && cu.status === 'shared'; });
+      await decline(shared.filter(function(cu){ return cu.agreement_id !== shareTo; }), 'Owner-sale share ended');
+      if (shareTo && !shared.some(function(cu){ return cu.agreement_id === shareTo; })){
+        var sres = await K().api('POST', '/reseller_customers', { agreement_id: shareTo, prospect_name: n.display_name, subdomain: sub, status: 'shared',
+          submitted_date: date || today(), decision_date: today(), notes: 'Owner direct sale shared under s.7.5', created_by: K().jwtEmail() }, 'return=representation');
+        if (!sres.ok) throw new Error((await sres.text()).slice(0, 200));
+        S.customers = S.customers.concat(await sres.json());
       }
     } catch (e){ K().setMsg('cn-seller-msg', 'Could not save: ' + e.message); return; }
     var sold = choice === 'owner' ? 'owner' : (choice ? 'reseller' : null), warn = '';
@@ -1634,5 +1666,6 @@
     var t = e.target; if (!t) return;
     if (t.id === 'rs-t-type' || t.id === 'rs-t-notice') calcTermEffective();
     if (t.id === 'rs-link-sel') S._linkPick = t.value;   // read before the dialog closes
+    if (t.id === 'cn-seller-sel'){ var sw = document.getElementById('cn-share-wrap'); if (sw) sw.style.display = t.value === 'owner' ? '' : 'none'; }
   });
 })();
