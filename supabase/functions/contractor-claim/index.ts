@@ -42,6 +42,10 @@ function phoneKey(v: unknown): string {
   const d = String(v ?? "").replace(/[^\d]/g, "");
   return d.length > 10 ? d.slice(-10) : d;   // match on the national number
 }
+// Normalized email for case-insensitive matching ('' when absent/blank).
+function emailKey(v: unknown): string {
+  return String(v ?? "").trim().toLowerCase();
+}
 
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
@@ -67,6 +71,7 @@ serve(async (req: Request) => {
   const admin   = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
   const authUid = user.id;
   const pKey    = phoneKey(user.phone);
+  const eKey    = emailKey(user.email);
 
   // Already linked? Idempotent.
   {
@@ -82,27 +87,28 @@ serve(async (req: Request) => {
     }
   }
 
-  if (!pKey) return jsonResponse({ linked: false, reason: "no_phone_on_account" });
+  // Identity is the caller's phone (SMS sign-in) OR email (email sign-in).
+  if (!pKey && !eKey) return jsonResponse({ linked: false, reason: "no_identity_on_account" });
 
-  // Find unused, unexpired invites, then match by phone (digits-only).
+  // Find unused, unexpired invites, then match by phone OR email.
   const nowIso = new Date().toISOString();
   const { data: invites } = await admin
     .from("contractor_invites")
-    .select("id, phone, contractor_id, role, invited_by, expires_at, used_at")
+    .select("id, phone, email, contractor_id, role, invited_by, expires_at, used_at")
     .is("used_at", null);
   const invite = (invites || []).find((iv: Record<string, unknown>) => {
-    if (phoneKey(iv.phone) !== pKey) return false;
     if (iv.expires_at && String(iv.expires_at) < nowIso) return false;
-    return true;
+    if (pKey && phoneKey(iv.phone) === pKey) return true;
+    if (eKey && emailKey(iv.email) === eKey)  return true;
+    return false;
   });
   if (!invite) return jsonResponse({ linked: false, reason: "no_invite" });
 
-  // Double check: the phone must ALSO be on the contractor's record. people /
-  // phone / email etc. live inside the housing_contractors `data` jsonb blob
-  // (only id/name/trade/status/data are real columns -- see sbSaveContractor /
-  // sbLoadContractors), so we read people out of `data`, NOT a top-level column.
-  // Selecting a non-existent "people" column makes PostgREST error the whole
-  // query, which previously surfaced as a misleading "contractor_not_found".
+  // Double check: the SAME phone/email must ALSO be on the contractor's record.
+  // people / phone / email etc. live inside the housing_contractors `data` jsonb
+  // blob (only id/name/trade/status/data are real columns -- see sbSaveContractor
+  // / sbLoadContractors), so we read people/email out of `data`, NOT a top-level
+  // column. Selecting a non-existent column makes PostgREST error the whole query.
   const { data: ctRows } = await admin
     .from("housing_contractors")
     .select("id, name, data")
@@ -112,13 +118,20 @@ serve(async (req: Request) => {
   if (!ct) return jsonResponse({ linked: false, reason: "contractor_not_found" });
   const ctData = (ct.data && typeof ct.data === "object") ? ct.data as Record<string, unknown> : {};
   const people = Array.isArray(ctData.people) ? ctData.people as Array<Record<string, unknown>> : [];
-  const onFile = people.some((p) => phoneKey(p.phone) === pKey);
-  if (!onFile) {
-    return jsonResponse({ linked: false, reason: "phone_not_on_contractor" });
+  const onFilePhone = !!pKey && people.some((p) => phoneKey(p.phone) === pKey);
+  const onFileEmail = !!eKey && (
+    emailKey(ctData.email) === eKey ||
+    people.some((p) => emailKey(p.email) === eKey)
+  );
+  if (!onFilePhone && !onFileEmail) {
+    return jsonResponse({ linked: false, reason: "contact_not_on_contractor" });
   }
 
-  // Resolve a display name from the matching key contact.
-  const match = people.find((p) => phoneKey(p.phone) === pKey);
+  // Resolve a display name from the matching key contact (by whichever channel
+  // matched), falling back to the contractor name.
+  const match = people.find((p) =>
+    (onFilePhone && phoneKey(p.phone) === pKey) || (onFileEmail && emailKey(p.email) === eKey)
+  );
   const displayName = (match && String(match.name || "")) || "";
 
   // Create the mapping (service role) and consume the invite.
@@ -126,7 +139,8 @@ serve(async (req: Request) => {
     auth_user_id:  authUid,
     contractor_id: invite.contractor_id,
     display_name:  displayName,
-    phone:         user.phone || invite.phone,
+    phone:         user.phone || invite.phone || null,
+    email:         user.email || invite.email || null,
     role:          invite.role || "contact",
     is_active:     true,
     invited_by:    invite.invited_by || null,
@@ -143,8 +157,8 @@ serve(async (req: Request) => {
       entity_type: "contractor",
       entity_id:   String(invite.contractor_id),
       action:      "contractor_portal_claimed",
-      detail:      "Portal login linked for " + (displayName || user.phone || authUid),
-      actor:       user.phone || authUid,
+      detail:      "Portal login linked for " + (displayName || user.phone || user.email || authUid),
+      actor:       user.phone || user.email || authUid,
       created_at:  nowIso,
     });
   } catch (_e) { /* non-fatal */ }

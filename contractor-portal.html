@@ -134,16 +134,25 @@
         <label for="cp_phone">Mobile number</label>
         <input id="cp_phone" type="tel" inputmode="tel" placeholder="(705) 555-1234" autocomplete="tel"/>
         <button id="cp_send" type="button">Text me a code</button>
+        <button id="cp_to_email" type="button" class="cp-ghost">Sign in with email instead</button>
+      </div>
+      <div id="cp_step_email" class="hidden">
+        <h1>Sign in</h1>
+        <p class="cp-sub">Enter the email on file with the housing office. We will email you a 6-digit code.</p>
+        <label for="cp_email">Email address</label>
+        <input id="cp_email" type="email" inputmode="email" placeholder="you@example.com" autocomplete="email"/>
+        <button id="cp_send_email" type="button">Email me a code</button>
+        <button id="cp_to_phone" type="button" class="cp-ghost">Sign in with mobile instead</button>
       </div>
       <div id="cp_step_code" class="hidden">
         <h1>Enter your code</h1>
-        <p class="cp-sub">We texted a 6-digit code to <strong id="cp_phone_sent"></strong>.</p>
+        <p class="cp-sub">We <span id="cp_sent_verb">texted</span> a 6-digit code to <strong id="cp_phone_sent"></strong>.</p>
         <p class="cp-sub" style="font-size:12px;">This is the sign-in code for your Contractor Portal account. It is sent by our automated verification service, so it may arrive from a short code or an unfamiliar number &mdash; that is expected.</p>
         <label for="cp_code">6-digit code</label>
         <input id="cp_code" type="text" inputmode="numeric" autocomplete="one-time-code" placeholder="123456"/>
         <button id="cp_verify" type="button">Verify &amp; sign in</button>
         <button id="cp_resend" type="button" class="cp-ghost">Resend code</button>
-        <button id="cp_back" type="button" class="cp-ghost">Use a different number</button>
+        <button id="cp_back" type="button" class="cp-ghost">Use a different number / email</button>
       </div>
       <div class="cp-msg" id="cp_msg"></div>
     </div>
