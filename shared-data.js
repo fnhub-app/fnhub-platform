@@ -2722,7 +2722,7 @@ function _ctInvitePickModal(ct, invitees){
       return '<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--border);border-radius:8px;margin-bottom:8px;cursor:pointer;background:var(--bg);">'
         + '<input type="checkbox" class="_ctInvChk" data-i="' + i + '" checked style="width:16px;height:16px;flex:0 0 auto;"/>'
         + '<div style="min-width:0;"><div style="font-weight:600;color:var(--text);font-size:13px;">' + esc(x.name || '(no name)') + '</div>'
-        + '<div style="color:var(--muted);font-size:12px;">' + esc(x.phone) + '</div></div></label>';
+        + '<div style="color:var(--muted);font-size:12px;">' + esc([x.phone, x.email].filter(Boolean).join(' · ')) + '</div></div></label>';
     }).join('');
     function close(val){ try { host.innerHTML = ''; } catch(e){} resolve(val); }
     window._ctInvitePickClose = function(){ close(null); };
@@ -2753,14 +2753,20 @@ function _ctInvitePickModal(ct, invitees){
 }
 window._ctInvitePickModal = _ctInvitePickModal;
 
-// Distinct, valid-E.164 key contacts from a people[] list, as invite targets.
+// Distinct key contacts from a people[] list, as portal invite targets. A
+// contact is invitable on a valid E.164 mobile OR a valid email (either channel
+// can be authorized + used to sign in). Deduped by phone, else by email.
 function _collectPortalInvitees(people){
   var seen = {}, out = [];
   (people || []).forEach(function(p){
-    if(!p || !p.phone) return;
-    var e164 = (typeof _toE164 === 'function') ? _toE164(p.phone) : '';
-    if(!e164 || seen[e164]) return;
-    seen[e164] = true; out.push({ phone: e164, name: p.name || '' });
+    if(!p) return;
+    var e164  = (p.phone && typeof _toE164 === 'function') ? _toE164(p.phone) : '';
+    var email = String(p.email || '').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) email = '';
+    if(!e164 && !email) return;                        // nothing to invite on
+    var key = e164 || ('email:' + email);
+    if(seen[key]) return; seen[key] = true;
+    out.push({ phone: e164, email: email, name: p.name || '' });
   });
   return out;
 }
@@ -2770,12 +2776,14 @@ function _collectPortalInvitees(people){
 // and the per-Key-Person invite button. `invitees` = [{phone(E.164), name}].
 async function _ctSendInvites(ct, invitees){
   if(!ct || !ct.id || !invitees || !invitees.length) return false;
-  var who = invitees.map(function(x){ return (x.name || x.phone); }).join(', ');
+  var who = invitees.map(function(x){ return (x.name || x.phone || x.email); }).join(', ');
   var now = new Date();
   var expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30-day window
   var invitedBy = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.email) || (window.currentRole || 'staff');
+  // One invite row per contact, carrying BOTH channels it has — the claim matches
+  // by phone OR email, so a row with both authorizes either sign-in method.
   var rows = invitees.map(function(x){
-    return { phone: x.phone, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires };
+    return { phone: x.phone || null, email: x.email || null, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires };
   });
   var r = await fetch(SUPABASE_URL + '/rest/v1/contractor_invites', {
     method: 'POST',
@@ -2784,25 +2792,49 @@ async function _ctSendInvites(ct, invitees){
   });
   if(!r.ok){
     var t = await r.text().catch(function(){ return ''; });
-    showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor_portal migration may not be run on this project.', {type:'error'});
+    showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor-portal migrations may not be run on this project (incl. 20261112 for email sign-in).', {type:'error'});
     console.warn('[portal] invite insert failed:', r.status, t.slice(0, 200));
     return false;
   }
   if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_portal_invited', 'Portal invite(s) issued to ' + who, window.currentRole || 'staff');
-  // Courtesy invite email with the portal link. Email ONLY the invited contacts
-  // (not every person on file) -- an un-invited contact who followed the link
-  // would be rejected by contractor-claim.
   var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
-  if(typeof notifyContractorPortalInvite === 'function'){
-    var _invitedPhones = {};
-    invitees.forEach(function(x){ if(x && x.phone) _invitedPhones[x.phone] = true; });
-    var _invitedPeople = (ct.people || []).filter(function(p){
-      var e164 = (p && p.phone && typeof _toE164 === 'function') ? _toE164(p.phone) : '';
-      return e164 && _invitedPhones[e164];
-    });
-    notifyContractorPortalInvite(ct, _invitedPeople, _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
+
+  // Deliver the sign-in link by whatever channel each invited contact has.
+  // EMAIL: notifyContractorPortalInvite emails the invited contacts (+ the
+  // contractor's own email). TEXT: window.sendSms texts the link to each
+  // invited mobile (needs the sms_notifications module + an SMS provider).
+  // Both are best-effort/fire-and-forget; the toast reports what we ATTEMPT
+  // (based on what's on file) so it's never misleading about "emailed" vs "texted".
+  var _invitedEmails = {};
+  invitees.forEach(function(x){ if(x && x.email) _invitedEmails[x.email] = true; });
+  var _invitedPeopleEmail = (ct.people || []).filter(function(p){
+    var e = String((p && p.email) || '').trim().toLowerCase();
+    return e && _invitedEmails[e];
+  });
+  var willEmail = _invitedPeopleEmail.length > 0 || !!ct.email;
+  if(willEmail && typeof notifyContractorPortalInvite === 'function'){
+    notifyContractorPortalInvite(ct, _invitedPeopleEmail, _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
   }
-  showToast('Invited ' + invitees.length + ' contact(s) to the portal (and emailed the sign-in link to any email on file). They sign in at ' + _portalLink, {type:'info'});
+  var _smsReady = ((typeof moduleOn !== 'function') || moduleOn('sms_notifications')) && typeof window.sendSms === 'function';
+  var _textTargets = _smsReady ? invitees.filter(function(x){ return x && x.phone; }) : [];
+  if(_textTargets.length){
+    var _short = (window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing';
+    _textTargets.forEach(function(x){
+      try {
+        window.sendSms({
+          to: x.phone,
+          body: _short + ' Contractor Portal: sign in to view and update your work orders at ' + _portalLink,
+          event: 'contractor_portal_invite', entity_type: 'contractor', entity_id: String(ct.id)
+        }).catch(function(e){ console.warn('[portal] invite SMS failed:', e); });
+      } catch(e){ console.warn('[portal] invite SMS threw:', e); }
+    });
+  }
+
+  var _chans = [];
+  if(_textTargets.length) _chans.push('texting the link to ' + _textTargets.length + ' mobile' + (_textTargets.length > 1 ? 's' : ''));
+  if(willEmail)           _chans.push('emailing it to the contact' + (invitees.length > 1 ? 's' : '') + ' with an email on file');
+  var _how = _chans.length ? ("We're " + _chans.join(' and ') + '.') : 'No mobile or email on file to send to — share this link:';
+  showToast('Invited ' + invitees.length + ' contact(s) to the portal. ' + _how + ' ' + _portalLink, {type:'info'});
   return true;
 }
 window._ctSendInvites = _ctSendInvites;
@@ -2816,27 +2848,32 @@ async function inviteContractorPersonFromRow(i){
     if(typeof ctGetPeople === 'function') ctGetPeople();   // flush typed values into _ctPeople
     var person = (window._ctPeople || [])[i];
     if(!person){ return; }
-    var e164 = (typeof _toE164 === 'function') ? _toE164(person.phone) : '';
-    if(!e164){ showToast('Add a valid mobile number for ' + (person.name || 'this contact') + ' first.', {type:'error'}); return; }
+    var e164  = (person.phone && typeof _toE164 === 'function') ? _toE164(person.phone) : '';
+    var email = String(person.email || '').trim().toLowerCase();
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) email = '';
+    if(!e164 && !email){ showToast('Add a valid mobile number or email for ' + (person.name || 'this contact') + ' first.', {type:'error'}); return; }
     var list = window._contractors || [];
     var ct = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0) ? list[window._ctEditIdx] : null;
     if(!ct || !ct.id){ showToast('Save the contractor first, then invite.', {type:'error'}); return; }
-    // The portal claim re-checks the phone is on the SAVED people[]; if this row
-    // was just typed, persist the form so the number is on file before authorizing it.
-    var onFile = _collectPortalInvitees(ct.people).some(function(x){ return x.phone === e164; });
+    // The portal claim re-checks the phone/email is on the SAVED people[]; if this
+    // row was just typed, persist the form so it's on file before authorizing it.
+    var onFile = _collectPortalInvitees(ct.people).some(function(x){ return (e164 && x.phone === e164) || (email && x.email === email); });
     if(!onFile && typeof saveContractor === 'function'){
       if(saveContractor({keepOpen:true}) === false) return;   // save aborted (missing name / declined duplicate)
       ct = (window._contractors || [])[window._ctEditIdx] || ct;
     }
     if(typeof showConfirm === 'function'){
+      var _ch = [];
+      if(e164)  _ch.push('text the sign-in link to ' + e164);
+      if(email) _ch.push('email it to ' + email);
       var ok = await showConfirm({
         title: 'Invite ' + (person.name || 'this contact') + ' to the portal?',
-        message: 'Text a sign-in code to ' + e164 + (person.email ? ' and email the portal link to ' + person.email : '') + '.',
+        message: 'We\'ll ' + _ch.join(' and ') + '. They can sign in with their ' + (e164 && email ? 'mobile or email' : (e164 ? 'mobile' : 'email')) + '.',
         confirmText: 'Send invite'
       });
       if(!ok) return;
     }
-    await _ctSendInvites(ct, [{ phone: e164, name: person.name || '' }]);
+    await _ctSendInvites(ct, [{ phone: e164, email: email, name: person.name || '' }]);
   } catch(e){ console.warn('[portal] inviteContractorPersonFromRow threw:', e); if(typeof showToast === 'function') showToast('Invite failed: ' + (e && e.message || e), {type:'error'}); }
 }
 window.inviteContractorPersonFromRow = inviteContractorPersonFromRow;

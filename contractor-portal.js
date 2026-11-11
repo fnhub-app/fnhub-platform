@@ -48,19 +48,39 @@
   var workOrders = [];   // last-loaded rows, indexed by the detail view
   var currentWO = null;  // the work order whose detail is open (for downloads)
 
-  // POST the OTP request for a phone. Shared by the first "Text me a code" and
-  // the "Resend code" button. Returns true on success.
-  async function sendOtp(phone) {
+  // Active sign-in channel: 'phone' (SMS code) or 'email' (email code).
+  var _authChannel = 'phone';
+  function _authTarget() {
+    return _authChannel === 'email'
+      ? ((el('cp_email') || {}).value || '').trim().toLowerCase()
+      : e164((el('cp_phone') || {}).value);
+  }
+  // POST the OTP request for the active channel. Shared by "Text/Email me a
+  // code" and "Resend code". Returns true on success. For email, create_user:true
+  // mints the auth user on first sign-in (like phone OTP does for a new number).
+  async function sendOtp(target) {
+    var payload = (_authChannel === 'email')
+      ? { email: target, create_user: true }
+      : { phone: target };
     var r = await fetch(SB + '/auth/v1/otp', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON },
-      body: JSON.stringify({ phone: phone })
+      body: JSON.stringify(payload)
     });
     if (!r.ok) {
       var d = await r.json().catch(function () { return {}; });
       throw new Error(d.msg || d.error_description || d.error || ('HTTP ' + r.status));
     }
     return true;
+  }
+  // Toggle between the phone and email sign-in inputs.
+  function showEmailLogin() { _authChannel = 'email'; hide('cp_step_phone'); show('cp_step_email'); setMsg(''); var i = el('cp_email'); if (i) i.focus(); }
+  function showPhoneLogin() { _authChannel = 'phone'; hide('cp_step_email'); show('cp_step_phone'); setMsg(''); var i = el('cp_phone'); if (i) i.focus(); }
+  // Enter the shared code step, labelled for the channel that just sent.
+  function enterCodeStep(target) {
+    var v = el('cp_sent_verb'); if (v) v.textContent = (_authChannel === 'email') ? 'emailed' : 'texted';
+    var t = el('cp_phone_sent'); if (t) t.textContent = target;
+    hide('cp_step_phone'); hide('cp_step_email'); show('cp_step_code'); setMsg('');
   }
 
   // Disable the Resend button for a cooldown so repeated taps can't trip the
@@ -83,40 +103,55 @@
   }
 
   async function requestCode() {
+    _authChannel = 'phone';
     var phone = e164(el('cp_phone').value);
     if (!phone) { setMsg('Enter a valid mobile number.', true); return; }
     setMsg('Sending code…');
     try {
       await sendOtp(phone);
-      el('cp_phone_sent').textContent = phone;
-      hide('cp_step_phone'); show('cp_step_code'); setMsg('');
+      enterCodeStep(phone);
       startResendCooldown(30);
     } catch (err) { setMsg('Could not send a code: ' + err.message, true); }
   }
 
-  // Resend to the same number without leaving the code step.
+  async function requestEmailCode() {
+    _authChannel = 'email';
+    var email = ((el('cp_email') || {}).value || '').trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { setMsg('Enter a valid email address.', true); return; }
+    setMsg('Sending code…');
+    try {
+      await sendOtp(email);
+      enterCodeStep(email);
+      startResendCooldown(30);
+    } catch (err) { setMsg('Could not send a code: ' + err.message, true); }
+  }
+
+  // Resend to the same target (phone or email) without leaving the code step.
   async function resendCode() {
-    var phone = e164(el('cp_phone').value);
-    if (!phone) { setMsg('Enter your number again.', true); return; }
+    var target = _authTarget();
+    if (!target) { setMsg('Enter your ' + (_authChannel === 'email' ? 'email' : 'number') + ' again.', true); return; }
     setMsg('Sending a new code…');
     try {
-      await sendOtp(phone);
+      await sendOtp(target);
       var codeEl = el('cp_code'); if (codeEl) { codeEl.value = ''; codeEl.focus(); }
-      setMsg('A new code was sent to ' + phone + '.');
+      setMsg('A new code was sent to ' + target + '.');
       startResendCooldown(30);
     } catch (err) { setMsg('Could not resend: ' + err.message, true); }
   }
 
   async function verifyCode() {
-    var phone = e164(el('cp_phone').value);
+    var target = _authTarget();
     var token = (el('cp_code').value || '').trim();
-    if (!token) { setMsg('Enter the code from the text.', true); return; }
+    if (!token) { setMsg('Enter the code we sent you.', true); return; }
     setMsg('Verifying…');
     try {
+      var verifyBody = (_authChannel === 'email')
+        ? { email: target, token: token, type: 'email' }
+        : { phone: target, token: token, type: 'sms' };
       var r = await fetch(SB + '/auth/v1/verify', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'apikey': ANON },
-        body: JSON.stringify({ phone: phone, token: token, type: 'sms' })
+        body: JSON.stringify(verifyBody)
       });
       var d = await r.json();
       if (!r.ok || !d.access_token) {
@@ -157,10 +192,11 @@
       var m;
       switch (reason) {
         case 'no_invite':
-          m = "We don't have a portal invite for this number yet. Ask the housing office to send you a portal invite, then sign in again.";
+          m = "We don't have a portal invite for this number or email yet. Ask the housing office to send you a portal invite, then sign in again.";
           break;
+        case 'contact_not_on_contractor':
         case 'phone_not_on_contractor':
-          m = "This number isn't listed as a contact on your contractor record. Ask the housing office to add it, then sign in again.";
+          m = "This number or email isn't listed as a contact on your contractor record. Ask the housing office to add it, then sign in again.";
           break;
         case 'deactivated':
           m = 'Your portal access has been turned off. Please contact the housing office.';
@@ -570,11 +606,16 @@
   function init() {
     if (!SB || !ANON) { setMsg('Portal is not configured for this nation.', true); return; }
     var s = el('cp_send'); if (s) s.addEventListener('click', requestCode);
+    var se = el('cp_send_email'); if (se) se.addEventListener('click', requestEmailCode);
+    var te = el('cp_to_email'); if (te) te.addEventListener('click', showEmailLogin);
+    var tp = el('cp_to_phone'); if (tp) tp.addEventListener('click', showPhoneLogin);
     var v = el('cp_verify'); if (v) v.addEventListener('click', verifyCode);
     var rs = el('cp_resend'); if (rs) rs.addEventListener('click', resendCode);
     var b = el('cp_back'); if (b) b.addEventListener('click', function () {
       if (_resendTimer) { clearInterval(_resendTimer); _resendTimer = null; }
-      hide('cp_step_code'); show('cp_step_phone'); setMsg('');
+      hide('cp_step_code');
+      show(_authChannel === 'email' ? 'cp_step_email' : 'cp_step_phone');
+      setMsg('');
     });
     // "My team" — request to add a key person (delegated: the button lives in
     // cp_app alongside the work-order list).
