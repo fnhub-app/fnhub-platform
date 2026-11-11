@@ -159,6 +159,46 @@
     Object.keys(map).forEach(function (k) { var e = document.getElementById(map[k]); if (e) e.style.display = (k === v) ? '' : 'none'; });
   }
 
+  // Make the support card draggable by its header (mouse + touch via Pointer
+  // Events). The overlay centers the card with flex; on first drag we switch the
+  // card to absolute positioning (the overlay is fixed inset:0, so left/top are
+  // viewport coords) and clamp it on screen. Idempotent per card element; the
+  // close ✕ and other header controls are exempt so they still work.
+  function _swMakeDraggable() {
+    var ov = document.getElementById('supportWidget'); if (!ov) return;
+    var card = ov.querySelector('.sw-card');
+    var hd = card && card.querySelector('.sw-hd');
+    if (!card || !hd || card.dataset.swDragWired) return;
+    card.dataset.swDragWired = '1';
+    hd.style.cursor = 'move';
+    hd.style.touchAction = 'none';
+    hd.style.userSelect = 'none';
+    var drag = null;
+    hd.addEventListener('pointerdown', function (e) {
+      var t = e.target;
+      if (t && t.closest && t.closest('button,a,input,textarea,select')) return;
+      var r = card.getBoundingClientRect();
+      card.style.position = 'absolute';
+      card.style.margin = '0';
+      card.style.left = r.left + 'px';
+      card.style.top = r.top + 'px';
+      drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
+      try { hd.setPointerCapture(e.pointerId); } catch (_) {}
+      e.preventDefault();
+    });
+    hd.addEventListener('pointermove', function (e) {
+      if (!drag) return;
+      var m = 8;
+      var maxL = Math.max(m, window.innerWidth - drag.w - m);
+      var maxT = Math.max(m, window.innerHeight - drag.h - m);
+      card.style.left = Math.min(Math.max(e.clientX - drag.dx, m), maxL) + 'px';
+      card.style.top = Math.min(Math.max(e.clientY - drag.dy, m), maxT) + 'px';
+    });
+    function _end(e) { drag = null; try { hd.releasePointerCapture(e.pointerId); } catch (_) {} }
+    hd.addEventListener('pointerup', _end);
+    hd.addEventListener('pointercancel', _end);
+  }
+
   function openSupportWidget() {
     if (typeof moduleOn === 'function' && !moduleOn('support')) {
       if (typeof showToast === 'function') showToast('Help & Support is turned off for this nation.', { type: 'info' });
@@ -172,6 +212,11 @@
     var tb = document.getElementById('support_thumbs'); if (tb) tb.innerHTML = '';
     var fi = document.getElementById('support_files'); if (fi) fi.value = '';
     var ov = document.getElementById('supportWidget'); if (ov) ov.style.display = 'flex';
+    _swMakeDraggable();
+    // Fresh session each open: clear the message list (and history) so the
+    // greeting doesn't stack up every time the widget is reopened.
+    var cm = document.getElementById('support_chat_msgs'); if (cm) cm.innerHTML = '';
+    _chat.length = 0;
     _greet();
     var ci = document.getElementById('support_chat_input'); if (ci) setTimeout(function () { try { ci.focus(); } catch (e) {} }, 30);
   }
