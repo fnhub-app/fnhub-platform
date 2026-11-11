@@ -74,6 +74,8 @@ interface Window {
   _notesFmtDT: (at: any) => string;              // shared.js (notes-thread date formatter)
   backfillContractorWorkOrders: (...args: any[]) => any; // shared-data.js (one-time portal projection backfill)
   inviteContractorToPortal: (...args: any[]) => any;  // shared-data.js (write a contractor_invites row)
+  inviteContractorPersonFromRow: (...args: any[]) => any; // shared-data.js (per-Key-Person portal invite)
+  _ctSendInvites: (...args: any[]) => any;        // shared-data.js (write invites + fire SMS/email link)
   _setAppFormScore: (...args: any[]) => any;     // housing-app.js (internal score stat on app form header)
   _openScoreSheetFromForm: (...args: any[]) => any; // housing-app.js (click score -> scorecard)
   _appFormScoreAppId: any;                       // housing-app.js (app id backing the form score stat)

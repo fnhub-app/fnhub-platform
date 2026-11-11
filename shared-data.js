@@ -2765,6 +2765,82 @@ function _collectPortalInvitees(people){
   return out;
 }
 
+// Write contractor_invites rows for the given invitees + fire the SMS/email
+// sign-in link, audit, and toast. Shared by the card-level invite (pick modal)
+// and the per-Key-Person invite button. `invitees` = [{phone(E.164), name}].
+async function _ctSendInvites(ct, invitees){
+  if(!ct || !ct.id || !invitees || !invitees.length) return false;
+  var who = invitees.map(function(x){ return (x.name || x.phone); }).join(', ');
+  var now = new Date();
+  var expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30-day window
+  var invitedBy = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.email) || (window.currentRole || 'staff');
+  var rows = invitees.map(function(x){
+    return { phone: x.phone, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires };
+  });
+  var r = await fetch(SUPABASE_URL + '/rest/v1/contractor_invites', {
+    method: 'POST',
+    headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+    body: JSON.stringify(rows)
+  });
+  if(!r.ok){
+    var t = await r.text().catch(function(){ return ''; });
+    showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor_portal migration may not be run on this project.', {type:'error'});
+    console.warn('[portal] invite insert failed:', r.status, t.slice(0, 200));
+    return false;
+  }
+  if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_portal_invited', 'Portal invite(s) issued to ' + who, window.currentRole || 'staff');
+  // Courtesy invite email with the portal link. Email ONLY the invited contacts
+  // (not every person on file) -- an un-invited contact who followed the link
+  // would be rejected by contractor-claim.
+  var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
+  if(typeof notifyContractorPortalInvite === 'function'){
+    var _invitedPhones = {};
+    invitees.forEach(function(x){ if(x && x.phone) _invitedPhones[x.phone] = true; });
+    var _invitedPeople = (ct.people || []).filter(function(p){
+      var e164 = (p && p.phone && typeof _toE164 === 'function') ? _toE164(p.phone) : '';
+      return e164 && _invitedPhones[e164];
+    });
+    notifyContractorPortalInvite(ct, _invitedPeople, _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
+  }
+  showToast('Invited ' + invitees.length + ' contact(s) to the portal (and emailed the sign-in link to any email on file). They sign in at ' + _portalLink, {type:'info'});
+  return true;
+}
+window._ctSendInvites = _ctSendInvites;
+
+// Invite a SINGLE Key Person row (Overview tab) to the portal + text the link.
+// One-tap version of inviteContractorToPortal for the per-row button -- no pick
+// modal (the person is already chosen), just a confirm.
+async function inviteContractorPersonFromRow(i){
+  try {
+    if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
+    if(typeof ctGetPeople === 'function') ctGetPeople();   // flush typed values into _ctPeople
+    var person = (window._ctPeople || [])[i];
+    if(!person){ return; }
+    var e164 = (typeof _toE164 === 'function') ? _toE164(person.phone) : '';
+    if(!e164){ showToast('Add a valid mobile number for ' + (person.name || 'this contact') + ' first.', {type:'error'}); return; }
+    var list = window._contractors || [];
+    var ct = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0) ? list[window._ctEditIdx] : null;
+    if(!ct || !ct.id){ showToast('Save the contractor first, then invite.', {type:'error'}); return; }
+    // The portal claim re-checks the phone is on the SAVED people[]; if this row
+    // was just typed, persist the form so the number is on file before authorizing it.
+    var onFile = _collectPortalInvitees(ct.people).some(function(x){ return x.phone === e164; });
+    if(!onFile && typeof saveContractor === 'function'){
+      if(saveContractor({keepOpen:true}) === false) return;   // save aborted (missing name / declined duplicate)
+      ct = (window._contractors || [])[window._ctEditIdx] || ct;
+    }
+    if(typeof showConfirm === 'function'){
+      var ok = await showConfirm({
+        title: 'Invite ' + (person.name || 'this contact') + ' to the portal?',
+        message: 'Text a sign-in code to ' + e164 + (person.email ? ' and email the portal link to ' + person.email : '') + '.',
+        confirmText: 'Send invite'
+      });
+      if(!ok) return;
+    }
+    await _ctSendInvites(ct, [{ phone: e164, name: person.name || '' }]);
+  } catch(e){ console.warn('[portal] inviteContractorPersonFromRow threw:', e); if(typeof showToast === 'function') showToast('Invite failed: ' + (e && e.message || e), {type:'error'}); }
+}
+window.inviteContractorPersonFromRow = inviteContractorPersonFromRow;
+
 async function inviteContractorToPortal(ctId){
   try {
     if(typeof moduleOn === 'function' && !moduleOn('contractor_portal')){ showToast('Contractor Portal module is off — enable it in Settings first.', {type:'error'}); return; }
@@ -2792,43 +2868,7 @@ async function inviteContractorToPortal(ctId){
     // Let the user choose which contacts get the sign-in text (default all).
     var selected = await _ctInvitePickModal(ct, invitees);
     if(!selected || !selected.length) return;
-    invitees = selected;
-    var who = invitees.map(function(x){ return (x.name || x.phone); }).join(', ');
-    var now = new Date();
-    var expires = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString(); // 30-day window
-    var invitedBy = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.email) || (window.currentRole || 'staff');
-    var rows = invitees.map(function(x){
-      return { phone: x.phone, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires };
-    });
-    var r = await fetch(SUPABASE_URL + '/rest/v1/contractor_invites', {
-      method: 'POST',
-      headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
-      body: JSON.stringify(rows)
-    });
-    if(!r.ok){
-      var t = await r.text().catch(function(){ return ''; });
-      showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor_portal migration may not be run on this project.', {type:'error'});
-      console.warn('[portal] invite insert failed:', r.status, t.slice(0, 200));
-      return;
-    }
-    if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_portal_invited', 'Portal invite(s) issued to ' + who, window.currentRole || 'staff');
-    // Courtesy invite email with the portal link (branded shell + editable in
-    // Settings > Notifications). Fire-and-forget; silent skip if no email on file.
-    var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
-    if(typeof notifyContractorPortalInvite === 'function'){
-      // Email ONLY the contacts that were actually invited (the staffer may have
-      // unchecked some in the pick modal) -- not every person on file. An
-      // un-invited contact who got the email would follow the link and be
-      // rejected by contractor-claim ("no invite for this number").
-      var _invitedPhones = {};
-      invitees.forEach(function(x){ if(x && x.phone) _invitedPhones[x.phone] = true; });
-      var _invitedPeople = (ct.people || []).filter(function(p){
-        var e164 = (p && p.phone && typeof _toE164 === 'function') ? _toE164(p.phone) : '';
-        return e164 && _invitedPhones[e164];
-      });
-      notifyContractorPortalInvite(ct, _invitedPeople, _portalLink).catch(function(e){ console.warn('[portal] invite email failed:', e); });
-    }
-    showToast('Invited ' + invitees.length + ' contact(s) to the portal (and emailed the sign-in link to any email on file). They sign in at ' + _portalLink, {type:'info'});
+    await _ctSendInvites(ct, selected);
   } catch(e){ console.warn('[portal] inviteContractorToPortal threw:', e); if(typeof showToast === 'function') showToast('Invite failed: ' + (e && e.message || e), {type:'error'}); }
 }
 window.inviteContractorToPortal = inviteContractorToPortal;
@@ -5298,17 +5338,19 @@ function ctRenderPeople(people) {
   window._ctPeople = people || [];
   var list = document.getElementById('ct_people_list');
   if(!list) return;
-  // Contractor Portal: show "Invite to portal" only when the module is on AND a
-  // SAVED contractor is open (invites authorize a phone that is on file). New,
-  // unsaved contractors have no id yet, so the button stays hidden until Save.
+  // Contractor Portal: show "Invite to portal" (card footer + per-person row
+  // button) only when the module is on AND a SAVED contractor is open (invites
+  // authorize a phone that is on file). New, unsaved contractors have no id yet,
+  // so the buttons stay hidden until Save.
+  var _savedCt = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
+    ? (window._contractors || [])[window._ctEditIdx] : null;
+  var _portalOn = (typeof moduleOn !== 'function') || moduleOn('contractor_portal');
+  var _ctCanInvite = !!(_portalOn && _savedCt && _savedCt.id);
   try {
     var _invBtn = document.getElementById('ct_portal_invite_btn');
     var _prevBtn = document.getElementById('ct_portal_preview_btn');
     if(_invBtn || _prevBtn){
-      var _savedCt = (typeof window._ctEditIdx === 'number' && window._ctEditIdx >= 0)
-        ? (window._contractors || [])[window._ctEditIdx] : null;
-      var _portalOn = (typeof moduleOn !== 'function') || moduleOn('contractor_portal');
-      var _showPortalBtns = (_portalOn && _savedCt && _savedCt.id) ? '' : 'none';
+      var _showPortalBtns = _ctCanInvite ? '' : 'none';
       if(_invBtn)  _invBtn.style.display  = _showPortalBtns;
       // Preview is a read-only staff view of the contractor's portal; same
       // gate as Invite (saved contractor + module on).
@@ -5322,10 +5364,16 @@ function ctRenderPeople(people) {
   list.innerHTML = window._ctPeople.map(function(p, i) {
     // value attributes escaped — a stored name/email containing a double quote
     // (or an injected payload) broke out of the attribute otherwise.
-    return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr auto;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
+    // Per-person "Invite" (send portal sign-up link) — only for saved contractors
+    // with the portal module on; the handler validates the mobile + saves first.
+    var _inviteBtn = _ctCanInvite
+      ? '<button type="button" onclick="inviteContractorPersonFromRow('+i+')" class="btn btn-ghost btn-sm" style="white-space:nowrap;" title="Text this contact a Contractor Portal sign-up link">📱 Invite</button>'
+      : '';
+    return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr'+(_ctCanInvite?' auto':'')+' auto;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
       +'<input type="text"  class="ct-person-name"  data-pi="'+i+'" value="'+escapeHtml(p.name||'')+'"  placeholder="Full name"  style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
       +'<input type="tel"   class="ct-person-phone" data-pi="'+i+'" value="'+escapeHtml(p.phone?formatPhone(p.phone):'')+'" placeholder="(705)-000-0000" oninput="fmtPhone(this)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
       +'<input type="email" class="ct-person-email" data-pi="'+i+'" value="'+escapeHtml(p.email||'')+'" placeholder="Email"      style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
+      + _inviteBtn
       +'<button type="button" onclick="ctRemovePerson('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;" title="Remove">✕</button>'
       +'</div>';
   }).join('');
@@ -6725,7 +6773,11 @@ function _ctRowStats(ct) {
 // Plumbing regardless of the SOW's own line items).
 function _ctComputeKpis() {
   var contractors = (window._contractors || []).filter(function(c){ return c && !c.archived; });
-  var byStatus = { approved:0, pending:0 };
+  // Bucket EVERY non-archived contractor so the KPI sub-line reconciles with the
+  // total (approved + pending + draft + declined + other == totalContractors);
+  // the old sub-line only showed approved + pending and left drafts/declined out,
+  // which made the total look wrong.
+  var byStatus = { approved:0, pending:0, draft:0, declined:0, other:0 };
   var totalJobs = 0;
   var totalSpend = 0;
   var jobsByTrade = {};
@@ -6733,6 +6785,9 @@ function _ctComputeKpis() {
     var st = ct.status || 'pending_review';
     if (st === 'approved') byStatus.approved++;
     else if (st === 'pending_review' || st === 'hm_recommended' || st === 'returned') byStatus.pending++;
+    else if (st === 'draft') byStatus.draft++;
+    else if (st === 'declined') byStatus.declined++;
+    else byStatus.other++;
     var s = _ctRowStats(ct);
     totalJobs  += s.jobCount;
     totalSpend += s.totalValue;
@@ -6747,6 +6802,9 @@ function _ctComputeKpis() {
     totalContractors: contractors.length,
     approved:         byStatus.approved,
     pending:          byStatus.pending,
+    draft:            byStatus.draft,
+    declined:         byStatus.declined,
+    other:            byStatus.other,
     totalJobs:        totalJobs,
     totalSpend:       totalSpend,
     topTrade:         topTrade,
@@ -6919,12 +6977,21 @@ function renderContractorsView(){
 
   // ── KPIs ─────────────────────────────────────────────────────────────
   var kpi = _ctComputeKpis();
+  // Sub-line parts reconcile with the total (every non-archived contractor is in
+  // exactly one bucket). Only non-zero segments are shown.
+  var _ctSubParts = [];
+  if (kpi.approved) _ctSubParts.push(kpi.approved + ' approved');
+  if (kpi.pending)  _ctSubParts.push(kpi.pending + ' pending');
+  if (kpi.draft)    _ctSubParts.push(kpi.draft + ' draft');
+  if (kpi.declined) _ctSubParts.push(kpi.declined + ' declined');
+  if (kpi.other)    _ctSubParts.push(kpi.other + ' other');
+  var _ctSub = _ctSubParts.length ? _ctSubParts.join(' · ') : 'none yet';
   if (kpiHost) {
     kpiHost.innerHTML =
       '<div class="ct-kpi-strip">' +
         '<div class="ct-kpi-card"><div class="ct-kpi-label">Total Contractors</div>'+
           '<div class="ct-kpi-val">'+kpi.totalContractors+'</div>'+
-          '<div class="ct-kpi-sub">'+kpi.approved+' approved · '+kpi.pending+' pending</div></div>' +
+          '<div class="ct-kpi-sub">'+_ctSub+'</div></div>' +
         '<div class="ct-kpi-card"><div class="ct-kpi-label">Total Requests</div>'+
           '<div class="ct-kpi-val">'+kpi.totalJobs+'</div>'+
           '<div class="ct-kpi-sub">across all contractors</div></div>' +
