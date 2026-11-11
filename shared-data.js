@@ -2792,7 +2792,7 @@ async function _ctSendInvites(ct, invitees){
   });
   if(!r.ok){
     var t = await r.text().catch(function(){ return ''; });
-    showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor-portal migrations may not be run on this project (incl. 20261112 for email sign-in).', {type:'error'});
+    showToast('Could not create the invite' + (invitees.length > 1 ? 's' : '') + ' (HTTP ' + r.status + '). The contractor-portal migrations may not be run on this project (incl. 20261112 + 20261113 for email / email-only sign-in).', {type:'error'});
     console.warn('[portal] invite insert failed:', r.status, t.slice(0, 200));
     return false;
   }
