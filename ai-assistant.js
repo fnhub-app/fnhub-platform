@@ -110,12 +110,50 @@ function _ensureAIPanel() {
   });
 }
 
+// Make the chat panel draggable by its header bar (mouse + touch via Pointer
+// Events). Idempotent per panel element (static panel on housing.html, injected
+// elsewhere). The panel is anchored bottom-right by inline style; on first drag
+// we switch to left/top so it can move anywhere, clamped into the viewport.
+function _aiMakeDraggable() {
+  var panel = document.getElementById('ai_chat_panel');
+  if (!panel) return;
+  var header = panel.firstElementChild;           // the dark title bar
+  if (!header || panel.dataset.aiDragWired) return;
+  panel.dataset.aiDragWired = '1';
+  header.style.cursor = 'move';
+  header.style.touchAction = 'none';              // drag the panel, don't scroll the page
+  header.style.userSelect = 'none';
+  var drag = null;
+  header.addEventListener('pointerdown', function (e) {
+    var tgt = e.target;
+    if (tgt && tgt.closest && tgt.closest('button,a,input,textarea,select')) return; // let the ✕ etc. work
+    var r = panel.getBoundingClientRect();
+    panel.style.left = r.left + 'px'; panel.style.top = r.top + 'px';
+    panel.style.right = 'auto';       panel.style.bottom = 'auto';
+    drag = { dx: e.clientX - r.left, dy: e.clientY - r.top, w: r.width, h: r.height };
+    try { header.setPointerCapture(e.pointerId); } catch (_) {}
+    e.preventDefault();
+  });
+  header.addEventListener('pointermove', function (e) {
+    if (!drag) return;
+    var m = 8;
+    var maxL = Math.max(m, window.innerWidth  - drag.w - m);
+    var maxT = Math.max(m, window.innerHeight - drag.h - m);
+    panel.style.left = Math.min(Math.max(e.clientX - drag.dx, m), maxL) + 'px';
+    panel.style.top  = Math.min(Math.max(e.clientY - drag.dy, m), maxT) + 'px';
+  });
+  function _end(e) { drag = null; try { header.releasePointerCapture(e.pointerId); } catch (_) {} }
+  header.addEventListener('pointerup', _end);
+  header.addEventListener('pointercancel', _end);
+}
+
 // ── Chat Panel: open / close / toggle ────────────────────────────────────────
 function openAIChat() {
   if (window.CLFN_MODULES && !CLFN_MODULES.isEnabled('ai_assistant')) return;
   _ensureAIPanel();
   var panel = document.getElementById('ai_chat_panel');
   if (panel) panel.style.display = 'flex';
+  _aiMakeDraggable();
   _aiPanelOpen = true;
   // Greet on first open
   if (_aiHistory.length === 0) {
