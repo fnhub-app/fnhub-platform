@@ -95,6 +95,14 @@ async function loadRenosData() {
     if(rpR && rpR.ok){var rpd=await rpR.json();rpd.forEach(function(r){window._renoProgress[r.unit_id]=r.data;});}
     if(stR && stR.ok){var stD=await stR.json();window._appSettings={};stD.forEach(function(r){window._appSettings[r.key]=r.value;});if(typeof _flattenLegacyAppSettings==='function')_flattenLegacyAppSettings();}
     if(typeof initApprovalAuthority === 'function') initApprovalAuthority();
+    // Apply saved module-enablement NOW that _appSettings is fully loaded. Without
+    // this, moduleOn()'s lazy hydration may have already run against the empty
+    // _appSettings set at boot and marked itself "hydrated" — so gates like
+    // moduleOn('contractor_portal') would read the registry DEFAULT (off) and hide
+    // the portal Invite buttons even though the nation enabled the module. Mirrors
+    // what housing.html does at login.
+    window._moduleEnablementHydrated = false;
+    if(typeof initModuleEnablement === 'function') initModuleEnablement();
     // Apply saved theme (logo + brand colors) — without this, the shared
     // header keeps the build-time default logo instead of the one uploaded
     // in Settings → Admin → Branding. Mirrors what loadHousingData() does
