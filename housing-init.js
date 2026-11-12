@@ -512,7 +512,13 @@ function renderScorecardActions(app) {
   // full explanation is visible; the "Complete scoring" button sits with the
   // decision buttons in the footer.
   if (_scoringIncomplete && _hadApproveAction && warn) {
-    warn.innerHTML = '<div class="sc-surface" style="font-size:13px;color:var(--warn-amber-text);background:var(--warn-amber-bg);border:1px solid var(--warn-amber-border);border-radius:8px;padding:10px 14px;">⚠️ The <strong>Housing Needs</strong> and <strong>Tenancy History</strong> scoring screens must be completed before this application can be approved.</div>';
+    // Put a "Score now" button right in the warning so the scoring screens are
+    // reachable from here — the footer "Complete scoring screens" button is far
+    // below (with the decision buttons) and was easy to miss.
+    warn.innerHTML = '<div class="sc-surface" style="color:var(--warn-amber-text);background:var(--warn-amber-bg);border:1px solid var(--warn-amber-border);border-radius:8px;padding:10px 14px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+      + '<div style="font-size:13px;flex:1 1 240px;min-width:0;">⚠️ The <strong>Housing Needs</strong> and <strong>Tenancy History</strong> scoring screens must be completed before this application can be approved.</div>'
+      + '<button class="btn btn-primary" style="font-size:13px;white-space:nowrap;flex:0 0 auto;" onclick="if(typeof completeScoringScreens===\'function\')completeScoringScreens(\'' + app.id + '\');">📋 Score now →</button>'
+      + '</div>';
   }
   var _scHtml = '';
   if (_scoringIncomplete && _hadApproveAction) {
