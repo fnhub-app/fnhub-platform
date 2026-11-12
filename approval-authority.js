@@ -52,6 +52,10 @@ var APPROVAL_AUTHORITY = (function() {
     assignUnit:               ['housing_manager', 'ed'],
     // Who can override the top match recommendation
     overrideMatch:            ['ed'],
+    // Who can override the Policy 8.5 / 12.5 good-standing (arrears) block and
+    // assign a unit to an applicant in arrears with no approved repayment
+    // arrangement. ED only by default; the override is always audited.
+    overrideArrears:          ['ed'],
     // Who can override a CALCULATED monthly rent (documented reason required)
     overrideRent:             ['ed'],
     // Who can assign within the tied score band (notes required)
@@ -424,6 +428,7 @@ var APPROVAL_AUTHORITY = (function() {
       approveFileUpdate:        'Approve file update',
       assignUnit:               'Assign unit to applicant',
       overrideMatch:            'Override top match recommendation',
+      overrideArrears:          'Override arrears good-standing block (Policy 8.5 / 12.5)',
       overrideRent:             'Override calculated monthly rent',
       assignTiedBand:           'Assign within tied score band',
       assignRentAmount:         'Set / edit unit rent amount',
@@ -474,7 +479,7 @@ var APPROVAL_AUTHORITY = (function() {
     groups: {
       'Housing Application':  ['reviewApplication','finalApproveApp','declineApplication','returnApplication','deleteApplication','unlockSignatures','viewApplicationScore'],
       'File Update':          ['reviewFileUpdate','approveFileUpdate'],
-      'Unit Assignment':      ['assignUnit','overrideMatch','assignTiedBand','assignRentAmount','overrideRent','editRentAgeFactors'],
+      'Unit Assignment':      ['assignUnit','overrideMatch','overrideArrears','assignTiedBand','assignRentAmount','overrideRent','editRentAgeFactors'],
       'Arrears & Policy':     ['editPolicyRules','manageArrears','approveArrangement','authorizeEviction'],
       'Maintenance Request & Renovation': ['sowEdThreshold','approveSowUnderThreshold','approveSowOverThreshold','lockSow','assignWorkOrder','editRenoProgress'],
       'Contractors':          ['recommendContractor','approveContractor','declineContractor','unlockEmailAttachments'],

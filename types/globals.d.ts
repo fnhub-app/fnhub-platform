@@ -67,6 +67,8 @@ interface Window {
   aiWriteLetter: (...args: any[]) => any;        // ai-assistant.js (DocLibrary letter writer)
   sendSms: (...args: any[]) => any;              // shared-data.js (SMS Edge Function wrapper)
   _toE164: (raw: any) => string;                 // shared-data.js (phone -> E.164 for SMS)
+  arrearsAssignmentGate: (...args: any[]) => any; // shared-data.js (ED-overridable arrears assignment gate)
+  _arrearsOverrideOk: any;                        // shared-data.js (one-shot ED arrears-override token)
   sbSyncContractorWorkOrder: (...args: any[]) => any; // shared-data.js (Contractor Portal projection upsert)
   notesThreadHtml: (...args: any[]) => any;      // shared.js (shared chat-style notes renderer -> HTML)
   renderNotesThread: (...args: any[]) => any;    // shared.js (shared chat-style notes renderer -> mount)

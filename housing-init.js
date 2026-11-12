@@ -1196,10 +1196,18 @@ function confirmAssignment() {
   // approved state; HM can assign past their own approval. The earlier
   // strict gate blocked file_update apps (hm_approved) even when the ED
   // already had the assign authority.
-  var _as = (typeof appAssignabilityStatus === 'function')
-    ? appAssignabilityStatus(app, null, { forAssignment: true })
-    : { ok: (app.status === APP_STATUS.ED_APPROVED || app.status === APP_STATUS.MGR_APPROVED || app.status === APP_STATUS.HM_APPROVED), reason:'Approval required before assigning' };
-  if(!_as.ok){ showToast(_as.reason, {type:'info'}); return; }
+  if(typeof arrearsAssignmentGate === 'function'){
+    // Shared gate — blocks on approval/eligibility; the Policy 8.5/12.5 arrears
+    // block is ED-overridable (confirm -> re-run confirmAssignment). Uses an
+    // info-style message to match this modal's existing tone.
+    if(!arrearsAssignmentGate(app, u, role, function(){ confirmAssignment(); },
+        { onBlock: function(m){ showToast(m.replace(/^⚠ /, ''), {type:'info'}); } })) return;
+  } else {
+    var _as = (typeof appAssignabilityStatus === 'function')
+      ? appAssignabilityStatus(app, null, { forAssignment: true })
+      : { ok: (app.status === APP_STATUS.ED_APPROVED || app.status === APP_STATUS.MGR_APPROVED || app.status === APP_STATUS.HM_APPROVED), reason:'Approval required before assigning' };
+    if(!_as.ok){ showToast(_as.reason, {type:'info'}); return; }
+  }
 
   // Write unit
   var isTransferReq = (app.appType === 'transfer_request');

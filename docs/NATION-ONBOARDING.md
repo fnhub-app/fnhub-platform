@@ -118,7 +118,12 @@ Functions → Secrets):
   + `EMAIL_FROM`).
 - `EMAIL_BRAND`, `EMAIL_REPLY_TO` — that nation's brand + reply-to.
 - `APP_URL` = `https://<nation>.fnhub.app` (so email links point to their site).
-- `ANTHROPIC_API_KEY` if the AI assistant module is licensed for them.
+- `ANTHROPIC_API_KEY` — the **platform owner's (Nation Pathways') Anthropic
+  key**, set by the platform on every nation that has the AI assistant and/or the
+  help chat (`support-chat`, which runs on every plan). AI usage is the
+  platform's cost — the nation never supplies or pays for a key. Easiest to set
+  from the admin portal (Nation → Supabase tab → AI Assistant key); see
+  `docs/AI-ASSISTANT-SETUP.md`.
 - Optional: `HOUSING_MR_NOTIFY_TO`, `HOUSING_APP_NOTIFY_TO` to route the
   maintenance/application notifications to a shared mailbox.
 - **SMS (only if the `sms_notifications` or `contractor_portal` module is

@@ -4580,7 +4580,9 @@ function appAssignabilityStatus(app, unit, opts){
     // rule is disabled (arrears.js / policy-rules.js).
     if(opts && opts.forAssignment && typeof arrearsAllocationBlock === 'function'){
       var _gs = arrearsAllocationBlock(((app.fn||'') + ' ' + (app.ln||'')).trim());
-      if(_gs) return { ok:false, reason:_gs };
+      // code:'arrears' lets the assignment actions offer an ED override of this
+      // specific block (arrearsAssignmentGate) rather than hard-stopping.
+      if(_gs) return { ok:false, reason:_gs, code:'arrears' };
     }
     return { ok:true, reason:'' };
   }
@@ -4600,6 +4602,64 @@ function appArrearsWarning(app){
   catch(e){ return null; }
 }
 window.appArrearsWarning = appArrearsWarning;
+
+// Shared assignment gate used by every unit-assignment action (confirmAssignment,
+// saveUnitEdit, saveAddTenant) so they never drift. Runs appAssignabilityStatus
+// with forAssignment and returns:
+//   true  -> cleared; the caller may proceed with the assignment
+//   false -> stop this pass (a message or an ED-override prompt was shown)
+// The Policy 8.5 / 12.5 good-standing (arrears) block is the ONE block an
+// Executive Director (overrideArrears authority) may override: the ED is shown
+// a confirm; on approval a one-shot token is set and `reinvoke` re-runs the
+// caller, which then passes (the override is audited when consumed). Any other
+// block (archived / deceased / not-approved / wrong building type) is never
+// overridable here. opts.onBlock(msg) customizes how a plain block message is
+// shown (default: persistent error toast); opts.unitLabel overrides the unit
+// text used in the audit line.
+function arrearsAssignmentGate(app, unit, role, reinvoke, opts){
+  opts = opts || {};
+  var showBlock = (typeof opts.onBlock === 'function')
+    ? opts.onBlock
+    : function(m){ if(typeof showToast === 'function') showToast(m, { type:'error' }); };
+  if(typeof appAssignabilityStatus !== 'function') return true;   // fail open if the rule isn't loaded
+  var st = appAssignabilityStatus(app, unit, { forAssignment:true });
+  if(st.ok) return true;
+  if(st.code !== 'arrears'){ showBlock('⚠ ' + st.reason); return false; }
+
+  var appId = (app && app.id) || '';
+  // Consume a previously-granted ED override for this application.
+  var tok = window._arrearsOverrideOk;
+  if(tok && tok.appId === appId){
+    window._arrearsOverrideOk = null;
+    try {
+      if(typeof auditEntry === 'function'){
+        var nm = ((app.fn||'') + ' ' + (app.ln||'')).trim();
+        var uLbl = opts.unitLabel || (unit ? ((unit.num||'') + ' ' + (unit.street||'')).trim() : '');
+        auditEntry(app.id, 'assignment_arrears_override',
+          'ED override of Policy 8.5/12.5 good-standing block — assigned ' + nm + (uLbl ? ' to ' + uLbl : '') + ' (' + (st.reason||'') + ')',
+          role);
+      }
+    } catch(e){}
+    return true;
+  }
+
+  var canOverride = (typeof APPROVAL_AUTHORITY !== 'undefined') && APPROVAL_AUTHORITY.can('overrideArrears', role);
+  if(!canOverride){
+    showBlock('⚠ ' + st.reason + ' Only the Executive Director can override this.');
+    return false;
+  }
+
+  var msg = st.reason + '  As Executive Director you may override this and assign anyway (Policy 8.5 / 12.5). The override is recorded in the audit log.';
+  if(typeof showConfirm === 'function'){
+    showConfirm({ title: 'Override arrears good-standing block?', message: msg, confirmText: 'Override & assign', cancelText: 'Cancel' })
+      .then(function(ok){ if(!ok) return; window._arrearsOverrideOk = { appId: appId, by: role, at: new Date().toISOString() }; if(typeof reinvoke === 'function') reinvoke(); });
+  } else if(window.confirm(msg)){
+    window._arrearsOverrideOk = { appId: appId, by: role, at: new Date().toISOString() };
+    if(typeof reinvoke === 'function') reinvoke();
+  }
+  return false;
+}
+window.arrearsAssignmentGate = arrearsAssignmentGate;
 
 // After a commercial (business/department) application is assigned to a
 // building, type the trigger-created tenant row: business/department kind,

@@ -955,9 +955,11 @@
       + '<div id="rs-stmt"></div></div>';
   }
 
-  // Recurring Subscription Fees only (s.7.3): subscription + the monthly AI
-  // add-on. Setup, consulting, travel, interest and carried balances excluded.
-  function isRecurringLine(d){ d = String(d || ''); return /subscription|ai staff assistant/i.test(d) && !/setup|carried forward|interest/i.test(d); }
+  // Recurring Subscription Fees only (s.7.3): the SUBSCRIPTION line only.
+  // Add-ons (AI Staff Assistant, text-message notifications), setup, consulting,
+  // travel, interest and carried balances are all excluded -- commission is
+  // earned on the subscription, not the add-ons.
+  function isRecurringLine(d){ d = String(d || ''); return /subscription/i.test(d) && !/setup|carried forward|interest/i.test(d); }
   // Recurring share of what was COLLECTED on one invoice (tax-inclusive) + its tax part.
   function invoiceCollected(inv){
     var rec = 0;
@@ -1572,7 +1574,7 @@
       + '<div class="tbl-wrap"><table><thead><tr><th>Seller</th><th class="num">Nations</th><th class="num">Collected</th><th class="num">Recurring</th><th class="num">Commission paid</th><th class="num">Commission owing</th></tr></thead><tbody>' + rows
       + '<tr><td><b>Total</b></td><td class="num"><b>' + tot.n + '</b></td><td class="num"><b>' + money(tot.c) + '</b></td><td class="num"><b>' + money(tot.r) + '</b></td><td class="num"><b>' + money(tot.p) + '</b></td><td class="num"><b>' + money(tot.o) + '</b></td></tr>'
       + '</tbody></table></div>'
-      + '<p class="note">"Collected" is all invoice payments; "Recurring" is the subscription and add-on share that earns commission. A payment counts in the month of the invoice\'s last payment date.</p>';
+      + '<p class="note">"Collected" is all invoice payments; "Recurring" is the subscription share that earns commission (add-ons such as the AI assistant and text notifications are excluded). A payment counts in the month of the invoice\'s last payment date.</p>';
   }
 
   // ---- Events (data-act; the panel CSP blocks inline handlers) ---------------
