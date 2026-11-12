@@ -987,17 +987,27 @@ function saveUnitEdit(){
       // queue, confirmAssignment and the Add-Tenant modal use, so the four
       // never drift. Any approved-flavour status is fine regardless of role;
       // ED can assign hm_approved file updates, HM can assign past ed_approved.
-      var _as = (typeof appAssignabilityStatus === 'function')
-        ? appAssignabilityStatus(linkedApp2, u, { forAssignment: true })
-        : { ok:false, reason:'Approval required before assigning' };
-      if(!_as.ok) {
+      // Shared assignment gate. The Policy 8.5/12.5 arrears block is ED-
+      // overridable (the gate shows a confirm and, on approval, re-runs
+      // saveUnitEdit); every other block hard-stops with its message.
+      var _passGate2;
+      if(typeof arrearsAssignmentGate === 'function'){
+        _passGate2 = arrearsAssignmentGate(linkedApp2, u, role2, function(){ saveUnitEdit(); });
+      } else {
+        var _as = (typeof appAssignabilityStatus === 'function')
+          ? appAssignabilityStatus(linkedApp2, u, { forAssignment: true })
+          : { ok:false, reason:'Approval required before assigning' };
+        _passGate2 = _as.ok;
+        if(!_as.ok) showToast('⚠ ' + _as.reason, {type:'error'});
+      }
+      if(!_passGate2) {
         // Roll back the in-place assignment mutation so a repeat Save can't
-        // slip past the gate via the "unchanged assignment" fast path.
+        // slip past the gate via the "unchanged assignment" fast path. (On an ED
+        // arrears override the gate re-runs saveUnitEdit, re-applying these.)
         u.assignedTo   = prevAssignedTo;
         u.assignedName = prevAssignedName;
         u.assignedDate = prevAssignedDate;
         u.status       = prevStatusVal;
-        showToast('⚠ ' + _as.reason, {type:'error'});
         return;
       }
       // Record who actually gated the assignment — the saver's real role, not
@@ -2852,7 +2862,12 @@ function saveAddTenant(){
   // approval check, so an un-approved app could be housed here and (below) the
   // app was never written back, leaking the tenant onto Match. Enforce the same
   // rule as every other assignment path.
-  if(linkedApp && typeof appAssignabilityStatus === 'function'){
+  // Shared assignment gate. The Policy 8.5/12.5 arrears block is ED-overridable
+  // (confirm -> re-run saveAddTenant); other blocks stop with an inline error.
+  if(linkedApp && typeof arrearsAssignmentGate === 'function'){
+    if(!arrearsAssignmentGate(linkedApp, units[idx], (window.currentRole || 'housing_employee_l1'),
+        function(){ saveAddTenant(); }, { onBlock: function(m){ showErr(m); } })) return;
+  } else if(linkedApp && typeof appAssignabilityStatus === 'function'){
     var _as = appAssignabilityStatus(linkedApp, units[idx], { forAssignment: true });
     if(!_as.ok){ showErr('⚠ ' + _as.reason); return; }
   }
