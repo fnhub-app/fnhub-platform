@@ -99,16 +99,19 @@ serve(async (req) => {
     if (u.ok) { const j = await u.json(); callerEmail = String((j && j.email) || '').toLowerCase() }
   } catch (_e) { /* ignore */ }
 
-  // 3) Upsert into the control plane.
+  // 3) Upsert into the control plane. AI token totals (this calendar month) ride
+  //    along from hs_data_usage so the admin panel can price per-nation AI cost.
   const row = {
     subdomain: sub,
     database_bytes: usage.database_bytes == null ? null : Number(usage.database_bytes),
     storage_bytes:  usage.storage_bytes  == null ? null : Number(usage.storage_bytes),
+    ai_input_tokens:  usage.ai_input_tokens  == null ? null : Number(usage.ai_input_tokens),
+    ai_output_tokens: usage.ai_output_tokens == null ? null : Number(usage.ai_output_tokens),
     reported_by: callerEmail || null,
     reported_at: new Date().toISOString(),
   }
   const { error } = await admin.from('nation_usage').upsert(row, { onConflict: 'subdomain' })
   if (error) return json({ error: 'write_failed', detail: String(error.message || error) }, 500)
 
-  return json({ ok: true, subdomain: sub, database_bytes: row.database_bytes, storage_bytes: row.storage_bytes })
+  return json({ ok: true, subdomain: sub, database_bytes: row.database_bytes, storage_bytes: row.storage_bytes, ai_input_tokens: row.ai_input_tokens, ai_output_tokens: row.ai_output_tokens })
 })

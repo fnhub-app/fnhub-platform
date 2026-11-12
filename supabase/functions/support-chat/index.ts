@@ -112,6 +112,9 @@ function buildSystem(source: string, nationName: string, faqText: string): strin
 // Returns the upstream status + parsed body instead of throwing, so the handler
 // can diagnose BOTH a non-200 from Anthropic and a 200 with empty content.
 async function callClaude(system: string, messages: unknown[]): Promise<{ ok: boolean; status: number; data: Record<string, unknown> }> {
+  // Prompt caching (4d): the system block (KB + nation FAQ) is stable per
+  // audience/nation across calls, so mark it cacheable to cut input-token cost.
+  const systemBlocks = [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -119,11 +122,20 @@ async function callClaude(system: string, messages: unknown[]): Promise<{ ok: bo
       'x-api-key': ANTHROPIC_KEY!,
       'anthropic-version': '2023-06-01',
     },
-    body: JSON.stringify({ model: MODEL, max_tokens: 700, system, messages }),
+    body: JSON.stringify({ model: MODEL, max_tokens: 700, system: systemBlocks, messages }),
   })
   let data: Record<string, unknown> = {}
   try { data = await r.json() } catch (_e) { data = {} }
   return { ok: r.ok, status: r.status, data }
+}
+
+// Input (incl. cache read/write) + output tokens from an Anthropic response.
+function usageTokens(data: Record<string, unknown>): { input: number; output: number } {
+  const u = (data && (data.usage as Record<string, unknown>)) || {}
+  return {
+    input: (Number(u.input_tokens) || 0) + (Number(u.cache_creation_input_tokens) || 0) + (Number(u.cache_read_input_tokens) || 0),
+    output: (Number(u.output_tokens) || 0),
+  }
 }
 
 serve(async (req) => {
@@ -200,6 +212,28 @@ serve(async (req) => {
       reply = res.ok
         ? 'Sorry, I could not answer that. Please use the "Report an issue to a person" button to reach the help desk.'
         : 'The help assistant is temporarily unavailable. Please use the "Report an issue to a person" button.'
+    }
+    // Usage audit (4b): record the Anthropic token spend so the help chat's
+    // cost rolls into the per-nation monthly AI figure (help chat runs on every
+    // plan, including nations without the AI add-on -- its cost is the
+    // platform's). Best-effort, service-role, append-only; never blocks the reply.
+    if (SUPABASE_SERVICE_KEY && res.ok) {
+      try {
+        const tok = usageTokens(data)
+        const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        await admin.from('housing_audit_log').insert({
+          entity_type: 'ai',
+          entity_id: 'SUPPORT',
+          action: 'support_chat',
+          detail: JSON.stringify({
+            detail: 'Help assistant (' + source + '): ' + message.slice(0, 200),
+            mode: 'support', source: source,
+            input_tokens: tok.input, output_tokens: tok.output,
+          }),
+          actor: (user.email || user.id || 'support'),
+          created_at: new Date().toISOString(),
+        })
+      } catch (_e) { /* non-fatal */ }
     }
     return json({ reply })
   } catch (e) {

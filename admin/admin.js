@@ -37,38 +37,66 @@
     email_intake:true, sms_notifications:true, contractor_portal:false
   };
 
-  // Home Land Homes fee schedule for the invoice builder. EXACT prices -- do not
-  // alter. Revised 2026-09-05 to match the schedule published on
-  // homelandhomes.ca. g=group, d=line description, p=unit price (CAD),
-  // q=default qty; hours=qty is entered in hours (unit is per-hour);
-  // custom=price is free-entry. NOTE: never edit the d strings — saved
-  // nation_billing rows re-select their line item by exact-description match.
-  var FEE_SCHEDULE = [
-    // Subscription -- billed annually in advance
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Small (up to 100 homes), annual', p: 5400, q: 1 },
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Mid-size (101-300 homes), annual', p: 9540, q: 1 },
-    { g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — Large (301-600 homes), annual', p: 15000, q: 1 },
-    // Subscription -- monthly (higher rate, already includes +10%)
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Small (up to 100 homes), monthly', p: 495, q: 1 },
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Mid-size (101-300 homes), monthly', p: 875, q: 1 },
-    { g: 'Subscription — monthly (higher rate, incl. +10%)', d: 'Subscription — Large (301-600 homes), monthly', p: 1375, q: 1 },
-    // One-time setup (once per client)
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Small', p: 3500, q: 1 },
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
-    { g: 'One-time setup (once per client)', d: 'One-time setup — Large', p: 9500, q: 1 },
-    // Setup with the 50% discount (one-year term, prepaid) -- the only discount that exists
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Small (50% discount)', p: 1750, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Mid-size (50% discount)', p: 3000, q: 1 },
-    { g: 'Setup — 50% discount (1-year term, prepaid)', d: 'One-time setup — Large (50% discount)', p: 4750, q: 1 },
-    // Add-on
+  // Nation Pathways fee schedule for the invoice builder. EXACT prices -- do not
+  // alter. Revised 2026-11-12 to match the schedule published on
+  // nationpathways.com (November 2026 pricing audit). g=group, d=line
+  // description, p=unit price (CAD), q=default qty; hours=qty is entered in
+  // hours (unit is per-hour); custom=price is free-entry. NOTE: never edit the d
+  // strings -- saved nation_billing rows re-select their line item by
+  // exact-description match. There are NO discounts: the price is locked for the
+  // signed term.
+  //
+  // Subscription is banded by the nation's home count (9 bands up to 600 homes;
+  // over 600 = custom quote). SUB_BANDS is the SINGLE SOURCE of the bands; the
+  // annual + monthly subscription lines in FEE_SCHEDULE are generated from it,
+  // and feeBandFor(homes) / setupTierFor(homes) map a home count to its band /
+  // setup tier so no caller hardcodes the ranges. Monthly billing = (annual/12)
+  // x 1.10, rounded to the nearest $5 (the published monthly figures below match
+  // this and are stored explicitly as the authoritative published numbers).
+  var SUB_BANDS = [
+    { max: 50,  annual: 4560,  monthly: 420  },
+    { max: 100, annual: 5520,  monthly: 505  },
+    { max: 150, annual: 6480,  monthly: 595  },
+    { max: 200, annual: 7440,  monthly: 680  },
+    { max: 250, annual: 8400,  monthly: 770  },
+    { max: 300, annual: 9360,  monthly: 860  },
+    { max: 400, annual: 11280, monthly: 1035 },
+    { max: 500, annual: 13200, monthly: 1210 },
+    { max: 600, annual: 15120, monthly: 1385 }
+  ];
+  // "up to 50 homes" / "51-100 homes" / ... for band i.
+  function bandLabel(i){
+    var b = SUB_BANDS[i]; if (!b) return '';
+    var lo = (i === 0) ? 1 : (SUB_BANDS[i - 1].max + 1);
+    return (i === 0) ? ('up to ' + b.max + ' homes') : (lo + '-' + b.max + ' homes');
+  }
+  var FEE_SCHEDULE = [];
+  // Subscription -- billed annually in advance (one line per band)
+  SUB_BANDS.forEach(function(b, i){
+    FEE_SCHEDULE.push({ g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — ' + bandLabel(i) + ', annual', p: b.annual, q: 1 });
+  });
+  // Subscription -- billed monthly (annual/12 + 10%, rounded to nearest $5)
+  SUB_BANDS.forEach(function(b, i){
+    FEE_SCHEDULE.push({ g: 'Subscription — monthly (billed monthly; annual/12 +10%)', d: 'Subscription — ' + bandLabel(i) + ', monthly', p: b.monthly, q: 1 });
+  });
+  FEE_SCHEDULE.push(
+    // One-time setup (once per client; pay up front OR spread across year 1 at no
+    // extra cost). The d strings stay stable ('... Small/Mid-size/Large') so saved
+    // rows keep matching; the home ranges + training sessions are in Schedule B.
+    { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Small', p: 3500, q: 1 },
+    { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
+    { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Large', p: 9500, q: 1 },
+    // Add-ons (flat, every plan size)
     { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 95, q: 1 },
+    { g: 'Add-on', d: 'Text-message notifications (per month, incl. 500 texts)', p: 25, q: 1 },
     // Additional services (hourly; written authorization required)
     { g: 'Additional services (hourly, written authorization)', d: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)', p: 150, q: 1, hours: true },
     { g: 'Additional services (hourly, written authorization)', d: 'Travel time (per hour, max 8 hrs/travel day)', p: 75, q: 1, hours: true },
     // Custom / at cost (free-entry amount)
     { g: 'Custom / at cost (enter amount)', d: 'Subscription — 600+ / Tribal Council (custom per quote)', p: 0, q: 1, custom: true },
+    { g: 'Custom / at cost (enter amount)', d: 'Text-message notifications — additional texts beyond 500 (per text)', p: 0.05, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
-  ];
+  );
 
   // Contract prices come from FEE_SCHEDULE (never retyped), so the subscription
   // agreement's Schedule A and the reseller pricing summary always match the
@@ -78,33 +106,53 @@
     throw new Error('Fee schedule item missing: ' + desc);
   }
   function feeFmt(n){ n = Number(n) || 0; return '$' + (n % 1 ? n.toFixed(2) : String(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-  var FEE_SIZES = { Small: 'Small (up to 100 homes)', 'Mid-size': 'Mid-size (101-300 homes)', Large: 'Large (301-600 homes)' };
-  // "$5,400/year ($450/mo) or $495/month; one-time setup $3,500"
-  function feeTierText(size){
-    var yr = feePrice('Subscription — ' + FEE_SIZES[size] + ', annual');
-    return feeFmt(yr) + '/year (' + feeFmt(Math.round(yr / 12 * 100) / 100) + '/mo) or '
-      + feeFmt(feePrice('Subscription — ' + FEE_SIZES[size] + ', monthly')) + '/month; one-time setup '
-      + feeFmt(feePrice('One-time setup — ' + size));
+  // Pick the subscription band for a home count. Returns {index,label,annual,
+  // monthly} or null for over 600 homes (custom quote). SINGLE helper so no
+  // caller re-derives the ranges.
+  function feeBandFor(homes){
+    var n = Number(homes);
+    if (!isFinite(n) || n < 1) return null;
+    for (var i = 0; i < SUB_BANDS.length; i++){
+      if (n <= SUB_BANDS[i].max) return { index: i, label: bandLabel(i), annual: SUB_BANDS[i].annual, monthly: SUB_BANDS[i].monthly };
+    }
+    return null;   // over 600 homes -> custom quote
+  }
+  // Setup tier for a home count: Small (<=100), Mid-size (<=300), Large (<=600).
+  function setupTierFor(homes){
+    var n = Number(homes) || 0;
+    if (n <= 100) return 'Small';
+    if (n <= 300) return 'Mid-size';
+    return 'Large';
+  }
+  // "$6,480/year ($540/mo) or $595/month billed monthly" for band i.
+  function feeBandText(i){
+    var b = SUB_BANDS[i];
+    return feeFmt(b.annual) + '/year (' + feeFmt(Math.round(b.annual / 12)) + '/mo) or ' + feeFmt(b.monthly) + '/month billed monthly';
   }
   // One-paragraph summary of the published pricing (reseller agreement s.6.1 default).
   function feeScheduleSummary(){
-    var sz = ['Small', 'Mid-size', 'Large'];
-    return "Per the Owner's published fee schedule (CAD, plus applicable taxes): "
-      + sz.map(function(k){ return FEE_SIZES[k] + ' ' + feeTierText(k); }).join('; ')
-      + '; 600+ homes / Tribal Council by quote. The setup fee is reduced 50% for a one-year term with the first year prepaid. '
-      + 'AI Staff Assistant add-on ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month. '
+    var bands = SUB_BANDS.map(function(b, i){ return bandLabel(i) + ' ' + feeFmt(b.annual) + '/yr (' + feeFmt(b.monthly) + '/mo billed monthly)'; }).join('; ');
+    return "Per the Owner's published fee schedule (CAD, plus applicable taxes). Subscription by home count: "
+      + bands + '; over 600 homes / Tribal Council by quote. '
+      + 'One-time setup: Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions, '
+      + 'Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions, '
+      + 'Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions; setup may be paid up front or spread across the first year\'s invoices at no extra cost. '
+      + 'Add-ons: AI Staff Assistant ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month (every plan size); text-message notifications ' + feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')) + '/month including 500 texts, then $0.05 per additional text. '
       + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
       + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
-      + 'Only recurring subscription and add-on fees earn Commission (Section 7.3).';
+      + 'Prices are locked for the signed term (no discounts). Only recurring subscription fees earn Commission (Section 7.3).';
   }
 
-  // Provider (Home Land Homes) details -- printed on invoices.
+  // Provider (Nation Pathways) details -- printed on invoices. NOTE: mailing
+  // address + phone are unchanged pending confirmation; the authoritative party
+  // details for generated contracts come from the Owner record (platform_owner,
+  // Resellers tab) -- update that too.
   var PROVIDER = {
-    name:  'Home Land Homes',
+    name:  'Nation Pathways',
     addr1: '916 Piper Street, Box 2251',
     addr2: 'Hearst, Ontario  P0L 1N0',
     phone: '705-960-5076',
-    email: 'hello@homelandhomes.ca'
+    email: 'hello@nationpathways.com'
   };
   // Past-due interest rate per the agreement (Section 7.5): 1% per month.
   var INTEREST_MONTHLY = 0.01;
@@ -220,7 +268,7 @@
     _dlgEnsureStyle();
     return new Promise(function(resolve){
       var ov = document.createElement('div'); ov.className = 'dlg-ov';
-      var html = '<div class="dlg-hd"><span class="dot"></span>' + esc(opts.title || 'Home Land Homes') + '</div>'
+      var html = '<div class="dlg-hd"><span class="dot"></span>' + esc(opts.title || 'Nation Pathways') + '</div>'
         + '<div class="dlg-bd">' + (opts.bodyHtml || esc(opts.message || ''));
       if (opts.fields){
         opts.fields.forEach(function(f){
@@ -338,7 +386,7 @@
       '<div class="nic-shell">'
       + '<div class="nic-hero">'
       +   '<h1>Platform Admin</h1>'
-      +   '<div class="nic-sub">Home Land Homes control plane &middot; signed in as <code>' + esc(meEmail) + '</code></div>'
+      +   '<div class="nic-sub">Nation Pathways control plane &middot; signed in as <code>' + esc(meEmail) + '</code></div>'
       // The control-plane project ref, one click to copy — it's needed for the
       // platform SQL editor, workflow inputs, and function deploys, and was
       // otherwise only findable by dissecting the Supabase URL.
@@ -351,7 +399,7 @@
       +   tile('Nations', String(nations.length))
       +   tile('Active', String(activeCount))
       +   tile('Data usage', esc(fmtBytes(totDb)) + ' db &middot; ' + esc(fmtBytes(totFiles)) + ' files')
-      +   tile('Est. monthly cost', _money(totCost))
+      +   tile('Est. hosting cost', _money(totCost) + ' CAD')
       + '</div>'
       + '<div class="nic-tabs">'
       +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('provision', 'Provision') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
@@ -407,38 +455,78 @@
       + '<div style="font-size:10px;color:var(--muted);">' + esc(timeAgo(u.reported_at)) + '</div>'
       + '</div>';
   }
-  // Supabase cost model (per the user's plan / published pricing).
-  var SUPA_COST = { computeMonthly: 10, dbIncludedGB: 8, storageIncludedGB: 100, dbOverPerGB: 0.125, storageOverPerGB: 0.0213, proOrgMonthly: 25 };
-  // Estimated monthly Supabase cost for a nation. A nation counts the $10 Micro
-  // compute base only once it has a live project (supabase_url set) -- a bare
-  // "provisioning" registry row with no project is $0. Overage from reported usage.
+  // One editable USD->CAD rate for the hosting estimate (invoices are CAD).
+  var USD_CAD = 1.38;
+  // Per-nation monthly hosting-cost model, in USD (converted to CAD below).
+  // NOTE: the 100 GB file-storage and 8 GB database allowances are SHARED across
+  // the whole Supabase ORGANIZATION, not granted per project -- overage is billed
+  // org-wide, so the per-nation overage here is an attribution/estimate, not a
+  // per-project invoice. The $25 Pro organization fee is likewise shared and is
+  // divided across the live nations.
+  var SUPA_COST = {
+    computeUsd:      15,     // Supabase compute, per live project (USD/mo)
+    proOrgUsd:       25,     // Pro organization fee (USD/mo) -- SHARED, divided by live nations
+    twilioNumberUsd: 1.15,   // dedicated Twilio number (USD/mo)
+    signinSmsUsd:    10,     // typical sign-in / 2FA texts (USD/mo)
+    helpChatUsd:     3,      // help chat (support-chat) usage (USD/mo)
+    emailUsd:        2,      // transactional email (USD/mo)
+    dbIncludedGB: 8, storageIncludedGB: 100, dbOverPerGB: 0.125, storageOverPerGB: 0.0213
+  };
+  // Sonnet 5.5 token pricing (USD per million). Single source, shared with the
+  // per-nation AI-usage display.
+  var AI_RATES = { inPerM: 2, outPerM: 10 };
+  function aiCostUsd(inTok, outTok){
+    return ((Number(inTok) || 0) / 1e6) * AI_RATES.inPerM + ((Number(outTok) || 0) / 1e6) * AI_RATES.outPerM;
+  }
+  // Estimated monthly hosting cost for a nation, in CAD. A nation costs nothing
+  // until it has a live project (supabase_url set) -- a bare "provisioning"
+  // registry row is $0. Fixed USD pieces (compute + shared Pro-org share + Twilio
+  // number + typical sign-in SMS + help chat + email) plus this nation's ACTUAL
+  // AI usage (reported tokens, step 4b) and any Supabase overage, all converted
+  // to CAD at USD_CAD. Breakdown fields (base/ai/over) are also in CAD.
   function estCost(n, u){
     var live = !!(n && n.supabase_url);
-    var base = live ? SUPA_COST.computeMonthly : 0;
-    var over = 0;
+    if (!live) return { live: false, currency: 'CAD', base: 0, ai: 0, over: 0, usd: 0, total: 0 };
+    var liveCount = 1;
+    try { liveCount = (_nations || []).filter(function(x){ return !!(x && x.supabase_url); }).length || 1; } catch (e) {}
+    var fixedUsd = SUPA_COST.computeUsd + (SUPA_COST.proOrgUsd / liveCount)
+      + SUPA_COST.twilioNumberUsd + SUPA_COST.signinSmsUsd + SUPA_COST.helpChatUsd + SUPA_COST.emailUsd;
+    var aiUsd = u ? aiCostUsd(u.ai_input_tokens, u.ai_output_tokens) : 0;
+    var overUsd = 0;
     if (u){
       var dbGB = (Number(u.database_bytes) || 0) / 1073741824;
       var stGB = (Number(u.storage_bytes)  || 0) / 1073741824;
-      over += Math.max(0, dbGB - SUPA_COST.dbIncludedGB) * SUPA_COST.dbOverPerGB;
-      over += Math.max(0, stGB - SUPA_COST.storageIncludedGB) * SUPA_COST.storageOverPerGB;
+      overUsd += Math.max(0, dbGB - SUPA_COST.dbIncludedGB) * SUPA_COST.dbOverPerGB;
+      overUsd += Math.max(0, stGB - SUPA_COST.storageIncludedGB) * SUPA_COST.storageOverPerGB;
     }
-    over = Math.round(over * 100) / 100;
-    return { live: live, base: base, over: over, total: Math.round((base + over) * 100) / 100 };
+    var toCad = function(x){ return Math.round(x * USD_CAD * 100) / 100; };
+    var usd = fixedUsd + aiUsd + overUsd;
+    return {
+      live: true, currency: 'CAD',
+      base:  toCad(fixedUsd),
+      ai:    toCad(aiUsd),
+      over:  toCad(overUsd),
+      usd:   Math.round(usd * 100) / 100,
+      total: toCad(usd)
+    };
   }
 
   function nationsCard(nations, usageBySub){
     usageBySub = usageBySub || {};
-    var totLive = 0, totBase = 0, totOver = 0;
+    var totLive = 0, totBase = 0, totOver = 0, totAi = 0;
     var rows = nations.length ? nations.map(function(n){
       var st = n.status || 'provisioning';
       var mods = Object.keys(n.modules_licensed || {}).filter(function(k){ return n.modules_licensed[k]; });
       var u = usageBySub[n.subdomain];
       var c = estCost(n, u);
       if (c.live) totLive++;
-      totBase += c.base; totOver += c.over;
+      totBase += c.base; totOver += c.over; totAi += (c.ai || 0);
+      var costBits = c.live ? [_money(c.base) + ' base'] : [];
+      if (c.live && c.ai > 0)   costBits.push(_money(c.ai) + ' AI');
+      if (c.live && c.over > 0) costBits.push(_money(c.over) + ' over');
       var costLine = '<div style="font-size:11px;margin-top:4px;padding-top:4px;border-top:1px dotted var(--line);' + (c.live ? '' : 'color:var(--muted);') + '">'
         + (c.live
-            ? '<b>' + _money(c.total) + '</b>/mo <span style="color:var(--muted);">' + (c.over > 0 ? '($10 + ' + _money(c.over) + ' over)' : '(compute)') + '</span>'
+            ? '<b>' + _money(c.total) + '</b>/mo CAD <span style="color:var(--muted);">(' + costBits.join(' + ') + ')</span>'
             : 'no project &middot; $0')
         + '</div>';
       return '<tr>'
@@ -453,13 +541,13 @@
         +   '<button class="btn sm ghost" type="button" data-act="configure" data-id="' + esc(n.id) + '">Dashboard</button>'
         + '</div></td></tr>';
     }).join('') : '<tr><td colspan="5" class="empty">No nations yet. Add one below.</td></tr>';
-    var grand = Math.round((totBase + totOver) * 100) / 100;
+    var grand = Math.round((totBase + totOver + totAi) * 100) / 100;
     var summary = nations.length
       ? '<div style="display:flex;flex-wrap:wrap;gap:8px 18px;align-items:baseline;margin-top:14px;padding-top:12px;border-top:1px solid var(--line);">'
-        +   '<div style="font-size:16px;font-weight:800;">Est. Supabase cost: ' + _money(grand) + '/mo</div>'
-        +   '<div style="font-size:12px;color:var(--muted);">' + totLive + ' live project' + (totLive === 1 ? '' : 's') + ' &times; $10 compute = ' + _money(totBase) + (totOver > 0 ? ' + ' + _money(totOver) + ' overage' : '') + '</div>'
+        +   '<div style="font-size:16px;font-weight:800;">Est. hosting cost: ' + _money(grand) + '/mo CAD</div>'
+        +   '<div style="font-size:12px;color:var(--muted);">' + totLive + ' live project' + (totLive === 1 ? '' : 's') + ' &middot; ' + _money(totBase) + ' base' + (totAi > 0 ? ' + ' + _money(totAi) + ' AI usage' : '') + (totOver > 0 ? ' + ' + _money(totOver) + ' overage' : '') + '</div>'
         + '</div>'
-        + '<p class="sub" style="margin:6px 0 0;font-size:11px;">Per-project Micro compute is $10/mo; overage is $0.125/GB over 8 GB database and $0.0213/GB over 100 GB storage. A nation counts $10 only once it has a live Supabase project (a provisioning-only registry row is $0). <b>Excludes</b> the $25/mo Supabase Pro org base (which includes some compute credit), plus MAU and egress &mdash; see Supabase billing for the exact invoice. Usage is reported by each nation\'s app when a manager opens Settings &rarr; Nation.</p>'
+        + '<p class="sub" style="margin:6px 0 0;font-size:11px;">Per live nation (CAD, converted from USD at ' + USD_CAD + '): Supabase compute $' + SUPA_COST.computeUsd + ', a share of the $' + SUPA_COST.proOrgUsd + ' Pro <b>organization</b> fee (divided across live nations), Twilio number $' + SUPA_COST.twilioNumberUsd + ', typical sign-in texts $' + SUPA_COST.signinSmsUsd + ', help chat $' + SUPA_COST.helpChatUsd + ', email $' + SUPA_COST.emailUsd + ', plus the nation\'s actual AI token usage (reported) and any Supabase overage. The 100 GB storage and 8 GB database allowances are <b>shared across the whole Supabase organization</b>, not per project, so overage ($0.125/GB db, $0.0213/GB storage) is an attribution estimate. A provisioning-only registry row is $0. Usage is reported by each nation\'s app when a manager opens Settings &rarr; Nation. Editable per statement on the Resellers tab.</p>'
       : '';
     return '<div class="card"><h3>Registered nations</h3>'
       + '<table><thead><tr><th>Nation</th><th>Status</th><th>Licensed modules</th><th>Usage &amp; est. cost</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
@@ -497,8 +585,8 @@
         'Stand up a fresh <b>database-per-nation</b> project: ' + extLink(LINKS.supaNew, 'Supabase &rarr; New project') + '. Then grab the ref, URL, anon + service_role keys from ' + extLink(LINKS.supaApi, 'Settings &rarr; API') + '.'],
       ['Provision (schema, bucket, first ED)', 'auto',
         'Click <b>Provision this nation</b> below. The platform replays the bootstrap schema, creates the <code>housing-files</code> storage bucket, seeds the first ED, and writes the registry row &mdash; one action. (Requires <code>SB_MGMT_TOKEN</code> set on the platform function.) The service_role key is used once and never stored.'],
-      ['Set the AI Assistant key (from this panel)', 'auto',
-        'Open the nation\'s <b>Dashboard &rarr; Config &rarr; AI Assistant key</b> and paste the Anthropic key &mdash; the panel writes it onto the nation project for you (no Supabase dashboard visit). Also run the <code>hs_data_usage</code> migration on the project (the <b>Migrations</b> tab can push it fleet-wide) so this panel\'s usage column fills in.'],
+      ['Set the AI Assistant key (the platform owner\'s key, from this panel)', 'auto',
+        'Open the nation\'s <b>Dashboard &rarr; Config &rarr; AI Assistant key</b> and paste <b>the platform owner\'s (Nation Pathways\') Anthropic key</b> &mdash; the panel writes it onto the nation project for you (no Supabase dashboard visit). The nation does <b>not</b> supply or pay for an AI key; Nation Pathways owns the Anthropic account and absorbs usage (the AI add-on fee covers it, and the help chat runs on every plan). Also run the <code>hs_data_usage</code> migration on the project (the <b>Migrations</b> tab can push it fleet-wide) so this panel\'s usage + AI-cost column fills in.'],
       ['Set up email notifications (from this panel)', 'auto',
         'Open the nation\'s <b>Dashboard &rarr; Email Config</b>: pick the provider, fill the From identity + reply-to, <b>Save changes</b>, then click <b>Apply to project</b> (with the provider API key) &mdash; the panel writes the <code>EMAIL_*</code> secrets onto the nation project. The provider-side setup (Entra app for Graph, domain verification for Resend) is manual &mdash; <b>see the &ldquo;Email delivery setup&rdquo; guide below</b>.'],
       ['Deploy the Edge Functions to the project', 'manual',
@@ -937,8 +1025,8 @@
       +   '<button class="btn sm ghost" type="button" data-act="provision" data-id="' + esc(n.id) + '">'
       +     (n.supabase_url ? 'Re-run provisioning &rarr;' : 'Provision this nation &rarr;') + '</button>'
       + '</div>'
-      + '<div class="card"><h3>AI Assistant key</h3>'
-      +   '<p class="sub" style="margin:2px 0 8px;">Sets this nation\'s <b>Anthropic API key</b> directly on its Supabase project (the <code>ANTHROPIC_API_KEY</code> Edge Function secret the <code>ai-chat</code> function reads). The key is written to the project and is <b>never stored here</b> &mdash; only a masked marker is kept.</p>'
+      + '<div class="card"><h3>AI Assistant key (platform owner\'s key)</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Sets the <b>platform owner\'s (Nation Pathways\') Anthropic API key</b> on this nation\'s Supabase project (the <code>ANTHROPIC_API_KEY</code> Edge Function secret <code>ai-chat</code> and <code>support-chat</code> read). <b>Nation Pathways supplies and pays for this key</b> &mdash; the nation never provides its own and has no separate Anthropic bill; the AI add-on fee covers usage, and the help chat runs on every plan at the platform\'s cost. The key is written to the project and is <b>never stored here</b> &mdash; only a masked marker is kept.</p>'
       +   '<div style="font-size:12px;margin-bottom:8px;">'
       +     (n.ai_key_last4
               ? 'Current: <b>set</b> &middot; ...' + esc(n.ai_key_last4) + (n.ai_key_updated_at ? ' &middot; updated ' + esc(timeAgo(n.ai_key_updated_at)) : '')
@@ -1078,7 +1166,7 @@
 
     var pAgreement =
         '<div class="card"><h3>Subscription agreement</h3>'
-      +   '<p class="sub" style="margin:2px 0 8px;">Generate the Home Land Homes software subscription agreement for this nation as a PDF. It fills in the nation party details below and is saved to the document library.</p>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Generate the Nation Pathways software subscription agreement for this nation as a PDF. It fills in the nation party details below and is saved to the document library.</p>'
       +   '<label>Nation legal name (party)</label><input id="cn-agr-name" value="' + esc(n.display_name || '') + '"/>'
       +   '<label>Administrative / mailing office address</label><input id="cn-agr-addr" placeholder="123 Main St, Town, ON  A1A 1A1" value="' + esc(n.office_address || '') + '"/>'
       +   '<div class="sub" style="margin:4px 0 0;font-size:11px;">Saved on the nation record and reused on the agreement + recurring-invoice header. Generating the agreement also saves it.</div>'
@@ -1591,7 +1679,7 @@
   var AGREEMENT_TPL = [
     '>TEMPLATE - This agreement was prepared as a working draft and is not legal advice. Have it reviewed by a lawyer (ideally one experienced with First Nations clients) before first use. The Provider party details are filled in from Platform Admin > Resellers > Owner.',
     '#SOFTWARE SUBSCRIPTION AGREEMENT',
-    '%Home Land Homes - Housing Management Platform',
+    '%Nation Pathways - Housing Management Platform',
     'This Software Subscription Agreement (the "Agreement") is made as of the date of last signature below (the "Effective Date") between:',
     '{{PROVIDER_PARTY}} (the "Provider"), and',
     '{{NATION}}, a First Nation with administrative offices at {{ADDRESS}} (the "Nation").',
@@ -1696,7 +1784,7 @@
     '##16. General',
     '-Entire agreement. This Agreement (including its Schedules) is the entire agreement between the parties regarding its subject matter and supersedes prior discussions.',
     '-Amendment. Amendments must be in writing and signed by both parties.',
-    '-Assignment. Neither party may assign this Agreement without the other\'s written consent, except the Provider may assign it to a corporation it forms to carry on the Home Land Homes business, or in connection with a merger or sale of that business, with written notice to the Nation; the Nation may terminate within sixty (60) days of such notice if the assignee is unacceptable to it, acting reasonably, with a pro-rata refund of prepaid Fees.',
+    '-Assignment. Neither party may assign this Agreement without the other\'s written consent, except the Provider may assign it to a corporation it forms to carry on the Nation Pathways business, or in connection with a merger or sale of that business, with written notice to the Nation; the Nation may terminate within sixty (60) days of such notice if the assignee is unacceptable to it, acting reasonably, with a pro-rata refund of prepaid Fees.',
     '-Resellers and referral partners. The Provider may market the Platform through independent resellers or referral partners. Any such reseller is not a party to this Agreement, has no authority to bind the Provider, set or change prices, grant discounts or make commitments or warranties on its behalf, and has no access to Customer Data. The Nation contracts only with the Provider, and only this Agreement (and written amendments signed by the Provider) governs the Nation\'s subscription.',
     '-Subcontracting. The Provider may use the subprocessors and third-party systems listed in Schedule D to deliver the Platform and remains responsible for them. The Provider will give the Nation at least thirty (30) days\' written notice before adding or replacing a subprocessor that will process Customer Data; if the Nation reasonably objects on data-protection grounds and no resolution is found, the Nation may terminate the affected feature or this Agreement with a pro-rata refund of prepaid Fees.',
     '-Force majeure. Neither party is liable for delay or failure caused by events beyond its reasonable control, provided it uses reasonable efforts to mitigate.',
@@ -1708,16 +1796,15 @@
     '@SIG|nation',
     '@SIG|provider',
     '##Schedule A - Order Form',
-    'Select one tier and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date.',
-    '###Subscription tiers',
-    '-[ ] Small - up to 100 homes: {{FEE_SMALL}}.',
-    '-[ ] Mid-size - 101-300 homes: {{FEE_MID}}.',
-    '-[ ] Large - 301-600 homes: {{FEE_LARGE}}.',
+    'Select one subscription band (by the Nation\'s current home count) and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date. Prices are locked for the signed term; there are no discounts.',
+    '###Subscription bands (by home count)',
+    '{{FEE_BANDS}}',
     '-[ ] 600+ / Tribal Council - custom: annual per quote; monthly per quote; setup per quote.',
     '###Billing and options',
-    'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (+10% rate above)',
-    'Setup discount: [ ] One-year term with first year prepaid - setup fee reduced 50% to $______ (Section 7.3)',
-    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}/month. Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
+    'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (billed monthly; annual/12 + 10% as shown above)',
+    'Setup (one-time): {{FEE_SETUP}}. Setup may be paid up front or spread across the first year\'s invoices at no extra cost.',
+    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}/month (the same flat fee for every plan size; includes AI usage, with no separate AI-vendor bill to the Nation). Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
+    'Optional add-on: [ ] Text-message notifications - {{FEE_SMS}}/month including 500 text messages, then $0.05 per additional text.',
     'Email delivery method (Schedule D): [ ] Nation\'s own Microsoft 365 tenant (requires the Nation\'s Microsoft administrator to grant application consent during setup)     [ ] Provider-managed transactional email service (Resend or SendGrid - United States; see Schedule D)',
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
     '###Term and contacts',
@@ -1745,7 +1832,7 @@
     '-Time spent in travel is billed at fifty percent (50%) of the hourly rate ({{FEE_TRAVEL_HR}} per hour), to a maximum of eight (8) hours of travel time per travel day.',
     '##Schedule C - Support and Service Levels',
     '###Support',
-    '-Email support at hello@homelandhomes.ca, business hours 9:00-17:00 Eastern, Monday to Friday excluding statutory holidays.',
+    '-Email support at hello@nationpathways.com, business hours 9:00-17:00 Eastern, Monday to Friday excluding statutory holidays.',
     '-Response service level: every support request receives a response within twenty-four (24) business hours of receipt (business hours as defined above; hours resume the next business day). Critical issues (Platform unavailable or data at risk) are prioritized ahead of all other requests.',
     '###Availability',
     '-Target availability of 99.5% per calendar month, excluding scheduled maintenance (announced at least 24 hours in advance and scheduled outside business hours where practicable) and force majeure.',
@@ -2035,12 +2122,15 @@
     var tpl = AGREEMENT_TPL
       .replace(/\{\{PROVIDER_PARTY\}\}/g, owner ? partyRecital(o) : partyName(o))
       .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
-      .replace(/\{\{FEE_SMALL\}\}/g, feeTierText('Small'))
-      .replace(/\{\{FEE_MID\}\}/g, feeTierText('Mid-size'))
-      .replace(/\{\{FEE_LARGE\}\}/g, feeTierText('Large'))
-      .replace(/\{\{FEE_AI\}\}/g, feeFmt(feePrice('AI Staff Assistant (per month)')))
-      .replace(/\{\{FEE_HOURLY\}\}/g, feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')))
-      .replace(/\{\{FEE_TRAVEL_HR\}\}/g, feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')))
+      .replace(/\{\{FEE_BANDS\}\}/g, function(){ return SUB_BANDS.map(function(b, i){
+        var lbl = bandLabel(i); lbl = lbl.charAt(0).toUpperCase() + lbl.slice(1);
+        return '-[ ] ' + lbl + ': ' + feeBandText(i) + '.';
+      }).join('\n'); })
+      .replace(/\{\{FEE_SETUP\}\}/g, function(){ return 'Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions; Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions; Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions'; })
+      .replace(/\{\{FEE_AI\}\}/g, function(){ return feeFmt(feePrice('AI Staff Assistant (per month)')); })
+      .replace(/\{\{FEE_SMS\}\}/g, function(){ return feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')); })
+      .replace(/\{\{FEE_HOURLY\}\}/g, function(){ return feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')); })
+      .replace(/\{\{FEE_TRAVEL_HR\}\}/g, function(){ return feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')); })
       .replace(/\{\{NATION\}\}/g, nationName)
       .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
       .replace(/\{\{DATE\}\}/g, _fmtDateLong());
@@ -2740,7 +2830,7 @@
     var M = 56, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), y = M;
     function t(s, x, yy, o){ o = o || {}; doc.setFont('helvetica', o.style || 'normal'); doc.setFontSize(o.size || 10); if (o.color) doc.setTextColor(o.color[0], o.color[1], o.color[2]); else doc.setTextColor(20, 20, 20); doc.text(String(s), x, yy, o.align ? { align: o.align } : undefined); }
     // Header
-    t('Home Land Homes', M, y, { style: 'bold', size: 16 });
+    t('Nation Pathways', M, y, { style: 'bold', size: 16 });
     t('INVOICE', W - M, y, { style: 'bold', size: 18, align: 'right', color: [120, 120, 120] });
     y += 16; t('Housing Management Platform', M, y, { size: 10, color: [110, 110, 110] });
     t(inv.number, W - M, y, { size: 11, align: 'right' });
@@ -2802,7 +2892,7 @@
     ].forEach(function(line){
       doc.splitTextToSize(line, W - M * 2).forEach(function(ln){ t(ln, M, y, { size: 9, color: [90, 90, 90] }); y += 12; });
     });
-    t('Home Land Homes - Housing Management Platform', M, H - 26, { size: 8, color: [130, 130, 130] });
+    t('Nation Pathways - Housing Management Platform', M, H - 26, { size: 8, color: [130, 130, 130] });
     return doc;
   }
 

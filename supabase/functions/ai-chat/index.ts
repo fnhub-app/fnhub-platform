@@ -370,8 +370,24 @@ const AUDIT_TOOL = {
   },
 }
 
-async function callClaude(system: string, messages: unknown[], tools?: unknown[]): Promise<Record<string, unknown>> {
-  const payload: Record<string, unknown> = { model: MODEL, max_tokens: 1500, system, messages }
+// Running token tally for one request (summed across every Anthropic call,
+// including the tool-use loop). input counts normal + cache read/write input.
+type Usage = { input: number; output: number }
+function addUsage(acc: Usage, data: Record<string, unknown>): void {
+  const u = (data && (data.usage as Record<string, unknown>)) || {}
+  acc.input += (Number(u.input_tokens) || 0)
+    + (Number(u.cache_creation_input_tokens) || 0)
+    + (Number(u.cache_read_input_tokens) || 0)
+  acc.output += (Number(u.output_tokens) || 0)
+}
+
+async function callClaude(system: string, messages: unknown[], tools?: unknown[], usage?: Usage): Promise<Record<string, unknown>> {
+  // Prompt caching (4d): the system block is large (HOW_TO + schema + the
+  // stuffed context) and is RE-SENT verbatim on every tool-use turn of a chat
+  // request, so caching it cuts input-token cost sharply within a request (and
+  // across requests whose system prefix matches). cache_control marks it cacheable.
+  const systemBlocks = [{ type: 'text', text: system, cache_control: { type: 'ephemeral' } }]
+  const payload: Record<string, unknown> = { model: MODEL, max_tokens: 1500, system: systemBlocks, messages }
   if (tools && tools.length) payload.tools = tools
   const r = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -384,6 +400,7 @@ async function callClaude(system: string, messages: unknown[], tools?: unknown[]
   })
   const data = await r.json()
   if (!r.ok) throw new Error(JSON.stringify(data).slice(0, 600))
+  if (usage) addUsage(usage, data)
   return data
 }
 
@@ -403,6 +420,8 @@ async function writeAiAudit(opts: {
   replyChars: number
   tables: string[]
   turns: number
+  inputTokens?: number
+  outputTokens?: number
 }): Promise<void> {
   if (!SUPABASE_SERVICE_KEY || !SUPABASE_URL) return
   try {
@@ -411,6 +430,8 @@ async function writeAiAudit(opts: {
     // `detail` is the human-readable summary the audit-log UI shows in its
     // Detail column (_parseAuditRow reads d.detail); the rest are structured
     // fields kept for the AI's own usage reports and compliance review.
+    // input_tokens / output_tokens (4b) drive the per-nation monthly AI-cost
+    // rollup (hs_data_usage sums them) and the fair-use check (4c).
     const summary = (opts.mode === 'draft' ? 'AI draft note: ' : 'AI question: ') + q
       + (opts.tables && opts.tables.length ? ' [queried: ' + opts.tables.join(', ') + ']' : '')
     const detail: Record<string, unknown> = {
@@ -422,6 +443,8 @@ async function writeAiAudit(opts: {
       reply_chars: opts.replyChars,
       tables_queried: opts.tables,
       turns: opts.turns,
+      input_tokens: Number(opts.inputTokens) || 0,
+      output_tokens: Number(opts.outputTokens) || 0,
     }
     await admin.from('housing_audit_log').insert({
       entity_type: 'ai',
@@ -434,6 +457,53 @@ async function writeAiAudit(opts: {
   } catch (e) {
     console.warn('[ai-audit] insert failed:', (e as Error).message)
   }
+}
+
+// ----- Fair-use monthly limit (4c; optional, default OFF) --------------------
+// The platform's AI cost is paid by the platform owner (Nation Pathways), not
+// the nation, so a nation can optionally be given a monthly token ceiling. The
+// limit lives in the nation's own housing_settings row key 'ai_fair_use'
+// ({ monthly_tokens: N }); 0 / absent = OFF (no limit). Enforcement must run on
+// the nation side (that is where ai-chat and the usage history are), so it is
+// read + compared here with the service-role client.
+async function getFairUseLimit(admin: ReturnType<typeof createClient>): Promise<number> {
+  try {
+    const { data } = await admin.from('housing_settings').select('value').eq('key', 'ai_fair_use').limit(1)
+    if (data && data.length) {
+      let v: Record<string, unknown> = data[0].value as Record<string, unknown>
+      if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = {} } }
+      const n = Number(v && (v as Record<string, unknown>).monthly_tokens)
+      return isFinite(n) && n > 0 ? n : 0
+    }
+  } catch (_e) { /* fail open */ }
+  return 0
+}
+// Sum input+output AI tokens recorded this calendar month (UTC) from the audit
+// log. Paginated past the row cap; bounded for safety.
+async function monthTokenUsage(admin: ReturnType<typeof createClient>): Promise<number> {
+  const first = new Date()
+  first.setUTCDate(1); first.setUTCHours(0, 0, 0, 0)
+  const iso = first.toISOString()
+  let total = 0, offset = 0
+  while (offset < 20000) {
+    const { data, error } = await admin
+      .from('housing_audit_log')
+      .select('detail')
+      .in('action', ['ai_query', 'ai_draft'])
+      .gte('created_at', iso)
+      .order('created_at', { ascending: false })
+      .range(offset, offset + 999)
+    if (error || !data || !data.length) break
+    for (const row of data) {
+      try {
+        const d = JSON.parse(String((row as Record<string, unknown>).detail || '{}'))
+        total += (Number(d.input_tokens) || 0) + (Number(d.output_tokens) || 0)
+      } catch (_e) { /* ignore unparseable (older) rows */ }
+    }
+    if (data.length < 1000) break
+    offset += 1000
+  }
+  return total
 }
 
 serve(async (req) => {
@@ -456,8 +526,8 @@ serve(async (req) => {
     const email = (user.email || '').toLowerCase()
     let role = ''
     let actorName = ''
-    if (SUPABASE_SERVICE_KEY) {
-      const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+    const admin = SUPABASE_SERVICE_KEY ? createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY) : null
+    if (admin) {
       const { data: rows } = await admin
         .from('staff')
         .select('role, name')
@@ -471,6 +541,20 @@ serve(async (req) => {
     }
     if (!role) return json({ error: 'AI assistant is available to active housing staff only.' }, 403)
 
+    // Fair-use monthly limit (4c): enforced only when the nation has set one.
+    if (admin) {
+      const limit = await getFairUseLimit(admin)
+      if (limit > 0) {
+        const used = await monthTokenUsage(admin)
+        if (used >= limit) {
+          return json({ reply: "This nation has reached its monthly AI usage limit. Please contact your administrator.", limit_reached: true })
+        }
+      }
+    }
+
+    // Running token tally for this request (4b) -- summed across every call.
+    const usage: Usage = { input: 0, output: 0 }
+
     const body = await req.json()
     const type    = body.type
     const message = body.message
@@ -480,26 +564,26 @@ serve(async (req) => {
 
     // --- Draft mode: single call, no tools ---
     if (type === 'draft') {
-      const data = await callClaude(buildSystem('draft', context), buildMessages(message, history))
+      const data = await callClaude(buildSystem('draft', context), buildMessages(message, history), undefined, usage)
       const reply = (data.content as any)?.[0]?.text || '(no response)'
-      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: message || '', replyChars: reply.length, tables: [], turns: 1 })
+      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: message || '', replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
 
     // --- Project milestones: single call, no tools; returns a JSON array ---
     if (type === 'project_milestones') {
-      const data = await callClaude(buildSystem('project_milestones', context), buildMessages(message, history))
+      const data = await callClaude(buildSystem('project_milestones', context), buildMessages(message, history), undefined, usage)
       const reply = (data.content as any)?.[0]?.text || '(no response)'
-      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: (message || '').slice(0, 500), replyChars: reply.length, tables: [], turns: 1 })
+      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: (message || '').slice(0, 500), replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
 
     // --- Letter mode: single call, no tools; drafts a resident letter grounded
     // in the nation's housing policy (policy text passed in context). ---
     if (type === 'letter') {
-      const data = await callClaude(buildSystem('letter', context), buildMessages(message, history))
+      const data = await callClaude(buildSystem('letter', context), buildMessages(message, history), undefined, usage)
       const reply = (data.content as any)?.[0]?.text || '(no response)'
-      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: ('letter: ' + (context?.purpose || '')).slice(0, 500), replyChars: reply.length, tables: [], turns: 1 })
+      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: ('letter: ' + (context?.purpose || '')).slice(0, 500), replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
 
@@ -510,14 +594,14 @@ serve(async (req) => {
     let turns = 0
     while (turns < MAX_TOOL_TURNS) {
       turns++
-      const resp = await callClaude(system, messages, [QUERY_TOOL, AUDIT_TOOL])
+      const resp = await callClaude(system, messages, [QUERY_TOOL, AUDIT_TOOL], usage)
       const content = (resp.content as Array<Record<string, unknown>>) || []
       messages.push({ role: 'assistant', content })
 
       if (resp.stop_reason !== 'tool_use') {
         const text = content.filter((b) => b.type === 'text').map((b) => b.text as string).join('\n').trim()
         const reply = text || '(no response)'
-        await writeAiAudit({ email, name: actorName, role, mode: 'chat', question: message || '', replyChars: reply.length, tables: tablesQueried, turns })
+        await writeAiAudit({ email, name: actorName, role, mode: 'chat', question: message || '', replyChars: reply.length, tables: tablesQueried, turns, inputTokens: usage.input, outputTokens: usage.output })
         return json({ reply })
       }
 
@@ -545,7 +629,7 @@ serve(async (req) => {
       }
       messages.push({ role: 'user', content: toolResults })
     }
-    await writeAiAudit({ email, name: actorName, role, mode: 'chat', question: message || '', replyChars: 0, tables: tablesQueried, turns })
+    await writeAiAudit({ email, name: actorName, role, mode: 'chat', question: message || '', replyChars: 0, tables: tablesQueried, turns, inputTokens: usage.input, outputTokens: usage.output })
     return json({ reply: "I couldn't finish that lookup. Try narrowing the question." })
   } catch (err) {
     return json({ error: (err as Error).message }, 500)
