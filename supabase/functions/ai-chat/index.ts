@@ -1070,6 +1070,7 @@ Write a professional EMAIL (not a formal letter).
 
 Rules:
 - Output ONLY the email text. No preamble, no explanation, no markdown fences.
+- Format as clean PLAIN TEXT for pasting straight into an email client. Do NOT use any Markdown or formatting characters (no **, *, #, _, >, or backticks) - they appear literally in email and look unprofessional. For a section heading, write a short Title Case heading on its own line (no asterisks) with a blank line before it; for a short list of options, start each line with "- " (hyphen + space). Separate paragraphs with a single blank line.
 - Begin with a "Subject: ..." line (a short, specific subject), then a blank line, then the email body.
 - Body: a brief greeting (e.g. "Hi ` + recipient + `," or "Dear ` + recipient + `,"), short, clear paragraphs, and a courteous sign-off naming ` + sender + `, ` + nation + `.
 - Do NOT include a mailing-address block, letterhead, or date line. Keep it concise and easy to read on a screen.
@@ -1082,6 +1083,7 @@ Write an official LETTER.
 
 Rules:
 - Output ONLY the letter text. No preamble, no explanation, no markdown fences.
+- Write clean PLAIN TEXT. Do NOT use any Markdown or formatting characters (no **, *, #, _, or backticks) - they are printed literally in the PDF. Use plain paragraphs and a simple heading on its own line where helpful; for a short list, start each line with "- ".
 - Do NOT include a letterhead, logo, or date line - those are added automatically when the letter is turned into a PDF. Begin with the recipient's name/address block, then the salutation.
 - Structure: recipient block; a "Dear ..." salutation; body paragraphs; a courteous closing ("Sincerely,"); then a signature block naming the ` + sender + `, ` + nation + `.
 - Be clear, respectful, and specific to the situation. Where the housing policy applies, reference it accurately in plain language (you may name the section/topic, but do not quote clauses that are not in the policy text above).
