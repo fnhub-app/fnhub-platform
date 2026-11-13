@@ -396,6 +396,15 @@
     var name = t[TIC_C.full_name] || u.assignedName || 'Unknown Tenant';
     _ticEl('tic_avatar').textContent = _ticInitials(name);
     _ticEl('tic_name').textContent   = name;
+    // Correct Name — a pencil beside the name, management only (ED/HM). Renaming
+    // touches tenants + housing_units + the application in the right order, so it
+    // stays a deliberate action rather than an inline field edit.
+    var _nameEdit = _ticEl('tic_name_edit');
+    if(_nameEdit){
+      var _canRen = (typeof ROLE !== 'undefined') && ROLE.isManagement && ROLE.isManagement(window.currentRole);
+      _nameEdit.style.display = _canRen ? '' : 'none';
+      if(_canRen) _nameEdit.onclick = function(){ _ticCorrectName(); };
+    }
 
     var subParts = [];
     if(t[TIC_C.unit_number]) subParts.push('Unit ' + t[TIC_C.unit_number]);
@@ -1083,6 +1092,7 @@
     savePromise
       .then(function(){
         inp.classList.remove('tic-saving');
+        _ticStampSaved();
         var beforeStr = _ticIsArray(prevForAudit) ? prevForAudit.join(', ') : (prevForAudit == null ? '' : String(prevForAudit));
         var afterStr  = _ticIsArray(body[key]) ? body[key].join(', ') : (body[key] == null ? '' : String(body[key]));
         _ticAudit('tic_overview_change', _ticDescribe(field.label, beforeStr, afterStr));
@@ -1448,6 +1458,7 @@
           if(arr[i] && arr[i].id === app.id){ arr[i] = app; break; }
         }
       }
+      _ticStampSaved();
       return app;
     });
   }
@@ -2728,6 +2739,19 @@
 
   // Show the "View Unit" footer button only when the tenant has an assigned
   // unit; hide it otherwise.
+  // Stamp the footer save indicator with the time of the last save. Shows just
+  // the disk icon + time (no "Fields save automatically" prose). No-op in
+  // read-only mode (nothing saves there).
+  function _ticStampSaved(){
+    var si = document.getElementById('tic_saved_indicator');
+    if(!si || _ticReadOnlyRole()) return;
+    var d = new Date();
+    var h = d.getHours(), m = d.getMinutes();
+    var ap = h >= 12 ? 'PM' : 'AM'; var h12 = h % 12; if(h12 === 0) h12 = 12;
+    si.textContent = '💾 Saved ' + h12 + ':' + (m < 10 ? '0' : '') + m + ' ' + ap;
+    try { si.title = 'Last saved ' + d.toLocaleString(); } catch(e){}
+  }
+
   function _ticSyncFooter(){
     var btn = _ticEl('tic_act_view_unit');
     if(btn) btn.style.display = _ticAssignedUnitId() ? '' : 'none';
@@ -2744,14 +2768,14 @@
         && APPROVAL_AUTHORITY.can('deleteApplication', window.currentRole);
       del.style.display = canDel ? '' : 'none';
     }
-    // Correct Name — management only. A deliberate action (not a field edit)
-    // because renaming touches tenants + housing_units + the application, and
-    // a bare unit rename would trip the sync trigger into splitting history.
-    var ren = _ticEl('tic_act_rename');
-    if(ren){
-      var canRen = (typeof ROLE !== 'undefined') && ROLE.isManagement && ROLE.isManagement(window.currentRole);
-      ren.style.display = canRen ? '' : 'none';
-    }
+    // Rent Ledger / Finance Card are finance actions for a HOUSED tenant, not an
+    // applicant — on an applicant TIC (no unit) they would open an empty finance
+    // card. Show them only when a unit is linked, the same gate as View Unit.
+    // (Correct Name moved to a pencil beside the hero name; New Work Order was
+    // removed from the card.)
+    var _hasUnit = !!_ticAssignedUnitId();
+    var led = _ticEl('tic_act_ledger');  if(led) led.style.display = _hasUnit ? '' : 'none';
+    var fin = _ticEl('tic_act_finance'); if(fin) fin.style.display = _hasUnit ? '' : 'none';
   }
 
   // CM5 — commercial-tailored TIC. For a business/department tenant (or a
@@ -3203,7 +3227,7 @@
     _ticState.movementLog = [];
     _ticSyncFooter();   // hide View Unit until the assigned unit resolves
     var _si = document.getElementById('tic_saved_indicator');
-    if(_si) _si.textContent = _ticReadOnlyRole() ? '' : '💾 Fields save automatically';
+    if(_si){ _si.textContent = _ticReadOnlyRole() ? '' : '💾'; _si.title = 'Fields save automatically'; }
     _ticApplyCommercialMode();   // restore all tabs until the tenant resolves
     _ticDocLib = null; _ticDocLibKey = null;
     _ticUtilDocLib = null; _ticUtilDocLibKey = null;

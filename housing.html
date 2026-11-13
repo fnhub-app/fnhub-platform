@@ -1621,7 +1621,10 @@
     <div class="tic-hero">
       <div id="tic_avatar" class="tic-avatar">—</div>
       <div class="tic-hero-main">
-        <h2 id="tic_name" class="tic-name">—</h2>
+        <div style="display:flex;align-items:center;gap:8px;">
+          <h2 id="tic_name" class="tic-name" style="margin:0;">—</h2>
+          <button id="tic_name_edit" type="button" title="Correct name" aria-label="Correct name" style="display:none;background:none;border:none;cursor:pointer;color:var(--muted);font-size:17px;line-height:1;padding:2px 4px;">&#9998;</button>
+        </div>
         <div id="tic_hero_sub" class="tic-hero-sub"></div>
         <div id="tic_hero_badges" class="tic-hero-badges"></div>
       </div>
@@ -1676,11 +1679,9 @@
     <!-- Footer -->
     <div class="tic-footer">
       <button id="tic_act_view_app"  type="button" class="btn btn-ghost">View Application</button>
-      <button id="tic_act_rename" type="button" class="btn btn-ghost" style="display:none;">&#9998; Correct Name</button>
       <button id="tic_act_view_unit" type="button" class="btn btn-ghost" style="display:none;">View Unit</button>
-      <button id="tic_act_new_wo"    type="button" class="btn btn-ghost">New Work Order</button>
-      <button id="tic_act_ledger"    type="button" class="btn btn-ghost">Rent Ledger</button>
-      <button id="tic_act_finance"   type="button" class="btn btn-ghost">Finance Card</button>
+      <button id="tic_act_ledger"    type="button" class="btn btn-ghost" style="display:none;">Rent Ledger</button>
+      <button id="tic_act_finance"   type="button" class="btn btn-ghost" style="display:none;">Finance Card</button>
       <button id="tic_act_invite"    type="button" class="btn btn-ghost">&#9993;&#65039; Invite to Portal</button>
       <button id="tic_act_delete_app" type="button" class="btn btn-ghost" style="display:none;color:var(--danger);border-color:var(--danger);">&#128465; Delete Application</button>
       <span class="tic-footer-spacer"></span>
