@@ -1389,7 +1389,24 @@ function _initStep6DocLib() {
       { key:'image',       label:'Image',           icon:'\uD83D\uDDBC\uFE0F' },
       { key:'other',       label:'Other',           icon:'\uD83D\uDCCE' }
     ],
-    maxSizeMB:     25
+    maxSizeMB:     25,
+    // "Write Letter with AI" on the Documents tab \u2014 the same policy-grounded
+    // letter writer the Tenant Card uses (window.aiWriteLetter), aimed at the
+    // applicant. The DocLibrary renders the button in its own header and files
+    // the branded PDF back into this application's documents.
+    aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+    aiRecipientName: function(){
+      var fn = (document.getElementById('fn') || {}).value || '';
+      var ln = (document.getElementById('ln') || {}).value || '';
+      var nm = (fn + ' ' + ln).trim();
+      if (nm) return nm;
+      try { var a = (window.applications || []).find(function(x){ return x.id === appId; }); if (a) return ((a.fn || '') + ' ' + (a.ln || '')).trim(); } catch(e){}
+      return '';
+    },
+    aiAddress: function(){
+      try { var a = (window.applications || []).find(function(x){ return x.id === appId; }); if (a) return a.assignedAddress || a.street || ''; } catch(e){}
+      return '';
+    }
   });
 }
 
