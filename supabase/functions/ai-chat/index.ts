@@ -1015,6 +1015,25 @@ Write 2-4 sentences. Be professional, clear, and compassionate. Reference specif
       ? ('HOUSING POLICY (the authoritative policy of this nation - ground the letter in it and, where it applies, cite the relevant part in plain language; do NOT invent policy that is not stated here):\n"""\n' + policy + '\n"""')
       : 'No housing policy text was provided for this nation. Write a correct, professional letter but do NOT cite specific policy clauses you cannot verify.'
     const format = (ctx?.format === 'email') ? 'email' : 'letter'
+    // Arrears: the client resolves the resident's live rent-ledger balance (via
+    // the housing arrears engine) and passes it in. NEVER invent a figure -- only
+    // state an amount when one was actually provided. arrearsAmount > 0 = owes;
+    // <= 0 = in good standing; absent/'' = not a tenant / unknown (say nothing).
+    const arrRaw = ctx?.arrearsAmount
+    const arrNum = (arrRaw === '' || arrRaw == null) ? null : Number(arrRaw)
+    const arrHas = arrNum != null && isFinite(arrNum)
+    const arrFmt = (ctx?.arrearsFormatted && String(ctx.arrearsFormatted)) || (arrHas ? ('$' + (arrNum as number).toFixed(2)) : '')
+    const hasArrangement = !!ctx?.hasArrangement
+    let arrearsBlock = ''
+    if (arrHas && (arrNum as number) > 0) {
+      arrearsBlock = `
+ARREARS - MANDATORY (this resident currently owes rent): You MUST state clearly in this ` + format + ` that their rent account is in arrears in the amount of ` + arrFmt + `, and you MUST ask them to contact the housing office to set up a payment arrangement. ` + (hasArrangement ? `They already have an approved repayment arrangement - acknowledge it and remind them to keep it current rather than starting a new one. ` : ``) + `Ground this in the nation's arrears / collections / repayment-arrangement policy (name the relevant section in plain language). Keep the tone ` + (hasArrangement ? `supportive` : `firm but respectful`) + ` and set out their options. Use ONLY the amount ` + arrFmt + ` - never state any other dollar figure.
+`
+    } else if (arrHas && (arrNum as number) <= 0) {
+      arrearsBlock = `
+ACCOUNT STANDING: this resident's rent account is currently in GOOD STANDING (no arrears). Do NOT state an arrears amount and do NOT ask them to set up a payment arrangement.
+`
+    }
     const header = `You are a professional housing administrator writing on behalf of the ` + nation + ` Housing Department.
 
 Recipient: ` + recipient + (address ? ' (' + address + ')' : '') + `
@@ -1023,6 +1042,8 @@ Tone: ` + tone + `
 What it needs to say / the situation: ` + (details || '(use the purpose above)') + `
 
 ` + policyBlock + `
+` + arrearsBlock + `
+ALWAYS reference the relevant housing policy section, in plain language, wherever it applies to the subject of this ` + format + ` (do not quote clauses that are not in the policy text above, and do not invent policy).
 `
     if (format === 'email') {
       return header + `

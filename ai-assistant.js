@@ -991,6 +991,38 @@ window._aiLetterClose = function(skipSnapshot) {
   m.style.display = 'none';
 };
 
+// Resolve a tenant's LIVE rent-ledger arrears for the letter writer, so the
+// draft can state the real balance and ask for a payment arrangement -- never a
+// fabricated figure. Uses the housing arrears engine (arrears.js, loaded on
+// housing.html + tenants.html); returns null when it isn't available or the
+// recipient isn't a known tenant (an applicant, a typo), so applicant letters
+// and pages without the engine simply omit arrears.
+function _aiLetterResolveArrears(name) {
+  name = (name || '').trim();
+  if (!name) return Promise.resolve(null);
+  if (typeof window.arrearsTenantByName !== 'function' || typeof window.arrearsStateForTenant !== 'function') {
+    return Promise.resolve(null);
+  }
+  var fmt = function(n){
+    try { return (typeof window.formatCurrency === 'function') ? window.formatCurrency(n) : ('$' + Number(n).toFixed(2)); }
+    catch(e){ return '$' + (Number(n) || 0).toFixed(2); }
+  };
+  var run = function(){
+    try {
+      var t = window.arrearsTenantByName(name);
+      if (!t || !t.id) return null;
+      var state = window.arrearsStateForTenant(t.id);
+      if (!state) return null;
+      var bal = Math.round((Number(state.balance) || 0) * 100) / 100;
+      return { balance: bal, formatted: fmt(bal), hasArrangement: !!state.hasApproved };
+    } catch(e){ return null; }
+  };
+  if (typeof window.arrearsLoad === 'function') {
+    return window.arrearsLoad().then(run).catch(function(){ return null; });
+  }
+  return Promise.resolve(run());
+}
+
 window._aiLetterGenerate = function() {
   var recipient = (document.getElementById('ai_letter_recipient') || {}).value || '';
   var address   = (document.getElementById('ai_letter_address')   || {}).value || '';
@@ -1006,7 +1038,8 @@ window._aiLetterGenerate = function() {
   var st  = document.getElementById('ai_letter_status');
   if (btn) btn.disabled = true;
   if (st) st.textContent = 'Drafting…';
-  _aiCall({
+  _aiLetterResolveArrears(recipient).then(function(arr){
+    return _aiCall({
     type: 'letter',
     message: (format === 'email') ? 'Write the email.' : 'Write the letter.',
     context: {
@@ -1019,9 +1052,13 @@ window._aiLetterGenerate = function() {
       details:    details.trim(),
       sender:     ((window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || '') + ' Housing Department',
       policyText: _aiPolicyText(),
+      arrearsAmount:    (arr && arr.balance != null) ? arr.balance : '',
+      arrearsFormatted: (arr && arr.formatted) ? arr.formatted : '',
+      hasArrangement:   !!(arr && arr.hasArrangement),
       role:       window._effectiveRole || window.currentRole || ''
     },
     history: []
+  });
   }).then(function(data){
     if (data.error) throw new Error(data.error);
     var res = document.getElementById('ai_letter_result');

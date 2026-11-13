@@ -2819,6 +2819,12 @@
     if(activeHidden && typeof _ticSwitchTab === 'function') _ticSwitchTab('overview');
   }
   function _ticFindApplicationForTenant(){
+    // 0) the application already resolved onto this TIC. Applicant files have NO
+    //    tenant row or unit, so the name-derived fallbacks below would find
+    //    nothing (and, during a rename, the tenant name has already been
+    //    corrected, so a name match would miss the still-old-named app). Trust
+    //    the application the card is already showing.
+    if(_ticState.application && _ticState.application.id) return Promise.resolve(_ticState.application.id);
     // 1) unit.assignedTo — set by the assign-unit flow and reflects the most
     //    recent application linked to this unit. Checked before tenant.application_id
     //    so that existing-tenant file updates (where the tenants row still carries
@@ -2962,6 +2968,11 @@
       // 3) linked application fn/ln (in-memory + persisted via the normal save).
       var appId = await _ticFindApplicationForTenant();
       if(appId){
+        // Keep the TIC's own copy of the application in sync so the hero + any
+        // app-derived view reflect the corrected name without a reload.
+        if(_ticState.application && _ticState.application.id === appId){
+          _ticState.application.fn = fn; _ticState.application.ln = ln;
+        }
         var appMem = (typeof applications !== 'undefined' && applications || []).find(function(a){ return a && a.id === appId; });
         if(appMem){
           appMem.fn = fn; appMem.ln = ln;
