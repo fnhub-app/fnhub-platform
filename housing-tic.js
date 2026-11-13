@@ -505,8 +505,11 @@
         if(!st) return;
         var bal = Math.round((Number(st.balance) || 0) * 100) / 100;
         el.classList.remove('tic-arrears-bad','tic-arrears-good');
-        if(bal > 0){ el.textContent = _ticFmtMoney(bal); el.classList.add('tic-arrears-bad'); }
-        else { el.textContent = _ticFmtMoney(0); el.classList.add('tic-arrears-good'); }
+        // Show the REAL ledger balance, matching the arrears panel lower on the
+        // card (a negative balance is a credit, not $0). Red when they owe,
+        // green otherwise.
+        el.textContent = _ticFmtMoney(bal);
+        el.classList.add(bal > 0 ? 'tic-arrears-bad' : 'tic-arrears-good');
       } catch(e){ /* best-effort */ }
     };
     if(typeof window.arrearsLoad === 'function') window.arrearsLoad().then(apply).catch(function(){});
