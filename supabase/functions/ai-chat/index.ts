@@ -404,6 +404,21 @@ async function callClaude(system: string, messages: unknown[], tools?: unknown[]
   return data
 }
 
+// Extract the assistant's text from a Messages API response. The model may
+// return a leading NON-text block (e.g. a thinking block) before the text
+// block, so never assume content[0] is the text -- filter for text blocks and
+// join them (the chat-mode loop already does this; the single-call modes used
+// to read content[0].text and got '(no response)' whenever a thinking block
+// came first).
+function replyText(data: Record<string, unknown>): string {
+  const blocks = (data?.content as Array<Record<string, unknown>>) || []
+  return blocks
+    .filter((b) => b && b.type === 'text' && typeof b.text === 'string')
+    .map((b) => b.text as string)
+    .join('\n')
+    .trim()
+}
+
 // Write one append-only audit row per AI interaction. Server-side (service-role)
 // so it cannot be bypassed by a tampered client. Columns mirror the rest of the
 // app's auditEntry(): actor = verified email; detail is a JSON string carrying
@@ -565,7 +580,7 @@ serve(async (req) => {
     // --- Draft mode: single call, no tools ---
     if (type === 'draft') {
       const data = await callClaude(buildSystem('draft', context), buildMessages(message, history), undefined, usage)
-      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      const reply = replyText(data) || '(no response)'
       await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: message || '', replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
@@ -573,7 +588,7 @@ serve(async (req) => {
     // --- Project milestones: single call, no tools; returns a JSON array ---
     if (type === 'project_milestones') {
       const data = await callClaude(buildSystem('project_milestones', context), buildMessages(message, history), undefined, usage)
-      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      const reply = replyText(data) || '(no response)'
       await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: (message || '').slice(0, 500), replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
@@ -582,7 +597,7 @@ serve(async (req) => {
     // in the nation's housing policy (policy text passed in context). ---
     if (type === 'letter') {
       const data = await callClaude(buildSystem('letter', context), buildMessages(message, history), undefined, usage)
-      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      const reply = replyText(data) || '(no response)'
       await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: ('letter: ' + (context?.purpose || '')).slice(0, 500), replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
@@ -592,7 +607,7 @@ serve(async (req) => {
     // the staff's rough input + record context. ---
     if (type === 'note') {
       const data = await callClaude(buildSystem('note', context), buildMessages(message, history), undefined, usage)
-      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      const reply = replyText(data) || '(no response)'
       await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: ('note: ' + (message || '')).slice(0, 500), replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
       return json({ reply })
     }
