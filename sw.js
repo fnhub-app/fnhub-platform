@@ -12,7 +12,7 @@
  *
  * Bump CACHE to force every client to drop the old cache on next load.
  * ============================================================ */
-var CACHE = 'clfn-shell-v171';
+var CACHE = 'clfn-shell-v172';
 
 var LIB_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net'];
 

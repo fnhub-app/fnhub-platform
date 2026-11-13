@@ -481,7 +481,7 @@
     };
     var rows = [];
     rows.push('<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-      + '<strong style="font-size:14px;">Balance ' + (st.balance < 0 ? (_money(Math.abs(st.balance)) + ' CR') : _money(st.balance)) + '</strong>'
+      + '<strong style="font-size:14px;">Balance ' + (st.balance < 0 ? (_money(Math.abs(st.balance)) + ' DR') : (st.balance > 0 ? (_money(st.balance) + ' CR') : _money(0))) + '</strong>'
       + (st.balance > 0 ? chip('ARREARS', 'bad') : chip('CURRENT', 'ok'))
       + (st.hasApproved ? chip('Arrangement · ' + (st.compliant ? 'compliant' : st.consecutiveMissed + ' mo missed'), st.compliant ? 'ok' : 'bad') : '')
       + (st.pendingEd ? chip('Arrangement pending ED', 'warn') : '')
