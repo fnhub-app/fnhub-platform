@@ -11439,6 +11439,18 @@ async function scRenderNotes(app){
   }
   if(!html) html = '<div class="txt-sm-muted" style="padding:6px 0;">No notes yet. Add one above &mdash; it saves to the application file and shows in the Tenant Card.</div>';
   mount.innerHTML = html;
+  // "✦ Draft with AI" on the scorecard note box (reads the current scorecard app
+  // live, so it stays correct across app switches). Idempotent; module-gated.
+  if(typeof window.aiAttachNoteButton === 'function'){
+    window.aiAttachNoteButton('sc_note_input', function(){
+      var a = window._currentScorecardApp || app || {};
+      var nm = ((a.fn||'') + ' ' + (a.ln||'')).trim();
+      var bits = [];
+      if(a.status) bits.push('Status: ' + a.status);
+      if(a.score != null) bits.push('Score: ' + a.score);
+      return { recordType:'housing application', recordName:nm, recordContext:bits.join('; ') };
+    });
+  }
 }
 window.scRenderNotes = scRenderNotes;
 

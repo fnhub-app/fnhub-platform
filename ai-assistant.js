@@ -769,11 +769,15 @@ function _aiLetterEnsureModal() {
   wrap.innerHTML =
     '<div style="background:var(--surface);border:1px solid var(--border);border-radius:16px;max-width:720px;width:100%;box-shadow:0 24px 60px rgba(0,0,0,0.5);overflow:hidden;margin:auto;">'
     + '<div style="background:var(--dark);padding:14px 18px;border-bottom:2px solid var(--yellow);display:flex;align-items:center;justify-content:space-between;">'
-    +   '<div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--yellow);font-size:16px;">✦</span><span style="font-family:\'DM Serif Display\',serif;font-size:16px;color:#fff;">Write a Letter with AI</span></div>'
+    +   '<div style="display:flex;align-items:center;gap:8px;"><span style="color:var(--yellow);font-size:16px;">✦</span><span id="ai_letter_title" style="font-family:\'DM Serif Display\',serif;font-size:16px;color:#fff;">Write a Letter or Email with AI</span></div>'
     +   '<button type="button" onclick="_aiLetterClose()" style="background:none;border:1px solid #444;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;">✕</button>'
     + '</div>'
     + '<div style="padding:18px;max-height:calc(100vh - 160px);overflow-y:auto;">'
     +   '<div id="ai_letter_policywarn" style="display:none;background:var(--warn-amber-bg);color:var(--warn-amber-text);border:1px solid var(--warn-amber-border);border-radius:8px;padding:8px 12px;font-size:12px;margin-bottom:12px;"></div>'
+    +   '<div class="f" style="margin-bottom:10px;"><label>Format</label><select id="ai_letter_format" onchange="_aiLetterSyncFormat()">'
+    +     '<option value="letter">Letter — formal, saved as a branded PDF</option>'
+    +     '<option value="email">Email — copy &amp; paste into your mail app</option>'
+    +   '</select></div>'
     +   '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">'
     +     '<div class="f"><label>Recipient name</label><input type="text" id="ai_letter_recipient" placeholder="Full name"/></div>'
     +     '<div class="f"><label>Re: / Address</label><input type="text" id="ai_letter_address" placeholder="Unit address or subject"/></div>'
@@ -788,13 +792,15 @@ function _aiLetterEnsureModal() {
     +   '</div>'
     +   '<div id="ai_letter_result_wrap" style="display:none;margin-top:16px;border-top:1px solid var(--border);padding-top:14px;">'
     +     '<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:6px;">'
-    +       '<label style="font-size:12px;font-weight:700;color:var(--text);">Drafted letter &mdash; review &amp; edit</label>'
+    +       '<label id="ai_letter_result_lbl" style="font-size:12px;font-weight:700;color:var(--text);">Draft &mdash; review &amp; edit</label>'
     +       '<span style="font-size:11px;color:var(--muted);">Grounded in the housing policy</span>'
     +     '</div>'
     +     '<textarea id="ai_letter_result" rows="14" style="width:100%;box-sizing:border-box;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;"></textarea>'
     +     '<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:10px;">'
     +       '<button type="button" class="btn btn-ghost btn-sm" onclick="_aiLetterGenerate()">↻ Regenerate</button>'
-    +       '<button type="button" id="ai_letter_save_btn" class="btn btn-primary btn-sm" onclick="_aiLetterSavePdf()">📄 Save as PDF to documents</button>'
+    +       '<button type="button" id="ai_letter_copy_btn" class="btn btn-primary btn-sm" onclick="_aiLetterCopy()">📋 Copy</button>'
+    +       '<button type="button" id="ai_letter_save_btn" class="btn btn-ghost btn-sm" onclick="_aiLetterSavePdf()">📄 Save as PDF to documents</button>'
+    +       '<span id="ai_letter_copied" style="font-size:12px;color:var(--success,#15803d);display:none;">Copied!</span>'
     +     '</div>'
     +   '</div>'
     + '</div>'
@@ -825,6 +831,7 @@ window.aiWriteLetter = function(ctx) {
   var res = document.getElementById('ai_letter_result');    if (res) res.value = '';
   var rw  = document.getElementById('ai_letter_result_wrap');if (rw) rw.style.display = 'none';
   var st  = document.getElementById('ai_letter_status');    if (st) st.textContent = '';
+  var fmt = document.getElementById('ai_letter_format');    if (fmt) fmt.value = (_aiLetterCtx.format === 'email') ? 'email' : 'letter';
   var warn = document.getElementById('ai_letter_policywarn');
   if (warn) {
     if (!_aiPolicyText().trim()) {
@@ -842,10 +849,121 @@ window.aiWriteLetter = function(ctx) {
     if (det) det.value = d.details || '';
     var purp = document.getElementById('ai_letter_purpose'); if (purp && d.purpose) purp.value = d.purpose;
     var tn   = document.getElementById('ai_letter_tone');    if (tn && d.tone) tn.value = d.tone;
+    if (fmt && d.format) fmt.value = d.format;
     if (res && d.result) { res.value = d.result; if (rw) rw.style.display = ''; }
     if (st) st.textContent = 'Restored your in-progress draft.';
   }
+  if (typeof window._aiLetterSyncFormat === 'function') window._aiLetterSyncFormat();
   modal.style.display = 'flex';
+};
+
+// Reflect the chosen Format (Letter vs Email) in the modal's labels and which
+// actions make sense. Email -> copy & paste is primary, no PDF-to-documents.
+window._aiLetterSyncFormat = function() {
+  var fmt = (document.getElementById('ai_letter_format') || {}).value || 'letter';
+  var isEmail = (fmt === 'email');
+  var set = function(id, txt){ var e = document.getElementById(id); if (e) e.textContent = txt; };
+  set('ai_letter_title',      isEmail ? 'Write an Email with AI' : 'Write a Letter with AI');
+  set('ai_letter_gen_btn',    ''); // rebuilt below to keep the ✦ glyph
+  var gen = document.getElementById('ai_letter_gen_btn');
+  if (gen) gen.innerHTML = '<span style="color:var(--dark);">✦</span> ' + (isEmail ? 'Generate email' : 'Generate letter');
+  set('ai_letter_result_lbl', isEmail ? 'Draft email — review & edit' : 'Draft letter — review & edit');
+  var det = document.getElementById('ai_letter_details');
+  if (det) det.placeholder = 'Describe the situation and anything the ' + (isEmail ? 'email' : 'letter') + ' must mention. The AI grounds it in the housing policy.';
+  // Save-as-PDF files a branded letter into the documents; it isn't meaningful
+  // for an email, so hide it there (Copy is the primary email action).
+  var saveBtn = document.getElementById('ai_letter_save_btn');
+  if (saveBtn) saveBtn.style.display = (isEmail || !(_aiLetterCtx && typeof _aiLetterCtx.saveFile === 'function')) ? 'none' : '';
+  var copyBtn = document.getElementById('ai_letter_copy_btn');
+  if (copyBtn) copyBtn.classList.toggle('btn-primary', true);
+};
+
+// Copy the drafted text to the clipboard. Falls back to a manual select when the
+// async Clipboard API isn't available (older/insecure contexts).
+window._aiLetterCopy = function() {
+  var res = document.getElementById('ai_letter_result');
+  var text = res ? (res.value || '') : '';
+  if (!text.trim()) { if (typeof showToast === 'function') showToast('Nothing to copy yet.', {type:'error'}); return; }
+  var flash = function(){
+    var c = document.getElementById('ai_letter_copied');
+    if (c) { c.style.display = ''; setTimeout(function(){ try { c.style.display = 'none'; } catch(e){} }, 1800); }
+  };
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(flash, function(){ try { res.focus(); res.select(); document.execCommand('copy'); flash(); } catch(e){} });
+      return;
+    }
+  } catch(e) {}
+  try { res.focus(); res.select(); document.execCommand('copy'); flash(); }
+  catch(e) { if (typeof showToast === 'function') showToast('Could not copy — select the text and copy manually.', {type:'info'}); }
+};
+
+// ── Reusable "Draft note with AI" for any notes box ──────────────────────────
+// aiDraftNoteInline(target, ctx): take the staff's rough text in the textarea
+// (or a short typed prompt when it's empty) and rewrite it as a concise, policy-
+// grounded professional note, placed back in the box. ctx: { recordType,
+// recordName, recordContext (string or fn), btnId }.
+window.aiDraftNoteInline = function(target, ctx) {
+  if (window.CLFN_MODULES && !CLFN_MODULES.isEnabled('ai_assistant')) {
+    if (typeof showToast === 'function') showToast('AI Assistant is disabled for this nation.', {type:'error'});
+    return;
+  }
+  var el = (typeof target === 'string') ? document.getElementById(target) : target;
+  if (!el) return;
+  ctx = ctx || {};
+  var rough = (el.value || '').trim();
+  if (!rough) {
+    rough = (typeof window.prompt === 'function') ? ((window.prompt('What should this note say? A few words is fine — the AI will write it up.') || '').trim()) : '';
+    if (!rough) return;
+  }
+  var resolve = function(v){ return (typeof v === 'function') ? v() : v; };
+  var btn = ctx.btnId ? document.getElementById(ctx.btnId) : null;
+  var prev = btn ? btn.innerHTML : '';
+  if (btn) { btn.disabled = true; btn.innerHTML = 'Drafting…'; }
+  _aiCall({
+    type: 'note',
+    message: rough,
+    context: {
+      nation:        (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || 'the First Nation',
+      recordType:    resolve(ctx.recordType) || 'housing record',
+      recordName:    resolve(ctx.recordName) || '',
+      recordContext: resolve(ctx.recordContext) || '',
+      policyText:    _aiPolicyText(),
+      role:          window._effectiveRole || window.currentRole || ''
+    },
+    history: []
+  }).then(function(data){
+    if (data.error) throw new Error(data.error);
+    var out = (data.reply || '').trim();
+    if (out) {
+      el.value = out;
+      try { el.dispatchEvent(new Event('input', { bubbles: true })); } catch(e){}
+      try { el.focus(); } catch(e){}
+    }
+  }).catch(function(err){
+    if (typeof showToast === 'function') showToast('AI note failed: ' + (err && err.message || err), {type:'error'});
+  }).finally(function(){
+    if (btn) { btn.disabled = false; btn.innerHTML = prev; }
+  });
+};
+
+// Insert a "✦ Draft with AI" button right after a notes textarea and wire it.
+// Idempotent per target id; no-op when the AI module is off or the box is absent.
+window.aiAttachNoteButton = function(targetId, ctx) {
+  try {
+    if (window.CLFN_MODULES && !CLFN_MODULES.isEnabled('ai_assistant')) return;
+    var el = document.getElementById(targetId);
+    if (!el) return;
+    var id = targetId + '_ai_btn';
+    if (document.getElementById(id)) return;
+    var b = document.createElement('button');
+    b.type = 'button'; b.id = id; b.className = 'btn btn-ghost btn-sm';
+    b.style.cssText = 'margin-top:6px;';
+    b.innerHTML = '<span style="color:var(--yellow);">✦</span> Draft with AI';
+    b.title = 'Draft this note with AI from what you typed (or a short prompt)';
+    b.onclick = function(){ var c = (typeof ctx === 'function') ? ctx() : (ctx || {}); c.btnId = id; window.aiDraftNoteInline(el, c); };
+    if (el.parentNode) el.parentNode.insertBefore(b, el.nextSibling);
+  } catch(e) { /* never break the host render */ }
 };
 
 window._aiLetterClose = function(skipSnapshot) {
@@ -859,6 +977,7 @@ window._aiLetterClose = function(skipSnapshot) {
         entityType: _aiLetterCtx.entityType, entityId: _aiLetterCtx.entityId,
         recipient: _g('ai_letter_recipient'), address: _g('ai_letter_address'),
         purpose: _g('ai_letter_purpose'), tone: _g('ai_letter_tone'),
+        format: _g('ai_letter_format'),
         details: _g('ai_letter_details'), result: _g('ai_letter_result'),
         t: Date.now()
       } : _aiLetterDraft;
@@ -877,15 +996,17 @@ window._aiLetterGenerate = function() {
     if (typeof showToast === 'function') showToast('Add a recipient and/or describe what the letter should say.', {type:'error'});
     return;
   }
+  var format  = (document.getElementById('ai_letter_format') || {}).value || 'letter';
   var btn = document.getElementById('ai_letter_gen_btn');
   var st  = document.getElementById('ai_letter_status');
   if (btn) btn.disabled = true;
   if (st) st.textContent = 'Drafting…';
   _aiCall({
     type: 'letter',
-    message: 'Write the letter.',
+    message: (format === 'email') ? 'Write the email.' : 'Write the letter.',
     context: {
       nation:     (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || 'the First Nation',
+      format:     format,
       recipient:  recipient.trim() || 'the resident',
       address:    address.trim(),
       purpose:    purpose,

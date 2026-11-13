@@ -587,6 +587,16 @@ serve(async (req) => {
       return json({ reply })
     }
 
+    // --- Note mode: single call, no tools; drafts a concise professional note
+    // for a housing record (tenant/applicant/inspection/work order/etc.) from
+    // the staff's rough input + record context. ---
+    if (type === 'note') {
+      const data = await callClaude(buildSystem('note', context), buildMessages(message, history), undefined, usage)
+      const reply = (data.content as any)?.[0]?.text || '(no response)'
+      await writeAiAudit({ email, name: actorName, role, mode: 'draft', question: ('note: ' + (message || '')).slice(0, 500), replyChars: reply.length, tables: [], turns: 1, inputTokens: usage.input, outputTokens: usage.output })
+      return json({ reply })
+    }
+
     // --- Chat mode: tool-use loop with the read-only query_database tool ---
     const system = buildSystem('chat', context)
     const messages = buildMessages(message, history)
@@ -925,6 +935,28 @@ Rules:
 - Order the array chronologically. Produce 8 to 16 milestones unless the input clearly calls for fewer or more.
 - Ground every milestone in the input; do not pad with generic filler.` + existing
   }
+  if (type === 'note') {
+    const nation   = ctx?.nation   || 'the First Nation'
+    const rtype    = ctx?.recordType || 'housing record'
+    const rname    = ctx?.recordName || ''
+    const rcontext = String(ctx?.recordContext || '').slice(0, 4000)
+    const policy   = String(ctx?.policyText || '').slice(0, 8000)
+    const policyBlock = policy
+      ? ('Relevant housing policy (ground the note in it where it applies; do NOT invent policy not stated here):\n"""\n' + policy + '\n"""')
+      : ''
+    return `You are a professional housing administrator at ` + nation + `. Write a concise, professional INTERNAL note for a ` + rtype + (rname ? ' (' + rname + ')' : '') + `.
+
+The staff member will give you a rough note, bullet points, or a short instruction describing what happened or what to record. Turn it into a clear, well-written note for the record.
+
+` + (rcontext ? ('Record context (for reference; do not restate wholesale):\n"""\n' + rcontext + '\n"""\n\n') : '') + policyBlock + `
+
+Rules:
+- Output ONLY the note text. No preamble, no heading, no markdown fences, no signature or date (those are added automatically).
+- Keep it brief and factual - usually 1 to 4 sentences, matching the amount of input. Do not pad.
+- Professional, neutral, respectful tone. This is an internal record read by staff.
+- Do NOT fabricate facts, dates, dollar amounts, names, or outcomes that were not provided. If the input is only a short instruction, write the note it implies without inventing specifics.
+- This is sensitive community data governed by OCAP principles.`
+  }
   if (type === 'draft') {
     const app = ctx?.app ?? {}
     const nation = ctx?.nation || 'the First Nation'
@@ -967,14 +999,31 @@ Write 2-4 sentences. Be professional, clear, and compassionate. Reference specif
     const policyBlock = policy
       ? ('HOUSING POLICY (the authoritative policy of this nation - ground the letter in it and, where it applies, cite the relevant part in plain language; do NOT invent policy that is not stated here):\n"""\n' + policy + '\n"""')
       : 'No housing policy text was provided for this nation. Write a correct, professional letter but do NOT cite specific policy clauses you cannot verify.'
-    return `You are a professional housing administrator writing an official letter on behalf of the ` + nation + ` Housing Department.
+    const format = (ctx?.format === 'email') ? 'email' : 'letter'
+    const header = `You are a professional housing administrator writing on behalf of the ` + nation + ` Housing Department.
 
 Recipient: ` + recipient + (address ? ' (' + address + ')' : '') + `
 Purpose: ` + purpose + `
 Tone: ` + tone + `
-What the letter needs to say / the situation: ` + (details || '(use the purpose above)') + `
+What it needs to say / the situation: ` + (details || '(use the purpose above)') + `
 
 ` + policyBlock + `
+`
+    if (format === 'email') {
+      return header + `
+Write a professional EMAIL (not a formal letter).
+
+Rules:
+- Output ONLY the email text. No preamble, no explanation, no markdown fences.
+- Begin with a "Subject: ..." line (a short, specific subject), then a blank line, then the email body.
+- Body: a brief greeting (e.g. "Hi ` + recipient + `," or "Dear ` + recipient + `,"), short, clear paragraphs, and a courteous sign-off naming ` + sender + `, ` + nation + `.
+- Do NOT include a mailing-address block, letterhead, or date line. Keep it concise and easy to read on a screen.
+- Where the housing policy applies, reference it accurately in plain language (name the section/topic; do not quote clauses that are not in the policy text above).
+- Do NOT fabricate facts, dates, dollar amounts, unit numbers, or names that were not provided.
+- For sensitive matters (arrears, warnings, eviction), stay firm but respectful, and set out the resident's options and the relevant policy steps.`
+    }
+    return header + `
+Write an official LETTER.
 
 Rules:
 - Output ONLY the letter text. No preamble, no explanation, no markdown fences.

@@ -2466,6 +2466,18 @@
          +   '</div>'
          + '</div>';
     _ticEl('tic_panel_notes').innerHTML = html;
+    // "✦ Draft with AI" on the note box — turns a few rough words into a
+    // concise, policy-grounded note for this tenant/applicant file.
+    if (typeof window.aiAttachNoteButton === 'function') {
+      window.aiAttachNoteButton('tic_note_input', function(){
+        var t = _ticState.tenant || {}, a = _ticState.application || {}, u = _ticState.unit || {};
+        var nm = t[TIC_C.full_name] || ((a.fn||'') + ' ' + (a.ln||'')).trim() || u.assignedName || '';
+        var bits = [];
+        if (u && (u.num || u.street)) bits.push('Unit: ' + ((u.num||'') + ' ' + (u.street||'')).trim());
+        var stt = t[TIC_C.tenancy_status] || u.status; if (stt) bits.push('Status: ' + stt);
+        return { recordType: (a && a.id && !(u && u.id)) ? 'applicant file' : 'tenant file', recordName: nm, recordContext: bits.join('; ') };
+      });
+    }
   }
 
   // ── Render: Unit History ──────────────────────────────────────────────────
