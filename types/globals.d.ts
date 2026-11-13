@@ -69,6 +69,11 @@ interface Window {
   _toE164: (raw: any) => string;                 // shared-data.js (phone -> E.164 for SMS)
   aiAttachNoteButton: (...args: any[]) => any;   // ai-assistant.js (attach "Draft with AI" to a notes box)
   aiDraftNoteInline: (...args: any[]) => any;    // ai-assistant.js (AI note drafting into a textarea)
+  aiFeatureOn: (cap: string, mod?: string) => boolean; // shared-config.js (AI feature matrix gate)
+  AI_FEAT_CAPS: any;                              // shared-config.js (AI capability list)
+  AI_FEAT_MODULES: any;                           // shared-config.js (AI module/applicability list)
+  renderAiFeaturesPanel: (...args: any[]) => any; // housing-settings.js (AI Features settings panel)
+  saveAiFeature: (...args: any[]) => any;         // housing-settings.js (persist an AI feature toggle)
   arrearsAssignmentGate: (...args: any[]) => any; // shared-data.js (ED-overridable arrears assignment gate)
   _arrearsOverrideOk: any;                        // shared-data.js (one-shot ED arrears-override token)
   sbSyncContractorWorkOrder: (...args: any[]) => any; // shared-data.js (Contractor Portal projection upsert)
@@ -227,6 +232,8 @@ declare function auditEntry(entityId: string, action: string, detail?: any, user
 declare function showToast(msg: string, opts?: { type?: string; duration?: number; position?: string }): any;
 /** Per-role 2FA policy panel (housing-settings.js); called from the Users table render in shared-data.js. */
 declare function renderMfaPolicyPanel(): void;
+/** AI feature matrix gate (shared-config.js): is capability `cap` allowed in module `mod`? */
+declare function aiFeatureOn(cap: string, mod?: string): boolean;
 /** Login-time 2FA enforcement (shared-auth.js); called from auth-login.js after the role is resolved. */
 declare function _mfaEnforceEnrollment(token: string, role: string): Promise<{ ok: boolean; session?: any }>;
 

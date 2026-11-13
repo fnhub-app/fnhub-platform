@@ -732,7 +732,7 @@ function _prjRenderOverview() {
       if (d.status) bits.push('Status: ' + d.status);
       if (d.funding_source) bits.push('Funding: ' + d.funding_source);
       return { recordType:'capital project', recordName: nm, recordContext: bits.join('; ') };
-    });
+    }, 'projects');
   }
 }
 

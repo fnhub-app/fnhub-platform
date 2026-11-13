@@ -2214,7 +2214,7 @@
           auditTable:    'housing_audit_log',
           getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
           readOnly:      _ticReadOnlyRole(),
-          aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+          aiLetters:       (typeof aiFeatureOn === 'function' && aiFeatureOn('letters', 'applications')),
           aiRecipientName: _aName,
           aiAddress:       _aAddr,
           categories: [
@@ -2261,7 +2261,7 @@
         },
         readOnly: _ticReadOnlyRole(),
         // Write Letter with AI — grounded in the housing policy (ai-assistant.js).
-        aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+        aiLetters:       (typeof aiFeatureOn === 'function' && aiFeatureOn('letters', 'tenants')),
         aiRecipientName: (unit && (unit.assignedName || unit.assigned_name)) || '',
         aiAddress:       (unit ? ((unit.num||'') + ' ' + (unit.street||'')).trim() : ''),
         categories: [
@@ -2469,6 +2469,7 @@
     // "✦ Draft with AI" on the note box — turns a few rough words into a
     // concise, policy-grounded note for this tenant/applicant file.
     if (typeof window.aiAttachNoteButton === 'function') {
+      var _ticNoteIsApplicant = !!(_ticState.application && _ticState.application.id && !(_ticState.unit && _ticState.unit.id));
       window.aiAttachNoteButton('tic_note_input', function(){
         var t = _ticState.tenant || {}, a = _ticState.application || {}, u = _ticState.unit || {};
         var nm = t[TIC_C.full_name] || ((a.fn||'') + ' ' + (a.ln||'')).trim() || u.assignedName || '';
@@ -2476,7 +2477,7 @@
         if (u && (u.num || u.street)) bits.push('Unit: ' + ((u.num||'') + ' ' + (u.street||'')).trim());
         var stt = t[TIC_C.tenancy_status] || u.status; if (stt) bits.push('Status: ' + stt);
         return { recordType: (a && a.id && !(u && u.id)) ? 'applicant file' : 'tenant file', recordName: nm, recordContext: bits.join('; ') };
-      });
+      }, _ticNoteIsApplicant ? 'applications' : 'tenants');
     }
   }
 

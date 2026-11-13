@@ -853,6 +853,51 @@ window.moduleOn = function(mod) {
   catch(e) { return true; }
 };
 
+// ── AI feature matrix ─────────────────────────────────────────────────────────
+// Which AI *capabilities* are allowed in which *modules*, on top of the master
+// `ai_assistant` module switch. ED/super_user tune it in Settings -> Nation ->
+// "AI Features" (saved to housing_settings key 'ai_features'); everything
+// defaults ON, so a nation that never touches the matrix behaves exactly as
+// before. Shape stored:
+//   { chat: bool, <moduleKey>: { notes: bool, letters: bool, draft: bool } }
+// A missing key = ON (fail-open). `chat` is app-wide (the floating assistant +
+// draft-a-note surfaces that aren't bound to a single record module).
+window.AI_FEAT_CAPS = [
+  { key: 'notes',   label: 'Draft notes' },
+  { key: 'letters', label: 'Write letters / emails' },
+  { key: 'draft',   label: 'Draft decision notes' }
+];
+// Modules that host an AI surface, with which capabilities actually apply to
+// each (the matrix is deliberately sparse — letters only exist on applicant /
+// tenant files, decision-note drafting only on the application approval modal).
+window.AI_FEAT_MODULES = [
+  { key: 'applications', label: 'Applications',     caps: ['notes', 'letters', 'draft'] },
+  { key: 'tenants',      label: 'Tenants',          caps: ['notes', 'letters'] },
+  { key: 'inspections',  label: 'Inspections',      caps: ['notes'] },
+  { key: 'maintenance',  label: 'Maintenance / Renovations', caps: ['notes'] },
+  { key: 'contractors',  label: 'Contractors',      caps: ['notes'] },
+  { key: 'projects',     label: 'Capital Projects', caps: ['notes'] }
+];
+
+// aiFeatureOn(cap, mod) — the single gate every AI entry point calls.
+//  - cap 'chat' (mod omitted): the app-wide assistant chat + generic draft.
+//  - cap in a module: that capability within that module.
+// Master gate is moduleOn('ai_assistant'); anything not explicitly turned off
+// in _appSettings.ai_features is ON. Fails open (returns true) on any error so
+// a settings read problem never silently strips the buttons.
+window.aiFeatureOn = function(cap, mod) {
+  try {
+    if (!window.moduleOn || !window.moduleOn('ai_assistant')) return false;
+    var feat = window._appSettings && window._appSettings.ai_features;
+    if (typeof feat === 'string') { try { feat = JSON.parse(feat); } catch(e) { feat = null; } }
+    if (!feat) return true;
+    if (cap === 'chat' || !mod) return feat.chat !== false;
+    var m = feat[mod];
+    if (!m) return true;
+    return m[cap] !== false;
+  } catch(e) { return true; }
+};
+
 // Full-page "this module isn't part of your plan" notice, shown when a module
 // entry point is reached while the module is disabled (deep link / direct URL;
 // nav links for disabled modules are already hidden). Directs the user to the

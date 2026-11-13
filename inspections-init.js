@@ -269,8 +269,12 @@ function openInspectionModal(id) {
       + '</div>';
   }).join('');
 
-  // AI draft-notes available only when the assistant is loaded + module on.
-  var aiNotesOn = (typeof _aiCall === 'function') && (!window.CLFN_MODULES || window.CLFN_MODULES.isEnabled('ai_assistant'));
+  // AI draft-notes available only when the assistant is loaded + the "notes"
+  // capability is on for Inspections (Settings -> Nation -> AI Features).
+  var aiNotesOn = (typeof _aiCall === 'function')
+    && ((typeof window.aiFeatureOn === 'function')
+        ? window.aiFeatureOn('notes', 'inspections')
+        : (!window.CLFN_MODULES || window.CLFN_MODULES.isEnabled('ai_assistant')));
 
   // Approval gate: only roles granted 'approveInspection' (Settings > Approval
   // Authority) can approve / sign off the report (stamps approved_by/approved_at).

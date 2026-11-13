@@ -375,6 +375,112 @@ function saveMfaPolicyRole(sel) {
 }
 window.saveMfaPolicyRole = saveMfaPolicyRole;
 
+// ── AI Features matrix — ED/super_user only ─────────────────────────────────
+// Which AI capabilities (notes / letters / decision notes) are allowed in which
+// modules, plus the app-wide assistant chat. Stored in housing_settings key
+// 'ai_features'; everything defaults ON. The master switch is the `ai_assistant`
+// module (Settings -> Nation -> Modules) -- this panel is hidden when it's off.
+function _aiFeatIsEd() {
+  var r = (window._realRole || window.currentRole || '');
+  return r === 'ed' || r === 'super_user';
+}
+function _aiFeatCfg() {
+  var c = (window._appSettings && window._appSettings.ai_features) || {};
+  if (typeof c === 'string') { try { c = JSON.parse(c); } catch (e) { c = {}; } }
+  return c || {};
+}
+// Is a given (cap, mod) currently enabled? mod omitted / 'chat' = the app-wide chat.
+function _aiFeatIsOn(cap, mod) {
+  var c = _aiFeatCfg();
+  if (cap === 'chat' || !mod) return c.chat !== false;
+  var m = c[mod];
+  if (!m) return true;
+  return m[cap] !== false;
+}
+function renderAiFeaturesPanel() {
+  var el = document.getElementById('ai_features_panel_body');
+  if (!el) return;
+  if (!_aiFeatIsEd()) { el.innerHTML = ''; return; }                           // ED only
+  if (typeof moduleOn === 'function' && !moduleOn('ai_assistant')) {           // master switch off
+    el.innerHTML =
+      '<div class="card card-flush-gold" style="margin-top:20px;"><div class="modal-hdr"><div>'
+      + '<div class="lbl-yellow">&#10022; AI Features</div>'
+      + '<div class="txt-sm-meta">The AI Assistant module is turned off for your nation, so no AI buttons show anywhere. Turn it on under <strong>Modules</strong> above to configure where AI appears.</div>'
+      + '</div></div></div>';
+    return;
+  }
+  var caps = window.AI_FEAT_CAPS || [];
+  var mods = window.AI_FEAT_MODULES || [];
+  var cell = function (cap, mod, applicable) {
+    if (!applicable) return '<td style="text-align:center;color:var(--muted);">&mdash;</td>';
+    var on = _aiFeatIsOn(cap, mod);
+    return '<td style="text-align:center;">'
+      + '<input type="checkbox" ' + (on ? 'checked' : '') + ' data-aifeat-cap="' + cap + '" data-aifeat-mod="' + mod + '" onchange="saveAiFeature(this)" style="width:auto;transform:scale(1.25);cursor:pointer;">'
+      + '</td>';
+  };
+  var headCells = caps.map(function (c) {
+    return '<th style="text-align:center;font-size:12px;padding:8px 10px;">' + escapeHtml(c.label) + '</th>';
+  }).join('');
+  var bodyRows = mods.map(function (m) {
+    var cells = caps.map(function (c) {
+      return cell(c.key, m.key, m.caps.indexOf(c.key) !== -1);
+    }).join('');
+    return '<tr style="border-bottom:1px solid var(--border);">'
+      + '<td style="padding:9px 10px;" class="js-txt-bold">' + escapeHtml(m.label) + '</td>' + cells + '</tr>';
+  }).join('');
+  var chatOn = _aiFeatIsOn('chat');
+  el.innerHTML =
+    '<div class="card card-flush-gold" style="margin-top:20px;">'
+    + '<div class="modal-hdr"><div>'
+    +   '<div class="lbl-yellow">&#10022; AI Features</div>'
+    +   '<div class="txt-sm-meta">Turn the &#10022; AI helper buttons on or off per module. Unchecking a box hides that button everywhere it appears for that area. ED only.</div>'
+    + '</div></div>'
+    + '<div class="sec-pad">'
+    +   '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:6px;">'
+    +     '<input type="checkbox" ' + (chatOn ? 'checked' : '') + ' data-aifeat-cap="chat" onchange="saveAiFeature(this)" style="width:auto;margin:3px 0 0;transform:scale(1.2);flex:0 0 auto;">'
+    +     '<span style="font-size:13px;color:var(--text);">Show the floating <strong>&#10022; AI assistant</strong> (chat) in the app header</span>'
+    +   '</label>'
+    +   '<div class="txt-sm-meta" style="margin:0 0 18px 32px;">The assistant answers staff questions about applications, units, maintenance and policy. Draft-note and letter buttons are set per module below.</div>'
+    +   '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;min-width:420px;">'
+    +     '<thead><tr style="border-bottom:2px solid var(--border);"><th style="text-align:left;padding:8px 10px;font-size:12px;">Module</th>' + headCells + '</tr></thead>'
+    +     '<tbody>' + bodyRows + '</tbody>'
+    +   '</table></div>'
+    +   '<div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.5;"><strong>Draft notes</strong> = the &#10022; button on notes boxes. <strong>Write letters / emails</strong> = the AI letter writer on applicant &amp; tenant document tabs. <strong>Draft decision notes</strong> = the AI helper on the application approval screen. A &mdash; means that capability doesn&rsquo;t apply to that area. Changes save immediately.</div>'
+    + '</div></div>';
+}
+window.renderAiFeaturesPanel = renderAiFeaturesPanel;
+
+function saveAiFeature(input) {
+  if (!_aiFeatIsEd()) { showToast('Only the Executive Director can change AI features.', { type: 'error' }); renderAiFeaturesPanel(); return; }
+  if (!input) return;
+  var cap = input.getAttribute('data-aifeat-cap');
+  var mod = input.getAttribute('data-aifeat-mod');
+  var on  = !!input.checked;
+  if (!cap) return;
+  if (!window._appSettings) window._appSettings = {};
+  var cfg = Object.assign({}, _aiFeatCfg());
+  if (cap === 'chat') {
+    cfg.chat = on;
+  } else {
+    if (!mod) return;
+    var m = Object.assign({}, cfg[mod] || {});
+    m[cap] = on;
+    cfg[mod] = m;
+  }
+  window._appSettings.ai_features = cfg;
+  var where = cap === 'chat' ? 'assistant chat' : (cap + ' in ' + mod);
+  saveSettingWithDraftFallback('ai_features', cfg).then(function (ok) {
+    if (ok) {
+      showToast('✓ AI feature ' + (on ? 'enabled' : 'disabled'), { type: 'info' });
+      if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'ai_features_updated', 'AI ' + where + ' turned ' + (on ? 'on' : 'off'), (window._realRole || window.currentRole) || 'ed');
+      if (typeof _syncAIHeaderBtn === 'function') { try { _syncAIHeaderBtn(); } catch (e) {} }
+    } else {
+      showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+    }
+  });
+}
+window.saveAiFeature = saveAiFeature;
+
 // ── Support FAQ (Help Assistant) — ED/super_user only ───────────────────────
 // Plain-text Q&A the in-app Help Assistant uses for this nation. Stored in
 // housing_settings key 'support_faq'; the support-chat Edge Function reads it
@@ -556,7 +662,7 @@ function showSettingsSection(section) {
     t.classList.toggle('active', tabSec===section);
   });
   if(section==='sec_users'       && typeof renderHousingUserTable==='function') renderHousingUserTable();
-  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
+  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
   if(section==='sec_app_scoring') {
     if(APPROVAL_AUTHORITY.can('editScoreModel', window.currentRole) && typeof renderV2ScoringEditor === 'function') {
       renderV2ScoringEditor();
