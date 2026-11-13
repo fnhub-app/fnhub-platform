@@ -3,8 +3,8 @@
 > **The AI key is the platform owner's (Nation Pathways') key — never the
 > nation's.** AI usage is the platform's cost, not the nation's. Nation Pathways
 > owns the Anthropic account, supplies the key, and pays for all usage; the nation
-> has **no separate Anthropic bill**. The AI Staff Assistant add-on fee ($95/mo,
-> flat for every plan size) covers it, and the in-app help chat (`support-chat`)
+> has **no separate Anthropic bill**. The AI Staff Assistant add-on fee ($150/mo,
+> flat for every plan size, includes up to 3,000,000 AI tokens/month) covers it, and the in-app help chat (`support-chat`)
 > runs on **every** plan — including nations without the AI add-on — also at the
 > platform's cost. Each nation's usage is tracked per month (see "Usage tracking"
 > below) so the platform can see cost per nation and, optionally, apply a fair-use
