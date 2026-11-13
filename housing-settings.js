@@ -481,6 +481,75 @@ function saveAiFeature(input) {
 }
 window.saveAiFeature = saveAiFeature;
 
+// ── AI Usage Limit (fair-use monthly token cap) — ED/super_user only ─────────
+// Per-nation monthly AI token ceiling, enforced server-side by the ai-chat Edge
+// Function (housing_settings key 'ai_fair_use' = { monthly_tokens: N }). Blank =
+// the platform default (3,000,000/mo); 0 = no cap (unlimited). When a nation
+// passes its cap the assistant soft-stops for the rest of the month with a
+// friendly message, then resets.
+var AI_FAIR_USE_DEFAULT = 3000000;
+function _aiFairUseCfg() {
+  var c = (window._appSettings && window._appSettings.ai_fair_use) || {};
+  if (typeof c === 'string') { try { c = JSON.parse(c); } catch (e) { c = {}; } }
+  return c || {};
+}
+function renderAiFairUsePanel() {
+  var el = document.getElementById('ai_fair_use_panel_body');
+  if (!el) return;
+  if (!_aiFeatIsEd()) { el.innerHTML = ''; return; }                           // ED only
+  if (typeof moduleOn === 'function' && !moduleOn('ai_assistant')) { el.innerHTML = ''; return; }
+  var cfg = _aiFairUseCfg();
+  var raw = (cfg && cfg.monthly_tokens != null) ? cfg.monthly_tokens : '';
+  var curVal = (raw === '' || raw == null) ? '' : String(raw);
+  el.innerHTML =
+    '<div class="card card-flush-gold" style="margin-top:20px;">'
+    + '<div class="modal-hdr"><div>'
+    +   '<div class="lbl-yellow">&#9889; AI Usage Limit</div>'
+    +   '<div class="txt-sm-meta">A monthly ceiling on AI tokens for your nation. When it is reached the assistant pauses for the rest of the month, then resets. ED only.</div>'
+    + '</div></div>'
+    + '<div class="sec-pad">'
+    +   '<label style="font-size:12px;font-weight:700;display:block;margin-bottom:6px;">Monthly token cap</label>'
+    +   '<input id="ai_fair_use_tokens" type="text" inputmode="numeric" value="' + escapeHtml(curVal) + '" placeholder="' + AI_FAIR_USE_DEFAULT.toLocaleString() + ' (default)" style="width:220px;max-width:100%;box-sizing:border-box;padding:8px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--surface);font-family:DM Sans,sans-serif;">'
+    +   '<div style="margin-top:10px;display:flex;justify-content:flex-start;">'
+    +     '<button type="button" onclick="saveAiFairUse()" class="btn btn-primary">Save limit</button>'
+    +   '</div>'
+    +   '<div style="margin-top:12px;font-size:12px;color:var(--muted);line-height:1.6;">'
+    +     '<strong>Leave blank</strong> to use the platform default of <strong>' + AI_FAIR_USE_DEFAULT.toLocaleString() + ' tokens/month</strong> (about $10&ndash;30 CAD of AI). '
+    +     'Enter a number to set your own cap, or <strong>0</strong> for no cap (unlimited). '
+    +     'The AI Staff Assistant add-on includes this monthly allotment; staff see a clear notice if the limit is reached.'
+    +   '</div>'
+    + '</div></div>';
+}
+window.renderAiFairUsePanel = renderAiFairUsePanel;
+
+function saveAiFairUse() {
+  if (!_aiFeatIsEd()) { showToast('Only the Executive Director can change the AI usage limit.', { type: 'error' }); renderAiFairUsePanel(); return; }
+  var elRaw = (document.getElementById('ai_fair_use_tokens') || {}).value;
+  var txt = String(elRaw == null ? '' : elRaw).trim();
+  var cfg = Object.assign({}, _aiFairUseCfg());
+  var label;
+  if (txt === '') {
+    cfg.monthly_tokens = '';                       // blank -> server uses the default
+    label = 'default (' + AI_FAIR_USE_DEFAULT.toLocaleString() + '/mo)';
+  } else {
+    var n = parseInt(txt.replace(/[^0-9]/g, ''), 10);
+    if (isNaN(n) || n < 0) { showToast('Enter a whole number of tokens (or 0 for no cap, blank for the default).', { type: 'error' }); return; }
+    cfg.monthly_tokens = n;
+    label = (n === 0) ? 'no cap (unlimited)' : (n.toLocaleString() + '/mo');
+  }
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.ai_fair_use = cfg;
+  saveSettingWithDraftFallback('ai_fair_use', cfg).then(function (ok) {
+    if (ok) {
+      showToast('✓ AI usage limit saved: ' + label, { type: 'info' });
+      if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'ai_fair_use_updated', 'AI monthly usage limit set to ' + label, (window._realRole || window.currentRole) || 'ed');
+    } else {
+      showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+    }
+  });
+}
+window.saveAiFairUse = saveAiFairUse;
+
 // ── Support FAQ (Help Assistant) — ED/super_user only ───────────────────────
 // Plain-text Q&A the in-app Help Assistant uses for this nation. Stored in
 // housing_settings key 'support_faq'; the support-chat Edge Function reads it
@@ -662,7 +731,7 @@ function showSettingsSection(section) {
     t.classList.toggle('active', tabSec===section);
   });
   if(section==='sec_users'       && typeof renderHousingUserTable==='function') renderHousingUserTable();
-  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
+  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderAiFairUsePanel==='function') renderAiFairUsePanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
   if(section==='sec_app_scoring') {
     if(APPROVAL_AUTHORITY.can('editScoreModel', window.currentRole) && typeof renderV2ScoringEditor === 'function') {
       renderV2ScoringEditor();

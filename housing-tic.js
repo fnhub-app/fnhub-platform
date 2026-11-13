@@ -485,6 +485,34 @@
     return { days: days, stale: stale,
       badge: '<span class="std-pill" style="' + style + '" title="Newest note on this tenant file">🕑 Last note: ' + ago + '</span>' };
   }
+  // Populate the top ARREARS KPI tile from the live arrears engine (arrears.js),
+  // matching the arrears panel lower on the card. Resolves the tenant by name
+  // (works for applicant files that also have a tenant/ledger row) and shows the
+  // real balance; best-effort and async, so the strip renders instantly and this
+  // overlays the figure once the engine cache is ready.
+  function _ticSyncArrearsKpi(){
+    var el = _ticEl('tic_strip_arrears');
+    if(!el) return;
+    if(typeof window.arrearsTenantByName !== 'function' || typeof window.arrearsStateForTenant !== 'function') return;
+    var t = _ticState.tenant || {}, u = _ticState.unit || {}, a = _ticState.application || {};
+    var nm = t[TIC_C.full_name] || u.assignedName || [a.fn, a.ln].filter(Boolean).join(' ');
+    if(!nm) return;
+    var apply = function(){
+      try {
+        var tt = window.arrearsTenantByName(nm);
+        if(!tt || !tt.id) return;
+        var st = window.arrearsStateForTenant(tt.id);
+        if(!st) return;
+        var bal = Math.round((Number(st.balance) || 0) * 100) / 100;
+        el.classList.remove('tic-arrears-bad','tic-arrears-good');
+        if(bal > 0){ el.textContent = _ticFmtMoney(bal); el.classList.add('tic-arrears-bad'); }
+        else { el.textContent = _ticFmtMoney(0); el.classList.add('tic-arrears-good'); }
+      } catch(e){ /* best-effort */ }
+    };
+    if(typeof window.arrearsLoad === 'function') window.arrearsLoad().then(apply).catch(function(){});
+    else apply();
+  }
+
   function _ticRenderStrip(){
     var t = _ticState.tenant  || {};
     var l = _ticState.ledger  || {};
@@ -509,6 +537,11 @@
       arrearsEl.textContent = _ticFmtMoney(0);
       arrearsEl.classList.add('tic-arrears-good');
     }
+    // Overlay the LIVE arrears balance from the Policy s.12 engine (arrears.js) --
+    // the same source as the arrears panel lower on the card -- so the top KPI
+    // reflects the real rent-ledger balance, not just the (often empty)
+    // ledger.arrears_balance field. Async; no-ops where the engine isn't loaded.
+    _ticSyncArrearsKpi();
 
     _ticEl('tic_strip_movein').textContent = _ticFmtDate(t[TIC_C.move_in_date] || u.assignedDate);
     _ticEl('tic_strip_lease').textContent  = t[TIC_C.lease_type]    || '—';

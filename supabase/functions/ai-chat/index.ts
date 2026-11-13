@@ -481,17 +481,28 @@ async function writeAiAudit(opts: {
 // ({ monthly_tokens: N }); 0 / absent = OFF (no limit). Enforcement must run on
 // the nation side (that is where ai-chat and the usage history are), so it is
 // read + compared here with the service-role client.
+// Platform default monthly token ceiling applied when a nation has not set its
+// own. ~3M tokens/month is a generous safety cap that still sits well inside the
+// AI add-on's budget. A nation can raise it, lower it, or set 0 to disable the
+// cap entirely from Settings -> Nation -> AI Usage Limit.
+const DEFAULT_FAIR_USE_TOKENS = 3_000_000
 async function getFairUseLimit(admin: ReturnType<typeof createClient>): Promise<number> {
   try {
-    const { data } = await admin.from('housing_settings').select('value').eq('key', 'ai_fair_use').limit(1)
+    const { data, error } = await admin.from('housing_settings').select('value').eq('key', 'ai_fair_use').limit(1)
+    if (error) return 0   // read failed -> fail open, never block on an error
     if (data && data.length) {
       let v: Record<string, unknown> = data[0].value as Record<string, unknown>
       if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = {} } }
-      const n = Number(v && (v as Record<string, unknown>).monthly_tokens)
-      return isFinite(n) && n > 0 ? n : 0
+      const raw = v && (v as Record<string, unknown>).monthly_tokens
+      // An explicit value wins -- including 0, which disables the cap for that
+      // nation. Only an absent/blank setting falls through to the default.
+      if (raw !== undefined && raw !== null && raw !== '') {
+        const n = Number(raw)
+        return isFinite(n) && n > 0 ? n : 0
+      }
     }
-  } catch (_e) { /* fail open */ }
-  return 0
+    return DEFAULT_FAIR_USE_TOKENS   // no explicit setting -> platform default cap
+  } catch (_e) { return 0 }          // fail open
 }
 // Sum input+output AI tokens recorded this calendar month (UTC) from the audit
 // log. Paginated past the row cap; bounded for safety.
