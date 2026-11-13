@@ -480,12 +480,13 @@
       return '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;color:' + c + ';white-space:nowrap;">' + txt + '</span>';
     };
     var rows = [];
-    rows.push('<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
-      + '<strong style="font-size:14px;">Balance ' + (st.balance < 0 ? (_money(Math.abs(st.balance)) + ' DR') : (st.balance > 0 ? (_money(st.balance) + ' CR') : _money(0))) + '</strong>'
-      + (st.balance > 0 ? chip('ARREARS', 'bad') : chip('CURRENT', 'ok'))
-      + (st.hasApproved ? chip('Arrangement · ' + (st.compliant ? 'compliant' : st.consecutiveMissed + ' mo missed'), st.compliant ? 'ok' : 'bad') : '')
-      + (st.pendingEd ? chip('Arrangement pending ED', 'warn') : '')
-      + '</div>');
+    // The balance value + ARREARS/CURRENT status chip are intentionally omitted
+    // here: the balance is shown in the TIC's top ARREARS KPI tile, and this
+    // panel is just the payment-arrangement details. Keep only the arrangement
+    // chips (compliant / missed / pending ED).
+    var _arrChips = (st.hasApproved ? chip('Arrangement · ' + (st.compliant ? 'compliant' : st.consecutiveMissed + ' mo missed'), st.compliant ? 'ok' : 'bad') : '')
+      + (st.pendingEd ? chip('Arrangement pending ED', 'warn') : '');
+    if (_arrChips) rows.push('<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + _arrChips + '</div>');
     if (st.hasApproved) {
       rows.push('<div style="font-size:12px;color:var(--muted);margin-top:4px;">'
         + _money(st.arrangement.payment_amount) + '/month toward ' + _money(st.arrangement.total_owing)
