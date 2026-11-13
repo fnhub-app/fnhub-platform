@@ -2362,6 +2362,13 @@ function cicRenderNotes(contractorId){
     +   '<textarea id="cic_note_input" class="tic-textarea" placeholder="Type your note…"></textarea>'
     +   '<div class="tic-form-actions" style="margin-top:8px;"><button type="button" class="btn btn-primary" onclick="cicSaveNote()">Add Note</button></div>'
     + '</div>';
+  // "✦ Draft with AI" on the contractor note box.
+  if(typeof window.aiAttachNoteButton === 'function'){
+    window.aiAttachNoteButton('cic_note_input', function(){
+      var c = window._ctLastSaved || {};
+      return { recordType:'contractor file', recordName: c.name || '', recordContext: (c.trade ? 'Trade: ' + c.trade : '') };
+    });
+  }
   // Any legacy single-field ct.notes value is shown read-only so nothing is lost.
   var legacy = (window._ctLastSaved && window._ctLastSaved.notes) ? String(window._ctLastSaved.notes).trim() : '';
   function _render(notes){
