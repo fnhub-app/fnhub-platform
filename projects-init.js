@@ -722,6 +722,18 @@ function _prjRenderOverview() {
       '<div id="prj_linked_rfqs"></div>' +
     '</div>';
   _prjLoadLinkedRfqs();
+  // "✦ Draft with AI" on the project Description/notes box.
+  if (typeof window.aiAttachNoteButton === 'function') {
+    window.aiAttachNoteButton('prj_f_desc', function(){
+      var d = window._prjDraft || {};
+      var nm = ((d.project_number ? d.project_number + ' ' : '') + (d.name || '')).trim();
+      var bits = [];
+      if (d.type) bits.push('Type: ' + d.type);
+      if (d.status) bits.push('Status: ' + d.status);
+      if (d.funding_source) bits.push('Funding: ' + d.funding_source);
+      return { recordType:'capital project', recordName: nm, recordContext: bits.join('; ') };
+    });
+  }
 }
 
 function _prjFundingChanged(val) {

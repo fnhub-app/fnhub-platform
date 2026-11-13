@@ -611,6 +611,12 @@ function _ensureSowModal() {
   }
   modal.innerHTML = _buildSowModalHTML();
   window._sowModalMounted = true;
+  // "✦ Draft with AI" on the maintenance-request notes box.
+  if (typeof window.aiAttachNoteButton === 'function') {
+    window.aiAttachNoteButton('sow_notes', function(){
+      return { recordType: 'maintenance request (work order)', recordName: '', recordContext: '' };
+    });
+  }
 }
 
 // Total tabs in the SOW modal — keep in sync with _buildSowModalHTML and
