@@ -2367,7 +2367,7 @@ function cicRenderNotes(contractorId){
     window.aiAttachNoteButton('cic_note_input', function(){
       var c = window._ctLastSaved || {};
       return { recordType:'contractor file', recordName: c.name || '', recordContext: (c.trade ? 'Trade: ' + c.trade : '') };
-    });
+    }, 'contractors');
   }
   // Any legacy single-field ct.notes value is shown read-only so nothing is lost.
   var legacy = (window._ctLastSaved && window._ctLastSaved.notes) ? String(window._ctLastSaved.notes).trim() : '';
@@ -11062,7 +11062,7 @@ function udpRenderFilePreviews(unitId){
     auditTable:    'housing_audit_log',
     getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
     // Write Letter with AI — grounded in the housing policy (ai-assistant.js).
-    aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+    aiLetters:       (typeof aiFeatureOn === 'function' && aiFeatureOn('letters', 'tenants')),
     aiRecipientName: function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? (u.assignedName||'') : ''; },
     aiAddress:       function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? ((u.num||'')+' '+(u.street||'')).trim() : String(unitId); },
     categories:    _HOUSING_TENANT_DOC_CATEGORIES
@@ -11456,7 +11456,7 @@ async function scRenderNotes(app){
       if(a.status) bits.push('Status: ' + a.status);
       if(a.score != null) bits.push('Score: ' + a.score);
       return { recordType:'housing application', recordName:nm, recordContext:bits.join('; ') };
-    });
+    }, 'applications');
   }
 }
 window.scRenderNotes = scRenderNotes;
@@ -11506,7 +11506,7 @@ function openTenantFilesPanel(unitId){
         auditTable:    'housing_audit_log',
         getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
         // Write Letter with AI — grounded in the housing policy (ai-assistant.js).
-        aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+        aiLetters:       (typeof aiFeatureOn === 'function' && aiFeatureOn('letters', 'tenants')),
         aiRecipientName: function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? (u.assignedName||'') : ''; },
         aiAddress:       function(){ var u=(typeof housingUnits!=='undefined'&&housingUnits||[]).filter(function(x){return x&&x.id===unitId;})[0]; return u ? ((u.num||'')+' '+(u.street||'')).trim() : String(unitId); },
         categories:    _HOUSING_TENANT_DOC_CATEGORIES,

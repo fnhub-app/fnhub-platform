@@ -615,7 +615,7 @@ function _ensureSowModal() {
   if (typeof window.aiAttachNoteButton === 'function') {
     window.aiAttachNoteButton('sow_notes', function(){
       return { recordType: 'maintenance request (work order)', recordName: '', recordContext: '' };
-    });
+    }, 'maintenance');
   }
 }
 

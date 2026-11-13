@@ -1394,7 +1394,7 @@ function _initStep6DocLib() {
     // letter writer the Tenant Card uses (window.aiWriteLetter), aimed at the
     // applicant. The DocLibrary renders the button in its own header and files
     // the branded PDF back into this application's documents.
-    aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+    aiLetters:       (typeof aiFeatureOn === 'function' && aiFeatureOn('letters', 'applications')),
     aiRecipientName: function(){
       var fn = (document.getElementById('fn') || {}).value || '';
       var ln = (document.getElementById('ln') || {}).value || '';
@@ -3457,6 +3457,11 @@ function openApprovalModal(action, confirmLabel, requireNotes) {
   if(confirmEl) {
     confirmEl.className = 'btn ' + (action === 'declined' ? 'btn-dark' : action === APP_STATUS.ED_APPROVED || action === APP_STATUS.MGR_APPROVED || action === 'hm_approved' ? 'btn-green' : 'btn-primary');
   }
+
+  // "✦ Draft with AI" decision-note button — shown only when the AI "draft"
+  // capability is on for Applications (Settings -> Nation -> AI Features).
+  var aiBtn = document.getElementById('ai_draft_btn');
+  if(aiBtn) aiBtn.style.display = (typeof aiFeatureOn === 'function' && aiFeatureOn('draft', 'applications')) ? 'flex' : 'none';
 
   var modal = document.getElementById('approvalModal');
   if(modal) modal.style.display = 'flex';

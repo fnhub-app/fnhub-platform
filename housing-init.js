@@ -2164,7 +2164,12 @@ function renderAppHeader(){
 function _syncAIHeaderBtn() {
   var btn = document.getElementById('header_ai_btn');
   if (!btn) return;
-  var on = window.CLFN_MODULES && CLFN_MODULES.isEnabled('ai_assistant');
+  // The floating assistant chat is the app-wide 'chat' capability in the AI
+  // feature matrix (Settings -> Nation -> AI Features), itself under the
+  // ai_assistant module master switch.
+  var on = (typeof window.aiFeatureOn === 'function')
+    ? window.aiFeatureOn('chat')
+    : (window.CLFN_MODULES && CLFN_MODULES.isEnabled('ai_assistant'));
   btn.style.display = on ? 'flex' : 'none';
 }
 

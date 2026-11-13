@@ -948,10 +948,15 @@ window.aiDraftNoteInline = function(target, ctx) {
 };
 
 // Insert a "✦ Draft with AI" button right after a notes textarea and wire it.
-// Idempotent per target id; no-op when the AI module is off or the box is absent.
-window.aiAttachNoteButton = function(targetId, ctx) {
+// Idempotent per target id; no-op when the box is absent or the AI "notes"
+// capability is turned off for `moduleKey` (Settings -> Nation -> AI Features).
+// `moduleKey` names the matrix module (applications/tenants/inspections/
+// maintenance/contractors/projects); omit it only for a box with no module home.
+window.aiAttachNoteButton = function(targetId, ctx, moduleKey) {
   try {
-    if (window.CLFN_MODULES && !CLFN_MODULES.isEnabled('ai_assistant')) return;
+    if (typeof window.aiFeatureOn === 'function') {
+      if (!window.aiFeatureOn('notes', moduleKey)) return;
+    } else if (window.CLFN_MODULES && !CLFN_MODULES.isEnabled('ai_assistant')) { return; }
     var el = document.getElementById(targetId);
     if (!el) return;
     var id = targetId + '_ai_btn';
