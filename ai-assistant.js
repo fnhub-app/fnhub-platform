@@ -1014,7 +1014,14 @@ function _aiLetterResolveArrears(name) {
       var state = window.arrearsStateForTenant(t.id);
       if (!state) return null;
       var bal = Math.round((Number(state.balance) || 0) * 100) / 100;
-      return { balance: bal, formatted: fmt(bal), hasArrangement: !!state.hasApproved };
+      // This nation's rent ledger stores money OWED as a NEGATIVE balance (the
+      // same convention the TIC arrears display uses: negative = DR/owed). The
+      // letter server treats arrearsAmount > 0 as "owes", so convert the stored
+      // balance into an amount-owed figure: owed = -bal (a negative stored
+      // balance becomes a positive amount owed; a positive credit becomes
+      // negative, i.e. not owed -> good standing).
+      var owed = -bal;
+      return { balance: owed, formatted: fmt(Math.abs(owed)), hasArrangement: !!state.hasApproved };
     } catch(e){ return null; }
   };
   if (typeof window.arrearsLoad === 'function') {
@@ -1052,6 +1059,7 @@ window._aiLetterGenerate = function() {
       details:    details.trim(),
       sender:     ((window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || '') + ' Housing Department',
       policyText: _aiPolicyText(),
+      portalUrl:  (((window.NATION_CONFIG && NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/portal.html'),
       arrearsAmount:    (arr && arr.balance != null) ? arr.balance : '',
       arrearsFormatted: (arr && arr.formatted) ? arr.formatted : '',
       hasArrangement:   !!(arr && arr.hasArrangement),

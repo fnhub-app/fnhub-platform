@@ -1045,6 +1045,13 @@ ARREARS - MANDATORY (this resident currently owes rent): You MUST state clearly 
 ACCOUNT STANDING: this resident's rent account is currently in GOOD STANDING (no arrears). Do NOT state an arrears amount and do NOT ask them to set up a payment arrangement.
 `
     }
+    // Community portal: invite the resident to keep their info current. Only
+    // included when the client supplies the portal URL.
+    const portalUrl = String(ctx?.portalUrl || '').trim()
+    const portalBlock = portalUrl
+      ? `
+COMMUNITY PORTAL: End with a short, friendly closing paragraph inviting the resident to visit the community portal at ` + portalUrl + ` to review and keep their information up to date (contact details, household members, and documents). Write the URL as a plain link exactly as given - do not alter it.`
+      : ''
     const header = `You are a professional housing administrator writing on behalf of the ` + nation + ` Housing Department.
 
 Recipient: ` + recipient + (address ? ' (' + address + ')' : '') + `
@@ -1054,6 +1061,7 @@ What it needs to say / the situation: ` + (details || '(use the purpose above)')
 
 ` + policyBlock + `
 ` + arrearsBlock + `
+` + portalBlock + `
 ALWAYS reference the relevant housing policy section, in plain language, wherever it applies to the subject of this ` + format + ` (do not quote clauses that are not in the policy text above, and do not invent policy).
 `
     if (format === 'email') {
