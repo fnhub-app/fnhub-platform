@@ -2174,7 +2174,54 @@
     if(!p) return;
     var unit = _ticState.unit;
     if(!unit || !unit.id){
-      p.innerHTML = '<div class="tic-empty">No unit linked — document library unavailable.</div>';
+      // Applicant TIC with no unit yet: fall back to the linked APPLICATION's
+      // document library so staff can still see app docs and use "Write Letter
+      // with AI" (grounded in housing policy) addressed to the applicant.
+      var _app = _ticState.application;
+      var _appId = _app && _app.id;
+      if(!_appId){
+        p.innerHTML = '<div class="tic-empty">No unit linked — document library unavailable.</div>';
+        return;
+      }
+      var _akey = 'app:' + _appId;
+      if(_ticDocLibKey === _akey && _ticDocLib){ return; }
+      p.innerHTML = '<div id="tic_doclib_mount"></div>';
+      var _amount = _ticEl('tic_doclib_mount');
+      if(!window.DocLibrary){ p.innerHTML = '<div class="tic-pending-inline">Document library is not loaded on this page.</div>'; return; }
+      var _aName = ((_app.fn || '') + ' ' + (_app.ln || '')).trim()
+        || ((_ticState.tenant && (_ticState.tenant.full_name || _ticState.tenant.assigned_name)) || '');
+      var _aAddr = _app.assignedAddress || _app.street || '';
+      try {
+        _ticDocLib = window.DocLibrary.create(_amount, {
+          entityType:    'application',
+          entityId:      _appId,
+          pathPrefix:    'applications/' + _appId,
+          supabaseUrl:   SUPABASE_URL,
+          supabaseAnon:  (typeof SUPABASE_ANON !== 'undefined') ? SUPABASE_ANON : '',
+          storageBucket: (typeof STORAGE_BUCKET !== 'undefined') ? STORAGE_BUCKET : 'housing-files',
+          getAuthToken:  function(){ return (window.HOUSING_HEADERS && window.HOUSING_HEADERS['Authorization'] || '').replace('Bearer ',''); },
+          auditTable:    'housing_audit_log',
+          getActor:      function(){ return (window.HOUSING_SESSION && window.HOUSING_SESSION.email) || window.currentRole || 'staff'; },
+          readOnly:      _ticReadOnlyRole(),
+          aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+          aiRecipientName: _aName,
+          aiAddress:       _aAddr,
+          categories: [
+            { key:'id',          label:'ID',              icon:'🧾' },
+            { key:'income',      label:'Income / Pay',    icon:'💰' },
+            { key:'reference',   label:'Reference',       icon:'📝' },
+            { key:'housing_hist',label:'Housing History', icon:'🏠' },
+            { key:'medical',     label:'Medical',         icon:'⚕️'  },
+            { key:'migrated',    label:'Migrated',        icon:'📂' },
+            { key:'image',       label:'Image',           icon:'🖼️' },
+            { key:'other',       label:'Other',           icon:'📎' }
+          ]
+        });
+        _ticDocLibKey = _akey;
+      } catch(e){
+        console.warn('[tic] application doclib failed:', e);
+        p.innerHTML = '<div class="tic-empty">Could not load the document library.</div>';
+      }
       return;
     }
     var key = String(unit.id);
