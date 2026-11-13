@@ -506,9 +506,9 @@
         var bal = Math.round((Number(st.balance) || 0) * 100) / 100;
         el.classList.remove('tic-arrears-bad','tic-arrears-good');
         // Show the REAL ledger balance, matching the arrears panel lower on the
-        // card (a negative balance is a credit, not $0). Red when they owe,
-        // green otherwise.
-        el.textContent = _ticFmtMoney(bal);
+        // card. A negative balance is a credit -> format as "$X CR" (not a bare
+        // minus). Red when they owe, green otherwise.
+        el.textContent = (bal < 0) ? (_ticFmtMoney(Math.abs(bal)) + ' CR') : _ticFmtMoney(bal);
         el.classList.add(bal > 0 ? 'tic-arrears-bad' : 'tic-arrears-good');
       } catch(e){ /* best-effort */ }
     };
