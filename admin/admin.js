@@ -87,7 +87,7 @@
     { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
     { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Large', p: 9500, q: 1 },
     // Add-ons (flat, every plan size)
-    { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 95, q: 1 },
+    { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 150, q: 1 },
     { g: 'Add-on', d: 'Text-message notifications (per month, incl. 500 texts)', p: 25, q: 1 },
     // Additional services (hourly; written authorization required)
     { g: 'Additional services (hourly, written authorization)', d: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)', p: 150, q: 1, hours: true },
@@ -137,7 +137,7 @@
       + 'One-time setup: Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions, '
       + 'Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions, '
       + 'Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions; setup may be paid up front or spread across the first year\'s invoices at no extra cost. '
-      + 'Add-ons: AI Staff Assistant ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month (every plan size); text-message notifications ' + feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')) + '/month including 500 texts, then $0.05 per additional text. '
+      + 'Add-ons: AI Staff Assistant ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month (every plan size; includes up to 3,000,000 AI tokens/month); text-message notifications ' + feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')) + '/month including 500 texts, then $0.05 per additional text. '
       + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
       + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
       + 'Prices are locked for the signed term (no discounts). Only recurring subscription fees earn Commission (Section 7.3).';

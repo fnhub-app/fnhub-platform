@@ -481,17 +481,28 @@ async function writeAiAudit(opts: {
 // ({ monthly_tokens: N }); 0 / absent = OFF (no limit). Enforcement must run on
 // the nation side (that is where ai-chat and the usage history are), so it is
 // read + compared here with the service-role client.
+// Platform default monthly token ceiling applied when a nation has not set its
+// own. ~3M tokens/month is a generous safety cap that still sits well inside the
+// AI add-on's budget. A nation can raise it, lower it, or set 0 to disable the
+// cap entirely from Settings -> Nation -> AI Usage Limit.
+const DEFAULT_FAIR_USE_TOKENS = 3_000_000
 async function getFairUseLimit(admin: ReturnType<typeof createClient>): Promise<number> {
   try {
-    const { data } = await admin.from('housing_settings').select('value').eq('key', 'ai_fair_use').limit(1)
+    const { data, error } = await admin.from('housing_settings').select('value').eq('key', 'ai_fair_use').limit(1)
+    if (error) return 0   // read failed -> fail open, never block on an error
     if (data && data.length) {
       let v: Record<string, unknown> = data[0].value as Record<string, unknown>
       if (typeof v === 'string') { try { v = JSON.parse(v) } catch { v = {} } }
-      const n = Number(v && (v as Record<string, unknown>).monthly_tokens)
-      return isFinite(n) && n > 0 ? n : 0
+      const raw = v && (v as Record<string, unknown>).monthly_tokens
+      // An explicit value wins -- including 0, which disables the cap for that
+      // nation. Only an absent/blank setting falls through to the default.
+      if (raw !== undefined && raw !== null && raw !== '') {
+        const n = Number(raw)
+        return isFinite(n) && n > 0 ? n : 0
+      }
     }
-  } catch (_e) { /* fail open */ }
-  return 0
+    return DEFAULT_FAIR_USE_TOKENS   // no explicit setting -> platform default cap
+  } catch (_e) { return 0 }          // fail open
 }
 // Sum input+output AI tokens recorded this calendar month (UTC) from the audit
 // log. Paginated past the row cap; bounded for safety.
@@ -1015,6 +1026,25 @@ Write 2-4 sentences. Be professional, clear, and compassionate. Reference specif
       ? ('HOUSING POLICY (the authoritative policy of this nation - ground the letter in it and, where it applies, cite the relevant part in plain language; do NOT invent policy that is not stated here):\n"""\n' + policy + '\n"""')
       : 'No housing policy text was provided for this nation. Write a correct, professional letter but do NOT cite specific policy clauses you cannot verify.'
     const format = (ctx?.format === 'email') ? 'email' : 'letter'
+    // Arrears: the client resolves the resident's live rent-ledger balance (via
+    // the housing arrears engine) and passes it in. NEVER invent a figure -- only
+    // state an amount when one was actually provided. arrearsAmount > 0 = owes;
+    // <= 0 = in good standing; absent/'' = not a tenant / unknown (say nothing).
+    const arrRaw = ctx?.arrearsAmount
+    const arrNum = (arrRaw === '' || arrRaw == null) ? null : Number(arrRaw)
+    const arrHas = arrNum != null && isFinite(arrNum)
+    const arrFmt = (ctx?.arrearsFormatted && String(ctx.arrearsFormatted)) || (arrHas ? ('$' + (arrNum as number).toFixed(2)) : '')
+    const hasArrangement = !!ctx?.hasArrangement
+    let arrearsBlock = ''
+    if (arrHas && (arrNum as number) > 0) {
+      arrearsBlock = `
+ARREARS - MANDATORY (this resident currently owes rent): You MUST state clearly in this ` + format + ` that their rent account is in arrears in the amount of ` + arrFmt + `, and you MUST ask them to contact the housing office to set up a payment arrangement. ` + (hasArrangement ? `They already have an approved repayment arrangement - acknowledge it and remind them to keep it current rather than starting a new one. ` : ``) + `Ground this in the nation's arrears / collections / repayment-arrangement policy (name the relevant section in plain language). Keep the tone ` + (hasArrangement ? `supportive` : `firm but respectful`) + ` and set out their options. Use ONLY the amount ` + arrFmt + ` - never state any other dollar figure.
+`
+    } else if (arrHas && (arrNum as number) <= 0) {
+      arrearsBlock = `
+ACCOUNT STANDING: this resident's rent account is currently in GOOD STANDING (no arrears). Do NOT state an arrears amount and do NOT ask them to set up a payment arrangement.
+`
+    }
     const header = `You are a professional housing administrator writing on behalf of the ` + nation + ` Housing Department.
 
 Recipient: ` + recipient + (address ? ' (' + address + ')' : '') + `
@@ -1023,6 +1053,8 @@ Tone: ` + tone + `
 What it needs to say / the situation: ` + (details || '(use the purpose above)') + `
 
 ` + policyBlock + `
+` + arrearsBlock + `
+ALWAYS reference the relevant housing policy section, in plain language, wherever it applies to the subject of this ` + format + ` (do not quote clauses that are not in the policy text above, and do not invent policy).
 `
     if (format === 'email') {
       return header + `

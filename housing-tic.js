@@ -485,6 +485,34 @@
     return { days: days, stale: stale,
       badge: '<span class="std-pill" style="' + style + '" title="Newest note on this tenant file">🕑 Last note: ' + ago + '</span>' };
   }
+  // Populate the top ARREARS KPI tile from the live arrears engine (arrears.js),
+  // matching the arrears panel lower on the card. Resolves the tenant by name
+  // (works for applicant files that also have a tenant/ledger row) and shows the
+  // real balance; best-effort and async, so the strip renders instantly and this
+  // overlays the figure once the engine cache is ready.
+  function _ticSyncArrearsKpi(){
+    var el = _ticEl('tic_strip_arrears');
+    if(!el) return;
+    if(typeof window.arrearsTenantByName !== 'function' || typeof window.arrearsStateForTenant !== 'function') return;
+    var t = _ticState.tenant || {}, u = _ticState.unit || {}, a = _ticState.application || {};
+    var nm = t[TIC_C.full_name] || u.assignedName || [a.fn, a.ln].filter(Boolean).join(' ');
+    if(!nm) return;
+    var apply = function(){
+      try {
+        var tt = window.arrearsTenantByName(nm);
+        if(!tt || !tt.id) return;
+        var st = window.arrearsStateForTenant(tt.id);
+        if(!st) return;
+        var bal = Math.round((Number(st.balance) || 0) * 100) / 100;
+        el.classList.remove('tic-arrears-bad','tic-arrears-good');
+        if(bal > 0){ el.textContent = _ticFmtMoney(bal); el.classList.add('tic-arrears-bad'); }
+        else { el.textContent = _ticFmtMoney(0); el.classList.add('tic-arrears-good'); }
+      } catch(e){ /* best-effort */ }
+    };
+    if(typeof window.arrearsLoad === 'function') window.arrearsLoad().then(apply).catch(function(){});
+    else apply();
+  }
+
   function _ticRenderStrip(){
     var t = _ticState.tenant  || {};
     var l = _ticState.ledger  || {};
@@ -509,6 +537,11 @@
       arrearsEl.textContent = _ticFmtMoney(0);
       arrearsEl.classList.add('tic-arrears-good');
     }
+    // Overlay the LIVE arrears balance from the Policy s.12 engine (arrears.js) --
+    // the same source as the arrears panel lower on the card -- so the top KPI
+    // reflects the real rent-ledger balance, not just the (often empty)
+    // ledger.arrears_balance field. Async; no-ops where the engine isn't loaded.
+    _ticSyncArrearsKpi();
 
     _ticEl('tic_strip_movein').textContent = _ticFmtDate(t[TIC_C.move_in_date] || u.assignedDate);
     _ticEl('tic_strip_lease').textContent  = t[TIC_C.lease_type]    || '—';
@@ -2819,6 +2852,12 @@
     if(activeHidden && typeof _ticSwitchTab === 'function') _ticSwitchTab('overview');
   }
   function _ticFindApplicationForTenant(){
+    // 0) the application already resolved onto this TIC. Applicant files have NO
+    //    tenant row or unit, so the name-derived fallbacks below would find
+    //    nothing (and, during a rename, the tenant name has already been
+    //    corrected, so a name match would miss the still-old-named app). Trust
+    //    the application the card is already showing.
+    if(_ticState.application && _ticState.application.id) return Promise.resolve(_ticState.application.id);
     // 1) unit.assignedTo — set by the assign-unit flow and reflects the most
     //    recent application linked to this unit. Checked before tenant.application_id
     //    so that existing-tenant file updates (where the tenants row still carries
@@ -2962,6 +3001,11 @@
       // 3) linked application fn/ln (in-memory + persisted via the normal save).
       var appId = await _ticFindApplicationForTenant();
       if(appId){
+        // Keep the TIC's own copy of the application in sync so the hero + any
+        // app-derived view reflect the corrected name without a reload.
+        if(_ticState.application && _ticState.application.id === appId){
+          _ticState.application.fn = fn; _ticState.application.ln = ln;
+        }
         var appMem = (typeof applications !== 'undefined' && applications || []).find(function(a){ return a && a.id === appId; });
         if(appMem){
           appMem.fn = fn; appMem.ln = ln;
