@@ -1389,7 +1389,24 @@ function _initStep6DocLib() {
       { key:'image',       label:'Image',           icon:'\uD83D\uDDBC\uFE0F' },
       { key:'other',       label:'Other',           icon:'\uD83D\uDCCE' }
     ],
-    maxSizeMB:     25
+    maxSizeMB:     25,
+    // "Write Letter with AI" on the Documents tab \u2014 the same policy-grounded
+    // letter writer the Tenant Card uses (window.aiWriteLetter), aimed at the
+    // applicant. The DocLibrary renders the button in its own header and files
+    // the branded PDF back into this application's documents.
+    aiLetters:       (typeof moduleOn === 'function' && moduleOn('ai_assistant')),
+    aiRecipientName: function(){
+      var fn = (document.getElementById('fn') || {}).value || '';
+      var ln = (document.getElementById('ln') || {}).value || '';
+      var nm = (fn + ' ' + ln).trim();
+      if (nm) return nm;
+      try { var a = (window.applications || []).find(function(x){ return x.id === appId; }); if (a) return ((a.fn || '') + ' ' + (a.ln || '')).trim(); } catch(e){}
+      return '';
+    },
+    aiAddress: function(){
+      try { var a = (window.applications || []).find(function(x){ return x.id === appId; }); if (a) return a.assignedAddress || a.street || ''; } catch(e){}
+      return '';
+    }
   });
 }
 
@@ -1531,56 +1548,6 @@ async function scLoadDocs(app) {
   if (assignBtn) {
     assignBtn.onclick = null;
     assignBtn.addEventListener('click', function(){ scShowAssignDocs(app); });
-  }
-
-  // Write Letter with AI — the SAME policy-grounded letter writer the Tenant
-  // Card uses (window.aiWriteLetter in ai-assistant.js), here aimed at the
-  // applicant. The scorecard DocLibrary is review-only (uploads happen in the
-  // wizard), so we drive the writer directly and file the generated PDF into
-  // this app's folder; the scorecard loader's "direct uploads" source then
-  // surfaces it in Application Documents. Management + ai_assistant module only.
-  var aiLetterBtn = document.getElementById('sc_ai_letter_btn');
-  if (aiLetterBtn) {
-    var _letterOk = typeof window.aiWriteLetter === 'function'
-      && (typeof moduleOn !== 'function' || moduleOn('ai_assistant'))
-      && ROLE.isManagement(window.currentRole);
-    aiLetterBtn.style.display = _letterOk ? '' : 'none';
-    aiLetterBtn.onclick = null;
-    if (_letterOk) {
-      aiLetterBtn.addEventListener('click', function(){
-        var recName = ((app.fn || '') + ' ' + (app.ln || '')).trim();
-        var recAddr = app.assignedAddress || app.street || '';
-        window.aiWriteLetter({
-          entityType:    'application',
-          entityId:      appId,
-          recipientName: recName,
-          address:       recAddr,
-          // File the drafted PDF into the application's document folder, then
-          // refresh the scorecard list so it shows without reopening.
-          saveFile: function(blob, filename, category){
-            var fname = filename || ('Letter-' + new Date().toISOString().slice(0,10) + '.pdf');
-            var path  = 'applications/' + appId + '/' + Date.now() + '_' + fname;
-            var done  = function(){ try { if (window._scDocsLib && typeof window._scDocsLib.refresh === 'function') window._scDocsLib.refresh(); } catch(e){} };
-            try {
-              if (typeof window.uploadFileResilient === 'function') {
-                window.uploadFileResilient(path, blob, {
-                  entityType: 'application', entityId: String(appId), filename: fname,
-                  size: blob.size, contentType: 'application/pdf'
-                }).then(done).catch(function(e){ console.warn('[sc letter] file failed:', e); });
-              } else {
-                Promise.resolve(window.sbUploadFile(path, blob)).then(function(){
-                  if (typeof window.sbSaveFileMeta === 'function') {
-                    return window.sbSaveFileMeta('application', String(appId), path, fname, blob.size, 'application/pdf');
-                  }
-                }).then(done).catch(function(e){ console.warn('[sc letter] file failed:', e); });
-              }
-            } catch(e){
-              if (typeof showToast === 'function') showToast('Could not file the letter: ' + (e && e.message || e), {type:'error'});
-            }
-          }
-        });
-      });
-    }
   }
 }
 
