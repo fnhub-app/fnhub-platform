@@ -41,7 +41,7 @@ window._printThemeStyles = function() {
 // Logo data URL is applied to all <img class="hlogo"> + #login-logo elements.
 // ═══════════════════════════════════════════════════════════════════════
 window.THEME_KEYS = ['yellow','action','dark','text','bg','surface','border','muted','sans','serif','radius'];
-// Platform default palette = Home Land Homes brand (Clay). A nation overrides
+// Platform default palette = Nation Pathways brand (Clay). A nation overrides
 // the accent (and the header ink derives from it) via the admin portal; a
 // nation with no override inherits this palette. Keep in sync with :root in
 // shared.css.

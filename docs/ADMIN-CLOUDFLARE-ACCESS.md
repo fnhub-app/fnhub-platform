@@ -24,8 +24,8 @@ Zero Trust covers up to 50 users at no cost.
 ## Step 1 — Turn on Zero Trust (one-time)
 
 1. Cloudflare dashboard → **Zero Trust** (left sidebar).
-2. If it's your first time, pick a **team name** (e.g. `homelandhomes`). Your
-   team login domain becomes `homelandhomes.cloudflareaccess.com`.
+2. If it's your first time, pick a **team name** (e.g. `nationpathways`). Your
+   team login domain becomes `nationpathways.cloudflareaccess.com`.
 3. Choose the **Free** plan when prompted (no card needed for ≤50 users).
 
 ## Step 2 — Pick a login method
