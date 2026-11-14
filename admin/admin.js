@@ -2477,7 +2477,7 @@
       if (msvcEl && !msvcEl.value && cfg.messaging_service_sid) msvcEl.value = cfg.messaging_service_sid;
       el.innerHTML = 'Already on the project &mdash; '
         + mark('provider', names.SMS_PROVIDER) + ' &middot; '
-        + mark('Account SID', names.TWILIO_ACCOUNT_SID) + ' &middot; '
+        + mark('Account SID', names.TWILIO_ACCOUNT_SID, cfg.sid_last4 ? 'AC...' + cfg.sid_last4 : '') + ' &middot; '
         + mark('Auth Token', names.TWILIO_AUTH_TOKEN) + ' &middot; '
         + mark('sender', senderOk, cfg.from || cfg.messaging_service_sid) + '. '
         + (allOk

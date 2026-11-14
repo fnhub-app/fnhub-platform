@@ -187,11 +187,20 @@ serve(async (req) => {
   // only ever returns digests. Credentials (SID/token) are never recorded.
   const smsFrom = entries.find((e) => e.name === 'SMS_FROM')
   const smsMsvc = entries.find((e) => e.name === 'TWILIO_MESSAGING_SERVICE_SID')
-  if (smsFrom || smsMsvc) {
+  const smsSid  = entries.find((e) => e.name === 'TWILIO_ACCOUNT_SID')
+  if (smsFrom || smsMsvc || smsSid) {
     try {
-      const marker: Record<string, unknown> = { provider: 'twilio', updated_at: new Date().toISOString(), updated_by: caller }
+      // Merge over the existing marker so applying just the SID (or just the
+      // number) never wipes the other recorded fields.
+      let prev: Record<string, unknown> = {}
+      try {
+        const { data: prows, error: perr } = await admin.from('nations').select('sms').eq('subdomain', sub).limit(1)
+        if (!perr && prows && prows.length && prows[0].sms && typeof prows[0].sms === 'object') prev = prows[0].sms
+      } catch (_e) { /* ignore */ }
+      const marker: Record<string, unknown> = { ...prev, provider: 'twilio', updated_at: new Date().toISOString(), updated_by: caller }
       if (smsFrom) marker.from = smsFrom.value
       if (smsMsvc) marker.messaging_service_sid = smsMsvc.value
+      if (smsSid)  marker.sid_last4 = smsSid.value.slice(-4)   // masked marker only, never the SID
       await admin.from('nations').update({ sms: marker }).eq('subdomain', sub)
     } catch (_e) { /* column may not exist yet -- marker is best-effort */ }
   }
