@@ -10,6 +10,12 @@
 // module's enabled state is changed. Licensing (nations.modules_licensed) stays
 // on the control-plane registry and is edited separately in the panel.
 //
+// Also carries the per-nation AI usage limit (actions 'get_ai_limit' /
+// 'set_ai_limit'): reads/writes the nation's housing_settings key 'ai_fair_use'
+// ({ monthly_tokens: N }), which the nation's ai-chat function enforces. The
+// platform pays the Anthropic bill, so the cap is a control-plane setting; the
+// in-app Settings card is read-only (housing-settings.js).
+//
 // Deploy on the fnhub-platform project (verifies the caller against
 // super_admins itself, so --no-verify-jwt is fine):
 //   supabase functions deploy set-nation-module --project-ref <platform-ref>
@@ -138,5 +144,44 @@ serve(async (req) => {
     return json({ ok: true, subdomain: sub, module: mod, enabled: newEnabled })
   }
 
-  return json({ error: 'bad_action', detail: "action must be 'get' or 'set'" }, 400)
+  // -- AI usage limit (housing_settings key 'ai_fair_use') --------------------
+  if (action === 'get_ai_limit') {
+    const res = await runSql(ref,
+      "select coalesce((select value from public.housing_settings where key='ai_fair_use'), '{}'::jsonb) as cfg")
+    if (!res.ok) return json({ error: 'mgmt_query_failed', detail: res.detail }, 502)
+    let cfg = (res.rows[0] && res.rows[0].cfg) || {}
+    if (typeof cfg === 'string') { try { cfg = JSON.parse(cfg) } catch (_e) { cfg = {} } }
+    return json({ ok: true, subdomain: sub, ai_fair_use: cfg })
+  }
+
+  if (action === 'set_ai_limit') {
+    // monthly_tokens semantics (matches ai-chat's getFairUseLimit): blank/'' ->
+    // platform default; 0 -> no cap (unlimited); N > 0 -> that cap.
+    const rawV = body.monthly_tokens
+    let lit: string, label: string
+    if (rawV === '' || rawV === null || rawV === undefined) { lit = '""'; label = 'platform default' }
+    else {
+      const n = parseInt(String(rawV).replace(/[^0-9]/g, ''), 10)
+      if (!Number.isFinite(n) || n < 0 || n > 1e12) return json({ error: 'bad_monthly_tokens' }, 400)
+      lit = String(n); label = n === 0 ? 'no cap (unlimited)' : n.toLocaleString('en-CA') + '/mo'
+    }
+    // lit is strictly '""' or digits (validated above), safe to interpolate.
+    const valJson = '{"monthly_tokens": ' + lit + '}'
+    const sql =
+      "insert into public.housing_settings (key, value) values ('ai_fair_use', '" + valJson + "'::jsonb) " +
+      "on conflict (key) do update set value = coalesce(public.housing_settings.value, '{}'::jsonb) || '" + valJson + "'::jsonb " +
+      "returning value"
+    const res = await runSql(ref, sql)
+    if (!res.ok) return json({ error: 'mgmt_set_failed', detail: res.detail }, 502)
+    try {
+      await admin.from('platform_audit').insert({
+        action: 'nation_ai_limit_set',
+        subdomain: sub,
+        detail: 'AI monthly token cap set to ' + label + ' by ' + caller,
+      })
+    } catch (_e) { /* audit best-effort */ }
+    return json({ ok: true, subdomain: sub, ai_fair_use: (res.rows[0] && res.rows[0].value) || {} })
+  }
+
+  return json({ error: 'bad_action', detail: "action must be 'get', 'set', 'get_ai_limit' or 'set_ai_limit'" }, 400)
 })

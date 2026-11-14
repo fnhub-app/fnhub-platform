@@ -154,7 +154,7 @@
     phone: '705-960-5076',
     email: 'hello@nationpathways.com'
   };
-  // Past-due interest rate per the agreement (Section 7.5): 1% per month.
+  // Past-due interest rate per the agreement (Section 7.4): 1% per month.
   var INTEREST_MONTHLY = 0.01;
   // YYYY-MM-DD for today + n days (browser Date is available here).
   function _dPlus(n){ return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
@@ -938,6 +938,7 @@
     renderSupportKey(n.subdomain);
     loadNicSummary(n.subdomain);
     renderNationModuleEnablement(n.subdomain, n.id, n.supabase_url, n.modules_licensed);
+    renderNationAiLimit(n.subdomain, n.supabase_url);
     if (typeof window.renderNationSeller === 'function') window.renderNationSeller(n);   // Overview -> Sold by (reseller.js)
   };
 
@@ -1036,6 +1037,12 @@
       +   '<p class="sub" style="margin:4px 0 0;font-size:11px;">Requires the nation to have a Supabase project, and the <code>ai-chat</code> function deployed to it (see the provisioning checklist). Leave blank and Save does nothing.</p>'
       +   '<div class="msg" id="cn-ai-msg"></div>'
       +   '<button class="btn sm" type="button" data-act="ai-key-save" data-sub="' + esc(n.subdomain) + '">Save &amp; apply to project</button>'
+      + '</div>'
+      + '<div class="card"><h3>AI usage limit (monthly token cap)</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Monthly ceiling on this nation\'s AI tokens, enforced server-side by the nation\'s <code>ai-chat</code> function. When the cap is reached the assistant pauses for the rest of the month, then resets. <b>Nation Pathways pays the Anthropic bill, so this is set here</b> &mdash; the nation\'s own Settings card shows it read-only. Platform default: <b>3,000,000 tokens/month</b> (about $10&ndash;30 CAD). Blank = default; <b>0</b> = no cap (unlimited).</p>'
+      +   '<div id="cn-ai-limit-body"><div class="empty">Loading current limit&hellip;</div></div>'
+      +   '<div class="msg" id="cn-ai-limit-msg"></div>'
+      +   '<button class="btn sm" type="button" data-act="ai-limit-save" data-sub="' + esc(n.subdomain) + '">Save limit</button>'
       + '</div>'
       + '<div class="card"><h3>Support login key</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Per-nation signing key for the <b>Enter</b> (support login) feature. The <b>private</b> key stays here on the control plane; you copy the <b>public</b> key into this nation\'s <code>SUPPORT_LOGIN_PUBKEY</code> Edge Function secret. A stolen public key cannot forge a login. Once generated the key is <b>locked</b> &mdash; rotating it invalidates the nation\'s current public key until you re-copy it.</p>'
@@ -1750,11 +1757,9 @@
     'The Nation will pay the subscription fees, one-time setup fee, and any selected add-on fees stated in Schedule A (the "Fees"). All amounts are in Canadian dollars and exclusive of applicable taxes, if any.',
     '###7.2 Billing',
     'Unless Schedule A states otherwise, subscription Fees are invoiced annually in advance, with billing aligned to the April-March fiscal year where the Nation requests it. Monthly billing, where selected, is charged at the monthly rate stated in Schedule A. Invoices are payable within thirty (30) days.',
-    '###7.3 Setup discount',
-    "Where the Nation signs a one-year term and pays the first year's subscription in advance, the one-time setup fee is reduced by fifty percent (50%), as reflected in Schedule A.",
-    '###7.4 Fee changes',
+    '###7.3 Fee changes',
     'Fees are fixed for the Initial Term. The Provider may adjust Fees effective at a Renewal Term by giving at least sixty (60) days\' written notice before renewal; the Nation may decline renewal in accordance with Section 8.',
-    '###7.5 Late amounts',
+    '###7.4 Late amounts',
     'Amounts more than thirty (30) days overdue may bear interest at 1% per month (12.68% annually). The Provider will not suspend the Nation\'s access for non-payment without first giving at least thirty (30) days\' written notice specifically referencing suspension, and will not delete Customer Data as a consequence of non-payment except in accordance with Section 4.6 following termination.',
     '##8. Term and Termination',
     '###8.1 Term',
@@ -2499,6 +2504,56 @@
     });
   };
 
+  // AI usage limit (Config card): reads/writes the nation's housing_settings
+  // key 'ai_fair_use' via set-nation-module's get_ai_limit / set_ai_limit
+  // actions. Blank = platform default (3,000,000/mo); 0 = no cap (unlimited).
+  window.renderNationAiLimit = async function(sub, supabaseUrl){
+    var body = document.getElementById('cn-ai-limit-body');
+    if(!body) return;
+    if(!supabaseUrl){ body.innerHTML = '<div class="empty">This nation has no Supabase project yet. Provision it first.</div>'; return; }
+    var cfg = {};
+    try {
+      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: sub, action: 'get_ai_limit' })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if(!r.ok){ body.innerHTML = '<div class="empty">Could not load the limit: ' + esc(d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + esc(String(d.detail).slice(0,160)) : '') + '</div>'; return; }
+      cfg = (d && d.ai_fair_use) || {};
+    } catch(e){ body.innerHTML = '<div class="empty">Network error loading the limit.</div>'; return; }
+    var raw = (cfg && cfg.monthly_tokens != null) ? cfg.monthly_tokens : '';
+    var cur = (raw === '' || raw == null) ? '' : String(raw);
+    var state = (cur === '') ? 'platform default (3,000,000/mo)' : (Number(cur) === 0 ? 'no cap (unlimited)' : Number(cur).toLocaleString('en-CA') + ' tokens/mo');
+    body.innerHTML =
+        '<div style="font-size:12px;margin-bottom:8px;">Current: <b>' + esc(state) + '</b></div>'
+      + '<label>Monthly token cap</label><input id="cn-ai-limit" type="text" inputmode="numeric" placeholder="3,000,000 (default)" value="' + esc(cur) + '"/>';
+  };
+
+  window.saveNationAiLimit = async function(sub){
+    var txt = String(((document.getElementById('cn-ai-limit') || {}).value) || '').trim();
+    var val;
+    if (txt === '') val = '';
+    else {
+      var n = parseInt(txt.replace(/[^0-9]/g, ''), 10);
+      if (isNaN(n) || n < 0){ setMsg('cn-ai-limit-msg', 'Enter a whole number of tokens (0 = unlimited, blank = platform default).'); return; }
+      val = n;
+    }
+    setMsg('cn-ai-limit-msg', 'Saving...', 'ok');
+    try {
+      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: sub, action: 'set_ai_limit', monthly_tokens: val })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if(!r.ok){ setMsg('cn-ai-limit-msg', 'Failed: ' + (d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + String(d.detail).slice(0,160) : '')); return; }
+      var label = (val === '') ? 'platform default (3,000,000/mo)' : (val === 0 ? 'no cap (unlimited)' : val.toLocaleString('en-CA') + '/mo');
+      setMsg('cn-ai-limit-msg', 'Saved: ' + label + '. Enforced on the nation\'s next AI request; its Settings card shows it read-only.', 'ok');
+      await audit('nation_ai_limit_set', sub, label);
+    } catch(e){ setMsg('cn-ai-limit-msg', 'Network error: ' + String(e).slice(0,120)); }
+  };
+
   // ON  -> license (registry modules_licensed[key]=true) + enable (nation).
   // OFF -> disable (nation); licensing is intentionally left as-is.
   window.toggleNationModule = async function(sub, nationId, module, on, cb){
@@ -2715,7 +2770,7 @@
     window._nicCarryIds = owing.map(function(x){ return x.id; });
     setMsg('cn-inv-msg', 'Carried ' + _money(total) + ' forward as a line. It will be billed when you create this invoice.', 'ok');
   };
-  // Generate a past-due interest charge (Section 7.5: 1%/month) and add it as a
+  // Generate a past-due interest charge (Section 7.4: 1%/month) and add it as a
   // line item. Interest is assessed as of the payment date if recorded, else
   // today. Applies only when more than 30 days past the due date. Idempotent:
   // any prior interest line is recomputed, not stacked.
@@ -2727,7 +2782,7 @@
     var asOf = inv.paid_date || _dPlus(0);
     var days = Math.floor((Date.parse(asOf) - Date.parse(inv.due_date)) / 86400000);
     if (days <= 30){
-      dlgAlert('As of ' + asOf + ', this invoice is ' + (days < 0 ? Math.abs(days) + ' day(s) before the due date' : days + ' day(s) past due') + '. Per Section 7.5, interest applies only to amounts more than 30 days overdue.', { title: 'No interest added' });
+      dlgAlert('As of ' + asOf + ', this invoice is ' + (days < 0 ? Math.abs(days) + ' day(s) before the due date' : days + ' day(s) past due') + '. Per Section 7.4, interest applies only to amounts more than 30 days overdue.', { title: 'No interest added' });
       return;
     }
     // Base = existing non-interest lines; interest accrues on the pre-tax,
@@ -2745,7 +2800,7 @@
     var interest = Math.round(principal * INTEREST_MONTHLY * months * 100) / 100;
     if (interest <= 0){ dlgAlert('Computed interest is $0.00 — nothing to add.'); return; }
     if (!(await dlgConfirm('Invoice ' + inv.number + ' is ' + days + ' days past the due date (' + inv.due_date + '), assessed as of ' + asOf + '.\n\nInterest at 1%/month (12.68%/yr) on ' + _money(principal) + ' = ' + _money(interest) + '.\n\nAdd this as a line item?', { title: 'Add past-due interest', okText: 'Add interest' }))) return;
-    var line = { description: 'Interest — ' + days + ' days past due at 1%/month (Section 7.5), assessed ' + asOf, qty: 1, unit_price: interest, interest: true };
+    var line = { description: 'Interest — ' + days + ' days past due at 1%/month (Section 7.4), assessed ' + asOf, qty: 1, unit_price: interest, interest: true };
     var lines = base.concat([line]);
     var subtotal = Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
     var taxRate = Number(inv.tax_rate) || 0;
@@ -3112,6 +3167,7 @@
       case 'nic-tab':       window.nicTab(el.getAttribute('data-tab') || ''); break;
       case 'note-add':      window.addNationNote(el.getAttribute('data-sub') || ''); break;
       case 'ai-key-save':   window.saveNationAiKey(el.getAttribute('data-sub') || ''); break;
+      case 'ai-limit-save': window.saveNationAiLimit(el.getAttribute('data-sub') || ''); break;
       case 'email-apply':   window.applyNationEmailSecrets(el.getAttribute('data-sub') || ''); break;
       case 'sms-apply':     window.applyNationSmsSecrets(el.getAttribute('data-sub') || ''); break;
       case 'copy-text':     window.copyTextBtn(el); break;
