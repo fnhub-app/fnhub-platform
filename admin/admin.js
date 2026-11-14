@@ -225,7 +225,7 @@
   function showLogin(prefill){
     app.innerHTML =
       '<h1>Platform admin sign-in</h1>'
-      + '<p class="sub">Restricted to FN Hub platform administrators. Enter your email and we\'ll send a secure sign-in link.</p>'
+      + '<p class="sub">Restricted to Nation Pathways platform administrators. Enter your email and we\'ll send a secure sign-in link.</p>'
       + '<label>Email address</label>'
       + '<input id="em" type="email" inputmode="email" autocomplete="email" placeholder="you@example.com" value="' + esc(prefill||'') + '"/>'
       + '<div class="msg" id="lmsg"></div>'
@@ -838,7 +838,7 @@
       + '</div>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
       +   '<div><label>Staff email domain</label><input id="an-domain" placeholder="listuguj.ca"/></div>'
-      +   '<div><label>Primary color</label><input id="an-color" placeholder="#f8e41a"/></div>'
+      +   '<div><label>Primary color</label><input id="an-color" placeholder="#2e5e4e"/></div>'
       + '</div>'
       + '<label>Licensed modules</label><div style="margin-top:2px;">' + modChecks + '</div>'
       + '<div class="msg" id="an-msg"></div>'
@@ -974,7 +974,7 @@
       +     '<div><label>Short code</label><input id="cn-short" value="' + esc(n.short) + '"/></div>'
       +   '</div>'
       +   '<div style="' + g2 + '">'
-      +     '<div><label>Primary color</label><input id="cn-color" placeholder="#f8e41a" value="' + esc(n.primary_color || '') + '"/></div>'
+      +     '<div><label>Primary color</label><input id="cn-color" placeholder="#2e5e4e" value="' + esc(n.primary_color || '') + '"/></div>'
       +     '<div><label>Staff email domain</label><input id="cn-domain" placeholder="nation.ca" value="' + esc(n.email_domain || '') + '"/></div>'
       +   '</div>'
       +   '<label>Housing email</label><input id="cn-housing" placeholder="housing@nation.ca" value="' + esc(n.housing_email || '') + '"/>'
@@ -1064,7 +1064,7 @@
       +   '<select id="cn-em-provider">' + provOpt('graph','Microsoft 365 (Graph) — sends from the nation mailbox') + provOpt('resend','Resend — sends from a verified domain') + provOpt('sendgrid','SendGrid — sends from a verified domain') + '</select>'
       +   '<div style="' + g2 + '">'
       +     '<div><label>From address</label><input id="cn-em-from" placeholder="demo@fnhub.app" value="' + esc(nEmail.from || '') + '"/></div>'
-      +     '<div><label>From name</label><input id="cn-em-from-name" placeholder="FN Hub Demo Housing" value="' + esc(nEmail.from_name || '') + '"/></div>'
+      +     '<div><label>From name</label><input id="cn-em-from-name" placeholder="Demo Nation Housing" value="' + esc(nEmail.from_name || '') + '"/></div>'
       +   '</div>'
       +   '<label>Reply-to (a monitored mailbox)</label><input id="cn-em-reply" placeholder="housing@nation.ca" value="' + esc(nEmail.reply_to || '') + '"/>'
       +   '<p class="sub" style="margin:6px 0 0;font-size:11px;">Resend/SendGrid: the From address must be on a domain verified with that provider (SPF + DKIM), or mail lands in spam. Graph ignores From here &mdash; it sends from the mailbox in the nation project\'s <code>GRAPH_FROM_USER</code> secret. Saved with the <b>Save changes</b> button below; takes effect on the nation\'s next page load.</p>'
@@ -1147,7 +1147,7 @@
       +   '<div id="cn-invoices"><div class="empty">Loading invoices...</div></div>'
       +   '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">'
       +     '<div style="font-weight:700;font-size:13px;margin-bottom:8px;">New invoice</div>'
-      +     '<div id="cn-inv-carry" style="display:none;background:var(--accent-light);border:1px solid #fde68a;border-radius:9px;padding:9px 11px;margin-bottom:10px;"></div>'
+      +     '<div id="cn-inv-carry" style="display:none;background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin-bottom:10px;"></div>'
       +     '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">'
       +       '<div style="flex:1;min-width:230px;"><label>Fee schedule</label>' + _feeScheduleSelectHtml() + '</div>'
       +       '<button class="btn sm" type="button" data-act="inv-add-catalog">Add selected &darr;</button>'
@@ -1344,7 +1344,7 @@
       + '<div class="card"><h3>Nation</h3>'
       +   '<div style="' + g2 + '"><div><label>Subdomain</label><input id="pv-sub" placeholder="listuguj" value="' + v(n && n.subdomain) + '"' + (n ? ' readonly style="background:var(--bg);color:var(--muted);"' : '') + '/></div><div><label>Short code</label><input id="pv-short" placeholder="LMG" value="' + v(n && n.short) + '"/></div></div>'
       +   '<label>Display name</label><input id="pv-name" placeholder="Listuguj Mi\'gmaq Government" value="' + v(n && n.display_name) + '"/>'
-      +   '<div style="' + g2 + '"><div><label>Staff email domain</label><input id="pv-domain" placeholder="listuguj.ca" value="' + v(n && n.email_domain) + '"/></div><div><label>Primary color</label><input id="pv-color" placeholder="#f8e41a" value="' + v(n && n.primary_color) + '"/></div></div>'
+      +   '<div style="' + g2 + '"><div><label>Staff email domain</label><input id="pv-domain" placeholder="listuguj.ca" value="' + v(n && n.email_domain) + '"/></div><div><label>Primary color</label><input id="pv-color" placeholder="#2e5e4e" value="' + v(n && n.primary_color) + '"/></div></div>'
       +   '<label>Housing email</label><input id="pv-housing" placeholder="housing@listuguj.ca" value="' + v(n && n.housing_email) + '"/>'
       +   '<label style="margin-top:10px;">Licensed modules</label><div>' + modChecks + '</div>'
       + '</div>'
@@ -2065,7 +2065,7 @@
     }
     return doc;
   }
-  // The FN Hub app icon as a PNG data URL for contract headers (cached).
+  // The Nation Pathways app icon as a PNG data URL for contract headers (cached).
   var _logoData = null;
   async function loadLogoDataUrl(){
     if (_logoData !== null) return _logoData;
@@ -3003,7 +3003,24 @@
         + (row.last_invoice ? ' &middot; last ' + esc(row.last_invoice) + ' on ' + esc(row.last_run_date || '') : '')
         + '</div>'
       : '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">No schedule yet &mdash; fill this in and Save to start automated billing.</div>';
-    host.innerHTML = statusLine
+    // Stale-price guard: a saved schedule keeps billing its stored amount even
+    // after the fee schedule changes, so flag any drift between the saved
+    // unit_amount and the CURRENT price of the selected (non-custom) line.
+    var staleWarn = '';
+    if (row && b.description){
+      for (var fi = 0; fi < FEE_SCHEDULE.length; fi++){
+        var fit = FEE_SCHEDULE[fi];
+        if (fit.d === b.description && !fit.custom){
+          if (Math.abs((Number(b.unit_amount) || 0) - fit.p) > 0.005){
+            staleWarn = '<div style="background:#fffbeb;border:1px solid #fde68a;color:#7a5c00;border-radius:9px;padding:9px 11px;margin-bottom:10px;font-size:12px;line-height:1.5;">'
+              + '&#9888;&#65039; The saved amount (<b>' + _money(Number(b.unit_amount) || 0) + '</b>) no longer matches the current fee schedule price for this line (<b>' + _money(fit.p) + '</b>). '
+              + 'Re-select the line item (which refills the amount) or adjust the amount, then Save &mdash; until then, generated invoices keep billing the saved amount.</div>';
+          }
+          break;
+        }
+      }
+    }
+    host.innerHTML = statusLine + staleWarn
       + '<div style="' + g2 + '">'
       +   '<div><label>Cadence</label><select id="cn-bill-cadence">' + cadOpts + '</select></div>'
       +   '<div><label>Next invoice date</label><input id="cn-bill-next" type="date" value="' + esc(b.next_run_date || '') + '"/></div>'
