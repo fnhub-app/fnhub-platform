@@ -88,8 +88,10 @@ const SUB_BANDS = [
   { max: 500, annual: 13200, monthly: 1210 },
   { max: 600, annual: 15120, monthly: 1385 },
 ]
-const ADDON_AI_MONTHLY  = 150   // AI Staff Assistant (per month)
+const ADDON_AI_MONTHLY  = 150   // AI Staff Assistant (per month, incl. 3,000,000 tokens)
 const ADDON_SMS_MONTHLY = 25    // Text-message notifications (per month, incl. 500 texts)
+const AI_OVER_PER_M     = 15    // AI tokens beyond the included 3M, per additional 1,000,000
+const AI_INCLUDED       = 3_000_000
 function bandFor(homes: number): { label: string; annual: number; monthly: number } | null {
   for (let i = 0; i < SUB_BANDS.length; i++) {
     if (homes <= SUB_BANDS[i].max) {
@@ -141,7 +143,7 @@ serve(async (req) => {
         const dyn: any[] = []
         let usage: any = null
         try {
-          const { data: urows } = await admin.from('nation_usage').select('units_count, sms_month_count, reported_at').eq('subdomain', sub).limit(1)
+          const { data: urows } = await admin.from('nation_usage').select('units_count, sms_month_count, ai_input_tokens, ai_output_tokens, reported_at').eq('subdomain', sub).limit(1)
           usage = (urows && urows[0]) || null
         } catch (_e) { usage = null }
         const homes = usage && usage.units_count != null ? Number(usage.units_count) : null
@@ -166,7 +168,18 @@ serve(async (req) => {
         // Add-ons bill ONLY on an explicit licensed=true (absent keys mean
         // "default licensed" for module gating, which must never auto-bill).
         const lic = (nation && (nation as any).modules_licensed) || {}
-        if (lic.ai_assistant === true)      dyn.push({ description: 'AI Staff Assistant (per month)',                          qty: mult, unit_price: ADDON_AI_MONTHLY })
+        if (lic.ai_assistant === true) {
+          dyn.push({ description: 'AI Staff Assistant (per month)', qty: mult, unit_price: ADDON_AI_MONTHLY })
+          // Published overage: AI_OVER_PER_M per additional 1,000,000 tokens
+          // beyond the included 3,000,000. Only accrues when the nation's cap
+          // was raised (the fair-use cap pauses the assistant at the limit).
+          // Monthly cadence only, same reasoning as the SMS overage.
+          const aiTok = ((usage && Number(usage.ai_input_tokens)) || 0) + ((usage && Number(usage.ai_output_tokens)) || 0)
+          if (monthly && aiTok > AI_INCLUDED) {
+            const overM = Math.round(((aiTok - AI_INCLUDED) / 1_000_000) * 100) / 100
+            dyn.push({ description: 'AI tokens beyond the included 3,000,000 (' + aiTok.toLocaleString('en-CA') + ' used on record' + (asOf ? ' as of ' + asOf : '') + '; per additional 1,000,000)', qty: overM, unit_price: AI_OVER_PER_M })
+          }
+        }
         if (lic.sms_notifications === true) {
           dyn.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: ADDON_SMS_MONTHLY })
           // Published overage: $0.05 per text beyond the included 500/month.

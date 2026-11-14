@@ -95,6 +95,7 @@
     // Custom / at cost (free-entry amount)
     { g: 'Custom / at cost (enter amount)', d: 'Subscription — 600+ / Tribal Council (custom per quote)', p: 0, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'Text-message notifications — additional texts beyond 500 (per text)', p: 0.05, q: 1, custom: true },
+    { g: 'Custom / at cost (enter amount)', d: 'AI tokens beyond the included 3,000,000 (per additional 1,000,000)', p: 15, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
   );
 
@@ -137,7 +138,7 @@
       + 'One-time setup: Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions, '
       + 'Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions, '
       + 'Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions; setup may be paid up front or spread across the first year\'s invoices at no extra cost. '
-      + 'Add-ons: AI Staff Assistant ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month (every plan size; includes up to 3,000,000 AI tokens/month); text-message notifications ' + feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')) + '/month including 500 texts, then $0.05 per additional text. '
+      + 'Add-ons: AI Staff Assistant ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month (every plan size; includes up to 3,000,000 AI tokens/month, then ' + feeFmt(feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)')) + ' per additional 1,000,000 where a higher limit is approved); text-message notifications ' + feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')) + '/month including 500 texts, then $0.05 per additional text. '
       + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
       + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
       + 'Prices are locked for the signed term (no discounts). Only recurring subscription fees earn Commission (Section 7.3).';
@@ -1919,7 +1920,7 @@
     '###Billing and options',
     'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (billed monthly; annual/12 + 10% as shown above)',
     'Setup (one-time): {{FEE_SETUP}}. Setup may be paid up front or spread across the first year\'s invoices at no extra cost.',
-    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}/month (the same flat fee for every plan size; includes AI usage, with no separate AI-vendor bill to the Nation). Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
+    'Optional add-on: [ ] AI Staff Assistant - {{FEE_AI}}/month (the same flat fee for every plan size; includes up to 3,000,000 AI tokens per month, with no separate AI-vendor bill to the Nation; beyond the included allotment the assistant pauses for the month unless the Nation requests a higher limit, in which case additional usage is billed at {{FEE_AI_OVER}} per additional 1,000,000 tokens). Acknowledgement and approval: by selecting this add-on, the Nation acknowledges and approves that each AI query (the staff question and the minimum related housing records needed to answer it) is processed in the United States by the Provider\'s AI subprocessor (Anthropic) as described in Schedule D; that this data is read-only for the query, is not retained for model training, and that the feature may be disabled by the Nation at any time in Platform settings. This selection is the Nation\'s written approval under Section 3.1. Initials: ____________',
     'Optional add-on: [ ] Text-message notifications - {{FEE_SMS}}/month including 500 text messages, then $0.05 per additional text.',
     'Email delivery method (Schedule D): [ ] Nation\'s own Microsoft 365 tenant (requires the Nation\'s Microsoft administrator to grant application consent during setup)     [ ] Provider-managed transactional email service (Resend or SendGrid - United States; see Schedule D)',
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
@@ -2244,6 +2245,7 @@
       }).join('\n'); })
       .replace(/\{\{FEE_SETUP\}\}/g, function(){ return 'Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions; Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions; Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions'; })
       .replace(/\{\{FEE_AI\}\}/g, function(){ return feeFmt(feePrice('AI Staff Assistant (per month)')); })
+      .replace(/\{\{FEE_AI_OVER\}\}/g, function(){ return feeFmt(feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)')); })
       .replace(/\{\{FEE_SMS\}\}/g, function(){ return feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')); })
       .replace(/\{\{FEE_HOURLY\}\}/g, function(){ return feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')); })
       .replace(/\{\{FEE_TRAVEL_HR\}\}/g, function(){ return feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')); })
@@ -3258,7 +3260,17 @@
     // Add-ons bill ONLY on explicit licensed=true (absent = default-licensed
     // for module GATING, which must never auto-bill).
     var lic = (n && n.modules_licensed) || {};
-    if (lic.ai_assistant === true)      lines.push({ description: 'AI Staff Assistant (per month)',                          qty: mult, unit_price: feePrice('AI Staff Assistant (per month)') || 150 });
+    var aiTok = ((usage && Number(usage.ai_input_tokens)) || 0) + ((usage && Number(usage.ai_output_tokens)) || 0);
+    if (lic.ai_assistant === true){
+      lines.push({ description: 'AI Staff Assistant (per month)', qty: mult, unit_price: feePrice('AI Staff Assistant (per month)') || 150 });
+      // Published overage: $15 per additional 1,000,000 tokens beyond the
+      // included 3,000,000 -- only accrues when the nation's cap was raised
+      // (the fair-use cap pauses the assistant at the limit). Monthly only.
+      if (monthly && aiTok > 3000000){
+        var overM = Math.round(((aiTok - 3000000) / 1000000) * 100) / 100;
+        lines.push({ description: 'AI tokens beyond the included 3,000,000 (' + aiTok.toLocaleString('en-CA') + ' used on record' + (asOf ? ' as of ' + asOf : '') + '; per additional 1,000,000)', qty: overM, unit_price: feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)') || 15 });
+      }
+    }
     var smsN = (usage && usage.sms_month_count != null) ? Number(usage.sms_month_count) : null;
     if (lic.sms_notifications === true){
       lines.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: feePrice('Text-message notifications (per month, incl. 500 texts)') || 25 });
@@ -3268,8 +3280,7 @@
         lines.push({ description: 'Text messages beyond the included 500 (' + smsN + ' sent on record' + (asOf ? ' as of ' + asOf : '') + ')', qty: smsN - 500, unit_price: 0.05 });
       }
     }
-    return { lines: lines, homes: homes, asOf: asOf, banded: !!band, lic: lic, smsN: smsN,
-      aiTokens: ((usage && Number(usage.ai_input_tokens)) || 0) + ((usage && Number(usage.ai_output_tokens)) || 0) };
+    return { lines: lines, homes: homes, asOf: asOf, banded: !!band, lic: lic, smsN: smsN, aiTokens: aiTok };
   }
   function _dynLinesSubtotal(lines){
     return Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
@@ -3296,7 +3307,7 @@
       + (dyn.lic && dyn.lic.ai_assistant !== true ? '<div style="color:var(--muted);margin-top:2px;">AI Staff Assistant: not explicitly licensed &mdash; not billed. License it in the <b>Modules</b> card to add ' + _money(feePrice('AI Staff Assistant (per month)') || 150) + '/mo.</div>' : '')
       + (dyn.lic && dyn.lic.sms_notifications !== true ? '<div style="color:var(--muted);margin-top:2px;">SMS / Text Notifications: not explicitly licensed &mdash; not billed. License it in the <b>Modules</b> card to add ' + _money(feePrice('Text-message notifications (per month, incl. 500 texts)') || 25) + '/mo (incl. 500 texts; $0.05 each after).</div>' : '')
       + (dyn.smsN != null ? '<div style="color:var(--muted);margin-top:2px;">Texts sent this month on record: <b>' + dyn.smsN + '</b> (500 included' + (dyn.smsN > 500 ? '; overage billed above' : '') + ').</div>' : '')
-      + (dyn.aiTokens > 0 ? '<div style="color:var(--muted);margin-top:2px;">AI usage this month on record: <b>' + dyn.aiTokens.toLocaleString('en-CA') + '</b> tokens of the 3,000,000 included (no overage fee &mdash; the assistant pauses at the cap).</div>' : '');
+      + (dyn.aiTokens > 0 ? '<div style="color:var(--muted);margin-top:2px;">AI usage this month on record: <b>' + dyn.aiTokens.toLocaleString('en-CA') + '</b> tokens of the 3,000,000 included' + (dyn.aiTokens > 3000000 ? ' &mdash; overage billed above at ' + _money(feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)') || 15) + '/1M.' : ' (beyond that: ' + _money(feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)') || 15) + ' per additional 1,000,000 where the cap is raised; otherwise the assistant pauses).') + '</div>' : '');
   }
   window._billDynToggle = function(sub){
     var on = !!(document.getElementById('cn-bill-dynamic') || {}).checked;
