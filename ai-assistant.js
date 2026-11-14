@@ -919,7 +919,7 @@ window.aiDraftNoteInline = function(target, ctx) {
   var resolve = function(v){ return (typeof v === 'function') ? v() : v; };
   var btn = ctx.btnId ? document.getElementById(ctx.btnId) : null;
   var prev = btn ? btn.innerHTML : '';
-  if (btn) { btn.disabled = true; btn.innerHTML = 'Drafting…'; }
+  if (btn) { btn.disabled = true; btn.innerHTML = '…'; }   // compact so it fits the in-box icon button
   _aiCall({
     type: 'note',
     message: rough,
@@ -961,13 +961,28 @@ window.aiAttachNoteButton = function(targetId, ctx, moduleKey) {
     if (!el) return;
     var id = targetId + '_ai_btn';
     if (document.getElementById(id)) return;
+    if (!el.parentNode) return;
+    // Put the AI trigger INSIDE the note box: wrap the textarea in a relative
+    // container and float a small sparkle icon in its bottom-right corner,
+    // instead of a full "Draft with AI" button below it. Idempotent -- reuse an
+    // existing wrap so re-renders don't double-wrap.
+    var wrap = (el.parentNode.classList && el.parentNode.classList.contains('ai-note-wrap')) ? el.parentNode : null;
+    if (!wrap) {
+      wrap = document.createElement('div');
+      wrap.className = 'ai-note-wrap';
+      wrap.style.cssText = 'position:relative;display:block;';
+      el.parentNode.insertBefore(wrap, el);
+      wrap.appendChild(el);
+    }
+    try { el.style.paddingRight = '42px'; } catch(_p){}   // keep typed text clear of the icon
     var b = document.createElement('button');
-    b.type = 'button'; b.id = id; b.className = 'btn btn-ghost btn-sm';
-    b.style.cssText = 'margin-top:6px;';
-    b.innerHTML = '<span style="color:var(--yellow);">✦</span> Draft with AI';
+    b.type = 'button'; b.id = id;
+    b.innerHTML = '✦';
     b.title = 'Draft this note with AI from what you typed (or a short prompt)';
+    b.setAttribute('aria-label', 'Draft this note with AI');
+    b.style.cssText = 'position:absolute;bottom:8px;right:8px;width:30px;height:30px;padding:0;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--yellow);font-size:16px;line-height:1;cursor:pointer;display:flex;align-items:center;justify-content:center;z-index:2;';
     b.onclick = function(){ var c = (typeof ctx === 'function') ? ctx() : (ctx || {}); c.btnId = id; window.aiDraftNoteInline(el, c); };
-    if (el.parentNode) el.parentNode.insertBefore(b, el.nextSibling);
+    wrap.appendChild(b);
   } catch(e) { /* never break the host render */ }
 };
 
