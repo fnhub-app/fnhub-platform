@@ -141,7 +141,7 @@ serve(async (req) => {
         const dyn: any[] = []
         let usage: any = null
         try {
-          const { data: urows } = await admin.from('nation_usage').select('units_count, reported_at').eq('subdomain', sub).limit(1)
+          const { data: urows } = await admin.from('nation_usage').select('units_count, sms_month_count, reported_at').eq('subdomain', sub).limit(1)
           usage = (urows && urows[0]) || null
         } catch (_e) { usage = null }
         const homes = usage && usage.units_count != null ? Number(usage.units_count) : null
@@ -167,7 +167,18 @@ serve(async (req) => {
         // "default licensed" for module gating, which must never auto-bill).
         const lic = (nation && (nation as any).modules_licensed) || {}
         if (lic.ai_assistant === true)      dyn.push({ description: 'AI Staff Assistant (per month)',                          qty: mult, unit_price: ADDON_AI_MONTHLY })
-        if (lic.sms_notifications === true) dyn.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: ADDON_SMS_MONTHLY })
+        if (lic.sms_notifications === true) {
+          dyn.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: ADDON_SMS_MONTHLY })
+          // Published overage: $0.05 per text beyond the included 500/month.
+          // Billed on MONTHLY cadence only (an annual invoice cannot carry a
+          // month's running count); month-to-date at report time, so it never
+          // overbills -- texts after the report simply roll to visibility next
+          // report.
+          const smsN = usage && usage.sms_month_count != null ? Number(usage.sms_month_count) : null
+          if (monthly && smsN != null && smsN > 500) {
+            dyn.push({ description: 'Text messages beyond the included 500 (' + smsN + ' sent on record' + (asOf ? ' as of ' + asOf : '') + ')', qty: smsN - 500, unit_price: 0.05 })
+          }
+        }
         feeLines = dyn
       }
       const feeSubtotal = Math.round(feeLines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0) * 100) / 100
