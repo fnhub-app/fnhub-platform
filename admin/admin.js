@@ -939,6 +939,7 @@
     loadNicSummary(n.subdomain);
     renderNationModuleEnablement(n.subdomain, n.id, n.supabase_url, n.modules_licensed);
     renderNationAiLimit(n.subdomain, n.supabase_url);
+    renderNationSmsStatus(n.subdomain, n.supabase_url);
     if (typeof window.renderNationSeller === 'function') window.renderNationSeller(n);   // Overview -> Sold by (reseller.js)
   };
 
@@ -1102,6 +1103,7 @@
     var pSms =
         '<div class="card"><h3>SMS provider (Twilio)</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Powers the <code>send-sms</code> Edge Function (staff / field / contractor <b>notification</b> texts). Nothing sends unless the <b>SMS / Text Notifications</b> module is licensed (Overview) and enabled in the nation app, the per-event SMS channel is on (Settings &rarr; Notifications), and the recipient has opted in. Give this nation its own Twilio <b>subaccount</b> so STOP/opt-out state and sender reputation stay isolated. Written straight onto the project via the Management API and <b>never stored here</b>.</p>'
+      +   '<div id="cn-sms-status" style="font-size:12px;margin-bottom:10px;color:var(--muted);">Checking what is already on the project&hellip;</div>'
       +   '<div style="' + g2 + '">'
       +     '<div><label>Twilio Account SID</label><input id="cn-sms-sid" autocomplete="off" placeholder="AC..." /></div>'
       +     '<div><label>Twilio Auth Token</label><input id="cn-sms-token" type="password" autocomplete="off" placeholder="(secret)"/></div>'
@@ -2431,6 +2433,37 @@
     } catch (e){ setMsg('cn-em-msg', 'Network error: ' + String(e).slice(0, 120)); }
   };
 
+  // SMS status line: which send-sms secret NAMES are already set on the
+  // nation's project (set-nation-secret action 'status' -- names only, values
+  // never leave the server). Reflects a Twilio setup done directly in the
+  // Supabase dashboard, so blank fields don't read as "not configured".
+  window.renderNationSmsStatus = async function(sub, supabaseUrl){
+    var el = document.getElementById('cn-sms-status');
+    if (!el) return;
+    if (!supabaseUrl){ el.textContent = ''; return; }
+    try {
+      var r = await fetch(PBASE + '/functions/v1/set-nation-secret', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: sub, action: 'status' })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if (!r.ok){ el.innerHTML = 'Could not read the project\'s secret status' + (d && d.error ? ' (' + esc(d.error) + ')' : '') + '.'; return; }
+      var names = {}; (d.set_names || []).forEach(function(nm){ names[nm] = true; });
+      var mark = function(label, on){ return label + ': ' + (on ? '<b style="color:var(--ok);">set</b>' : '<span>not set</span>'); };
+      var senderOk = !!(names.SMS_FROM || names.TWILIO_MESSAGING_SERVICE_SID);
+      var allOk = !!(names.SMS_PROVIDER && names.TWILIO_ACCOUNT_SID && names.TWILIO_AUTH_TOKEN && senderOk);
+      el.innerHTML = 'Already on the project &mdash; '
+        + mark('provider', names.SMS_PROVIDER) + ' &middot; '
+        + mark('Account SID', names.TWILIO_ACCOUNT_SID) + ' &middot; '
+        + mark('Auth Token', names.TWILIO_AUTH_TOKEN) + ' &middot; '
+        + mark('sender', senderOk) + '. '
+        + (allOk
+            ? '<b style="color:var(--ok);">SMS sending is configured.</b> Leave the fields blank to keep it.'
+            : 'Fill in the missing fields and Apply (or set them in the nation project\'s dashboard).');
+    } catch (e){ el.textContent = ''; }
+  };
+
   // SMS & Portal tab -> "Apply to project": write the Twilio secrets the
   // send-sms function reads onto the nation project via set-nation-secret's
   // batch mode. Mirrors applyNationEmailSecrets. SMS_PROVIDER=twilio is implied.
@@ -2459,6 +2492,7 @@
       if (!r.ok){ setMsg('cn-sms-msg', (d && d.error) ? ('Failed: ' + d.error + (d.name ? ' (' + d.name + ')' : '') + (d.detail ? ' - ' + String(d.detail).slice(0,160) : '')) : ('Failed: HTTP ' + r.status)); return; }
       var tEl = document.getElementById('cn-sms-token'); if (tEl) tEl.value = '';
       setMsg('cn-sms-msg', 'Applied to the project: ' + (d.applied || []).join(', ') + '. send-sms picks this up within about a minute.', 'ok');
+      renderNationSmsStatus(sub, 'set');   // refresh the status line (truthy url flag)
       await audit('nation_sms_secrets_set', sub, (d.applied || []).join(', '));
     } catch (e){ setMsg('cn-sms-msg', 'Network error: ' + String(e).slice(0, 120)); }
   };
