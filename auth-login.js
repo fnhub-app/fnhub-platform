@@ -689,6 +689,9 @@ function initLoginPage() {
   var logoEl = document.getElementById('login-logo');
   var _nc = window.NATION_CONFIG || {};
   if (logoEl) logoEl.src = _nc.logo || window.HLH_LOGO_DATA_URL || (typeof CLFN_LOGO_DATA_URL === 'string' ? CLFN_LOGO_DATA_URL : '');
+  // Browser-tab favicon on the sign-in screen (pre-auth, so _applyTheme hasn't
+  // run) -- use the nation's logo, falling back to the platform mark.
+  try { if (typeof window._setFavicon === 'function') window._setFavicon(_nc.logo || window.HLH_LOGO_DATA_URL); } catch (e) {}
   if (_nc.primary_color) {
     try { document.documentElement.style.setProperty('--yellow', _nc.primary_color); } catch (e) {}
     // Header / dark surfaces on the sign-in screen follow the brand colour too.

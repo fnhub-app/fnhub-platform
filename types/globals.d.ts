@@ -177,6 +177,7 @@ interface Window {
   _onAccent: (...args: any[]) => any;
   _accentInk: (...args: any[]) => any;
   _brandInk: (...args: any[]) => any;
+  _brandSurface: (...args: any[]) => any;   // shared.js (visible-tinted dark surface from accent)
   _themeOnAccentHex: any;
   _themeOnAccentRgb: any;
   _themeAccentRgb: any;
