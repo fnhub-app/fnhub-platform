@@ -255,7 +255,7 @@
       '.dlg-ov{position:fixed;inset:0;background:rgba(17,17,16,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:18px;}'
     + '.dlg{background:var(--surface);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);max-width:440px;width:100%;overflow:hidden;animation:dlgin .12s ease-out;}'
     + '@keyframes dlgin{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}'
-    + '.dlg-hd{background:var(--ink);color:#fff;padding:12px 18px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;}'
+    + '.dlg-hd{background:var(--dark,#223F35);color:#fff;padding:12px 18px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px;}'
     + '.dlg-hd .dot{width:8px;height:8px;border-radius:50%;background:var(--accent);flex-shrink:0;}'
     + '.dlg-bd{padding:16px 18px;font-size:14px;color:var(--ink);white-space:pre-wrap;line-height:1.5;}'
     + '.dlg-bd label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px;white-space:normal;}'
@@ -2450,14 +2450,22 @@
       var d = await r.json().catch(function(){ return {}; });
       if (!r.ok){ el.innerHTML = 'Could not read the project\'s secret status' + (d && d.error ? ' (' + esc(d.error) + ')' : '') + '.'; return; }
       var names = {}; (d.set_names || []).forEach(function(nm){ names[nm] = true; });
-      var mark = function(label, on){ return label + ': ' + (on ? '<b style="color:var(--ok);">set</b>' : '<span>not set</span>'); };
+      var vals = d.values || {};
+      var mark = function(label, on, extra){ return label + ': ' + (on ? '<b style="color:var(--ok);">set' + (extra ? ' (' + esc(extra) + ')' : '') + '</b>' : '<span>not set</span>'); };
       var senderOk = !!(names.SMS_FROM || names.TWILIO_MESSAGING_SERVICE_SID);
       var allOk = !!(names.SMS_PROVIDER && names.TWILIO_ACCOUNT_SID && names.TWILIO_AUTH_TOKEN && senderOk);
+      // Prefill the NON-SECRET fields with the live project values (only when
+      // the input is empty, so in-progress typing is never clobbered). The
+      // Auth Token is write-only and the SID shows masked in the line below.
+      var fromEl = document.getElementById('cn-sms-from');
+      if (fromEl && !fromEl.value && vals.SMS_FROM) fromEl.value = vals.SMS_FROM;
+      var msvcEl = document.getElementById('cn-sms-msvc');
+      if (msvcEl && !msvcEl.value && vals.TWILIO_MESSAGING_SERVICE_SID) msvcEl.value = vals.TWILIO_MESSAGING_SERVICE_SID;
       el.innerHTML = 'Already on the project &mdash; '
-        + mark('provider', names.SMS_PROVIDER) + ' &middot; '
-        + mark('Account SID', names.TWILIO_ACCOUNT_SID) + ' &middot; '
+        + mark('provider', names.SMS_PROVIDER, vals.SMS_PROVIDER) + ' &middot; '
+        + mark('Account SID', names.TWILIO_ACCOUNT_SID, d.twilio_sid_last4 ? 'AC...' + d.twilio_sid_last4 : '') + ' &middot; '
         + mark('Auth Token', names.TWILIO_AUTH_TOKEN) + ' &middot; '
-        + mark('sender', senderOk) + '. '
+        + mark('sender', senderOk, vals.SMS_FROM || vals.TWILIO_MESSAGING_SERVICE_SID) + '. '
         + (allOk
             ? '<b style="color:var(--ok);">SMS sending is configured.</b> Leave the fields blank to keep it.'
             : 'Fill in the missing fields and Apply (or set them in the nation project\'s dashboard).')

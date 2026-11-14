@@ -85,7 +85,7 @@
     + '.rs-typed{font-family:Georgia,"Times New Roman",serif;font-style:italic;font-weight:700;font-size:28px;color:#14204a}'
     + '.rs-sign-ov{position:fixed;inset:0;background:rgba(17,17,16,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px}'
     + '.rs-sign{background:var(--surface);border-radius:14px;box-shadow:0 18px 50px rgba(0,0,0,.3);max-width:560px;width:100%;overflow:hidden}'
-    + '.rs-sign-hd{background:var(--ink);color:#fff;padding:12px 18px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}'
+    + '.rs-sign-hd{background:var(--dark,#223F35);color:#fff;padding:12px 18px;font-weight:700;font-size:14px;display:flex;align-items:center;gap:8px}'
     + '.rs-sign-hd .dot{width:8px;height:8px;border-radius:50%;background:var(--accent)}'
     + '.rs-sign-bd{padding:14px 18px}'
     + '.rs-sign-tabs{display:flex;gap:6px;margin:12px 0 8px}'
