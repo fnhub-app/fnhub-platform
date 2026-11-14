@@ -139,6 +139,20 @@ window._hexToRgbStr = function(hex){
 // for the app header / modal headers / print banners so they carry the nation's
 // brand hue while staying dark enough for white text on any brand colour.
 window._brandInk = function(hex, k){ return window._mixHex(hex, '#000000', k==null?0.88:k); };
+// A deep but still VISIBLY-tinted dark SURFACE from the accent: darken toward
+// black only until it reaches a target luminance, so a dark accent (e.g. Spruce)
+// lands on a readable dark teal instead of near-black, while a bright accent
+// still reaches a deep dark. Used for the pre-auth login darks, where the ED's
+// explicit Header/Dark Surface override isn't available (post-login surfaces use
+// that override). No new colour literals -- reuses _brandInk/_luminance.
+window._brandSurface = function(accent){
+  for (var k = 0; k <= 0.95; k += 0.05){
+    var c = window._brandInk(accent, k);
+    var l = c ? window._luminance(c) : null;
+    if (l != null && l <= 0.022) return c;
+  }
+  return window._brandInk(accent, 0.88);
+};
 
 // Relative luminance (WCAG) of a hex colour, 0..1.
 window._luminance = function(hex){
@@ -211,13 +225,18 @@ window._applyBrandDark = function(accent, customDark){
   //    own Ink shows, not a near-black derivation of the accent);
   //  - a distinct brand accent derives a matching deep ink.
   var isCustom = customDark && String(customDark).toLowerCase() !== stock.toLowerCase();
-  var base  = isCustom ? customDark : (accentIsDefault ? stock : window._brandInk(accent, 0.88));
+  var base  = isCustom ? customDark : (accentIsDefault ? stock : window._brandSurface(accent));
   if (base){
     root.style.setProperty('--dark', base);
     var d2 = window._mixHex(base, '#ffffff', 0.06);
     var d3 = window._mixHex(base, '#ffffff', 0.14);
     if (d2) root.style.setProperty('--dark2', d2);
     if (d3) root.style.setProperty('--dark3', d3);
+    // Login-page canvas: a touch DEEPER than --dark so the card lifts off a
+    // brand-tinted dark instead of pure black. (Only the login screen reads
+    // --login-bg; post-login pages use the light Birch page background.)
+    var lbg = window._brandInk(base, 0.4);
+    if (lbg) root.style.setProperty('--login-bg', lbg);
   }
   // Accent companions (hover + soft tint + rgba glow base) — derive from a
   // DISTINCT brand accent so hover/tint/glows don't stay the default clay on a
@@ -342,13 +361,16 @@ window._setFavicon = function(href) {
     var sel = (rel === 'icon')
       ? 'link[rel="icon"], link[rel="shortcut icon"]'
       : 'link[rel="apple-touch-icon"]';
+    // Derive the mime from a data: URI (an SVG logo needs image/svg+xml, not the
+    // old hardcoded image/png -- a type mismatch makes the browser ignore it).
+    var _mime = (rel === 'icon') ? ((/^data:(image\/[a-z0-9.+-]+)/i.exec(href) || [null, 'image/png'])[1]) : '';
     var nodes = head.querySelectorAll(sel);
     if (nodes.length) {
-      for (var i = 0; i < nodes.length; i++) nodes[i].setAttribute('href', href);
+      for (var i = 0; i < nodes.length; i++) { nodes[i].setAttribute('href', href); if (_mime) nodes[i].setAttribute('type', _mime); }
     } else {
       var l = document.createElement('link');
       l.setAttribute('rel', rel);
-      if (rel === 'icon') l.setAttribute('type', 'image/png');
+      if (_mime) l.setAttribute('type', _mime);
       l.setAttribute('href', href);
       head.appendChild(l);
     }
