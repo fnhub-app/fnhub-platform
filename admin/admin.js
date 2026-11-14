@@ -154,7 +154,7 @@
     phone: '705-960-5076',
     email: 'hello@nationpathways.com'
   };
-  // Past-due interest rate per the agreement (Section 7.5): 1% per month.
+  // Past-due interest rate per the agreement (Section 7.4): 1% per month.
   var INTEREST_MONTHLY = 0.01;
   // YYYY-MM-DD for today + n days (browser Date is available here).
   function _dPlus(n){ return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
@@ -1750,11 +1750,9 @@
     'The Nation will pay the subscription fees, one-time setup fee, and any selected add-on fees stated in Schedule A (the "Fees"). All amounts are in Canadian dollars and exclusive of applicable taxes, if any.',
     '###7.2 Billing',
     'Unless Schedule A states otherwise, subscription Fees are invoiced annually in advance, with billing aligned to the April-March fiscal year where the Nation requests it. Monthly billing, where selected, is charged at the monthly rate stated in Schedule A. Invoices are payable within thirty (30) days.',
-    '###7.3 Setup discount',
-    "Where the Nation signs a one-year term and pays the first year's subscription in advance, the one-time setup fee is reduced by fifty percent (50%), as reflected in Schedule A.",
-    '###7.4 Fee changes',
+    '###7.3 Fee changes',
     'Fees are fixed for the Initial Term. The Provider may adjust Fees effective at a Renewal Term by giving at least sixty (60) days\' written notice before renewal; the Nation may decline renewal in accordance with Section 8.',
-    '###7.5 Late amounts',
+    '###7.4 Late amounts',
     'Amounts more than thirty (30) days overdue may bear interest at 1% per month (12.68% annually). The Provider will not suspend the Nation\'s access for non-payment without first giving at least thirty (30) days\' written notice specifically referencing suspension, and will not delete Customer Data as a consequence of non-payment except in accordance with Section 4.6 following termination.',
     '##8. Term and Termination',
     '###8.1 Term',
@@ -2715,7 +2713,7 @@
     window._nicCarryIds = owing.map(function(x){ return x.id; });
     setMsg('cn-inv-msg', 'Carried ' + _money(total) + ' forward as a line. It will be billed when you create this invoice.', 'ok');
   };
-  // Generate a past-due interest charge (Section 7.5: 1%/month) and add it as a
+  // Generate a past-due interest charge (Section 7.4: 1%/month) and add it as a
   // line item. Interest is assessed as of the payment date if recorded, else
   // today. Applies only when more than 30 days past the due date. Idempotent:
   // any prior interest line is recomputed, not stacked.
@@ -2727,7 +2725,7 @@
     var asOf = inv.paid_date || _dPlus(0);
     var days = Math.floor((Date.parse(asOf) - Date.parse(inv.due_date)) / 86400000);
     if (days <= 30){
-      dlgAlert('As of ' + asOf + ', this invoice is ' + (days < 0 ? Math.abs(days) + ' day(s) before the due date' : days + ' day(s) past due') + '. Per Section 7.5, interest applies only to amounts more than 30 days overdue.', { title: 'No interest added' });
+      dlgAlert('As of ' + asOf + ', this invoice is ' + (days < 0 ? Math.abs(days) + ' day(s) before the due date' : days + ' day(s) past due') + '. Per Section 7.4, interest applies only to amounts more than 30 days overdue.', { title: 'No interest added' });
       return;
     }
     // Base = existing non-interest lines; interest accrues on the pre-tax,
@@ -2745,7 +2743,7 @@
     var interest = Math.round(principal * INTEREST_MONTHLY * months * 100) / 100;
     if (interest <= 0){ dlgAlert('Computed interest is $0.00 — nothing to add.'); return; }
     if (!(await dlgConfirm('Invoice ' + inv.number + ' is ' + days + ' days past the due date (' + inv.due_date + '), assessed as of ' + asOf + '.\n\nInterest at 1%/month (12.68%/yr) on ' + _money(principal) + ' = ' + _money(interest) + '.\n\nAdd this as a line item?', { title: 'Add past-due interest', okText: 'Add interest' }))) return;
-    var line = { description: 'Interest — ' + days + ' days past due at 1%/month (Section 7.5), assessed ' + asOf, qty: 1, unit_price: interest, interest: true };
+    var line = { description: 'Interest — ' + days + ' days past due at 1%/month (Section 7.4), assessed ' + asOf, qty: 1, unit_price: interest, interest: true };
     var lines = base.concat([line]);
     var subtotal = Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
     var taxRate = Number(inv.tax_rate) || 0;
