@@ -98,3 +98,16 @@ been reported (or above 600 homes = custom quote). The band table in
 Platform columns: `nation_usage.units_count`, `nation_billing.dynamic`.
 The admin Billing card has the "Dynamic pricing" toggle + a live preview, and
 its "Generate now" uses the same logic.
+
+### SMS overage + draft previews
+
+With SMS licensed, monthly dynamic invoices also bill the published overage:
+$0.05 per text beyond the included 500/month, from `nation_usage.sms_month_count`
+(billable `sms_log` sends this month, reported by `hs_data_usage()` -- migration
+`20261116_usage_sms_count.sql`; platform column:
+`alter table public.nation_usage add column if not exists sms_month_count integer;`).
+Month-to-date at report time, so it can undercount but never overbills. AI has
+no overage fee by design -- the fair-use cap pauses the assistant instead; the
+panel preview shows tokens used against the included 3,000,000. The Billing
+card's "Preview draft invoice" button builds the exact PDF the next run would
+produce (dynamic or stored), numbered DRAFT, writing nothing.

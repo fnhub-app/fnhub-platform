@@ -3227,6 +3227,7 @@
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">'
       +   '<button class="btn" type="button" data-act="bill-save" data-sub="' + esc(sub) + '">Save schedule</button>'
       +   (row ? '<button class="btn ghost" type="button" data-act="bill-toggle" data-sub="' + esc(sub) + '">' + (row.active ? 'Pause' : 'Resume') + '</button>' : '')
+      +   '<button class="btn ghost" type="button" data-act="bill-draft" data-sub="' + esc(sub) + '">Preview draft invoice</button>'
       +   (row ? '<button class="btn ghost" type="button" data-act="bill-run" data-sub="' + esc(sub) + '">Generate now</button>' : '')
       + '</div>';
     // Wire the fee-schedule select programmatically (admin CSP blocks inline handlers).
@@ -3258,8 +3259,17 @@
     // for module GATING, which must never auto-bill).
     var lic = (n && n.modules_licensed) || {};
     if (lic.ai_assistant === true)      lines.push({ description: 'AI Staff Assistant (per month)',                          qty: mult, unit_price: feePrice('AI Staff Assistant (per month)') || 150 });
-    if (lic.sms_notifications === true) lines.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: feePrice('Text-message notifications (per month, incl. 500 texts)') || 25 });
-    return { lines: lines, homes: homes, asOf: asOf, banded: !!band };
+    var smsN = (usage && usage.sms_month_count != null) ? Number(usage.sms_month_count) : null;
+    if (lic.sms_notifications === true){
+      lines.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: feePrice('Text-message notifications (per month, incl. 500 texts)') || 25 });
+      // Published overage: $0.05/text beyond the included 500 -- monthly
+      // cadence only (an annual invoice cannot carry one month's count).
+      if (monthly && smsN != null && smsN > 500){
+        lines.push({ description: 'Text messages beyond the included 500 (' + smsN + ' sent on record' + (asOf ? ' as of ' + asOf : '') + ')', qty: smsN - 500, unit_price: 0.05 });
+      }
+    }
+    return { lines: lines, homes: homes, asOf: asOf, banded: !!band, lic: lic, smsN: smsN,
+      aiTokens: ((usage && Number(usage.ai_input_tokens)) || 0) + ((usage && Number(usage.ai_output_tokens)) || 0) };
   }
   function _dynLinesSubtotal(lines){
     return Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
@@ -3269,7 +3279,7 @@
     var n = _nations.filter(function(x){ return x.subdomain === sub; })[0] || {};
     var usage = null;
     try {
-      var r = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,reported_at');
+      var r = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,sms_month_count,ai_input_tokens,ai_output_tokens,reported_at');
       var rows = r.ok ? await r.json().catch(function(){ return []; }) : [];
       usage = rows[0] || null;
     } catch (e){ /* preview is best-effort */ }
@@ -3282,7 +3292,11 @@
     el.innerHTML = '<b>Next invoice will bill:</b>' + rows$
       + '<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid #A9C4BA;margin-top:4px;padding-top:4px;"><span>Fee subtotal (before discount/tax)</span><b>' + _money(sub$) + '</b></div>'
       + (dyn.homes == null ? '<div style="color:#7a5c00;margin-top:4px;">&#9888;&#65039; No home count reported yet &mdash; a manager opening <b>Settings &rarr; Nation</b> in the nation app reports it. Until then the fallback line above is billed.</div>'
-        : '<div style="color:var(--muted);margin-top:4px;">Home count and licensing are re-read at every generation, so this updates as the nation grows.</div>');
+        : '<div style="color:var(--muted);margin-top:4px;">Home count, licensing and usage are re-read at every generation, so this updates as the nation grows.</div>')
+      + (dyn.lic && dyn.lic.ai_assistant !== true ? '<div style="color:var(--muted);margin-top:2px;">AI Staff Assistant: not explicitly licensed &mdash; not billed. License it in the <b>Modules</b> card to add ' + _money(feePrice('AI Staff Assistant (per month)') || 150) + '/mo.</div>' : '')
+      + (dyn.lic && dyn.lic.sms_notifications !== true ? '<div style="color:var(--muted);margin-top:2px;">SMS / Text Notifications: not explicitly licensed &mdash; not billed. License it in the <b>Modules</b> card to add ' + _money(feePrice('Text-message notifications (per month, incl. 500 texts)') || 25) + '/mo (incl. 500 texts; $0.05 each after).</div>' : '')
+      + (dyn.smsN != null ? '<div style="color:var(--muted);margin-top:2px;">Texts sent this month on record: <b>' + dyn.smsN + '</b> (500 included' + (dyn.smsN > 500 ? '; overage billed above' : '') + ').</div>' : '')
+      + (dyn.aiTokens > 0 ? '<div style="color:var(--muted);margin-top:2px;">AI usage this month on record: <b>' + dyn.aiTokens.toLocaleString('en-CA') + '</b> tokens of the 3,000,000 included (no overage fee &mdash; the assistant pauses at the cap).</div>' : '');
   }
   window._billDynToggle = function(sub){
     var on = !!(document.getElementById('cn-bill-dynamic') || {}).checked;
@@ -3338,13 +3352,51 @@
   // Generate an invoice from the schedule immediately (manual run / test) and
   // advance the schedule the same way the scheduler would. Email (auto_send) is
   // only sent by the automated scheduler, not this manual run.
+  // Draft invoice: build the exact PDF the next generation would produce --
+  // from the CURRENT form values (saved or not) -- without writing anything:
+  // no nation_invoices row, no number consumed, no date advance. Watermarked
+  // DRAFT via the number field.
+  window.previewDraftBillingInvoice = async function(sub){
+    var b = _readBilling();
+    var n = _nations.filter(function(x){ return x.subdomain === sub; })[0];
+    var lines;
+    if (b.dynamic){
+      var ur = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,sms_month_count,ai_input_tokens,ai_output_tokens,reported_at');
+      var urows = ur.ok ? await ur.json().catch(function(){ return []; }) : [];
+      lines = _dynBillingLines(n, urows[0] || null, b.cadence, b).lines;
+    } else {
+      if (!(b.unit_amount > 0) || !b.description){ setMsg('cn-bill-msg', 'Pick a line item and amount first (or tick Dynamic pricing).'); return; }
+      lines = [{ description: b.description, qty: 1, unit_price: Math.round(b.unit_amount * 100) / 100 }];
+    }
+    setMsg('cn-bill-msg', 'Building draft...', 'ok');
+    ensureJsPdf(function(){
+      try {
+        var subtotal = _dynLinesSubtotal(lines);
+        var taxRate = Number(b.tax_rate) || 0;
+        var discount = _calcDiscount(subtotal, b.discount_type, Number(b.discount_value) || 0);
+        var taxable = Math.round((subtotal - discount) * 100) / 100;
+        var tax = Math.round(taxable * taxRate) / 100;
+        var tot = Math.round((taxable + tax) * 100) / 100;
+        var today = new Date().toISOString().slice(0, 10);
+        var inv = { subdomain: sub, number: 'DRAFT', issue_date: today, due_date: _dPlus(Number(b.due_days) || 30), currency: 'CAD',
+          line_items: lines, subtotal: subtotal, tax_rate: taxRate, tax: tax, total: tot, amount_paid: 0, status: 'draft',
+          notes: 'DRAFT - preview only. Not recorded, no invoice number consumed.' };
+        if (discount > 0){ inv.discount_type = b.discount_type; inv.discount_value = Number(b.discount_value) || 0; inv.discount = discount; inv.discount_label = b.discount_label || null; }
+        var doc = buildInvoicePdf(n, inv);
+        var url = URL.createObjectURL(doc.output('blob'));
+        window.open(url, '_blank');
+        setMsgWithView('cn-bill-msg', 'Draft built - ' + _money(tot) + ' total. Nothing was recorded.', url);
+      } catch (e){ setMsg('cn-bill-msg', 'Could not build the draft: ' + String(e && e.message || e)); }
+    }, function(){ setMsg('cn-bill-msg', 'Could not load the PDF generator (offline?).'); });
+  };
+
   window.runNationBilling = async function(sub){
     var b = window._nicBilling; if (!b){ setMsg('cn-bill-msg', 'Save the schedule first.'); return; }
     var n = _nations.filter(function(x){ return x.subdomain === sub; })[0];
     // Dynamic schedules price from live usage + licensing at generation time.
     var _dynLines = null;
     if (b.dynamic){
-      var _ur = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,reported_at');
+      var _ur = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,sms_month_count,ai_input_tokens,ai_output_tokens,reported_at');
       var _urows = _ur.ok ? await _ur.json().catch(function(){ return []; }) : [];
       _dynLines = _dynBillingLines(n, _urows[0] || null, b.cadence, b).lines;
     }
@@ -3439,6 +3491,7 @@
       case 'bill-toggle':   window.toggleNationBilling(el.getAttribute('data-sub') || ''); break;
       case 'bill-run':      window.runNationBilling(el.getAttribute('data-sub') || ''); break;
       case 'bill-dyn-toggle': window._billDynToggle(el.getAttribute('data-sub') || ''); break;
+      case 'bill-draft':    window.previewDraftBillingInvoice(el.getAttribute('data-sub') || ''); break;
       case 'logo-clear':    { var _lh = document.getElementById('cn-logo'); var _lp = document.getElementById('cn-logo-preview'); var _lf = document.getElementById('cn-logo-file'); if (_lh) _lh.value = ''; if (_lp) _lp.style.backgroundImage = ''; if (_lf) _lf.value = ''; break; }
       case 'inv-interest':  window.invAddInterest(el.getAttribute('data-id') || '', el.getAttribute('data-sub') || ''); break;
       case 'ps-refresh':    window.renderPlatformSupport(); break;
