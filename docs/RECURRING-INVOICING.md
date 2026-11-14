@@ -111,3 +111,13 @@ no overage fee by design -- the fair-use cap pauses the assistant instead; the
 panel preview shows tokens used against the included 3,000,000. The Billing
 card's "Preview draft invoice" button builds the exact PDF the next run would
 produce (dynamic or stored), numbered DRAFT, writing nothing.
+
+### AI overage
+
+The AI add-on includes 3,000,000 tokens/month; the fair-use cap pauses the
+assistant there by default. When the platform owner raises a nation's cap
+(Config -> AI usage limit), monthly dynamic invoices bill the excess at $15 per
+additional 1,000,000 tokens (fractional, 2 dp), from nation_usage's reported
+month-to-date token totals. The fee schedule line is "AI tokens beyond the
+included 3,000,000 (per additional 1,000,000)" and the subscription agreement's
+AI add-on clause states the allotment + overage ({{FEE_AI_OVER}}).
