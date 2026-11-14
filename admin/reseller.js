@@ -286,7 +286,7 @@
       +   '<p class="sub" style="margin:0;">The party that owns the software: the <b>Owner</b> in every reseller agreement and the <b>Provider</b> on the nation subscription agreement. If ownership moves to a business entity, update it here. New contracts use the new details; activated reseller agreements keep the details they were signed with.</p>'
       +   partyFields('rs-o-', o, false)
       +   '<div class="rs-grid">'
-      +     fld('Product / brand name', 'rs-o-product_name', o.product_name, { ph: 'e.g. FN Hub' })
+      +     fld('Product / brand name', 'rs-o-product_name', o.product_name, { ph: 'e.g. Nation Pathways' })
       +     fld('Business / corporation number', 'rs-o-business_number', o.business_number, { ph: 'Optional' })
       +     fld('Authorized signatory', 'rs-o-signatory_name', o.signatory_name)
       +     fld('Signatory title', 'rs-o-signatory_title', o.signatory_title, { ph: 'e.g. Owner, President' })
