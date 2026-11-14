@@ -114,22 +114,16 @@ serve(async (req) => {
       .map((s: any) => String((s && s.name) || ''))
       .filter((nm: string) => VISIBLE.has(nm))
       .sort()
-    // Echo back NON-SECRET config values so the cards can prefill (a sender
-    // number, provider names, from-addresses). Credentials are never echoed:
-    // the Auth Token / API keys stay write-only, and the Account SID is
-    // reduced to its last 4 for a masked "set (...1234)" display.
-    const VALUE_SAFE = new Set([
-      'SMS_PROVIDER', 'SMS_FROM', 'TWILIO_MESSAGING_SERVICE_SID',
-      'EMAIL_PROVIDER', 'EMAIL_FROM', 'EMAIL_FROM_NAME', 'EMAIL_REPLY_TO',
-    ])
-    const values: Record<string, string> = {}
-    let sidLast4 = ''
-    for (const s of (Array.isArray(list) ? list : [])) {
-      const nm = String((s && s.name) || '')
-      const v = String((s && s.value) || '')
-      if (VALUE_SAFE.has(nm) && v) values[nm] = v.slice(0, 200)
-      if (nm === 'TWILIO_ACCOUNT_SID' && v) sidLast4 = v.slice(-4)
-    }
+    // NOTE: the Management API list endpoint returns a SHA-256 DIGEST in each
+    // secret's value field, never the plaintext -- secrets cannot be read back
+    // out of a project, even by the owner. So real values for display come
+    // from the registry marker nations.sms (written by this function's apply
+    // path below; non-secret sender config only), not from the project.
+    let smsConfig: Record<string, unknown> | null = null
+    try {
+      const { data: nrows, error: nerr } = await admin.from('nations').select('sms').eq('subdomain', sub).limit(1)
+      if (!nerr && nrows && nrows.length && nrows[0].sms && typeof nrows[0].sms === 'object') smsConfig = nrows[0].sms
+    } catch (_e) { /* column may not exist yet -- fail soft */ }
     // Proof-of-save: the panel's own last SMS apply, from the audit trail this
     // function already writes (names + caller only, never values). Lets the
     // card answer "did my Apply land?" even though fields never echo values.
@@ -143,7 +137,7 @@ serve(async (req) => {
         .limit(1)
       if (arows && arows.length) smsLast = { at: String(arows[0].created_at || ''), detail: String(arows[0].detail || '') }
     } catch (_e) { /* best-effort */ }
-    return json({ ok: true, subdomain: sub, set_names: setNames, values, twilio_sid_last4: sidLast4, sms_last_applied: smsLast })
+    return json({ ok: true, subdomain: sub, set_names: setNames, sms_config: smsConfig, sms_last_applied: smsLast })
   }
 
   // Accept a single { name, value } (the AI-key card) or a batch
@@ -186,6 +180,20 @@ serve(async (req) => {
     try {
       await admin.from('nations').update({ ai_key_last4: last4, ai_key_updated_at: new Date().toISOString() }).eq('subdomain', sub)
     } catch (_e) { /* marker is best-effort */ }
+  }
+
+  // Registry marker for the NON-SECRET sender config (nations.sms jsonb), so
+  // the SMS card can display/prefill real values later -- the project itself
+  // only ever returns digests. Credentials (SID/token) are never recorded.
+  const smsFrom = entries.find((e) => e.name === 'SMS_FROM')
+  const smsMsvc = entries.find((e) => e.name === 'TWILIO_MESSAGING_SERVICE_SID')
+  if (smsFrom || smsMsvc) {
+    try {
+      const marker: Record<string, unknown> = { provider: 'twilio', updated_at: new Date().toISOString(), updated_by: caller }
+      if (smsFrom) marker.from = smsFrom.value
+      if (smsMsvc) marker.messaging_service_sid = smsMsvc.value
+      await admin.from('nations').update({ sms: marker }).eq('subdomain', sub)
+    } catch (_e) { /* column may not exist yet -- marker is best-effort */ }
   }
 
   // Audit (best-effort). Never the values - only which names were set.
