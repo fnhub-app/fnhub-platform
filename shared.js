@@ -269,7 +269,16 @@ window._applyTheme = function(theme) {
   // value derived from the accent. Handled here, not in the THEME_KEYS loop,
   // so leaving it unset doesn't wipe the derived/default --yellow-light.
   if (theme.tint) root.style.setProperty('--yellow-light', theme.tint);
-  if (theme.accentInk) root.style.setProperty('--accent-ink', theme.accentInk);
+  // Honour an accentInk override ONLY when it's actually readable as TEXT on a
+  // light surface. A mistakenly light value (e.g. a leftover near-white) would
+  // make every accent-ink label invisible -- in that case keep the readable ink
+  // already derived from the accent above. Luminance <= ~0.2 is roughly a 4:1
+  // contrast against white; we only reject clearly-too-light overrides.
+  if (theme.accentInk) {
+    var _inkLum = null;
+    try { _inkLum = window._luminance(theme.accentInk); } catch(_e){ _inkLum = null; }
+    if (_inkLum == null || _inkLum <= 0.2) root.style.setProperty('--accent-ink', theme.accentInk);
+  }
   if (theme.accentHover)  root.style.setProperty('--yellow-mid', theme.accentHover);
   if (theme.borderStrong) root.style.setProperty('--border-strong', theme.borderStrong);
   if (theme.inputBorder)  root.style.setProperty('--input-border', theme.inputBorder);
