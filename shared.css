@@ -104,6 +104,7 @@
   --danger-border: #fecaca;
   /* Login screen palette — dark overlay + error accents */
   --login-bg:      #0f0f0e;
+  --login-muted:   rgba(255,255,255,0.66);   /* readable muted text on the dark login card */
   --err-bg:        #3b0a0a;
   --err-border:    #7f1d1d;
   --err-text:      #fca5a5;
@@ -1746,17 +1747,17 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .login-panel--center { text-align: center; }
 .login-title         { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px; }
 .login-icon-large    { font-size: 2rem; margin-bottom: 12px; }
-.login-help          { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
+.login-help          { font-size: 13px; color: var(--login-muted); line-height: 1.7; margin-bottom: 16px; }
 .login-help--tight   { line-height: 1.6; margin-bottom: 14px; }
 .login-help strong   { color: #fff; }
 .login-field         { display: flex; flex-direction: column; gap: 6px; }
-.login-label         { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
+.login-label         { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--login-muted); }
 .login-input         { background: var(--dark); border: 1px solid var(--dark-border); border-radius: 8px; padding: 12px 14px; font-size: 14px; color: #fff; font-family: var(--sans); outline: none; width: 100%; box-sizing: border-box; }
 .login-input:focus   { border-color: var(--yellow); }
 .login-row           { display: flex; align-items: center; justify-content: space-between; }
-.login-check         { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.login-check         { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--login-muted); }
 .login-checkbox      { width: 16px; height: 16px; cursor: pointer; accent-color: var(--yellow); margin: 0; }
-.login-link          { background: none; border: none; font-size: 12px; color: var(--yellow); cursor: pointer; padding: 0; font-family: var(--sans); }
+.login-link          { background: none; border: none; font-size: 12px; color: var(--yellow-light); cursor: pointer; padding: 0; font-family: var(--sans); }
 .login-link--block   { width: 100%; }
 .login-btn           { background: var(--action); border: none; color: var(--action-text); padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 700; font-family: var(--sans); cursor: pointer; width: 100%; }
 .login-btn:disabled  { opacity: .65; cursor: wait; }

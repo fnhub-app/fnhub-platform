@@ -232,11 +232,10 @@ window._applyBrandDark = function(accent, customDark){
     var d3 = window._mixHex(base, '#ffffff', 0.14);
     if (d2) root.style.setProperty('--dark2', d2);
     if (d3) root.style.setProperty('--dark3', d3);
-    // Login-page canvas: a touch DEEPER than --dark so the card lifts off a
-    // brand-tinted dark instead of pure black. (Only the login screen reads
-    // --login-bg; post-login pages use the light Birch page background.)
-    var lbg = window._brandInk(base, 0.4);
-    if (lbg) root.style.setProperty('--login-bg', lbg);
+    // Login-page canvas: a visible brand-tinted dark (= --dark) rather than pure
+    // black. The card (--dark2, a touch lighter) lifts off it. Only the login
+    // screen reads --login-bg; post-login pages use the light Birch background.
+    root.style.setProperty('--login-bg', base);
   }
   // Accent companions (hover + soft tint + rgba glow base) — derive from a
   // DISTINCT brand accent so hover/tint/glows don't stay the default clay on a
