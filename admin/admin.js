@@ -766,6 +766,7 @@
       + '<div style="margin-top:10px;font-size:12px;font-weight:700;color:var(--muted);">Target nations</div>'
       + '<div style="margin:6px 0 10px;">' + checks + '</div>'
       + '<label style="display:inline-flex;align-items:center;gap:8px;font-weight:600;font-size:12px;"><input type="checkbox" id="fm-force" style="width:auto;"/> Force re-run where already applied</label>'
+      + '<label style="display:flex;align-items:flex-start;gap:8px;font-weight:600;font-size:12px;margin-top:8px;"><input type="checkbox" id="fm-platform" style="width:auto;margin-top:2px;"/> <span>Run on the <b>platform (control-plane)</b> project instead of nations &mdash; for SQL from <code>supabase/platform/</code> that touches <code>nations</code>, <code>nation_usage</code>, billing or reseller tables. Nation targets are ignored; pasted SQL only.</span></label>'
       + '<div class="msg" id="fm-msg"></div>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:6px;">'
       +   '<button class="btn ghost" type="button" data-act="fleet-dry">Dry run (preview)</button>'
@@ -792,15 +793,26 @@
     var sql   = ((document.getElementById('fm-sql')   || {}).value || '');
     var label = ((document.getElementById('fm-label') || {}).value || '').trim();
     var force = !!(document.getElementById('fm-force') || {}).checked;
+    var platform = !!(document.getElementById('fm-platform') || {}).checked;
     var targets = _fmSelectedTargets();
     if (!file && !sql.trim()){ setMsg('fm-msg', 'Enter a migration filename or paste SQL.'); return; }
-    if (!targets.length){ setMsg('fm-msg', 'Select at least one target nation.'); return; }
+    if (platform && file){ setMsg('fm-msg', 'Platform mode runs pasted SQL only - supabase/migrations/ files are nation schema. Paste the platform SQL into the box instead.'); return; }
+    // Guard against the classic wrong-target mistake: control-plane SQL sent
+    // to nation projects always fails with "relation ... does not exist".
+    var PLATFORM_TABLES = /\b(?:public\.)?(nations|nations_public|nation_usage|nation_billing|nation_invoices|nation_migrations|nation_support_keys|platform_audit|platform_owner|platform_support_tickets|super_admins|reseller_\w+)\b/i;
+    if (!platform && sql && PLATFORM_TABLES.test(sql)){
+      var m = PLATFORM_TABLES.exec(sql);
+      setMsg('fm-msg', 'This SQL references the control-plane table "' + (m && m[1]) + '", which does not exist on nation projects. Tick "Run on the platform (control-plane) project" above and run it again.');
+      return;
+    }
+    if (!platform && !targets.length){ setMsg('fm-msg', 'Select at least one target nation.'); return; }
     setMsg('fm-msg', dryRun ? 'Previewing...' : 'Applying...', 'ok');
     // Clear the previous run's results table so a failed attempt can't sit
     // above a stale success table (or vice versa) — message and table always
     // describe the SAME run.
     var _resEl = document.getElementById('fm-results'); if (_resEl) _resEl.innerHTML = '';
     var payload = { targets: targets, dryRun: !!dryRun, force: force };
+    if (platform){ payload.platform = true; payload.targets = []; }
     if (file) payload.migration = file; else { payload.sql = sql; if (label) payload.label = label; }
     var r;
     try {

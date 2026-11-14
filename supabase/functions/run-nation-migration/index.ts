@@ -93,8 +93,45 @@ serve(async (req) => {
   }
   if (!sql.trim()) return json({ error: 'empty_sql' }, 400)
 
-  // Enumerate targets: active nations with a project, minus the control plane.
   const PLATFORM_REF = refFromUrl(SUPABASE_URL)
+
+  // Explicit opt-in: run the pasted SQL on the CONTROL-PLANE project itself
+  // (the supabase/platform/*.sql family: nations, nation_usage, billing,
+  // reseller tables). Raw SQL only -- supabase/migrations/ holds NATION
+  // schema, so a migration filename makes no sense here. Ledgered under the
+  // pseudo-subdomain '_platform'; audited as platform_migration.
+  if (body.platform === true) {
+    if (migration) return json({ error: 'platform_takes_raw_sql',
+      message: 'Platform mode runs pasted SQL only. supabase/migrations/ files are nation schema; paste the platform SQL instead.' }, 400)
+    if (!PLATFORM_REF) return json({ error: 'platform_ref_unresolved' }, 500)
+    if (dryRun) return json({ ok: true, migration: ledgerName, dryRun: true, count: 1,
+      results: [{ subdomain: '_platform', status: 'would_run', detail: 'control-plane project' }] })
+    let pOk = false, pDetail = ''
+    try {
+      const pr = await fetch(MGMT_BASE + '/v1/projects/' + encodeURIComponent(PLATFORM_REF) + '/database/query', {
+        method: 'POST',
+        headers: { Authorization: 'Bearer ' + MGMT_TOKEN, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query: sql + "\n;\nnotify pgrst, 'reload schema';" }),
+      })
+      pOk = pr.ok
+      pDetail = pOk ? 'applied' : ('Management API ' + pr.status + ': ' + (await pr.text()).slice(0, 300))
+    } catch (e) { pDetail = String(e && (e as Error).message || e) }
+    try {
+      await admin.from('nation_migrations').upsert(
+        { subdomain: '_platform', migration: ledgerName, status: pOk ? 'applied' : 'failed', detail: pOk ? null : pDetail, applied_by: actor, applied_at: new Date().toISOString() },
+        { onConflict: 'subdomain,migration' })
+    } catch (_e) { /* ledger best-effort */ }
+    try {
+      await admin.from('platform_audit').insert({
+        action: 'platform_migration', subdomain: null,
+        detail: actor + ' ran ' + ledgerName + ' on the control-plane project: ' + (pOk ? 'applied' : 'failed'),
+      })
+    } catch (_e) { /* audit best-effort */ }
+    return json({ ok: true, migration: ledgerName, dryRun: false, count: 1,
+      results: [{ subdomain: '_platform', status: pOk ? 'applied' : 'failed', detail: pDetail }] })
+  }
+
+  // Enumerate targets: active nations with a project, minus the control plane.
   const { data: nations, error: nErr } = await admin
     .from('nations').select('subdomain, display_name, supabase_url, status')
   if (nErr) return json({ error: 'lookup_failed', detail: nErr.message }, 500)
