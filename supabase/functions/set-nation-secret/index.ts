@@ -114,6 +114,22 @@ serve(async (req) => {
       .map((s: any) => String((s && s.name) || ''))
       .filter((nm: string) => VISIBLE.has(nm))
       .sort()
+    // Echo back NON-SECRET config values so the cards can prefill (a sender
+    // number, provider names, from-addresses). Credentials are never echoed:
+    // the Auth Token / API keys stay write-only, and the Account SID is
+    // reduced to its last 4 for a masked "set (...1234)" display.
+    const VALUE_SAFE = new Set([
+      'SMS_PROVIDER', 'SMS_FROM', 'TWILIO_MESSAGING_SERVICE_SID',
+      'EMAIL_PROVIDER', 'EMAIL_FROM', 'EMAIL_FROM_NAME', 'EMAIL_REPLY_TO',
+    ])
+    const values: Record<string, string> = {}
+    let sidLast4 = ''
+    for (const s of (Array.isArray(list) ? list : [])) {
+      const nm = String((s && s.name) || '')
+      const v = String((s && s.value) || '')
+      if (VALUE_SAFE.has(nm) && v) values[nm] = v.slice(0, 200)
+      if (nm === 'TWILIO_ACCOUNT_SID' && v) sidLast4 = v.slice(-4)
+    }
     // Proof-of-save: the panel's own last SMS apply, from the audit trail this
     // function already writes (names + caller only, never values). Lets the
     // card answer "did my Apply land?" even though fields never echo values.
@@ -127,7 +143,7 @@ serve(async (req) => {
         .limit(1)
       if (arows && arows.length) smsLast = { at: String(arows[0].created_at || ''), detail: String(arows[0].detail || '') }
     } catch (_e) { /* best-effort */ }
-    return json({ ok: true, subdomain: sub, set_names: setNames, sms_last_applied: smsLast })
+    return json({ ok: true, subdomain: sub, set_names: setNames, values, twilio_sid_last4: sidLast4, sms_last_applied: smsLast })
   }
 
   // Accept a single { name, value } (the AI-key card) or a batch

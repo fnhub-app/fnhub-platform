@@ -18,7 +18,7 @@
      light surfaces (white text on it); Amber is the accent on the dark bars.
      Font + icon are served under this panel's own CSP (admin/_headers). */
   :root{
-    --accent:#2E5E4E; --accent-bar:#D9922E; --accent-light:#ecf3f0; --ink:#111110; --ink2:#1c1c1a;
+    --accent:#2E5E4E; --accent-bar:#D9922E; --accent-light:#ecf3f0; --dark:#223F35; --ink:#111110; --ink2:#1c1c1a;
     --muted:#696960; --hair:#e8e6df; --line:#e8e6df;
     --bg:#fafaf8; --surface:#ffffff; --danger:#b91c1c; --ok:#15803d;
     --radius:10px; --shadow:0 1px 3px rgba(0,0,0,.05), 0 4px 14px rgba(0,0,0,.07);
@@ -27,7 +27,7 @@
   *{box-sizing:border-box}
   html,body{margin:0}
   body{background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.5;-webkit-text-size-adjust:100%;padding:0 0 48px}
-  .bar{background:var(--ink);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:5;border-bottom:1px solid #2a2a28}
+  .bar{background:var(--dark);color:#fff;padding:14px 18px;display:flex;align-items:center;gap:11px;position:sticky;top:0;z-index:5;border-bottom:1px solid rgba(255,255,255,.12)}
   .bar .logo{width:32px;height:32px;border-radius:9px;display:block;flex-shrink:0}
   .bar b{font-size:15px;font-weight:700;letter-spacing:.2px}
   .bar b em{font-style:normal;color:var(--accent-bar)}
@@ -63,7 +63,7 @@
   code{background:var(--accent-light);border:1px solid var(--hair);border-radius:5px;padding:1px 5px;font-size:12px}
   /* Nation Information Card -- TIC-style shell (hero + strip + tabs + body + footer) */
   .nic-shell{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:14px}
-  .nic-hero{background:var(--ink);color:#fff;padding:14px 18px 16px}
+  .nic-hero{background:var(--dark);color:#fff;padding:14px 18px 16px}
   .nic-hero .back{background:none;border:1px solid #444;color:#ccc;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:10px}
   .nic-hero .back:hover{border-color:var(--accent-bar);color:var(--accent-bar)}
   .nic-hero h1{color:#fff;margin:0 0 2px;font-size:21px}
