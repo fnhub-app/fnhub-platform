@@ -2450,22 +2450,24 @@
       var d = await r.json().catch(function(){ return {}; });
       if (!r.ok){ el.innerHTML = 'Could not read the project\'s secret status' + (d && d.error ? ' (' + esc(d.error) + ')' : '') + '.'; return; }
       var names = {}; (d.set_names || []).forEach(function(nm){ names[nm] = true; });
-      var vals = d.values || {};
+      // Real sender values come from the registry marker (nations.sms, written
+      // when applied via this panel) -- the project only ever returns DIGESTS
+      // of its secrets, so nothing from the project list is displayable.
+      var cfg = d.sms_config || {};
       var mark = function(label, on, extra){ return label + ': ' + (on ? '<b style="color:var(--ok);">set' + (extra ? ' (' + esc(extra) + ')' : '') + '</b>' : '<span>not set</span>'); };
       var senderOk = !!(names.SMS_FROM || names.TWILIO_MESSAGING_SERVICE_SID);
       var allOk = !!(names.SMS_PROVIDER && names.TWILIO_ACCOUNT_SID && names.TWILIO_AUTH_TOKEN && senderOk);
-      // Prefill the NON-SECRET fields with the live project values (only when
-      // the input is empty, so in-progress typing is never clobbered). The
-      // Auth Token is write-only and the SID shows masked in the line below.
+      // Prefill the sender fields from the registry marker (only when empty,
+      // so in-progress typing is never clobbered). Credentials never echo.
       var fromEl = document.getElementById('cn-sms-from');
-      if (fromEl && !fromEl.value && vals.SMS_FROM) fromEl.value = vals.SMS_FROM;
+      if (fromEl && !fromEl.value && cfg.from) fromEl.value = cfg.from;
       var msvcEl = document.getElementById('cn-sms-msvc');
-      if (msvcEl && !msvcEl.value && vals.TWILIO_MESSAGING_SERVICE_SID) msvcEl.value = vals.TWILIO_MESSAGING_SERVICE_SID;
+      if (msvcEl && !msvcEl.value && cfg.messaging_service_sid) msvcEl.value = cfg.messaging_service_sid;
       el.innerHTML = 'Already on the project &mdash; '
-        + mark('provider', names.SMS_PROVIDER, vals.SMS_PROVIDER) + ' &middot; '
-        + mark('Account SID', names.TWILIO_ACCOUNT_SID, d.twilio_sid_last4 ? 'AC...' + d.twilio_sid_last4 : '') + ' &middot; '
+        + mark('provider', names.SMS_PROVIDER) + ' &middot; '
+        + mark('Account SID', names.TWILIO_ACCOUNT_SID) + ' &middot; '
         + mark('Auth Token', names.TWILIO_AUTH_TOKEN) + ' &middot; '
-        + mark('sender', senderOk, vals.SMS_FROM || vals.TWILIO_MESSAGING_SERVICE_SID) + '. '
+        + mark('sender', senderOk, cfg.from || cfg.messaging_service_sid) + '. '
         + (allOk
             ? '<b style="color:var(--ok);">SMS sending is configured.</b> Leave the fields blank to keep it.'
             : 'Fill in the missing fields and Apply (or set them in the nation project\'s dashboard).')
