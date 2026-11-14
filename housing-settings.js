@@ -1868,12 +1868,13 @@ function renderThemesPanel() {
     + '</div>'
     + '<div id="theme_logo_msg" class="txt-fineprint"></div>'
     + '<label class="flex-row-mb" style="margin-top:10px;cursor:pointer;">'
-    +   '<input type="checkbox" id="theme_logo_transparent"' + (theme.logoTransparent?' checked':'') + ' onchange="_themeOnTransparentChange()"/>'
+    +   '<input type="checkbox" id="theme_logo_transparent"' + (theme.logoTransparent?' checked':'') + ' onchange="_themeOnTransparentChange();_themeScheduleAutoSave();"/>'
     +   '<span class="txt-help m-0">Drop white background &mdash; useful when the logo image isn&rsquo;t saved with a transparent background. Best for clean white-on-dark logos.</span>'
     + '</label>'
-    + '<div class="flex-end-10" style="margin-top:18px;">'
+    + '<div class="flex-end-10" style="margin-top:18px;align-items:center;">'
+    +   '<span id="theme_autosave_ind" style="margin-right:auto;font-size:12px;color:var(--muted);">Changes save automatically</span>'
     +   '<button type="button" onclick="resetThemeSettings()" class="btn btn-ghost">Reset to Defaults</button>'
-    +   '<button type="button" onclick="saveThemeSettings()" class="btn btn-primary">Save &amp; Apply</button>'
+    +   '<button type="button" onclick="saveThemeSettings()" class="btn btn-ghost">Save now</button>'
     + '</div>';
   // Stash a working copy for the file picker to write into
   window._themeDraftLogo = theme.logo || '';
@@ -1899,6 +1900,7 @@ function _themeOnRangeChange(key) {
   var px = slider.value + 'px';
   if (valEl) valEl.textContent = px;
   document.documentElement.style.setProperty('--' + key, px);
+  _themeScheduleAutoSave();
 }
 // Font select → load font + apply CSS variable live for immediate preview
 function _themeOnFontChange(key) {
@@ -1909,6 +1911,7 @@ function _themeOnFontChange(key) {
   var css  = def ? def.css : ("'" + name + "', " + (key === 'serif' ? 'serif' : 'sans-serif'));
   if (def && def.google) window._loadGoogleFont(name);
   document.documentElement.style.setProperty('--' + key, css);
+  _themeScheduleAutoSave();
 }
 // Map a theme field key to the CSS custom property it drives (most are 1:1;
 // 'tint' drives --yellow-light).
@@ -1935,6 +1938,7 @@ function _themeOnPickerChange(key) {
   var hex    = document.getElementById('theme_'+key+'_hex');
   if(picker && hex) hex.value = picker.value;
   _themeLiveApply(key, picker.value);
+  _themeScheduleAutoSave();
 }
 function _themeOnHexChange(key) {
   var hex    = document.getElementById('theme_'+key+'_hex');
@@ -1944,6 +1948,7 @@ function _themeOnHexChange(key) {
   if(!/^#[0-9a-fA-F]{6}$/.test(v)) return;       // wait for a valid hex
   if(picker) picker.value = v;
   _themeLiveApply(key, v);
+  _themeScheduleAutoSave();
 }
 function _themeApplyLogoFile(f) {
   var msg = document.getElementById('theme_logo_msg');
@@ -1966,7 +1971,8 @@ function _themeApplyLogoFile(f) {
     if(img)   img.src = dataUrl;
     if(wrap)  wrap.style.display  = '';
     if(empty) empty.style.display = 'none';
-    if(msg) msg.textContent = 'Logo ready — click Save & Apply to publish.';
+    if(msg) msg.textContent = 'Logo added.';
+    _themeScheduleAutoSave();
   };
   rdr.readAsDataURL(f);
 }
@@ -1996,7 +2002,8 @@ function _themeClearLogo() {
   if(img)   img.src = '';
   if(wrap)  wrap.style.display  = 'none';
   if(empty) empty.style.display = '';
-  if(msg) msg.textContent = 'Logo cleared — click Save & Apply to publish.';
+  if(msg) msg.textContent = 'Logo cleared.';
+  _themeScheduleAutoSave();
 }
 
 function _readThemeFromForm() {
@@ -2045,6 +2052,49 @@ function saveThemeSettings() {
       if(typeof auditEntry === 'function') auditEntry('SETTINGS', 'theme_updated', 'Brand theme updated', window.currentRole||'staff');
     } else {
       showToast('Theme save failed — applied locally only', {type:'error'});
+    }
+  });
+}
+
+// ── Auto-save (Settings -> Themes) ──────────────────────────────────────────
+// Theme changes persist automatically a short beat after the last edit, so the
+// ED doesn't have to click "Save now". Debounced because the colour pickers and
+// hex boxes fire on every `input` while dragging/typing. ED/super_user only; a
+// small indicator in the footer reflects the state (no per-change toast).
+var _themeAutoSaveTimer = null;
+function _themeIsThemeEd() {
+  var r = (window.currentRole || '');
+  return r === ROLE.ED || r === ROLE.SUPER_USER;
+}
+function _themeAutosaveInd(txt, danger) {
+  var ind = document.getElementById('theme_autosave_ind');
+  if (!ind) return;
+  ind.textContent = txt;
+  ind.style.color = danger ? 'var(--danger)' : 'var(--muted)';
+}
+function _themeScheduleAutoSave() {
+  if (!_themeIsThemeEd()) return;                 // non-ED can't edit anyway
+  if (_themeAutoSaveTimer) clearTimeout(_themeAutoSaveTimer);
+  _themeAutosaveInd('Saving…');
+  _themeAutoSaveTimer = setTimeout(_themeDoAutoSave, 700);
+}
+window._themeScheduleAutoSave = _themeScheduleAutoSave;
+function _themeDoAutoSave() {
+  _themeAutoSaveTimer = null;
+  if (!_themeIsThemeEd()) return;
+  var theme = _readThemeFromForm();
+  // Re-apply the whole theme so accent-derived colours (header/hover/tint)
+  // settle to the new accent, not just the single var the live handler set.
+  if (typeof _applyTheme === 'function') _applyTheme(theme);
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.theme = theme;
+  saveSettingWithDraftFallback('theme', theme).then(function (ok) {
+    if (ok) {
+      var t = new Date();
+      _themeAutosaveInd('✓ Saved ' + t.getHours() + ':' + String(t.getMinutes()).padStart(2, '0'));
+      if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'theme_updated', 'Brand theme updated (auto-save)', window.currentRole || 'staff');
+    } else {
+      _themeAutosaveInd('Save failed — applied locally only', true);
     }
   });
 }
