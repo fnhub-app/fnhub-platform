@@ -483,8 +483,10 @@ async function writeAiAudit(opts: {
 // read + compared here with the service-role client.
 // Platform default monthly token ceiling applied when a nation has not set its
 // own. ~3M tokens/month is a generous safety cap that still sits well inside the
-// AI add-on's budget. A nation can raise it, lower it, or set 0 to disable the
-// cap entirely from Settings -> Nation -> AI Usage Limit.
+// AI add-on's budget. The cap is managed per nation from the ADMIN CONTROL
+// PLANE (Nation Dashboard -> Config -> AI usage limit, via set-nation-module's
+// set_ai_limit action) -- the platform pays the Anthropic bill. The in-app
+// Settings -> Nation card shows it read-only.
 const DEFAULT_FAIR_USE_TOKENS = 3_000_000
 async function getFairUseLimit(admin: ReturnType<typeof createClient>): Promise<number> {
   try {

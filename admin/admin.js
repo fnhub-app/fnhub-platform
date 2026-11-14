@@ -938,6 +938,7 @@
     renderSupportKey(n.subdomain);
     loadNicSummary(n.subdomain);
     renderNationModuleEnablement(n.subdomain, n.id, n.supabase_url, n.modules_licensed);
+    renderNationAiLimit(n.subdomain, n.supabase_url);
     if (typeof window.renderNationSeller === 'function') window.renderNationSeller(n);   // Overview -> Sold by (reseller.js)
   };
 
@@ -1036,6 +1037,12 @@
       +   '<p class="sub" style="margin:4px 0 0;font-size:11px;">Requires the nation to have a Supabase project, and the <code>ai-chat</code> function deployed to it (see the provisioning checklist). Leave blank and Save does nothing.</p>'
       +   '<div class="msg" id="cn-ai-msg"></div>'
       +   '<button class="btn sm" type="button" data-act="ai-key-save" data-sub="' + esc(n.subdomain) + '">Save &amp; apply to project</button>'
+      + '</div>'
+      + '<div class="card"><h3>AI usage limit (monthly token cap)</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Monthly ceiling on this nation\'s AI tokens, enforced server-side by the nation\'s <code>ai-chat</code> function. When the cap is reached the assistant pauses for the rest of the month, then resets. <b>Nation Pathways pays the Anthropic bill, so this is set here</b> &mdash; the nation\'s own Settings card shows it read-only. Platform default: <b>3,000,000 tokens/month</b> (about $10&ndash;30 CAD). Blank = default; <b>0</b> = no cap (unlimited).</p>'
+      +   '<div id="cn-ai-limit-body"><div class="empty">Loading current limit&hellip;</div></div>'
+      +   '<div class="msg" id="cn-ai-limit-msg"></div>'
+      +   '<button class="btn sm" type="button" data-act="ai-limit-save" data-sub="' + esc(n.subdomain) + '">Save limit</button>'
       + '</div>'
       + '<div class="card"><h3>Support login key</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Per-nation signing key for the <b>Enter</b> (support login) feature. The <b>private</b> key stays here on the control plane; you copy the <b>public</b> key into this nation\'s <code>SUPPORT_LOGIN_PUBKEY</code> Edge Function secret. A stolen public key cannot forge a login. Once generated the key is <b>locked</b> &mdash; rotating it invalidates the nation\'s current public key until you re-copy it.</p>'
@@ -2497,6 +2504,56 @@
     });
   };
 
+  // AI usage limit (Config card): reads/writes the nation's housing_settings
+  // key 'ai_fair_use' via set-nation-module's get_ai_limit / set_ai_limit
+  // actions. Blank = platform default (3,000,000/mo); 0 = no cap (unlimited).
+  window.renderNationAiLimit = async function(sub, supabaseUrl){
+    var body = document.getElementById('cn-ai-limit-body');
+    if(!body) return;
+    if(!supabaseUrl){ body.innerHTML = '<div class="empty">This nation has no Supabase project yet. Provision it first.</div>'; return; }
+    var cfg = {};
+    try {
+      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: sub, action: 'get_ai_limit' })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if(!r.ok){ body.innerHTML = '<div class="empty">Could not load the limit: ' + esc(d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + esc(String(d.detail).slice(0,160)) : '') + '</div>'; return; }
+      cfg = (d && d.ai_fair_use) || {};
+    } catch(e){ body.innerHTML = '<div class="empty">Network error loading the limit.</div>'; return; }
+    var raw = (cfg && cfg.monthly_tokens != null) ? cfg.monthly_tokens : '';
+    var cur = (raw === '' || raw == null) ? '' : String(raw);
+    var state = (cur === '') ? 'platform default (3,000,000/mo)' : (Number(cur) === 0 ? 'no cap (unlimited)' : Number(cur).toLocaleString('en-CA') + ' tokens/mo');
+    body.innerHTML =
+        '<div style="font-size:12px;margin-bottom:8px;">Current: <b>' + esc(state) + '</b></div>'
+      + '<label>Monthly token cap</label><input id="cn-ai-limit" type="text" inputmode="numeric" placeholder="3,000,000 (default)" value="' + esc(cur) + '"/>';
+  };
+
+  window.saveNationAiLimit = async function(sub){
+    var txt = String(((document.getElementById('cn-ai-limit') || {}).value) || '').trim();
+    var val;
+    if (txt === '') val = '';
+    else {
+      var n = parseInt(txt.replace(/[^0-9]/g, ''), 10);
+      if (isNaN(n) || n < 0){ setMsg('cn-ai-limit-msg', 'Enter a whole number of tokens (0 = unlimited, blank = platform default).'); return; }
+      val = n;
+    }
+    setMsg('cn-ai-limit-msg', 'Saving...', 'ok');
+    try {
+      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subdomain: sub, action: 'set_ai_limit', monthly_tokens: val })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      if(!r.ok){ setMsg('cn-ai-limit-msg', 'Failed: ' + (d.error || ('HTTP ' + r.status)) + (d.detail ? ' - ' + String(d.detail).slice(0,160) : '')); return; }
+      var label = (val === '') ? 'platform default (3,000,000/mo)' : (val === 0 ? 'no cap (unlimited)' : val.toLocaleString('en-CA') + '/mo');
+      setMsg('cn-ai-limit-msg', 'Saved: ' + label + '. Enforced on the nation\'s next AI request; its Settings card shows it read-only.', 'ok');
+      await audit('nation_ai_limit_set', sub, label);
+    } catch(e){ setMsg('cn-ai-limit-msg', 'Network error: ' + String(e).slice(0,120)); }
+  };
+
   // ON  -> license (registry modules_licensed[key]=true) + enable (nation).
   // OFF -> disable (nation); licensing is intentionally left as-is.
   window.toggleNationModule = async function(sub, nationId, module, on, cb){
@@ -3110,6 +3167,7 @@
       case 'nic-tab':       window.nicTab(el.getAttribute('data-tab') || ''); break;
       case 'note-add':      window.addNationNote(el.getAttribute('data-sub') || ''); break;
       case 'ai-key-save':   window.saveNationAiKey(el.getAttribute('data-sub') || ''); break;
+      case 'ai-limit-save': window.saveNationAiLimit(el.getAttribute('data-sub') || ''); break;
       case 'email-apply':   window.applyNationEmailSecrets(el.getAttribute('data-sub') || ''); break;
       case 'sms-apply':     window.applyNationSmsSecrets(el.getAttribute('data-sub') || ''); break;
       case 'copy-text':     window.copyTextBtn(el); break;
