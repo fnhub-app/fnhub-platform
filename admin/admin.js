@@ -922,6 +922,76 @@
     clearSession(); document.getElementById('btn_out').style.display = 'none'; showLogin();
   };
 
+  // ---- Per-nation setup checklists (persisted) --------------------------------
+  // State: nations.setup_checklist jsonb { "<key>": {done,by,at} }. Rendered by
+  // _chkRow(); a tick PATCHes the registry so any admin sees done/outstanding.
+  // Requires the platform SQL (run via Migrations -> platform mode):
+  //   alter table public.nations add column if not exists setup_checklist jsonb;
+  var CHK_SECTIONS = {
+    setup:  ['ns_register','ns_project','ns_provision','ns_ai_key','ns_email','ns_functions','ns_subdomain','ns_auth','ns_modules','ns_active','ns_handoff'],
+    intake: ['ei_table','ei_function','ei_secret','ei_routing','ei_address','ei_test'],
+    portal: ['cp_tables','cp_functions','cp_phone_auth','cp_license','cp_invite']
+  };
+  window._nicSetupState = {}; window._nicSetupSub = '';
+  function _chkDone(key){ var s = window._nicSetupState[key]; return !!(s && s.done); }
+  function _chkRow(key, title, bodyHtml){
+    var done = _chkDone(key);
+    var st = window._nicSetupState[key] || {};
+    var meta = done ? ' <span style="font-size:11px;color:var(--ok);font-weight:600;">&#10003; ' + esc(String(st.by || '').split('@')[0] || 'done') + (st.at ? ' &middot; ' + esc(timeAgo(st.at)) : '') + '</span>' : '';
+    return '<li style="display:flex;gap:10px;padding:9px 0;border-bottom:1px solid var(--line);align-items:flex-start;">'
+      + '<input type="checkbox" data-act="setup-check" data-key="' + esc(key) + '"' + (done ? ' checked' : '') + ' style="width:auto;margin-top:3px;flex-shrink:0;cursor:pointer;"/>'
+      + '<div style="flex:1;" id="chk_body_' + esc(key) + '" class="' + (done ? 'chk-done' : '') + '">'
+      +   '<div class="chk-title" style="font-weight:700;font-size:13px;">' + title + '<span id="chk_meta_' + esc(key) + '">' + meta + '</span></div>'
+      +   (bodyHtml ? '<div style="font-size:12px;color:var(--muted);line-height:1.55;">' + bodyHtml + '</div>' : '')
+      + '</div></li>';
+  }
+  function _chkProgress(section){
+    var keys = CHK_SECTIONS[section] || [];
+    var done = 0; keys.forEach(function(k){ if (_chkDone(k)) done++; });
+    return done + '/' + keys.length;
+  }
+  function _chkAllProgress(){
+    var done = 0, total = 0;
+    Object.keys(CHK_SECTIONS).forEach(function(sec){ CHK_SECTIONS[sec].forEach(function(k){ total++; if (_chkDone(k)) done++; }); });
+    return done + ' of ' + total + ' steps done';
+  }
+  function _chkRefreshBadges(){
+    Object.keys(CHK_SECTIONS).forEach(function(sec){
+      var b = document.getElementById('chk_prog_' + sec); if (b) b.textContent = _chkProgress(sec);
+    });
+    var ov = document.getElementById('chk_prog_all'); if (ov) ov.textContent = _chkAllProgress();
+  }
+  window.toggleSetupCheck = async function(el){
+    var key = el.getAttribute('data-key'); if (!key || !window._nicSetupSub) return;
+    var on = !!el.checked;
+    var st = window._nicSetupState;
+    var prev = st[key];
+    if (on) st[key] = { done: true, by: jwtEmail(), at: new Date().toISOString() };
+    else delete st[key];
+    var body = document.getElementById('chk_body_' + key); if (body) body.className = on ? 'chk-done' : '';
+    var meta = document.getElementById('chk_meta_' + key);
+    if (meta) meta.innerHTML = on ? ' <span style="font-size:11px;color:var(--ok);font-weight:600;">&#10003; ' + esc(jwtEmail().split('@')[0] || 'done') + ' &middot; just now</span>' : '';
+    _chkRefreshBadges();
+    try {
+      var r = await api('PATCH', '/nations?subdomain=eq.' + encodeURIComponent(window._nicSetupSub),
+        { setup_checklist: st, updated_at: new Date().toISOString() }, 'return=minimal');
+      if (!r.ok){
+        var t = await r.text().catch(function(){ return ''; });
+        // revert
+        if (prev) st[key] = prev; else delete st[key];
+        el.checked = !on; if (body) body.className = el.checked ? 'chk-done' : ''; _chkRefreshBadges();
+        var hint = /setup_checklist/.test(t) ? ' Run the platform SQL first (Migrations -> platform mode): alter table public.nations add column if not exists setup_checklist jsonb;' : '';
+        dlgAlert('Could not save the checklist: ' + String(t).slice(0, 160) + hint, { title: 'Checklist not saved' });
+        return;
+      }
+      await audit('nation_setup_check', window._nicSetupSub, key + (on ? ' done' : ' reopened'));
+    } catch (e) {
+      if (prev) st[key] = prev; else delete st[key];
+      el.checked = !on; if (body) body.className = el.checked ? 'chk-done' : ''; _chkRefreshBadges();
+      dlgAlert('Network error saving the checklist: ' + String(e).slice(0, 120), { title: 'Checklist not saved' });
+    }
+  };
+
   // ---- Configure a nation (P3) -----------------------------------------------
   window.adminHome = function(){ showDashboard(); };
 
@@ -938,6 +1008,10 @@
       if (n) _nations = _nations.filter(function(x){ return String(x.id) !== String(n.id); }).concat([n]);
     }
     if (!n){ showDashboard(); return; }
+    // Per-nation setup-checklist state (nations.setup_checklist jsonb) must be
+    // loaded BEFORE configureView builds the checkbox rows.
+    window._nicSetupState = (n.setup_checklist && typeof n.setup_checklist === 'object') ? n.setup_checklist : {};
+    window._nicSetupSub = String(n.subdomain || '').toLowerCase();
     document.getElementById('btn_out').style.display = '';
     app.innerHTML = configureView(n);
     renderNationDocsCard(n.subdomain);
@@ -973,8 +1047,29 @@
     // Access + status actions live here (moved off the nations-list rows,
     // which now carry only the Dashboard button).
     var nUrl = 'https://' + esc(n.subdomain) + '.fnhub.app';
+    var pSetupCard =
+        '<div class="card"><h3>Setup checklist <span id="chk_prog_all" style="font-size:12px;font-weight:600;color:var(--muted);margin-left:8px;">' + _chkAllProgress() + '</span></h3>'
+      +   '<p class="sub" style="margin:2px 0 4px;">Tick each step as it is completed for <b>this nation</b> &mdash; saved to the registry, so every admin sees what is done and what is outstanding. The full how-to for each step lives on the <b>Provision</b> page guides; the Email Intake and Contractor Portal steps also appear (with their details) on those tabs.</p>'
+      +   '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.6px;margin-top:10px;">Nation setup <span id="chk_prog_setup" style="font-weight:600;text-transform:none;letter-spacing:0;">' + _chkProgress('setup') + '</span></div>'
+      +   '<ol style="list-style:none;margin:2px 0 0;padding:0;">'
+      +     _chkRow('ns_register',  'Register the nation', '')
+      +     _chkRow('ns_project',   'Create its Supabase project', '')
+      +     _chkRow('ns_provision', 'Provision (schema, bucket, first ED)', '')
+      +     _chkRow('ns_ai_key',    'Set the AI Assistant key', '')
+      +     _chkRow('ns_email',     'Set up email notifications', '')
+      +     _chkRow('ns_functions', 'Deploy the Edge Functions to the project', '')
+      +     _chkRow('ns_subdomain', 'Point the subdomain at the app (Cloudflare)', '')
+      +     _chkRow('ns_auth',      'Set the auth sign-in policy', '')
+      +     _chkRow('ns_modules',   'License the modules', '')
+      +     _chkRow('ns_active',    'Set status to Active', '')
+      +     _chkRow('ns_handoff',   'Hand off to the nation\'s ED', '')
+      +   '</ol>'
+      +   '<div style="font-size:12px;color:var(--muted);margin-top:10px;">Email Intake: <b id="chk_prog_intake">' + _chkProgress('intake') + '</b> (details on the Email Intake tab) &middot; Contractor Portal &amp; SMS: <b id="chk_prog_portal">' + _chkProgress('portal') + '</b> (details on the SMS &amp; Portal tab)</div>'
+      + '</div>';
+
     var pOverview =
-        '<div class="card"><h3>Access</h3>'
+        pSetupCard
+      + '<div class="card"><h3>Access</h3>'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
       +     '<a class="btn sm ghost" href="' + nUrl + '" target="_blank" rel="noopener">Open ' + esc(n.subdomain) + '.fnhub.app &rarr;</a>'
       +     (n.supabase_url ? '<button class="btn sm ghost" type="button" data-act="enter" data-id="' + esc(n.id) + '" title="Sign in to this nation as Platform Support (logged both sides; the nation\'s ED is emailed)">Enter as Platform Support</button>' : '')
@@ -1096,13 +1191,14 @@
     var pEmailIntake =
         '<div class="card"><h3>Email Intake &mdash; setup</h3>'
       +   '<p class="sub" style="margin:2px 0 10px;">Staff forward an email to a nation address; it lands in the app under <b>Operations &rarr; Email Intake</b>, where they file it to a unit/tenant (attachments + body go to the unit&rsquo;s documents). One shared Cloudflare Email Worker (<code>housing-email-intake</code>) routes <code>&lt;nation&gt;@fnhub.app</code> to each nation&rsquo;s database via the platform registry. Do these once per nation:</p>'
-      +   '<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">'
-      +     '<li><b>Table</b> &mdash; run the <code>email_intake</code> migration (Fleet migration page). Fleet-wide, so usually already done.</li>'
-      +     '<li><b>Edge function</b> &mdash; <code>email-intake</code> deploys to every nation via CI (with <code>--no-verify-jwt</code>). No action needed.</li>'
-      +     '<li><b>Secret</b> &mdash; on <b>this nation&rsquo;s Supabase project</b> (Settings &rarr; Edge Functions &rarr; Secrets) set <code>EMAIL_INTAKE_SECRET</code> to the <b>same shared value</b> configured on the Cloudflare worker.</li>'
-      +     '<li><b>Cloudflare routing</b> &mdash; Cloudflare &rarr; <b>fnhub.app</b> &rarr; Email &rarr; Email Routing &rarr; Routing rules &rarr; add pattern <code>' + esc(n.subdomain) + '</code> &rarr; action <b>Send to a Worker</b> &rarr; <code>housing-email-intake</code>. Staff then forward to <code>' + iaAddr + '</code>.</li>'
-      +     '<li><b>App address</b> &mdash; in the nation app, <b>Settings &rarr; Nation &rarr; Email Intake Address</b> = <code>' + iaAddr + '</code> (this is the default).</li>'
-      +     '<li><b>Test</b> &mdash; forward an email to <code>' + iaAddr + '</code>, then check <b>Operations &rarr; Email Intake</b>.</li>'
+      +   '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:2px;">Progress: <span id="chk_prog_intake">' + _chkProgress('intake') + '</span></div>'
+      +   '<ol style="list-style:none;margin:0;padding:0;">'
+      +     _chkRow('ei_table',    'Table', 'Run the <code>email_intake</code> migration (Fleet migration page). Fleet-wide, so usually already done.')
+      +     _chkRow('ei_function', 'Edge function', '<code>email-intake</code> deploys to every nation via CI (with <code>--no-verify-jwt</code>). No action needed.')
+      +     _chkRow('ei_secret',   'Secret', 'On <b>this nation&rsquo;s Supabase project</b> (Settings &rarr; Edge Functions &rarr; Secrets) set <code>EMAIL_INTAKE_SECRET</code> to the <b>same shared value</b> configured on the Cloudflare worker.')
+      +     _chkRow('ei_routing',  'Cloudflare routing', 'Cloudflare &rarr; <b>fnhub.app</b> &rarr; Email &rarr; Email Routing &rarr; Routing rules &rarr; add pattern <code>' + esc(n.subdomain) + '</code> &rarr; action <b>Send to a Worker</b> &rarr; <code>housing-email-intake</code>. Staff then forward to <code>' + iaAddr + '</code>.')
+      +     _chkRow('ei_address',  'App address', 'In the nation app, <b>Settings &rarr; Nation &rarr; Email Intake Address</b> = <code>' + iaAddr + '</code> (this is the default).')
+      +     _chkRow('ei_test',     'Test', 'Forward an email to <code>' + iaAddr + '</code>, then check <b>Operations &rarr; Email Intake</b>.')
       +   '</ol>'
       +   '<p class="sub" style="margin:10px 0 0;font-size:11px;"><b>Sender gate:</b> only emails whose sender is an <b>active staff member of this nation</b> create a row &mdash; anything else is dropped (the address is public). Staff forward from their own work address. <b>Do NOT</b> enable Cloudflare Email Routing on the nation&rsquo;s own mail domain (e.g. a Microsoft 365 domain) &mdash; it hijacks the MX and breaks that mail. Use <code>' + iaAddr + '</code>, or have the mail admin auto-forward a friendly address to it. The <code>EMAIL_INTAKE_SECRET</code> must match exactly on the Cloudflare worker and on every nation&rsquo;s Supabase project.</p>'
       + '</div>';
@@ -1130,12 +1226,13 @@
       + '</div>'
       + '<div class="card"><h3>Contractor Portal &mdash; setup</h3>'
       +   '<p class="sub" style="margin:2px 0 10px;">Contractors sign in at <a href="' + portalUrl + '" target="_blank" rel="noopener"><code>' + portalUrl + '</code></a> with an SMS one-time code (Supabase phone auth via <b>Twilio Verify</b> &mdash; separate from the notification sender above) and see only their own work orders (enforced by RLS). Do these once per nation:</p>'
-      +   '<ol style="margin:0;padding-left:18px;font-size:13px;line-height:1.7;">'
-      +     '<li><b>Tables</b> &mdash; run <code>20261101_contractor_portal_b1.sql</code> (and <code>20261031_sms_notifications.sql</code> for SMS) from the <b>Fleet migrations</b> page. Fleet-wide and idempotent, so usually already done.</li>'
-      +     '<li><b>Edge functions</b> &mdash; <code>contractor-claim</code> and <code>send-sms</code> deploy to every nation via CI (the &ldquo;Deploy Supabase Edge Functions&rdquo; workflow). No action.</li>'
-      +     '<li><b>Phone auth</b> &mdash; on <b>this nation&rsquo;s Supabase project</b>: Authentication &rarr; Providers &rarr; <b>Phone</b> &rarr; enable &rarr; SMS provider <b>Twilio Verify</b>, then enter the Account SID + Auth Token and a <b>Verify Service SID</b> (Twilio &rarr; Verify &rarr; Services &rarr; Create). This is a dashboard step.</li>'
-      +     '<li><b>License + enable</b> &mdash; tick <b>Contractor Portal</b> (and <b>SMS / Text Notifications</b>) under <b>Overview &rarr; Licensed modules</b> and Save, then the nation turns each on in <b>Settings &rarr; Nation &rarr; Modules</b>.</li>'
-      +     '<li><b>Invite</b> &mdash; staff invite a contractor&rsquo;s known key-contact phone from the contractor card; only an invited phone that is also on the contractor&rsquo;s record can claim a login.</li>'
+      +   '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:2px;">Progress: <span id="chk_prog_portal">' + _chkProgress('portal') + '</span></div>'
+      +   '<ol style="list-style:none;margin:0;padding:0;">'
+      +     _chkRow('cp_tables',     'Tables', 'Run <code>20261101_contractor_portal_b1.sql</code> (and <code>20261031_sms_notifications.sql</code> for SMS) from the <b>Fleet migrations</b> page. Fleet-wide and idempotent, so usually already done.')
+      +     _chkRow('cp_functions',  'Edge functions', '<code>contractor-claim</code> and <code>send-sms</code> deploy to every nation via CI (the &ldquo;Deploy Supabase Edge Functions&rdquo; workflow). No action.')
+      +     _chkRow('cp_phone_auth', 'Phone auth', 'On <b>this nation&rsquo;s Supabase project</b>: Authentication &rarr; Providers &rarr; <b>Phone</b> &rarr; enable &rarr; SMS provider <b>Twilio Verify</b>, then enter the Account SID + Auth Token and a <b>Verify Service SID</b> (Twilio &rarr; Verify &rarr; Services &rarr; Create). This is a dashboard step.')
+      +     _chkRow('cp_license',    'License + enable', 'Tick <b>Contractor Portal</b> (and <b>SMS / Text Notifications</b>) under <b>Overview &rarr; Licensed modules</b> and Save, then turn each on in the nation\'s <b>Modules</b> card here.')
+      +     _chkRow('cp_invite',     'Invite', 'Staff invite a contractor&rsquo;s known key-contact phone from the contractor card; only an invited phone that is also on the contractor&rsquo;s record can claim a login.')
       +   '</ol>'
       +   '<p class="sub" style="margin:10px 0 0;font-size:11px;"><b>Keep both OFF on the demo nation</b> unless the <code>is_demo</code> SMS guardrail is built &mdash; a live portal/notification send uses real Twilio and would text a real phone.</p>'
       + '</div>';
@@ -3258,6 +3355,7 @@
       case 'note-add':      window.addNationNote(el.getAttribute('data-sub') || ''); break;
       case 'ai-key-save':   window.saveNationAiKey(el.getAttribute('data-sub') || ''); break;
       case 'ai-limit-save': window.saveNationAiLimit(el.getAttribute('data-sub') || ''); break;
+      case 'setup-check':   window.toggleSetupCheck(el); break;
       case 'email-apply':   window.applyNationEmailSecrets(el.getAttribute('data-sub') || ''); break;
       case 'sms-apply':     window.applyNationSmsSecrets(el.getAttribute('data-sub') || ''); break;
       case 'copy-text':     window.copyTextBtn(el); break;
