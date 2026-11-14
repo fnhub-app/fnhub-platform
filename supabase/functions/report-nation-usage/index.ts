@@ -107,10 +107,19 @@ serve(async (req) => {
     storage_bytes:  usage.storage_bytes  == null ? null : Number(usage.storage_bytes),
     ai_input_tokens:  usage.ai_input_tokens  == null ? null : Number(usage.ai_input_tokens),
     ai_output_tokens: usage.ai_output_tokens == null ? null : Number(usage.ai_output_tokens),
+    // Homes on record (non-archived housing_units) -- drives dynamic billing.
+    units_count: usage.units_count == null ? null : Number(usage.units_count),
     reported_by: callerEmail || null,
     reported_at: new Date().toISOString(),
   }
-  const { error } = await admin.from('nation_usage').upsert(row, { onConflict: 'subdomain' })
+  let { error } = await admin.from('nation_usage').upsert(row, { onConflict: 'subdomain' })
+  if (error && /units_count/.test(String(error.message || ''))) {
+    // nation_usage.units_count not added yet on this platform -- report the
+    // rest rather than failing usage reporting on column order-of-deploy.
+    const { units_count: _uc, ...rest } = row as Record<string, unknown>
+    const r2 = await admin.from('nation_usage').upsert(rest, { onConflict: 'subdomain' })
+    error = r2.error
+  }
   if (error) return json({ error: 'write_failed', detail: String(error.message || error) }, 500)
 
   return json({ ok: true, subdomain: sub, database_bytes: row.database_bytes, storage_bytes: row.storage_bytes, ai_input_tokens: row.ai_input_tokens, ai_output_tokens: row.ai_output_tokens })
