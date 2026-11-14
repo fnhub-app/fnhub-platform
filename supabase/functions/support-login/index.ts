@@ -140,7 +140,7 @@ serve(async (req) => {
       const recips = (eds || []).filter((r: any) => isValidEmail(r.email)).map((r: any) => ({ to: r.email, to_name: r.name || '' }))
       if (recips.length) {
         const when = new Date().toISOString().replace('T', ' ').slice(0, 16) + ' UTC'
-        const inner = '<p>A <b>Home Land Homes platform support</b> session was just opened on your housing app.</p>'
+        const inner = '<p>A <b>Nation Pathways platform support</b> session was just opened on your housing app.</p>'
           + '<ul style="font-size:14px;color:#333;line-height:1.6;">'
           + '<li><b>By:</b> ' + escapeHtml(operator) + '</li>'
           + '<li><b>When:</b> ' + escapeHtml(when) + '</li>'

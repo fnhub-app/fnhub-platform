@@ -2084,7 +2084,7 @@ function renderAppHeader(){
       var c = sessionStorage.getItem('clfn_logo_cache');
       if (c) return c;
     } catch(e) {}
-    // This nation's own logo, else the Home Land Homes platform default. CLFN's
+    // This nation's own logo, else the Nation Pathways platform default. CLFN's
     // mark is only ever CLFN's own (set on its directory entry), never a fallback
     // for other nations.
     var _regLogo = (window.NATION_CONFIG && window.NATION_CONFIG.logo) || '';

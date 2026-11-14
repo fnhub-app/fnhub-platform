@@ -32,14 +32,14 @@ const SUPABASE_URL   = Deno.env.get('SUPABASE_URL') || ''
 const SERVICE_KEY    = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || ''
 const CRON_SECRET    = Deno.env.get('CRON_SECRET') || ''
 const RESEND_API_KEY = Deno.env.get('RESEND_API_KEY') || ''
-const EMAIL_FROM     = Deno.env.get('EMAIL_FROM') || 'Home Land Homes <hello@homelandhomes.ca>'
+const EMAIL_FROM     = Deno.env.get('EMAIL_FROM') || 'Nation Pathways <hello@nationpathways.com>'
 
 const PROVIDER = {
-  name:  'Home Land Homes',
+  name:  'Nation Pathways',
   addr1: '916 Piper Street, Box 2251',
   addr2: 'Hearst, Ontario  P0L 1N0',
   phone: '705-960-5076',
-  email: 'hello@homelandhomes.ca',
+  email: 'hello@nationpathways.com',
 }
 
 const CORS = {

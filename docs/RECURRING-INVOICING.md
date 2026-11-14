@@ -31,10 +31,10 @@ Everything runs on the **control-plane** project (`fnhub-platform`,
    - `CRON_SECRET` — any long random string. The scheduler must send this as
      the `x-cron-secret` header; it is the only gate on the function.
    - `RESEND_API_KEY` — **only for Auto-send.** A [Resend](https://resend.com)
-     API key. The sending domain (e.g. `homelandhomes.ca`) must be verified in
+     API key. The sending domain (e.g. `nationpathways.com`) must be verified in
      Resend.
    - `EMAIL_FROM` — optional; defaults to
-     `Home Land Homes <hello@homelandhomes.ca>`.
+     `Nation Pathways <hello@nationpathways.com>`.
 
    `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` are injected automatically.
 
