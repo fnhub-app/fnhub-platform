@@ -72,6 +72,35 @@ function advance(day: string, cadence: string, anchor: number | null): string {
   return isoDay(d)
 }
 
+// -- Dynamic pricing (schedule row has dynamic=true) --------------------------
+// Subscription band by the nation's REPORTED home count (nation_usage.units_count,
+// pushed up by report-nation-usage) + add-on lines for modules EXPLICITLY
+// licensed true on nations.modules_licensed. KEEP IN SYNC with admin/admin.js
+// SUB_BANDS + FEE_SCHEDULE (the pricing single source) -- published 2026-11-02.
+const SUB_BANDS = [
+  { max: 50,  annual: 4560,  monthly: 420  },
+  { max: 100, annual: 5520,  monthly: 505  },
+  { max: 150, annual: 6480,  monthly: 595  },
+  { max: 200, annual: 7440,  monthly: 680  },
+  { max: 250, annual: 8400,  monthly: 770  },
+  { max: 300, annual: 9360,  monthly: 860  },
+  { max: 400, annual: 11280, monthly: 1035 },
+  { max: 500, annual: 13200, monthly: 1210 },
+  { max: 600, annual: 15120, monthly: 1385 },
+]
+const ADDON_AI_MONTHLY  = 150   // AI Staff Assistant (per month)
+const ADDON_SMS_MONTHLY = 25    // Text-message notifications (per month, incl. 500 texts)
+function bandFor(homes: number): { label: string; annual: number; monthly: number } | null {
+  for (let i = 0; i < SUB_BANDS.length; i++) {
+    if (homes <= SUB_BANDS[i].max) {
+      const lo = i === 0 ? 1 : SUB_BANDS[i - 1].max + 1
+      const label = i === 0 ? ('up to ' + SUB_BANDS[i].max + ' homes') : (lo + '-' + SUB_BANDS[i].max + ' homes')
+      return { label, annual: SUB_BANDS[i].annual, monthly: SUB_BANDS[i].monthly }
+    }
+  }
+  return null   // over 600 homes = custom quote; dynamic mode falls back to the stored line
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST')    return json({ error: 'method_not_allowed' }, 405)
@@ -99,11 +128,49 @@ serve(async (req) => {
   for (const sch of (due || [])) {
     const sub = sch.subdomain
     try {
-      // Nation display details for the invoice + email.
-      const { data: nrows } = await admin.from('nations').select('display_name, office_address').eq('subdomain', sub).limit(1)
+      // Nation display details for the invoice + email (+ licensing for dynamic).
+      const { data: nrows } = await admin.from('nations').select('display_name, office_address, modules_licensed').eq('subdomain', sub).limit(1)
       const nation = (nrows && nrows[0]) || { display_name: sub }
 
-      const feeSubtotal = Math.round((Number(sch.unit_amount) || 0) * 100) / 100
+      // Fee lines: the stored schedule line, or -- in dynamic mode -- the
+      // subscription band by reported home count plus licensed add-on lines.
+      let feeLines: any[] = [{ description: sch.description, qty: 1, unit_price: Math.round((Number(sch.unit_amount) || 0) * 100) / 100 }]
+      if (sch.dynamic === true) {
+        const monthly = sch.cadence !== 'annual'
+        const mult = monthly ? 1 : 12
+        const dyn: any[] = []
+        let usage: any = null
+        try {
+          const { data: urows } = await admin.from('nation_usage').select('units_count, reported_at').eq('subdomain', sub).limit(1)
+          usage = (urows && urows[0]) || null
+        } catch (_e) { usage = null }
+        const homes = usage && usage.units_count != null ? Number(usage.units_count) : null
+        const asOf = usage && usage.reported_at ? String(usage.reported_at).slice(0, 10) : ''
+        const band = (homes != null && isFinite(homes)) ? bandFor(homes) : null
+        if (band) {
+          dyn.push({
+            description: 'Subscription - ' + band.label + ', ' + (monthly ? 'monthly' : 'annual')
+              + ' (' + homes + ' home' + (homes === 1 ? '' : 's') + ' on record' + (asOf ? ' as of ' + asOf : '') + ')',
+            qty: 1, unit_price: monthly ? band.monthly : band.annual,
+          })
+        } else {
+          // No usage reported yet, or over 600 homes (custom quote): bill the
+          // stored line and say why, rather than guessing a band.
+          dyn.push({
+            description: sch.description + (homes == null
+              ? ' (dynamic: home count not yet reported - open Settings -> Nation in the app)'
+              : ' (dynamic: ' + homes + ' homes exceeds the banded schedule - custom quote)'),
+            qty: 1, unit_price: Math.round((Number(sch.unit_amount) || 0) * 100) / 100,
+          })
+        }
+        // Add-ons bill ONLY on an explicit licensed=true (absent keys mean
+        // "default licensed" for module gating, which must never auto-bill).
+        const lic = (nation && (nation as any).modules_licensed) || {}
+        if (lic.ai_assistant === true)      dyn.push({ description: 'AI Staff Assistant (per month)',                          qty: mult, unit_price: ADDON_AI_MONTHLY })
+        if (lic.sms_notifications === true) dyn.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: ADDON_SMS_MONTHLY })
+        feeLines = dyn
+      }
+      const feeSubtotal = Math.round(feeLines.reduce((a, l) => a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0), 0) * 100) / 100
       const taxRate     = Number(sch.tax_rate) || 0
       // Standing per-nation discount: percent-of-fee or fixed dollars, clamped
       // to the fee, taken off BEFORE tax. Never applied to carried-forward
@@ -118,7 +185,7 @@ serve(async (req) => {
       const feeTaxable  = Math.round((feeSubtotal - discount) * 100) / 100
       const feeTax      = Math.round(feeTaxable * taxRate) / 100
       const dueDate     = addDays(today, Number(sch.due_days) || 30)
-      const lineItems: any[] = [{ description: sch.description, qty: 1, unit_price: feeSubtotal }]
+      const lineItems: any[] = feeLines.slice()
 
       // Optional carry-forward: roll every still-owing invoice's balance onto this
       // one as a single line, then mark the sources 'carried' (below) so a balance

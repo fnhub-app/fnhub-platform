@@ -82,3 +82,19 @@ curl -X POST https://<PLATFORM_REF>.functions.supabase.co/recurring-invoices \
 - `{"dryRun": true}` reports what would be billed without writing.
 - `{"subdomain": "demo"}` runs a single nation now.
 - `{}` runs all due schedules (what the cron job sends).
+
+## Dynamic pricing (per-usage banding)
+
+A schedule row with `dynamic = true` prices each generated invoice from the app
+instead of the stored line: the subscription band is chosen by the nation's
+**reported home count** (`nation_usage.units_count`, pushed up by
+`report-nation-usage` when a manager opens Settings -> Nation; the count comes
+from `hs_data_usage()` -- migration `20261115_usage_units_count.sql`), and
+add-on lines (AI Staff Assistant, SMS) are added when the module is
+**explicitly** `true` in `nations.modules_licensed` (absent keys never bill).
+The stored line item + amount remain as the fallback when no home count has
+been reported (or above 600 homes = custom quote). The band table in
+`recurring-invoices` must be kept in sync with `admin/admin.js` SUB_BANDS.
+Platform columns: `nation_usage.units_count`, `nation_billing.dynamic`.
+The admin Billing card has the "Dynamic pricing" toggle + a live preview, and
+its "Generate now" uses the same logic.

@@ -3195,7 +3195,9 @@
       +   '<div><label>Cadence</label><select id="cn-bill-cadence">' + cadOpts + '</select></div>'
       +   '<div><label>Next invoice date</label><input id="cn-bill-next" type="date" value="' + esc(b.next_run_date || '') + '"/></div>'
       + '</div>'
-      + '<label>Line item (fee schedule)</label>' + _billFeeSelectHtml(b.description)
+      + '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:4px;cursor:pointer;font-weight:600;"><input type="checkbox" id="cn-bill-dynamic" style="width:auto;margin-top:3px;"' + (b.dynamic ? ' checked' : '') + ' data-act="bill-dyn-toggle" data-sub="' + esc(sub) + '"/> <span><b>Dynamic pricing</b> &mdash; each invoice prices itself from the app: the subscription band by the nation\'s <b>reported home count</b> (from Settings &rarr; Nation usage reporting) plus add-on lines for modules <b>explicitly licensed</b> (AI Staff Assistant, SMS). The line item + amount below become the fallback used only when no home count has been reported.</span></label>'
+      + '<div id="cn-bill-dyn-preview" style="display:' + (b.dynamic ? 'block' : 'none') + ';background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin:8px 0 2px;font-size:12px;line-height:1.6;">Loading live preview&hellip;</div>'
+      + '<label>Line item (fee schedule)' + (b.dynamic ? ' <span style="font-weight:400;color:var(--muted);">(fallback only while Dynamic is on)</span>' : '') + '</label>' + _billFeeSelectHtml(b.description)
       + '<div style="' + g2 + '">'
       +   '<div><label>Amount per period (CAD)</label><input id="cn-bill-amount" type="number" step="0.01" value="' + esc(b.unit_amount === '' ? '' : b.unit_amount) + '"/></div>'
       +   '<div><label>Tax rate (%)</label><input id="cn-bill-tax" type="number" step="0.01" value="' + esc(b.tax_rate || 0) + '"/></div>'
@@ -3230,7 +3232,65 @@
     // Wire the fee-schedule select programmatically (admin CSP blocks inline handlers).
     var _feeSel = document.getElementById('cn-bill-desc');
     if (_feeSel) _feeSel.onchange = function(){ window._billApplyFee(_feeSel); };
+    if (b.dynamic) _billDynPreview(sub);
   }
+  // ---- Dynamic billing lines (client side) -----------------------------------
+  // Mirrors recurring-invoices' dynamic branch, but prices from the in-panel
+  // single source (SUB_BANDS / feeBandFor / feePrice). Returns {lines, note}.
+  function _dynBillingLines(n, usage, cadence, fallback){
+    var monthly = cadence !== 'annual';
+    var mult = monthly ? 1 : 12;
+    var lines = [];
+    var homes = (usage && usage.units_count != null) ? Number(usage.units_count) : null;
+    var asOf = (usage && usage.reported_at) ? String(usage.reported_at).slice(0, 10) : '';
+    var band = (homes != null && isFinite(homes)) ? feeBandFor(homes) : null;
+    if (band){
+      lines.push({ description: 'Subscription - ' + band.label + ', ' + (monthly ? 'monthly' : 'annual')
+        + ' (' + homes + ' home' + (homes === 1 ? '' : 's') + ' on record' + (asOf ? ' as of ' + asOf : '') + ')',
+        qty: 1, unit_price: monthly ? band.monthly : band.annual });
+    } else {
+      lines.push({ description: (fallback && fallback.description || 'Subscription') + (homes == null
+        ? ' (dynamic: home count not yet reported - open Settings -> Nation in the app)'
+        : ' (dynamic: ' + homes + ' homes exceeds the banded schedule - custom quote)'),
+        qty: 1, unit_price: Math.round((Number(fallback && fallback.unit_amount) || 0) * 100) / 100 });
+    }
+    // Add-ons bill ONLY on explicit licensed=true (absent = default-licensed
+    // for module GATING, which must never auto-bill).
+    var lic = (n && n.modules_licensed) || {};
+    if (lic.ai_assistant === true)      lines.push({ description: 'AI Staff Assistant (per month)',                          qty: mult, unit_price: feePrice('AI Staff Assistant (per month)') || 150 });
+    if (lic.sms_notifications === true) lines.push({ description: 'Text-message notifications (per month, incl. 500 texts)', qty: mult, unit_price: feePrice('Text-message notifications (per month, incl. 500 texts)') || 25 });
+    return { lines: lines, homes: homes, asOf: asOf, banded: !!band };
+  }
+  function _dynLinesSubtotal(lines){
+    return Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
+  }
+  async function _billDynPreview(sub){
+    var el = document.getElementById('cn-bill-dyn-preview'); if (!el) return;
+    var n = _nations.filter(function(x){ return x.subdomain === sub; })[0] || {};
+    var usage = null;
+    try {
+      var r = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,reported_at');
+      var rows = r.ok ? await r.json().catch(function(){ return []; }) : [];
+      usage = rows[0] || null;
+    } catch (e){ /* preview is best-effort */ }
+    var b = _readBilling();
+    var dyn = _dynBillingLines(n, usage, b.cadence, b);
+    var sub$ = _dynLinesSubtotal(dyn.lines);
+    var rows$ = dyn.lines.map(function(l){
+      return '<div style="display:flex;justify-content:space-between;gap:12px;"><span>' + esc(l.description) + (l.qty > 1 ? ' &times; ' + l.qty : '') + '</span><b>' + _money((Number(l.qty)||0) * (Number(l.unit_price)||0)) + '</b></div>';
+    }).join('');
+    el.innerHTML = '<b>Next invoice will bill:</b>' + rows$
+      + '<div style="display:flex;justify-content:space-between;gap:12px;border-top:1px solid #A9C4BA;margin-top:4px;padding-top:4px;"><span>Fee subtotal (before discount/tax)</span><b>' + _money(sub$) + '</b></div>'
+      + (dyn.homes == null ? '<div style="color:#7a5c00;margin-top:4px;">&#9888;&#65039; No home count reported yet &mdash; a manager opening <b>Settings &rarr; Nation</b> in the nation app reports it. Until then the fallback line above is billed.</div>'
+        : '<div style="color:var(--muted);margin-top:4px;">Home count and licensing are re-read at every generation, so this updates as the nation grows.</div>');
+  }
+  window._billDynToggle = function(sub){
+    var on = !!(document.getElementById('cn-bill-dynamic') || {}).checked;
+    var el = document.getElementById('cn-bill-dyn-preview');
+    if (el) el.style.display = on ? 'block' : 'none';
+    if (on) _billDynPreview(sub);
+  };
+
   function _readBilling(){
     function v(id){ var el = document.getElementById(id); return el ? (el.value || '').trim() : ''; }
     function cb(id){ var el = document.getElementById(id); return !!(el && el.checked); }
@@ -3248,13 +3308,14 @@
       auto_send: cb('cn-bill-autosend'),
       carry_forward: cb('cn-bill-carry'),
       recipient_email: v('cn-bill-email'),
-      cc_emails: v('cn-bill-cc')
+      cc_emails: v('cn-bill-cc'),
+      dynamic: cb('cn-bill-dynamic')
     };
   }
   window.saveNationBilling = async function(sub){
     var b = _readBilling();
     if (!b.description){ setMsg('cn-bill-msg', 'Enter a line description.'); return; }
-    if (!(b.unit_amount > 0)){ setMsg('cn-bill-msg', 'Enter an amount greater than zero.'); return; }
+    if (!b.dynamic && !(b.unit_amount > 0)){ setMsg('cn-bill-msg', 'Enter an amount greater than zero.'); return; }
     if (b.discount_type === 'percent' && b.discount_value > 100){ setMsg('cn-bill-msg', 'Percent discount cannot exceed 100%.'); return; }
     if (!/^\d{4}-\d{2}-\d{2}$/.test(b.next_run_date)){ setMsg('cn-bill-msg', 'Pick the next invoice date.'); return; }
     if (b.auto_send && !b.recipient_email){ setMsg('cn-bill-msg', 'Auto-send needs a billing email.'); return; }
@@ -3280,14 +3341,21 @@
   window.runNationBilling = async function(sub){
     var b = window._nicBilling; if (!b){ setMsg('cn-bill-msg', 'Save the schedule first.'); return; }
     var n = _nations.filter(function(x){ return x.subdomain === sub; })[0];
-    var _estBase = Math.round((Number(b.unit_amount) || 0) * 100) / 100;
+    // Dynamic schedules price from live usage + licensing at generation time.
+    var _dynLines = null;
+    if (b.dynamic){
+      var _ur = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub) + '&select=units_count,reported_at');
+      var _urows = _ur.ok ? await _ur.json().catch(function(){ return []; }) : [];
+      _dynLines = _dynBillingLines(n, _urows[0] || null, b.cadence, b).lines;
+    }
+    var _estBase = _dynLines ? _dynLinesSubtotal(_dynLines) : Math.round((Number(b.unit_amount) || 0) * 100) / 100;
     var _estDisc = _calcDiscount(_estBase, b.discount_type, Number(b.discount_value) || 0);
     var total = Math.round((_estBase - _estDisc) * (1 + (Number(b.tax_rate) || 0) / 100) * 100) / 100;
     if (!(await dlgConfirm('Generate an invoice now from this schedule for ' + (n ? n.display_name : sub) + '?\n\nThis creates ' + _money(total) + (_estDisc > 0 ? ' (after a ' + _money(_estDisc) + ' discount)' : '') + ' and advances the next date. Email is only sent by the automated scheduler, not this manual run.', { title: 'Generate now', okText: 'Generate' }))) return;
     setMsg('cn-bill-msg', 'Generating...', 'ok');
     ensureJsPdf(async function(){
       try {
-        var subtotal = Math.round((Number(b.unit_amount) || 0) * 100) / 100;
+        var subtotal = _dynLines ? _dynLinesSubtotal(_dynLines) : Math.round((Number(b.unit_amount) || 0) * 100) / 100;
         var taxRate = Number(b.tax_rate) || 0;
         var discount = _calcDiscount(subtotal, b.discount_type, Number(b.discount_value) || 0);
         var taxable = Math.round((subtotal - discount) * 100) / 100;
@@ -3297,7 +3365,7 @@
         var due = _dPlus(Number(b.due_days) || 30);
         var number = await nextInvoiceNumber();
         var inv = { subdomain: sub, number: number, issue_date: today, due_date: due, currency: 'CAD',
-          line_items: [{ description: b.description, qty: 1, unit_price: subtotal }], subtotal: subtotal, tax_rate: taxRate, tax: tax, total: tot,
+          line_items: _dynLines || [{ description: b.description, qty: 1, unit_price: subtotal }], subtotal: subtotal, tax_rate: taxRate, tax: tax, total: tot,
           amount_paid: 0, status: 'sent', notes: 'Generated from recurring schedule.', created_by: jwtEmail() };
         if (discount > 0){ inv.discount_type = b.discount_type; inv.discount_value = Number(b.discount_value) || 0; inv.discount = discount; inv.discount_label = b.discount_label || null; }
         var r = await api('POST', '/nation_invoices', inv, 'return=minimal');
@@ -3370,6 +3438,7 @@
       case 'bill-save':     window.saveNationBilling(el.getAttribute('data-sub') || ''); break;
       case 'bill-toggle':   window.toggleNationBilling(el.getAttribute('data-sub') || ''); break;
       case 'bill-run':      window.runNationBilling(el.getAttribute('data-sub') || ''); break;
+      case 'bill-dyn-toggle': window._billDynToggle(el.getAttribute('data-sub') || ''); break;
       case 'logo-clear':    { var _lh = document.getElementById('cn-logo'); var _lp = document.getElementById('cn-logo-preview'); var _lf = document.getElementById('cn-logo-file'); if (_lh) _lh.value = ''; if (_lp) _lp.style.backgroundImage = ''; if (_lf) _lf.value = ''; break; }
       case 'inv-interest':  window.invAddInterest(el.getAttribute('data-id') || '', el.getAttribute('data-sub') || ''); break;
       case 'ps-refresh':    window.renderPlatformSupport(); break;
