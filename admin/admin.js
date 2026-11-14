@@ -2501,6 +2501,19 @@
     var msvc  = get('cn-sms-msvc');
     if (!sid && !token && !from && !msvc){ setMsg('cn-sms-msg', 'Enter the Twilio Account SID, Auth Token, and a sender (number or Messaging Service SID) first.'); return; }
     if (from && msvc){ setMsg('cn-sms-msg', 'Set only ONE sender: a number (SMS_FROM) OR a Messaging Service SID, not both.'); return; }
+    // Normalize to E.164: strip spaces/dashes/dots/parens, then add the +
+    // (10-digit North American numbers get +1; 11 digits starting with 1 get
+    // +). Numbers copied out of Twilio as "(249) 402-7630" just work.
+    if (from && !/^\+/.test(from)){
+      var digits = from.replace(/[^0-9]/g, '');
+      if (digits.length === 10) from = '+1' + digits;
+      else if (digits.length === 11 && digits.charAt(0) === '1') from = '+' + digits;
+      else if (digits.length >= 8 && digits.length <= 15) from = '+' + digits;
+      var fEl = document.getElementById('cn-sms-from'); if (fEl) fEl.value = from;
+    } else if (from) {
+      from = '+' + from.slice(1).replace(/[^0-9]/g, '');
+      var fEl2 = document.getElementById('cn-sms-from'); if (fEl2) fEl2.value = from;
+    }
     if (from && !/^\+[1-9]\d{7,14}$/.test(from)){ setMsg('cn-sms-msg', 'The sender number must be E.164, e.g. +17055551234.'); return; }
     var secrets = [{ name: 'SMS_PROVIDER', value: 'twilio' }];
     if (sid)   secrets.push({ name: 'TWILIO_ACCOUNT_SID', value: sid });
