@@ -114,7 +114,20 @@ serve(async (req) => {
       .map((s: any) => String((s && s.name) || ''))
       .filter((nm: string) => VISIBLE.has(nm))
       .sort()
-    return json({ ok: true, subdomain: sub, set_names: setNames })
+    // Proof-of-save: the panel's own last SMS apply, from the audit trail this
+    // function already writes (names + caller only, never values). Lets the
+    // card answer "did my Apply land?" even though fields never echo values.
+    let smsLast: { at: string; detail: string } | null = null
+    try {
+      const { data: arows } = await admin.from('platform_audit')
+        .select('created_at, detail')
+        .eq('subdomain', sub)
+        .eq('action', 'nation_sms_secrets_set')
+        .order('created_at', { ascending: false })
+        .limit(1)
+      if (arows && arows.length) smsLast = { at: String(arows[0].created_at || ''), detail: String(arows[0].detail || '') }
+    } catch (_e) { /* best-effort */ }
+    return json({ ok: true, subdomain: sub, set_names: setNames, sms_last_applied: smsLast })
   }
 
   // Accept a single { name, value } (the AI-key card) or a batch

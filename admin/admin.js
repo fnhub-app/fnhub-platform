@@ -2460,7 +2460,11 @@
         + mark('sender', senderOk) + '. '
         + (allOk
             ? '<b style="color:var(--ok);">SMS sending is configured.</b> Leave the fields blank to keep it.'
-            : 'Fill in the missing fields and Apply (or set them in the nation project\'s dashboard).');
+            : 'Fill in the missing fields and Apply (or set them in the nation project\'s dashboard).')
+        + (d.sms_last_applied && d.sms_last_applied.at
+            ? '<br/>Last applied from this panel: <b>' + esc(timeAgo(d.sms_last_applied.at)) + '</b>'
+              + (d.sms_last_applied.detail ? ' &mdash; ' + esc(String(d.sms_last_applied.detail).slice(0, 160)) : '')
+            : '');
     } catch (e){ el.textContent = ''; }
   };
 
