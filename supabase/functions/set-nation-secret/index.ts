@@ -89,6 +89,34 @@ serve(async (req) => {
   const sub = String(body.subdomain || '').trim().toLowerCase()
   if (!SUB_RE.test(sub)) return json({ error: 'bad_subdomain' }, 400)
 
+  // Read-only status: which of the panel-manageable secret NAMES already exist
+  // on the nation project, so the SMS/Email cards can reflect a setup done
+  // directly in the Supabase dashboard. The Management API response is reduced
+  // to names server-side -- secret VALUES are never returned to the browser.
+  if (body.action === 'status') {
+    const { data: srows } = await admin.from('nations').select('subdomain, supabase_url').eq('subdomain', sub).limit(1)
+    const snation = srows && srows[0]
+    if (!snation) return json({ error: 'nation_not_found' }, 404)
+    const sref = refFromUrl(snation.supabase_url || '')
+    if (!sref) return json({ error: 'nation_has_no_project' }, 400)
+    const lr = await fetch(MGMT_BASE + '/v1/projects/' + sref + '/secrets', {
+      headers: { Authorization: 'Bearer ' + MGMT_TOKEN },
+    })
+    if (!lr.ok) {
+      const t = await lr.text().catch(() => '')
+      return json({ error: 'mgmt_list_secrets_failed', status: lr.status, detail: t.slice(0, 200) }, 502)
+    }
+    let list: any[] = []
+    try { list = await lr.json() } catch (_e) { list = [] }
+    const VISIBLE = new Set<string>(ALLOWED)
+    for (const g of ['GRAPH_TENANT_ID', 'GRAPH_CLIENT_ID', 'GRAPH_CLIENT_SECRET', 'GRAPH_FROM_USER']) VISIBLE.add(g)
+    const setNames = (Array.isArray(list) ? list : [])
+      .map((s: any) => String((s && s.name) || ''))
+      .filter((nm: string) => VISIBLE.has(nm))
+      .sort()
+    return json({ ok: true, subdomain: sub, set_names: setNames })
+  }
+
   // Accept a single { name, value } (the AI-key card) or a batch
   // { secrets: [{ name, value }, ...] } (the Email tab's Apply button).
   let entries: Array<{ name: string; value: string }>
