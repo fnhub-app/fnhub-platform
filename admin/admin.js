@@ -144,14 +144,14 @@
       + 'Prices are locked for the signed term (no discounts). Only recurring subscription fees earn Commission (Section 7.3).';
   }
 
-  // Provider (Nation Pathways) details -- printed on invoices. NOTE: mailing
-  // address + phone are unchanged pending confirmation; the authoritative party
-  // details for generated contracts come from the Owner record (platform_owner,
-  // Resellers tab) -- update that too.
+  // Provider (Nation Pathways) details -- printed on invoices. NOTE: phone is
+  // unchanged pending confirmation; the authoritative party details for
+  // generated contracts come from the Owner record (platform_owner, Resellers
+  // tab) -- update that too.
   var PROVIDER = {
     name:  'Nation Pathways',
-    addr1: '916 Piper Street, Box 2251',
-    addr2: 'Hearst, Ontario  P0L 1N0',
+    addr1: '152 Simon Lake Drive, Box 392',
+    addr2: 'Naughton, Ontario  P0M 2M0',
     phone: '705-960-5076',
     email: 'hello@nationpathways.com'
   };
@@ -2231,6 +2231,16 @@
       var rows = await r.json(); return (rows && rows[0]) || null;
     } catch (e){ return null; }
   }
+  // Cached Owner record for the invoice "from" block, so the business name /
+  // address / phone / email on invoices are edited in ONE place (Resellers ->
+  // Owner), the same record the subscription agreement uses. undefined = not
+  // loaded yet; null = loaded, none on file (falls back to PROVIDER constants).
+  var _provOwner;
+  async function loadProviderOwner(){
+    if (_provOwner !== undefined) return _provOwner;
+    try { _provOwner = await loadOwner(); } catch (e){ _provOwner = null; }
+    return _provOwner;
+  }
 
   function buildAgreementPdf(nationName, address, owner, logo){
     // Provider details come from the Owner record; the fallbacks keep the
@@ -2889,10 +2899,11 @@
   };
   // Re-generate this invoice's PDF from its CURRENT stored data (so interest
   // lines, carried balances, etc. are included) and open it in a new tab.
-  window.viewNationInvoice = function(id, sub){
+  window.viewNationInvoice = async function(id, sub){
     var inv = (window._nicInvoices || []).filter(function(x){ return String(x.id) === String(id); })[0];
     if (!inv){ dlgAlert('Invoice not loaded — reopen the Invoices tab and try again.'); return; }
     var n = _nations.filter(function(x){ return x.subdomain === sub; })[0];
+    await Promise.all([loadLogoDataUrl(), loadProviderOwner()]);
     ensureJsPdf(function(){
       try {
         var doc = buildInvoicePdf(n, inv);
@@ -3033,6 +3044,7 @@
         }
         if (carried.length) await audit('nation_invoice_carried', sub, carried.length + ' invoice(s) -> ' + number);
         window._nicCarryIds = null;
+        await Promise.all([loadLogoDataUrl(), loadProviderOwner()]);
         var doc = buildInvoicePdf(n, inv);
         var fname = number + '.pdf';
         var blob = doc.output('blob');
@@ -3056,13 +3068,26 @@
     var doc = new jsPDF({ unit: 'pt', format: 'letter' });
     var M = 56, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), y = M;
     function t(s, x, yy, o){ o = o || {}; doc.setFont('helvetica', o.style || 'normal'); doc.setFontSize(o.size || 10); if (o.color) doc.setTextColor(o.color[0], o.color[1], o.color[2]); else doc.setTextColor(20, 20, 20); doc.text(String(s), x, yy, o.align ? { align: o.align } : undefined); }
-    // Header
-    t('Nation Pathways', M, y, { style: 'bold', size: 16 });
+    // Header -- logo (if preloaded) at top-left, provider block beside it.
+    // Business name / address / phone / email come from the editable Owner
+    // record (Resellers -> Owner), each field falling back to the PROVIDER
+    // constant when blank. "Housing Management Platform" stays a fixed product
+    // descriptor.
+    var ow = _provOwner || {};
+    var pName  = ow.operating_as || PROVIDER.name;
+    var pAddr1 = ow.street || PROVIDER.addr1;
+    var pCity  = [ow.city, [ow.province, ow.postal_code].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    var pAddr2 = pCity || PROVIDER.addr2;
+    var pPhone = ow.phone || PROVIDER.phone;
+    var pEmail = ow.email || PROVIDER.email;
+    var hx = M;
+    if (_logoData){ try { doc.addImage(_logoData, 'PNG', M, y - 11, 40, 40); hx = M + 52; } catch (e){} }
+    t(pName, hx, y, { style: 'bold', size: 16 });
     t('INVOICE', W - M, y, { style: 'bold', size: 18, align: 'right', color: [120, 120, 120] });
-    y += 16; t('Housing Management Platform', M, y, { size: 10, color: [110, 110, 110] });
+    y += 16; t('Housing Management Platform', hx, y, { size: 10, color: [110, 110, 110] });
     t(inv.number, W - M, y, { size: 11, align: 'right' });
-    y += 13; t(PROVIDER.addr1 + ', ' + PROVIDER.addr2, M, y, { size: 9, color: [110, 110, 110] });
-    y += 12; t(PROVIDER.phone + '   ·   ' + PROVIDER.email, M, y, { size: 9, color: [110, 110, 110] });
+    y += 13; t(pAddr1 + ', ' + pAddr2, hx, y, { size: 9, color: [110, 110, 110] });
+    y += 12; t(pPhone + '   ·   ' + pEmail, hx, y, { size: 9, color: [110, 110, 110] });
     y += 20; doc.setDrawColor(220); doc.line(M, y, W - M, y); y += 20;
     // Bill to + meta
     t('BILL TO', M, y, { style: 'bold', size: 9, color: [120, 120, 120] });
@@ -3119,7 +3144,7 @@
     ].forEach(function(line){
       doc.splitTextToSize(line, W - M * 2).forEach(function(ln){ t(ln, M, y, { size: 9, color: [90, 90, 90] }); y += 12; });
     });
-    t('Nation Pathways - Housing Management Platform', M, H - 26, { size: 8, color: [130, 130, 130] });
+    t(pName + ' - Housing Management Platform', M, H - 26, { size: 8, color: [130, 130, 130] });
     return doc;
   }
 
@@ -3379,6 +3404,7 @@
       if (!(b.unit_amount > 0) || !b.description){ setMsg('cn-bill-msg', 'Pick a line item and amount first (or tick Dynamic pricing).'); return; }
       lines = [{ description: b.description, qty: 1, unit_price: Math.round(b.unit_amount * 100) / 100 }];
     }
+    await Promise.all([loadLogoDataUrl(), loadProviderOwner()]);
     setMsg('cn-bill-msg', 'Building draft...', 'ok');
     ensureJsPdf(function(){
       try {
@@ -3433,6 +3459,7 @@
         if (discount > 0){ inv.discount_type = b.discount_type; inv.discount_value = Number(b.discount_value) || 0; inv.discount = discount; inv.discount_label = b.discount_label || null; }
         var r = await api('POST', '/nation_invoices', inv, 'return=minimal');
         if (!r.ok){ var t = await r.text(); setMsg('cn-bill-msg', /duplicate|unique/i.test(t) ? 'Number collision, try again.' : 'Could not create invoice.'); return; }
+        await Promise.all([loadLogoDataUrl(), loadProviderOwner()]);
         var doc = buildInvoicePdf(n, inv); var fname = number + '.pdf'; var blob = doc.output('blob'); var viewUrl = URL.createObjectURL(blob); doc.save(fname);
         try { await uploadDoc(sub, new File([blob], fname, { type: 'application/pdf' }), 'invoice'); } catch(e){}
         var nextRun = _advanceBillDate(b.next_run_date, b.cadence, b.anchor_day);
