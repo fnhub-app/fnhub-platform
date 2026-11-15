@@ -403,7 +403,7 @@
       +   tile('Est. hosting cost', _money(totCost) + ' CAD')
       + '</div>'
       + '<div class="nic-tabs">'
-      +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('provision', 'Provision') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
+      +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('provision', 'Provision') + tab('sop', 'Onboarding SOP') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
       + '</div>'
       + '<div class="nic-body">'
       +   panel('nations',   nationsCard(nations, usageBySub), true)
@@ -418,6 +418,7 @@
               + foldCard('Email delivery setup — Microsoft 365 (Graph) & Resend', 'Provider-side setup; day-to-day config lives in each nation\'s Email Config tab', emailSetupCard())
               + foldCard('Support login setup — the "Enter" button', 'Per-nation signing keys for platform support sessions', supportLoginSetupCard())
               + foldCard('Support inbox setup — Dashboard → Support', 'Mirror nations\' help requests into one aggregated worklist', supportInboxSetupCard()), false)
+      +   panel('sop', onboardingSopCard(), false)
       +   panel('addnation', addNationCard(), false)
       +   panel('migrations', migrationsCard(nations), false)
       // Resellers renders lazily (reseller.js) the first time its tab opens.
@@ -615,6 +616,138 @@
     // Body only — the Provision tab wraps this in a collapsible foldCard.
     return '<p class="sub" style="margin:2px 0 6px;"><span class="pill" style="font-size:9px;background:#dcfce7;color:#166534;">Automated</span> steps the platform already handles; <span class="pill" style="font-size:9px;background:#f4f4f0;color:#696960;">Manual</span> steps you do in Supabase, GitHub, or Cloudflare. Links open each destination.</p>'
       + '<ol style="list-style:none;margin:4px 0 0;padding:0;">' + items + '</ol>';
+  }
+
+  // Full end-to-end onboarding SOP -- the single authoritative sequence for
+  // standing up a new nation, phased from platform prerequisites to go-live.
+  // The detailed per-area guides stay where they're actionable (the Provision
+  // tab's fold cards and each nation's Config / Email Config / SMS & Portal /
+  // Email Intake tabs); this SOP is the ordered checklist that ties them
+  // together. Lives on its own "Onboarding SOP" tab.
+  function onboardingSopCard(){
+    var _n = 0;
+    // One running-numbered step: [title, 'auto'|'manual', html].
+    function step(title, kind, html){
+      _n += 1;
+      return '<li style="display:flex;gap:12px;padding:11px 0;border-bottom:1px solid var(--line);align-items:flex-start;">'
+        + '<span style="flex:0 0 auto;width:26px;height:26px;border-radius:50%;background:var(--accent);color:#fff;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;">' + _n + '</span>'
+        + '<div style="flex:1;"><div style="font-weight:700;font-size:13px;margin-bottom:3px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">' + title + ' ' + stepTag(kind) + '</div>'
+        + '<div style="font-size:12px;color:var(--muted);line-height:1.55;">' + html + '</div></div>'
+        + '</li>';
+    }
+    function phase(letter, title, sub){
+      return '<div style="margin:24px 0 6px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;border-bottom:2px solid var(--accent);padding-bottom:5px;">'
+        + '<span style="font-weight:800;font-size:15px;color:var(--accent);">' + letter + '</span>'
+        + '<span style="font-weight:800;font-size:14px;">' + title + '</span>'
+        + (sub ? '<span style="font-size:11px;color:var(--muted);">' + sub + '</span>' : '')
+        + '</div>';
+    }
+    function bullets(arr){
+      return '<ul style="margin:6px 0 0;padding-left:18px;font-size:12px;color:var(--muted);line-height:1.6;">'
+        + arr.map(function(t){ return '<li style="margin-bottom:5px;">' + t + '</li>'; }).join('') + '</ul>';
+    }
+    // A named optional-module block inside Phase E.
+    function optBlock(title, blurb, arr){
+      return '<div style="border:1px solid var(--line);border-radius:9px;padding:12px 14px;margin-top:12px;">'
+        + '<div style="font-weight:800;font-size:13px;">' + title + '</div>'
+        + (blurb ? '<div style="font-size:12px;color:var(--muted);margin-top:3px;">' + blurb + '</div>' : '')
+        + bullets(arr) + '</div>';
+    }
+    var ol = '<ol style="list-style:none;margin:4px 0 0;padding:0;">';
+
+    // --- Phase A: platform prerequisites (one-time, before the first nation) ---
+    var phaseA = phase('A', 'Platform prerequisites', 'one-time, before your first nation')
+      + '<p class="sub" style="margin:4px 0 0;">Do these once for the whole platform; every later nation reuses them.</p>'
+      + bullets([
+          'Control-plane Supabase project exists, with <code>SB_MGMT_TOKEN</code> set on the platform Edge Functions (the Provision action uses it to stand up each nation).',
+          'GitHub repo secrets are configured so the ' + extLink(LINKS.gh, 'deploy workflows') + ' run (Supabase access token, the default project id).',
+          'Run once in the <b>control-plane</b> SQL Editor: <code>supabase/platform/nation_support_keys.sql</code> (support-login keys) and <code>supabase/platform/support_inbox.sql</code> (aggregated Support inbox), then set <code>SUPPORT_INBOX_SECRET</code> on the platform project. Add the reseller schema (<code>supabase/platform/reseller.sql</code> + v2/v3/v4) only if you use resellers.',
+          'Fill in the <b>Owner record</b> (<b>Resellers &rarr; Owner</b>) &mdash; it is the Provider on every nation agreement and the from-block on invoices.',
+          '<b>Recommended wildcard</b> (skips the per-nation subdomain step): a proxied <code>*.fnhub.app</code> DNS record + a <code>*.fnhub.app/*</code> Worker route in ' + extLink(LINKS.cf, 'Cloudflare') + ', so new subdomains resolve automatically.',
+          '<b>For Email Intake</b> (optional): the shared Cloudflare Email Worker <code>housing-email-intake</code> is deployed and a single <code>EMAIL_INTAKE_SECRET</code> value is chosen (reused on every nation project).'
+        ]);
+
+    // --- Phase B: register & provision ---
+    var phaseB = phase('B', 'Register &amp; provision the nation', 'core') + ol
+      + step('Register the nation', 'manual',
+          'Fill in the <b>Add a nation</b> tab (subdomain, display name, short code). Creates the registry row and reserves <code>&lt;sub&gt;.fnhub.app</code>.')
+      + step('Create its Supabase project', 'manual',
+          'Stand up a fresh <b>database-per-nation</b> project at ' + extLink(LINKS.supaNew, 'Supabase &rarr; New project') + '. Copy the ref, URL, anon + service_role keys from ' + extLink(LINKS.supaApi, 'Settings &rarr; API') + '.')
+      + step('Provision (schema, bucket, first ED)', 'auto',
+          'In the nation\'s <b>Dashboard</b> click <b>Provision this nation</b>. Replays the bootstrap schema, creates the <code>housing-files</code> bucket, seeds the first ED, and sets the auth redirect URLs &mdash; one action. The service_role key is used once and never stored.')
+      + step('Push the usage migration', 'auto',
+          'Run <code>hs_data_usage</code> from the <b>Migrations</b> tab (fleet-wide) so this panel\'s usage + AI-cost column fills in.')
+      + '</ol>';
+
+    // --- Phase C: configure core services ---
+    var phaseC = phase('C', 'Configure core services') + ol
+      + step('Set the AI Assistant key', 'auto',
+          'Open <b>Dashboard &rarr; Config &rarr; AI Assistant key</b> and paste <b>the platform owner\'s (Nation Pathways\') Anthropic key</b> &mdash; the panel writes it onto the nation project. The nation never supplies or pays for an AI key; Nation Pathways owns the account (the help chat runs on every plan; the AI add-on fee covers staff-assistant usage).')
+      + step('Set up email notifications', 'auto',
+          'Open <b>Dashboard &rarr; Email Config</b>: pick the provider, fill the From identity + reply-to, <b>Save changes</b>, then <b>Apply to project</b> with the provider API key. Provider-side setup (Entra app for Graph, domain verification for Resend) is in the <b>Email delivery setup</b> guide on the Provision tab.')
+      + step('Deploy the Edge Functions', 'manual',
+          'In ' + extLink(LINKS.gh, 'GitHub Actions') + ' run <b>&ldquo;Deploy Supabase Edge Functions&rdquo;</b> with the nation\'s <b>project ref</b> in the <code>project_ref</code> input. Pushes to <code>main</code> auto-deploy only to the default-project secret, so each nation needs this manual run per functions change. CLI: <code>supabase functions deploy --project-ref &lt;ref&gt;</code>.')
+      + step('Point the subdomain at the app', 'manual',
+          'Skip this if you set up the wildcard in Phase A. Otherwise in ' + extLink(LINKS.cf, 'Cloudflare') + ': <b>Workers &amp; Pages &rarr; clfn-housing-app &rarr; Settings &rarr; Domains &amp; Routes &rarr; Add &rarr; Custom Domain</b>, enter <code>&lt;sub&gt;.fnhub.app</code> (DNS + TLS in ~1-2 min).')
+      + step('Set the auth sign-in policy', 'manual',
+          'In the nation project\'s <b>Authentication &rarr; Providers &rarr; Email</b>: keep <b>Allow new users to sign up ON</b> (the in-app Add-Staff flow creates logins), and turn <b>Confirm email OFF</b> unless you have configured custom SMTP &mdash; otherwise a new staff member never gets the verification email and cannot log in.')
+      + '</ol>';
+
+    // --- Phase D: license, activate, hand off ---
+    var phaseD = phase('D', 'License, activate &amp; hand off') + ol
+      + step('License the modules', 'manual',
+          'Open <b>Dashboard &rarr; Overview (Modules card)</b> and tick which optional modules this nation may use. <b>Ticking a module ON licenses AND enables it</b> &mdash; and for billable add-ons (AI Staff Assistant, SMS / Text Notifications) the explicit ON is what puts the line on the invoice.')
+      + step('Set status to Active', 'manual',
+          'Only <b>active</b> nations publish to <code>nations_public</code> and resolve at <code>&lt;sub&gt;.fnhub.app</code>. Flip status to Active in <b>Dashboard &rarr; Overview</b> (Status card).')
+      + step('Hand off to the nation\'s ED', 'manual',
+          'The ED signs in at <code>&lt;sub&gt;.fnhub.app</code> with the seeded login and adds their own staff. The nation manages itself from here.')
+      + '</ol>';
+
+    // --- Phase E: optional modules ---
+    var phaseE = phase('E', 'Optional modules', 'only if the nation uses them')
+      + optBlock('Email Intake (forward-to-file)', 'Staff forward an email to <code>&lt;sub&gt;@fnhub.app</code>; it lands under Operations &rarr; Email Intake.', [
+          'Run the <code>email_intake</code> migration (Migrations tab, fleet).',
+          'On the nation project set <code>EMAIL_INTAKE_SECRET</code> to the <b>same shared value</b> as the Cloudflare worker.',
+          'Cloudflare &rarr; <b>fnhub.app</b> &rarr; Email Routing &rarr; add pattern <code>&lt;sub&gt;</code> &rarr; Send to Worker &rarr; <code>housing-email-intake</code>.',
+          'App address default is <code>&lt;sub&gt;@fnhub.app</code> (Settings &rarr; Nation &rarr; Email Intake Address). Forward a test email and confirm it appears. <b>Never</b> enable Email Routing on the nation\'s own mail domain &mdash; it hijacks the MX.'
+        ])
+      + optBlock('SMS / Text Notifications (Twilio)', 'Staff / field / contractor notification texts via the <code>send-sms</code> function.', [
+          'License + enable <b>SMS / Text Notifications</b> (Overview &rarr; Modules).',
+          'Give the nation its own Twilio <b>subaccount</b> (keeps opt-out state + sender reputation isolated).',
+          '<b>Dashboard &rarr; SMS &amp; Portal</b> &rarr; enter the Account SID, Auth Token, and one sender (number or Messaging Service SID) &rarr; <b>Apply to project</b>.'
+        ])
+      + optBlock('Contractor Portal', 'Contractors sign in at <code>&lt;sub&gt;.fnhub.app/contractor-portal.html</code> and see only their own work orders.', [
+          'Run <code>20261101_contractor_portal_b1.sql</code> (and <code>20261031_sms_notifications.sql</code> for SMS) from the Migrations tab (fleet, idempotent).',
+          'On the nation project: <b>Authentication &rarr; Providers &rarr; Phone</b> &rarr; enable &rarr; SMS provider <b>Twilio Verify</b> (Account SID + Auth Token + a <b>Verify Service SID</b>).',
+          'License + enable <b>Contractor Portal</b>, then staff invite a contractor\'s known key-contact phone from the contractor card (only an invited phone already on the contractor\'s record can claim a login).'
+        ])
+      + optBlock('Platform Support login (the "Enter" button)', 'A signed-in Platform Support session on the nation app for troubleshooting (logged both sides; the ED is emailed each time).', [
+          '<b>Dashboard &rarr; Config</b> &rarr; <b>Generate keypair</b> (private key stays on the control plane).',
+          'Copy the <b>public</b> key into the nation project &rarr; Settings &rarr; Edge Functions &rarr; Secrets as <code>SUPPORT_LOGIN_PUBKEY</code>.',
+          'Functions deploy via CI; the one-time platform table (<code>nation_support_keys.sql</code>) is from Phase A.'
+        ])
+      + optBlock('Aggregated Support inbox', 'Mirrors the nation\'s Help &amp; Support tickets into Dashboard &rarr; Support.', [
+          'On the nation project set <code>SUPPORT_INBOX_SECRET</code> (same value as the platform) and <code>SUPPORT_INBOX_URL</code> (the platform <code>platform-ticket-intake</code> function URL). Until both are set the mirror simply no-ops.'
+        ]);
+
+    // --- Phase F: go-live verification ---
+    var phaseF = phase('F', 'Go-live verification', 'confirm before you hand over')
+      + bullets([
+          '<code>&lt;sub&gt;.fnhub.app</code> resolves and loads the sign-in page.',
+          'The seeded ED can sign in and add a staff member.',
+          'Email pipeline resolves &mdash; the nation app\'s <b>Settings &rarr; Admin &rarr; Config &rarr; Email pipeline</b> shows the provider + from-address.',
+          'The licensed modules appear in the nation\'s navigation.',
+          'A test application, unit, and maintenance request each save.',
+          'The AI chat answers a question (if the AI add-on is licensed).',
+          '(If enabled) a forwarded email appears in Email Intake, and a contractor can claim a portal login.',
+          'Status is <b>Active</b> and the nation shows green on the <b>Nations</b> list.'
+        ]);
+
+    return '<div class="card">'
+      + '<h3 style="display:block;">Onboarding a new nation &mdash; standard operating procedure</h3>'
+      + '<p class="sub" style="margin:2px 0 0;">The authoritative start-to-finish sequence. <span class="pill" style="font-size:9px;background:#dcfce7;color:#166534;">Automated</span> steps the platform handles for you; <span class="pill" style="font-size:9px;background:#f4f4f0;color:#696960;">Manual</span> steps you do in Supabase, GitHub, or Cloudflare. The detailed per-area guides live on the <b>Provision</b> tab and each nation\'s <b>Config</b> tabs; this page is the ordered checklist that ties them together.</p>'
+      + phaseA + phaseB + phaseC + phaseD + phaseE + phaseF
+      + '</div>';
   }
 
   // Detailed, provider-by-provider email setup reference (Microsoft 365 / Graph
