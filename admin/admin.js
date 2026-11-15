@@ -2836,9 +2836,12 @@
     var year = new Date().getFullYear();
     var r = await api('GET', '/nation_invoices?select=number');
     var rows = r.ok ? await r.json().catch(function(){ return []; }) : [];
-    var re = new RegExp('^HLH-' + year + '-(\\d+)$'), max = 0;
+    // Match any prefix for the current year (legacy HLH or current NP) so the
+    // sequence continues unbroken across the Home Land Homes -> Nation Pathways
+    // rename; issue new numbers under the NP prefix.
+    var re = new RegExp('-' + year + '-(\\d+)$'), max = 0;
     rows.forEach(function(x){ var m = re.exec(String(x.number || '')); if (m){ var nn = parseInt(m[1], 10); if (nn > max) max = nn; } });
-    return 'HLH-' + year + '-' + String(max + 1).padStart(2, '0');
+    return 'NP-' + year + '-' + String(max + 1).padStart(2, '0');
   }
   async function renderNationInvoices(sub){
     var host = document.getElementById('cn-invoices'); if (!host) return;

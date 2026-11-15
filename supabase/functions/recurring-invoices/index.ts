@@ -12,7 +12,7 @@
 //
 // Flow (idempotent per day): find nation_billing rows that are active and due
 // (next_run_date <= today), and for each one:
-//   1. generate the next HLH-YYYY-NN invoice number (collision-safe insert),
+//   1. generate the next NP-YYYY-NN invoice number (collision-safe insert),
 //   2. insert a nation_invoices row from the schedule (status 'sent'),
 //   3. advance next_run_date by the cadence and stamp last_run_date/last_invoice,
 //   4. write a platform_audit row, and
@@ -245,16 +245,19 @@ serve(async (req) => {
       // Collision-safe invoice number: scan for the year's max, insert, retry on
       // a unique-violation by bumping the sequence (up to 6 attempts).
       const year = today.slice(0, 4)
-      const { data: numRows } = await admin.from('nation_invoices').select('number').like('number', 'HLH-' + year + '-%')
+      // Match any prefix for the year (legacy HLH or current NP) so numbering
+      // continues unbroken across the Home Land Homes -> Nation Pathways rename;
+      // issue new numbers under the NP prefix.
+      const { data: numRows } = await admin.from('nation_invoices').select('number').like('number', '%-' + year + '-%')
       let seq = 0
       for (const r of (numRows || [])) {
-        const m = /^HLH-\d{4}-(\d+)$/.exec(String(r.number || ''))
+        const m = /-\d{4}-(\d+)$/.exec(String(r.number || ''))
         if (m) { const nn = parseInt(m[1], 10); if (nn > seq) seq = nn }
       }
       let inserted: any = null, number = ''
       for (let attempt = 0; attempt < 6 && !inserted; attempt++) {
         seq += 1
-        number = 'HLH-' + year + '-' + String(seq).padStart(2, '0')
+        number = 'NP-' + year + '-' + String(seq).padStart(2, '0')
         const row: any = {
           subdomain: sub, number, issue_date: today, due_date: dueDate, currency: 'CAD',
           line_items: lineItems, subtotal, tax_rate: taxRate, tax, total, amount_paid: 0,
