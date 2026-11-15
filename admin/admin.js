@@ -144,14 +144,14 @@
       + 'Prices are locked for the signed term (no discounts). Only recurring subscription fees earn Commission (Section 7.3).';
   }
 
-  // Provider (Nation Pathways) details -- printed on invoices. NOTE: mailing
-  // address + phone are unchanged pending confirmation; the authoritative party
-  // details for generated contracts come from the Owner record (platform_owner,
-  // Resellers tab) -- update that too.
+  // Provider (Nation Pathways) details -- printed on invoices. NOTE: phone is
+  // unchanged pending confirmation; the authoritative party details for
+  // generated contracts come from the Owner record (platform_owner, Resellers
+  // tab) -- update that too.
   var PROVIDER = {
     name:  'Nation Pathways',
-    addr1: '916 Piper Street, Box 2251',
-    addr2: 'Hearst, Ontario  P0L 1N0',
+    addr1: '152 Simon Lake Drive, Box 392',
+    addr2: 'Naughton, Ontario  P0M 2M0',
     phone: '705-960-5076',
     email: 'hello@nationpathways.com'
   };
