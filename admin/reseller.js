@@ -1060,7 +1060,7 @@
       + '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th class="num">Gross collected</th><th class="num">Hosting</th><th class="num">Processing</th><th class="num">Taxes</th><th class="num">Refunds / credits</th><th class="num">Net revenue</th><th class="num">Commission ' + Number(st.commission_rate) + '%</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '<div class="rs-grid3">'
       +   fld('Clawback / offset (s.9.2)', 'rs-s-clawback', (Number(st.clawback) || 0).toFixed(2), { type: 'number', step: '0.01', dis: !draft })
-      +   fld('Clawback note', 'rs-s-clawback_note', st.clawback_note, { dis: !draft, ph: 'e.g. Refund on HLH-2026-07' })
+      +   fld('Clawback note', 'rs-s-clawback_note', st.clawback_note, { dis: !draft, ph: 'e.g. Refund on NP-2026-07' })
       +   fld('Payment due', 'rs-s-due_date', st.due_date, { type: 'date', dis: !draft })
       +   fld('Notes', 'rs-s-notes', st.notes, { area: true, full: true, dis: !draft })
       + '</div>'
