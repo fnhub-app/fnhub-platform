@@ -1982,7 +1982,25 @@
     psPaint();
     return true;
   }
+  // Small transient toast (the admin panel had only blocking dialogs). Used so a
+  // triage status change gives visible feedback instead of the row silently
+  // dropping out of a filtered view.
+  function adminToast(msg){
+    try {
+      if (!document.getElementById('admin-toast-style')){
+        var sEl = document.createElement('style'); sEl.id = 'admin-toast-style';
+        sEl.textContent = '.admin-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);background:var(--dark);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--sans);box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:9999;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;max-width:88vw;}.admin-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}';
+        document.head.appendChild(sEl);
+      }
+      var el = document.createElement('div'); el.className = 'admin-toast'; el.textContent = String(msg || '');
+      document.body.appendChild(el);
+      requestAnimationFrame(function(){ el.classList.add('show'); });
+      setTimeout(function(){ el.classList.remove('show'); setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 220); }, 2400);
+    } catch (e){}
+  }
   window.psSetStatus = async function(id, status){
+    var prevT = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
+    var prev = prevT ? (prevT.platform_status || 'new') : 'new';
     var patch = { platform_status: status, updated_at: new Date().toISOString() };
     if (status === 'resolved'){ patch.resolved_by = jwtEmail(); patch.resolved_at = new Date().toISOString(); }
     else { patch.resolved_by = null; patch.resolved_at = null; }
@@ -1991,6 +2009,7 @@
     var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
     if (t){ t.platform_status = status; t.resolved_by = patch.resolved_by; t.resolved_at = patch.resolved_at; }
     psPaint();
+    adminToast(status === 'resolved' ? 'Resolved' : (prev === 'resolved' ? 'Reopened' : 'Marked in progress'));
   };
 
   function renderProvisionResults(d){
