@@ -273,10 +273,17 @@
         + '<div class="dlg-bd">' + (opts.bodyHtml || esc(opts.message || ''));
       if (opts.fields){
         opts.fields.forEach(function(f){
-          html += '<label for="dlg-f-' + esc(f.key) + '">' + esc(f.label || '') + '</label>'
-            + '<input id="dlg-f-' + esc(f.key) + '" type="' + (f.inputType || 'text') + '" value="' + esc(f.defaultValue == null ? '' : f.defaultValue) + '"'
-            + (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '')
-            + (f.step ? ' step="' + esc(f.step) + '"' : '') + '/>';
+          html += '<label for="dlg-f-' + esc(f.key) + '">' + esc(f.label || '') + '</label>';
+          if (f.type === 'textarea'){
+            html += '<textarea id="dlg-f-' + esc(f.key) + '" rows="' + (f.rows || 4) + '"'
+              + (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '')
+              + ' style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:10px 12px;border:1px solid var(--hair);border-radius:9px;">'
+              + esc(f.defaultValue == null ? '' : f.defaultValue) + '</textarea>';
+          } else {
+            html += '<input id="dlg-f-' + esc(f.key) + '" type="' + (f.inputType || 'text') + '" value="' + esc(f.defaultValue == null ? '' : f.defaultValue) + '"'
+              + (f.placeholder ? ' placeholder="' + esc(f.placeholder) + '"' : '')
+              + (f.step ? ' step="' + esc(f.step) + '"' : '') + '/>';
+          }
         });
         html += '<div class="dlg-err" id="dlg-err"></div>';
       } else if (opts.prompt){
@@ -316,7 +323,7 @@
       var okBtn = box.querySelector('#dlg-ok'); if (okBtn) okBtn.onclick = ok;
       var cBtn = box.querySelector('#dlg-cancel'); if (cBtn) cBtn.onclick = cancel;
       ov.addEventListener('click', function(e){ if (e.target === ov) cancel(); });
-      function onKey(e){ if (e.key === 'Escape'){ e.preventDefault(); cancel(); } else if (e.key === 'Enter'){ e.preventDefault(); ok(); } }
+      function onKey(e){ if (e.key === 'Escape'){ e.preventDefault(); cancel(); } else if (e.key === 'Enter' && !(e.target && e.target.tagName === 'TEXTAREA')){ e.preventDefault(); ok(); } }
       document.addEventListener('keydown', onKey);
     });
   }
@@ -728,7 +735,8 @@
           'Functions deploy via CI; the one-time platform table (<code>nation_support_keys.sql</code>) is from Phase A.'
         ])
       + optBlock('Aggregated Support inbox', 'Mirrors the nation\'s Help &amp; Support tickets into Dashboard &rarr; Support.', [
-          'On the nation project set <code>SUPPORT_INBOX_SECRET</code> (same value as the platform) and <code>SUPPORT_INBOX_URL</code> (the platform <code>platform-ticket-intake</code> function URL). Until both are set the mirror simply no-ops.'
+          'On the nation project set <code>SUPPORT_INBOX_SECRET</code> (same value as the platform) and <code>SUPPORT_INBOX_URL</code> (the platform <code>platform-ticket-intake</code> function URL). Until both are set the mirror simply no-ops.',
+          'To <b>reply to reporters from the inbox</b> (the Reply button on each ticket), deploy the <code>send-notification</code> function to the <b>platform</b> project and set an email provider there (<code>EMAIL_PROVIDER</code> + keys &mdash; e.g. Resend from the already-verified <code>fnhub.app</code> domain). Without it, Reply reports that email is not configured.'
         ]);
 
     // --- Phase F: go-live verification ---
@@ -897,7 +905,8 @@
       +   '<div style="font-weight:800;font-size:13px;">One-time platform setup</div>'
       +   numList([
               'Run <code>supabase/platform/support_inbox.sql</code> in the <b>platform</b> SQL Editor (creates <code>platform_support_tickets</code>, super-admin RLS).',
-              'Pick a strong random <b>inbox secret</b> (e.g. a 32+ char token). On the <b>platform</b> project &rarr; Edge Functions &rarr; Secrets set <code>SUPPORT_INBOX_SECRET</code> to it. (<code>platform-ticket-intake</code> deploys automatically from <code>main</code>, JWT verify OFF.)'
+              'Pick a strong random <b>inbox secret</b> (e.g. a 32+ char token). On the <b>platform</b> project &rarr; Edge Functions &rarr; Secrets set <code>SUPPORT_INBOX_SECRET</code> to it. (<code>platform-ticket-intake</code> deploys automatically from <code>main</code>, JWT verify OFF.)',
+              '<b>To reply to reporters from this inbox</b> (the <b>Reply</b> button on each ticket): deploy the <code>send-notification</code> function to the <b>platform</b> project and set an email provider in its Edge Function secrets (<code>EMAIL_PROVIDER</code> + keys &mdash; e.g. <code>resend</code> from the already-verified <code>fnhub.app</code> domain). Optional &mdash; triage works without it, but Reply needs it. Replies are platform-side only (logged in the ticket\'s notes); they do not touch the nation\'s own copy.'
             ])
       +   '<div style="font-weight:800;font-size:13px;margin-top:12px;">Per-nation setup (once each)</div>'
       +   numList([
@@ -1869,6 +1878,7 @@
       var src = PS_SRC[t.source] || esc(t.source || '');
       var st = t.platform_status || 'new';
       var acts = '<button class="btn sm ghost" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">View</button>';
+      if (t.reporter_email) acts += ' <button class="btn sm ghost" type="button" data-act="ps-reply" data-id="' + esc(t.id) + '">Reply</button>';
       if (st === 'new' || st === 'open') acts += ' <button class="btn sm" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="resolved">Resolve</button>';
       if (st === 'new') acts = '<button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Start</button> ' + acts;
       if (st === 'resolved') acts += ' <button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Reopen</button>';
@@ -1911,6 +1921,52 @@
       + (ctxUrl ? ('Page: ' + ctxUrl + '\n') : '')
       + '\n' + (t.body || '(no details)');
     dlgAlert(lines, { title: t.subject || 'Support request' });
+  };
+  // Email a reply to the ticket's reporter. Sends from the PLATFORM project's
+  // own send-notification function, so the platform project must have that
+  // function deployed AND an email provider configured (EMAIL_PROVIDER + keys)
+  // in its Edge Function secrets. The reply is logged into the ticket's notes
+  // and a 'new' ticket moves to 'in progress'. (Platform-side only -- this does
+  // not touch the nation's own copy of the ticket.)
+  window.psReply = async function(id){
+    var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
+    if (!t) return;
+    if (!t.reporter_email){ dlgAlert('No email address on file for this reporter, so a reply cannot be sent.', { title: 'Reply' }); return; }
+    var res = await dlgForm('Reply to ' + (t.reporter_name || t.reporter_email), [
+      { key: 'reply', label: 'Your reply (emailed to the reporter)', type: 'textarea', rows: 6, placeholder: 'Type your reply...', validate: function(v){ return v ? '' : 'Type a reply first.'; } }
+    ], { okText: 'Send reply', bodyHtml: '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Re: <b>' + esc(t.subject || 'your support request') + '</b> &middot; ' + esc(t.nation_name || t.subdomain || '') + ' &middot; to <code>' + esc(t.reporter_email) + '</code></div>' });
+    if (!res) return;
+    var reply = (res.reply || '').trim(); if (!reply) return;
+    var replyHtml = '<p>Reply from Nation Pathways support'
+      + (t.subject ? ' about your request &ldquo;' + esc(t.subject) + '&rdquo;' : '') + ':</p>'
+      + '<p style="white-space:pre-wrap;">' + esc(reply) + '</p>';
+    var sent = false, errMsg = '';
+    try {
+      var r = await fetch(PBASE + '/functions/v1/send-notification', {
+        method: 'POST',
+        headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ to: t.reporter_email, to_name: t.reporter_name || '', subject: 'Re: ' + (t.subject || 'your support request'), html: replyHtml, brand: 'Nation Pathways' })
+      });
+      if (r.ok){ sent = true; }
+      else { var d = await r.json().catch(function(){ return {}; }); errMsg = (d && (d.error || d.message)) || ('HTTP ' + r.status); }
+    } catch (e){ errMsg = String(e && e.message || e); }
+    if (!sent){
+      dlgAlert('Could not send the reply (' + errMsg + '). The platform project needs the send-notification function deployed and an email provider configured (EMAIL_PROVIDER + keys) in its Edge Function secrets -- see the "Support inbox setup" card on the Provision tab.', { title: 'Reply not sent' });
+      return;
+    }
+    // Log the reply on the ticket + move a new ticket to in progress.
+    var stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
+    var logLine = '[' + stamp + '] Replied to ' + t.reporter_email + ' (' + jwtEmail() + '): ' + reply;
+    var newNotes = (t.notes ? (t.notes + '\n') : '') + logLine;
+    var patch = { notes: newNotes, updated_at: new Date().toISOString() };
+    if ((t.platform_status || 'new') === 'new') patch.platform_status = 'open';
+    try {
+      await api('PATCH', '/platform_support_tickets?id=eq.' + encodeURIComponent(id), patch, 'return=minimal');
+      t.notes = newNotes; if (patch.platform_status) t.platform_status = patch.platform_status;
+    } catch (e){}
+    try { await audit('platform_support_reply', t.subdomain || id, t.reporter_email || ''); } catch (e){}
+    psPaint();
+    dlgAlert('Reply sent to ' + t.reporter_email + '.', { title: 'Reply sent' });
   };
   window.psSetStatus = async function(id, status){
     var patch = { platform_status: status, updated_at: new Date().toISOString() };
@@ -3707,6 +3763,7 @@
       case 'inv-interest':  window.invAddInterest(el.getAttribute('data-id') || '', el.getAttribute('data-sub') || ''); break;
       case 'ps-refresh':    window.renderPlatformSupport(); break;
       case 'ps-view':       window.psView(id); break;
+      case 'ps-reply':      window.psReply(id); break;
       case 'ps-status':     window.psSetStatus(id, el.getAttribute('data-status') || ''); break;
     }
   });
