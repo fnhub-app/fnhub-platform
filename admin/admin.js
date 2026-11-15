@@ -1926,7 +1926,7 @@
     'Additional setup line items from scoping call (if any; flat fees - Section 5): ______________________________',
     '###Term and contacts',
     'Initial Term: [ ] One (1) year from the Effective Date     [ ] Other: ______________',
-    'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, inspections, capital projects, finance, Chief & Council dashboard, tenant/applicant portal.',
+    'Included modules: applications & waitlist, unit inventory, tenants, matching, maintenance & work orders, renovations & RFQ tendering, contractor registry, unit mapping & photos, inspections, capital projects, finance, email intake (forward-to-file), the Chief & Council leadership dashboard, in-app help & support, the tenant/applicant portal, and the contractor portal.',
     'Nation\'s primary contact for notices: name ____________________ email ____________________',
     'Provider contact for notices: {{PROVIDER_NOTICE}}',
     '##Schedule B - Setup Services (Scope)',
