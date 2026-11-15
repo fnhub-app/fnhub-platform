@@ -827,6 +827,8 @@ function addHab(){
     +'<div class="f"><label>Date of Birth <span class="r">*</span></label><input type="date" data-role="habDob" onchange="triggerV2Score()"/></div>'
     +'<div class="f"><label>Relationship <span class="r">*</span></label>'
     +'<select data-role="habRel"><option value="">Select</option><option>Spouse</option><option>Child</option><option>Parent</option><option>Sibling</option><option>Other</option></select></div>'
+    +'<div class="f"><label>In applicant\'s care?</label>'
+    +'<select data-role="habInCare" onchange="if(typeof triggerV2Score===\'function\')triggerV2Score()"><option value="yes">Yes &mdash; lives in this household</option><option value="no">No &mdash; not in applicant\'s care</option></select></div>'
     +'<div class="f"><label>Band Member #</label><input type="number"/></div>'
     +'<div class="f"><label>Accessibility</label>'
     +'<select><option>None</option><option>Wheelchair Accessible</option><option>Visual Impairment</option><option>Hearing Impairment</option><option>Other</option></select></div>'
@@ -943,6 +945,9 @@ function _appSpouseIndicator(){
 function _appDependentsCount(){
   var n = 0;
   document.querySelectorAll('#habList .rrow').forEach(function(row){
+    // A child/member not in the applicant's care lives elsewhere and does not
+    // count toward this household's dependents (they may be on another app).
+    if(((row.querySelector('[data-role="habInCare"]')||{}).value) === 'no') return;
     var rel = (row.querySelector('[data-role="habRel"]')||{}).value || '';
     if(rel === 'Spouse') return;
     var dob = (row.querySelector('[data-role="habDob"]')||{}).value || '';
@@ -1135,7 +1140,8 @@ function saveApplicationRecord(opts){
     var ln=row.querySelector('[data-role="habLn"]');
     var dob=row.querySelector('[data-role="habDob"]');
     var rel=row.querySelector('[data-role="habRel"]');
-    if(fn&&fn.value) habitants.push({fn:fn.value,ln:(ln&&ln.value)||'',dob:(dob&&dob.value)||'',relationship:(rel&&rel.value)||''});
+    var care=row.querySelector('[data-role="habInCare"]');
+    if(fn&&fn.value) habitants.push({fn:fn.value,ln:(ln&&ln.value)||'',dob:(dob&&dob.value)||'',relationship:(rel&&rel.value)||'',inCare:!(care&&care.value==='no')});
   });
 
   // Co-applicant
@@ -1590,7 +1596,8 @@ function popReview(){
     var fn2 = txts[0]?txts[0].value.trim():'';
     var ln2 = txts[1]?txts[1].value.trim():'';
     var rel = relEl?relEl.value:'';
-    if(fn2||ln2) habRows.push(row((fn2+' '+ln2).trim(), rel||'—'));
+    var notInCare = ((r.querySelector('[data-role="habInCare"]')||{}).value) === 'no';
+    if(fn2||ln2) habRows.push(row((fn2+' '+ln2).trim(), (rel||'—')+(notInCare?' · ⚠ not in applicant\'s care':'')));
   });
   if(habRows.length) html += section('Household Members ('+habRows.length+')', habRows.join(''), '👨‍👩‍👧');
 
@@ -1978,7 +1985,8 @@ function printApplicationPreview() {
     var dt   = r.querySelector('input[type="date"]');
     var sel  = r.querySelector('select');
     var nm   = [(txts[0]?txts[0].value:''),(txts[1]?txts[1].value:'')].filter(Boolean).join(' ') || ('Member '+(i+1));
-    habBody += row(nm, (sel?sel.value:'')+(dt&&dt.value?' · DOB: '+dt.value:''));
+    var notInCare = ((r.querySelector('[data-role="habInCare"]')||{}).value) === 'no';
+    habBody += row(nm, (sel?sel.value:'')+(dt&&dt.value?' · DOB: '+dt.value:'')+(notInCare?' · ⚠ not in applicant\'s care':''));
   });
   if(!habBody) habBody = row('Household Members', '—');
 

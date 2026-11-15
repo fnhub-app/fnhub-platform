@@ -1229,9 +1229,17 @@ function saveNosTable() {
 
 
 // ── Auto-calculate Persons Over Occupancy Standard ───────────────────────────
+// A listed household member marked "not in the applicant's care" (lives
+// elsewhere -- e.g. with a relative who may list them on their own
+// application) is recorded on the application but does NOT count toward
+// household size, dependents or bedroom need. Every need calculation iterates
+// _habRowsCare() instead of all #habList rows so those members are excluded.
+function _habInCare(row){ var s = row && row.querySelector('[data-role="habInCare"]'); return !s || s.value !== 'no'; }
+function _habRowsCare(){ return Array.prototype.filter.call(document.querySelectorAll('#habList .rrow'), _habInCare); }
+
 function calcPersonsOverStandard() {
   // Count total household members
-  var habCount  = document.querySelectorAll('#habList .rrow').length;
+  var habCount  = _habRowsCare().length;
   var coStatus  = (document.getElementById('co_status')||{}).value || 'no';
   var coCount   = (coStatus === 'yes' || coStatus === 'y') ? 1 : 0;
   var totalPeople = 1 + coCount + habCount; // applicant + co-applicant + members
@@ -1404,7 +1412,7 @@ function triggerV2Score() {
 
   // Dependents under 18 from habList
   var dependentsUnder18 = 0;
-  document.querySelectorAll('#habList .rrow').forEach(function(row) {
+  _habRowsCare().forEach(function(row) {
     var dobEl = row.querySelector('[data-role="habDob"]');
     if (!dobEl || !dobEl.value) return;
     var age = (Date.now() - new Date(dobEl.value).getTime()) / (365.25*24*3600*1000);
@@ -1534,7 +1542,7 @@ function autoPopulateScore(){
   let bandCount=0;
   if(g('band'))bandCount++;
   if(g('co_band'))bandCount++;
-  document.querySelectorAll('#habList .rrow').forEach(function(row){
+  _habRowsCare().forEach(function(row){
     var inputs=row.querySelectorAll('input[type="number"]');
     if(inputs.length>0&&inputs[0].value)bandCount++;
   });
@@ -1573,7 +1581,7 @@ function autoPopulateScore(){
   const people=[];
   const appDob=g('dob');if(appDob)people.push({label:'Applicant ('+ageLabel(appDob)+')',dob:appDob});
   const coDob=g('co_dob');if(coDob)people.push({label:'Co-Applicant ('+ageLabel(coDob)+')',dob:coDob});
-  document.querySelectorAll('#habList .rrow').forEach(function(row,i){
+  _habRowsCare().forEach(function(row,i){
     var inputs=row.querySelectorAll('input[type="date"]');
     const fn=row.querySelector('input[type="text"]');
     if(inputs.length>0&&inputs[0].value)
@@ -1640,7 +1648,7 @@ function autoPopulateScore(){
   const scPayment=document.getElementById('sc_payment');if(scPayment)scPayment.value=payDur;
 
   // Occupants (calculated)
-  const habCount=document.querySelectorAll('#habList .rrow').length;
+  const habCount=_habRowsCare().length;
   const coCount=(g('co_status')==='yes')?1:0;
   const totalPeople=1+coCount+habCount;
   const occCo=document.getElementById('occ_coapplicant');if(occCo)occCo.textContent=coCount;
