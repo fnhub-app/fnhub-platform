@@ -624,6 +624,7 @@
   // tab's fold cards and each nation's Config / Email Config / SMS & Portal /
   // Email Intake tabs); this SOP is the ordered checklist that ties them
   // together. Lives on its own "Onboarding SOP" tab.
+  var _sopBodyHtml = '';   // cached SOP body (intro + phases), reused by the print window
   function onboardingSopCard(){
     var _n = 0;
     // One running-numbered step: [title, 'auto'|'manual', html].
@@ -743,12 +744,47 @@
           'Status is <b>Active</b> and the nation shows green on the <b>Nations</b> list.'
         ]);
 
+    var intro = '<p class="sub" style="margin:2px 0 0;">The authoritative start-to-finish sequence. <span class="pill" style="font-size:9px;background:#dcfce7;color:#166534;">Automated</span> steps the platform handles for you; <span class="pill" style="font-size:9px;background:#f4f4f0;color:#696960;">Manual</span> steps you do in Supabase, GitHub, or Cloudflare. The detailed per-area guides live on the <b>Provision</b> tab and each nation\'s <b>Config</b> tabs; this page is the ordered checklist that ties them together.</p>';
+    _sopBodyHtml = intro + phaseA + phaseB + phaseC + phaseD + phaseE + phaseF;
     return '<div class="card">'
-      + '<h3 style="display:block;">Onboarding a new nation &mdash; standard operating procedure</h3>'
-      + '<p class="sub" style="margin:2px 0 0;">The authoritative start-to-finish sequence. <span class="pill" style="font-size:9px;background:#dcfce7;color:#166534;">Automated</span> steps the platform handles for you; <span class="pill" style="font-size:9px;background:#f4f4f0;color:#696960;">Manual</span> steps you do in Supabase, GitHub, or Cloudflare. The detailed per-area guides live on the <b>Provision</b> tab and each nation\'s <b>Config</b> tabs; this page is the ordered checklist that ties them together.</p>'
-      + phaseA + phaseB + phaseC + phaseD + phaseE + phaseF
+      + '<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap;">'
+      +   '<h3 style="margin:0;">Onboarding a new nation &mdash; standard operating procedure</h3>'
+      +   '<button class="btn sm ghost" type="button" data-act="print-sop">&#128424;&#65039; Print SOP</button>'
+      + '</div>'
+      + _sopBodyHtml
       + '</div>';
   }
+
+  // Open the SOP in a clean, print-friendly window and fire the print dialog.
+  // Self-contained styles (the popup is a blank document with none of the
+  // panel's CSS), so the tokens/classes the SOP body uses are redefined here.
+  window.printOnboardingSop = function(){
+    if (!_sopBodyHtml) { try { onboardingSopCard(); } catch (e) {} }
+    var w = window.open('', '_blank', 'width=900,height=1100');
+    if (!w) return;   // popup blocked -- user can allow and retry
+    var css = ':root{--accent:#2E5E4E;--muted:#555;--line:#ccc;--hair:#ccc;--accent-light:#eef3f1;--ink:#111;'
+      + "--sans:'DM Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,system-ui,sans-serif;}"
+      + '*{box-sizing:border-box;}'
+      + 'body{font-family:var(--sans);color:var(--ink);line-height:1.5;max-width:780px;margin:0 auto;padding:24px;}'
+      + '.print-head{border-bottom:3px solid var(--accent);padding-bottom:9px;margin-bottom:6px;}'
+      + '.print-head h1{margin:0;font-size:21px;color:var(--accent);}'
+      + '.print-head .ph-sub{color:var(--muted);font-size:12px;margin-top:3px;}'
+      + '.sub{color:var(--muted);font-size:12px;}'
+      + '.pill{display:inline-block;border-radius:999px;padding:2px 8px;font-weight:700;}'
+      + 'code{background:#f2f2ee;border:1px solid #e3e3dc;border-radius:4px;padding:0 4px;font-size:11px;font-family:ui-monospace,Menlo,Consolas,monospace;}'
+      + 'a{color:#1d4ed8;text-decoration:none;}'
+      + 'ol,ul{margin:4px 0;}'
+      + 'li{break-inside:avoid;}'
+      + '@media print{a{color:#000;}body{padding:0;max-width:none;}}';
+    var head = '<div class="print-head"><h1>Onboarding a new nation &mdash; SOP</h1>'
+      + '<div class="ph-sub">Nation Pathways &middot; control-plane standard operating procedure &middot; printed ' + new Date().toISOString().slice(0, 10) + '</div></div>';
+    w.document.open();
+    w.document.write('<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Onboarding SOP &mdash; Nation Pathways</title><style>' + css + '</style></head><body>' + head + _sopBodyHtml + '</body></html>');
+    w.document.close();
+    // Printed from the opener (not an inline popup script, which the panel CSP
+    // would block); the delay lets the fonts + layout settle first.
+    setTimeout(function(){ try { w.focus(); w.print(); } catch (e) {} }, 350);
+  };
 
   // Detailed, provider-by-provider email setup reference (Microsoft 365 / Graph
   // and Resend). Static guide -- links open each destination. The secret names
@@ -3646,6 +3682,7 @@
       case 'doc-dl':        window.downloadNationDoc(el.getAttribute('data-path') || '', el.getAttribute('data-name') || ''); break;
       case 'doc-del':       window.deleteNationDoc(el.getAttribute('data-id') || '', el.getAttribute('data-path') || '', el.getAttribute('data-sub') || ''); break;
       case 'nic-tab':       window.nicTab(el.getAttribute('data-tab') || ''); break;
+      case 'print-sop':     window.printOnboardingSop(); break;
       case 'note-add':      window.addNationNote(el.getAttribute('data-sub') || ''); break;
       case 'ai-key-save':   window.saveNationAiKey(el.getAttribute('data-sub') || ''); break;
       case 'ai-limit-save': window.saveNationAiLimit(el.getAttribute('data-sub') || ''); break;
