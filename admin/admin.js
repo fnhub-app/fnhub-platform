@@ -736,7 +736,7 @@
         ])
       + optBlock('Aggregated Support inbox', 'Mirrors the nation\'s Help &amp; Support tickets into Dashboard &rarr; Support.', [
           'On the nation project set <code>SUPPORT_INBOX_SECRET</code> (same value as the platform) and <code>SUPPORT_INBOX_URL</code> (the platform <code>platform-ticket-intake</code> function URL). Until both are set the mirror simply no-ops.',
-          'To <b>reply to reporters from the inbox</b> (the Reply button on each ticket), deploy the <code>send-notification</code> function to the <b>platform</b> project and set an email provider there (<code>EMAIL_PROVIDER</code> + keys &mdash; e.g. Resend from the already-verified <code>fnhub.app</code> domain). Without it, Reply reports that email is not configured.'
+          'To <b>reply to reporters from the inbox</b> (View / Reply on a ticket opens a chat thread): run <code>support_replies.sql</code> on the platform project, deploy <code>send-notification</code> to the <b>platform</b> project, and set an email provider there (<code>EMAIL_PROVIDER</code> + keys &mdash; e.g. Resend from the verified <code>fnhub.app</code> domain). Without it, replying reports that email is not configured.'
         ]);
 
     // --- Phase F: go-live verification ---
@@ -906,7 +906,7 @@
       +   numList([
               'Run <code>supabase/platform/support_inbox.sql</code> in the <b>platform</b> SQL Editor (creates <code>platform_support_tickets</code>, super-admin RLS).',
               'Pick a strong random <b>inbox secret</b> (e.g. a 32+ char token). On the <b>platform</b> project &rarr; Edge Functions &rarr; Secrets set <code>SUPPORT_INBOX_SECRET</code> to it. (<code>platform-ticket-intake</code> deploys automatically from <code>main</code>, JWT verify OFF.)',
-              '<b>To reply to reporters from this inbox</b> (the <b>Reply</b> button on each ticket): deploy the <code>send-notification</code> function to the <b>platform</b> project and set an email provider in its Edge Function secrets (<code>EMAIL_PROVIDER</code> + keys &mdash; e.g. <code>resend</code> from the already-verified <code>fnhub.app</code> domain). Optional &mdash; triage works without it, but Reply needs it. Replies are platform-side only (logged in the ticket\'s notes); they do not touch the nation\'s own copy.'
+              '<b>To reply to reporters from this inbox</b> (<b>View / Reply</b> on each ticket opens a chat thread): run <code>supabase/platform/support_replies.sql</code> on the platform project (adds the reply thread), deploy the <code>send-notification</code> function to the <b>platform</b> project, and set an email provider in its Edge Function secrets (<code>EMAIL_PROVIDER</code> + keys &mdash; e.g. <code>resend</code> from the already-verified <code>fnhub.app</code> domain). Optional &mdash; triage works without it. Replies are platform-side only; they do not touch the nation\'s own copy.'
             ])
       +   '<div style="font-weight:800;font-size:13px;margin-top:12px;">Per-nation setup (once each)</div>'
       +   numList([
@@ -1877,8 +1877,7 @@
       var from = esc(t.reporter_name || t.reporter_email || '(unknown)');
       var src = PS_SRC[t.source] || esc(t.source || '');
       var st = t.platform_status || 'new';
-      var acts = '<button class="btn sm ghost" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">View</button>';
-      if (t.reporter_email) acts += ' <button class="btn sm ghost" type="button" data-act="ps-reply" data-id="' + esc(t.id) + '">Reply</button>';
+      var acts = '<button class="btn sm ghost" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">View / Reply</button>';
       if (st === 'new' || st === 'open') acts += ' <button class="btn sm" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="resolved">Resolve</button>';
       if (st === 'new') acts = '<button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Start</button> ' + acts;
       if (st === 'resolved') acts += ' <button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Reopen</button>';
@@ -1908,35 +1907,50 @@
     var sel = document.getElementById('ps-filter');
     if (sel) sel.addEventListener('change', function(){ _psFilter = sel.value || 'openish'; psPaint(); });
   }
-  window.psView = function(id){
+  // Chat-style ticket view: a meta header, the thread (original report + each
+  // staff reply as bubbles), and an inline reply box. Replies live in the
+  // platform ticket's `replies` jsonb (support_replies.sql). Sending reopens the
+  // view so the new message appears in the thread. Platform-side only -- this
+  // never touches the nation's own copy of the ticket.
+  window.psView = async function(id){
     var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
     if (!t) return;
     var ctxUrl = (t.context && t.context.url) || '';
-    var lines = ''
-      + 'From: ' + (t.reporter_name || '(unknown)') + (t.reporter_email ? (' <' + t.reporter_email + '>') : '') + '\n'
-      + (t.reporter_phone ? ('Phone: ' + t.reporter_phone + '\n') : '')
-      + 'Nation: ' + (t.nation_name || t.subdomain || '') + '   Source: ' + (PS_SRC[t.source] || t.source || '') + (t.reporter_role ? (' (' + t.reporter_role + ')') : '') + '\n'
-      + 'Category: ' + (t.category || '') + '\n'
-      + (t.attachment_count ? (t.attachment_count + ' screenshot(s) attached - view on the nation\'s Support page.\n') : '')
-      + (ctxUrl ? ('Page: ' + ctxUrl + '\n') : '')
-      + '\n' + (t.body || '(no details)');
-    dlgAlert(lines, { title: t.subject || 'Support request' });
+    var replies = Array.isArray(t.replies) ? t.replies : [];
+    var meta = '<div style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:10px;">'
+      + '<div><b>' + esc(t.reporter_name || '(unknown)') + '</b>' + (t.reporter_email ? ' &lt;' + esc(t.reporter_email) + '&gt;' : '') + (t.reporter_phone ? ' &middot; ' + esc(t.reporter_phone) : '') + '</div>'
+      + '<div>' + esc(t.nation_name || t.subdomain || '') + ' &middot; ' + esc(PS_SRC[t.source] || t.source || '') + (t.reporter_role ? ' (' + esc(t.reporter_role) + ')' : '') + ' &middot; ' + esc(t.category || '') + '</div>'
+      + (ctxUrl ? '<div>Page: <a href="' + esc(ctxUrl) + '" target="_blank" rel="noopener">' + esc(ctxUrl) + '</a></div>' : '')
+      + (t.attachment_count ? '<div>' + t.attachment_count + ' screenshot(s) &mdash; view on the nation\'s Support page.</div>' : '')
+      + '</div>';
+    function bubble(mine, who, when, text){
+      return '<div style="display:flex;justify-content:' + (mine ? 'flex-end' : 'flex-start') + ';margin:6px 0;">'
+        + '<div style="max-width:80%;background:' + (mine ? 'var(--accent-light)' : 'var(--bg)') + ';border:1px solid var(--line);border-radius:12px;padding:8px 11px;">'
+        + '<div style="font-size:11px;color:var(--muted);margin-bottom:3px;">' + esc(who) + (when ? ' &middot; ' + esc(when) : '') + '</div>'
+        + '<div style="font-size:13px;color:var(--ink);white-space:pre-wrap;word-break:break-word;">' + esc(text) + '</div>'
+        + '</div></div>';
+    }
+    var thread = bubble(false, t.reporter_name || 'Reporter', timeAgo(t.nation_created_at || t.received_at), t.body || '(no details)');
+    replies.forEach(function(rp){ thread += bubble(true, rp.by || 'Support', timeAgo(rp.at), rp.text || ''); });
+    var threadBox = '<div style="max-height:46vh;overflow-y:auto;border:1px solid var(--line);border-radius:10px;padding:8px 10px;background:var(--surface);">' + thread + '</div>';
+    var canReply = !!t.reporter_email;
+    var bodyHtml = meta + threadBox
+      + (canReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">No email on file for this reporter &mdash; you can\'t reply from here.</div>');
+    var res = await dlgForm(t.subject || 'Support request',
+      canReply ? [{ key: 'reply', label: 'Reply (emailed to the reporter)', type: 'textarea', rows: 3, placeholder: 'Type a reply... (leave blank to just close)' }] : [],
+      { bodyHtml: bodyHtml, okText: canReply ? 'Send reply' : 'Close', cancelText: canReply ? 'Close' : null });
+    if (!res) return;                         // closed
+    var reply = canReply ? ((res.reply || '').trim()) : '';
+    if (!reply) return;                       // "Send reply" with an empty box = just close
+    var ok = await _psSendReply(t, reply);
+    if (ok) window.psView(id);                // reopen so the new message shows in the thread
   };
-  // Email a reply to the ticket's reporter. Sends from the PLATFORM project's
-  // own send-notification function, so the platform project must have that
-  // function deployed AND an email provider configured (EMAIL_PROVIDER + keys)
-  // in its Edge Function secrets. The reply is logged into the ticket's notes
-  // and a 'new' ticket moves to 'in progress'. (Platform-side only -- this does
-  // not touch the nation's own copy of the ticket.)
-  window.psReply = async function(id){
-    var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
-    if (!t) return;
-    if (!t.reporter_email){ dlgAlert('No email address on file for this reporter, so a reply cannot be sent.', { title: 'Reply' }); return; }
-    var res = await dlgForm('Reply to ' + (t.reporter_name || t.reporter_email), [
-      { key: 'reply', label: 'Your reply (emailed to the reporter)', type: 'textarea', rows: 6, placeholder: 'Type your reply...', validate: function(v){ return v ? '' : 'Type a reply first.'; } }
-    ], { okText: 'Send reply', bodyHtml: '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">Re: <b>' + esc(t.subject || 'your support request') + '</b> &middot; ' + esc(t.nation_name || t.subdomain || '') + ' &middot; to <code>' + esc(t.reporter_email) + '</code></div>' });
-    if (!res) return;
-    var reply = (res.reply || '').trim(); if (!reply) return;
+  // Email one reply to the ticket's reporter and append it to the ticket's
+  // `replies` thread. Returns true on a successful send. Needs send-notification
+  // deployed to the PLATFORM project with an email provider configured
+  // (EMAIL_PROVIDER + keys) -- see the Support-inbox setup card. A 'new' ticket
+  // moves to 'in progress' on the first reply.
+  async function _psSendReply(t, reply){
     var replyHtml = '<p>Reply from Nation Pathways support'
       + (t.subject ? ' about your request &ldquo;' + esc(t.subject) + '&rdquo;' : '') + ':</p>'
       + '<p style="white-space:pre-wrap;">' + esc(reply) + '</p>';
@@ -1952,22 +1966,22 @@
     } catch (e){ errMsg = String(e && e.message || e); }
     if (!sent){
       dlgAlert('Could not send the reply (' + errMsg + '). The platform project needs the send-notification function deployed and an email provider configured (EMAIL_PROVIDER + keys) in its Edge Function secrets -- see the "Support inbox setup" card on the Provision tab.', { title: 'Reply not sent' });
-      return;
+      return false;
     }
-    // Log the reply on the ticket + move a new ticket to in progress.
-    var stamp = new Date().toISOString().slice(0, 16).replace('T', ' ');
-    var logLine = '[' + stamp + '] Replied to ' + t.reporter_email + ' (' + jwtEmail() + '): ' + reply;
-    var newNotes = (t.notes ? (t.notes + '\n') : '') + logLine;
-    var patch = { notes: newNotes, updated_at: new Date().toISOString() };
+    var entry = { by: jwtEmail(), at: new Date().toISOString(), text: reply, to: t.reporter_email };
+    var replies = (Array.isArray(t.replies) ? t.replies : []).concat([entry]);
+    var patch = { replies: replies, updated_at: new Date().toISOString() };
     if ((t.platform_status || 'new') === 'new') patch.platform_status = 'open';
     try {
-      await api('PATCH', '/platform_support_tickets?id=eq.' + encodeURIComponent(id), patch, 'return=minimal');
-      t.notes = newNotes; if (patch.platform_status) t.platform_status = patch.platform_status;
+      var pr = await api('PATCH', '/platform_support_tickets?id=eq.' + encodeURIComponent(t.id), patch, 'return=minimal');
+      // If the replies column isn't there yet, the reply still sent -- say so.
+      if (pr && !pr.ok){ dlgAlert('Reply emailed, but it could not be saved to the thread. Run supabase/platform/support_replies.sql on the platform project so replies persist.', { title: 'Reply sent' }); }
+      else { t.replies = replies; if (patch.platform_status) t.platform_status = patch.platform_status; }
     } catch (e){}
-    try { await audit('platform_support_reply', t.subdomain || id, t.reporter_email || ''); } catch (e){}
+    try { await audit('platform_support_reply', t.subdomain || t.id, t.reporter_email || ''); } catch (e){}
     psPaint();
-    dlgAlert('Reply sent to ' + t.reporter_email + '.', { title: 'Reply sent' });
-  };
+    return true;
+  }
   window.psSetStatus = async function(id, status){
     var patch = { platform_status: status, updated_at: new Date().toISOString() };
     if (status === 'resolved'){ patch.resolved_by = jwtEmail(); patch.resolved_at = new Date().toISOString(); }
@@ -3763,7 +3777,6 @@
       case 'inv-interest':  window.invAddInterest(el.getAttribute('data-id') || '', el.getAttribute('data-sub') || ''); break;
       case 'ps-refresh':    window.renderPlatformSupport(); break;
       case 'ps-view':       window.psView(id); break;
-      case 'ps-reply':      window.psReply(id); break;
       case 'ps-status':     window.psSetStatus(id, el.getAttribute('data-status') || ''); break;
     }
   });
