@@ -356,9 +356,24 @@ serve(async (req: Request) => {
     const callerEmail = (user.email || "").toLowerCase();
     const emailLit = callerEmail.replace(/[\\%_]/g, (c: string) => "\\" + c);
     const adminGate = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY);
-    const { data: staffRows } = await adminGate
-      .from("staff").select("id").ilike("email", emailLit).eq("is_active", true).limit(1);
-    if (!staffRows || !staffRows.length) {
+    // Allowed callers: an ACTIVE staff member (nation projects) OR a platform
+    // super-admin (the control-plane project, which has no `staff` table but a
+    // `super_admins` table -- used by the admin Support inbox reply). Each
+    // lookup is best-effort: on a project that lacks one of the tables that
+    // query just returns nothing, so the other gate still applies and neither
+    // nation nor platform gains access it would not otherwise have.
+    let allowed = false;
+    {
+      const { data: staffRows } = await adminGate
+        .from("staff").select("id").ilike("email", emailLit).eq("is_active", true).limit(1);
+      if (staffRows && staffRows.length) allowed = true;
+    }
+    if (!allowed && callerEmail) {
+      const { data: saRows } = await adminGate
+        .from("super_admins").select("email").ilike("email", emailLit).limit(1);
+      if (saRows && saRows.length) allowed = true;
+    }
+    if (!allowed) {
       return jsonResponse({ error: "Staff access required" }, 403);
     }
   }
