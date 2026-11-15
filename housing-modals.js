@@ -3249,6 +3249,10 @@ window.openEditModal = function(appId) {
         if(txts[1]) txts[1].value = h.ln || '';
         if(dts[0])  dts[0].value  = h.dob || '';
         if(sels[0]) sels[0].value = h.relationship || '';
+        // "In applicant's care?" — default Yes for legacy records (no flag).
+        // Tolerates the staff boolean and the portal's 'Yes'/'No' string.
+        var careSel = row.querySelector('[data-role="habInCare"]');
+        if(careSel){ var _ic = h.inCare; careSel.value = (_ic === false || _ic === 'No' || _ic === 'no') ? 'no' : 'yes'; }
       });
     }
   }

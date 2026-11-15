@@ -920,14 +920,15 @@
           + '<p class="sub" style="margin:0 0 10px;">Everyone besides yourself (and the co-applicant).</p>'
           + wfRepeater('rep_hab', p.habitants || [], [
               { k: 'fn', label: 'First name' }, { k: 'ln', label: 'Last name' },
-              { k: 'dob', label: 'Date of birth', type: 'date' }, { k: 'relationship', label: 'Relationship to you', type: 'select', opts: REL_OPTS }
+              { k: 'dob', label: 'Date of birth', type: 'date' }, { k: 'relationship', label: 'Relationship to you', type: 'select', opts: REL_OPTS },
+              { k: 'inCare', label: 'In your care / lives with you?', type: 'select', opts: ['Yes', 'No'] }
             ], 'wizAddHab')
           + '<h4 style="margin:18px 0 6px;">Pets (optional)</h4>'
           + wfRepeater('rep_pet', p.pets || [], [
               { k: 'name', label: 'Name' }, { k: 'type', label: 'Type (dog, cat&hellip;)' }, { k: 'size', label: 'Size', type: 'select', opts: PET_SIZES }
             ], 'wizAddPet');
       }, collect: function (p) {
-        p.habitants = wfCollectRepeater('rep_hab', ['fn', 'ln', 'dob', 'relationship']);
+        p.habitants = wfCollectRepeater('rep_hab', ['fn', 'ln', 'dob', 'relationship', 'inCare']);
         p.pets = wfCollectRepeater('rep_pet', ['name', 'type', 'size']);
       } },
     { title: 'Income', render: function (p) {
