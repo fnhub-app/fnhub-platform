@@ -2889,10 +2889,11 @@
   };
   // Re-generate this invoice's PDF from its CURRENT stored data (so interest
   // lines, carried balances, etc. are included) and open it in a new tab.
-  window.viewNationInvoice = function(id, sub){
+  window.viewNationInvoice = async function(id, sub){
     var inv = (window._nicInvoices || []).filter(function(x){ return String(x.id) === String(id); })[0];
     if (!inv){ dlgAlert('Invoice not loaded — reopen the Invoices tab and try again.'); return; }
     var n = _nations.filter(function(x){ return x.subdomain === sub; })[0];
+    await loadLogoDataUrl();
     ensureJsPdf(function(){
       try {
         var doc = buildInvoicePdf(n, inv);
@@ -3033,6 +3034,7 @@
         }
         if (carried.length) await audit('nation_invoice_carried', sub, carried.length + ' invoice(s) -> ' + number);
         window._nicCarryIds = null;
+        await loadLogoDataUrl();
         var doc = buildInvoicePdf(n, inv);
         var fname = number + '.pdf';
         var blob = doc.output('blob');
@@ -3056,13 +3058,15 @@
     var doc = new jsPDF({ unit: 'pt', format: 'letter' });
     var M = 56, W = doc.internal.pageSize.getWidth(), H = doc.internal.pageSize.getHeight(), y = M;
     function t(s, x, yy, o){ o = o || {}; doc.setFont('helvetica', o.style || 'normal'); doc.setFontSize(o.size || 10); if (o.color) doc.setTextColor(o.color[0], o.color[1], o.color[2]); else doc.setTextColor(20, 20, 20); doc.text(String(s), x, yy, o.align ? { align: o.align } : undefined); }
-    // Header
-    t('Nation Pathways', M, y, { style: 'bold', size: 16 });
+    // Header -- logo (if preloaded) at top-left, provider block beside it.
+    var hx = M;
+    if (_logoData){ try { doc.addImage(_logoData, 'PNG', M, y - 11, 40, 40); hx = M + 52; } catch (e){} }
+    t('Nation Pathways', hx, y, { style: 'bold', size: 16 });
     t('INVOICE', W - M, y, { style: 'bold', size: 18, align: 'right', color: [120, 120, 120] });
-    y += 16; t('Housing Management Platform', M, y, { size: 10, color: [110, 110, 110] });
+    y += 16; t('Housing Management Platform', hx, y, { size: 10, color: [110, 110, 110] });
     t(inv.number, W - M, y, { size: 11, align: 'right' });
-    y += 13; t(PROVIDER.addr1 + ', ' + PROVIDER.addr2, M, y, { size: 9, color: [110, 110, 110] });
-    y += 12; t(PROVIDER.phone + '   ·   ' + PROVIDER.email, M, y, { size: 9, color: [110, 110, 110] });
+    y += 13; t(PROVIDER.addr1 + ', ' + PROVIDER.addr2, hx, y, { size: 9, color: [110, 110, 110] });
+    y += 12; t(PROVIDER.phone + '   ·   ' + PROVIDER.email, hx, y, { size: 9, color: [110, 110, 110] });
     y += 20; doc.setDrawColor(220); doc.line(M, y, W - M, y); y += 20;
     // Bill to + meta
     t('BILL TO', M, y, { style: 'bold', size: 9, color: [120, 120, 120] });
@@ -3379,6 +3383,7 @@
       if (!(b.unit_amount > 0) || !b.description){ setMsg('cn-bill-msg', 'Pick a line item and amount first (or tick Dynamic pricing).'); return; }
       lines = [{ description: b.description, qty: 1, unit_price: Math.round(b.unit_amount * 100) / 100 }];
     }
+    await loadLogoDataUrl();
     setMsg('cn-bill-msg', 'Building draft...', 'ok');
     ensureJsPdf(function(){
       try {
@@ -3433,6 +3438,7 @@
         if (discount > 0){ inv.discount_type = b.discount_type; inv.discount_value = Number(b.discount_value) || 0; inv.discount = discount; inv.discount_label = b.discount_label || null; }
         var r = await api('POST', '/nation_invoices', inv, 'return=minimal');
         if (!r.ok){ var t = await r.text(); setMsg('cn-bill-msg', /duplicate|unique/i.test(t) ? 'Number collision, try again.' : 'Could not create invoice.'); return; }
+        await loadLogoDataUrl();
         var doc = buildInvoicePdf(n, inv); var fname = number + '.pdf'; var blob = doc.output('blob'); var viewUrl = URL.createObjectURL(blob); doc.save(fname);
         try { await uploadDoc(sub, new File([blob], fname, { type: 'application/pdf' }), 'invoice'); } catch(e){}
         var nextRun = _advanceBillDate(b.next_run_date, b.cadence, b.anchor_day);
