@@ -10,6 +10,10 @@ name: Deploy platform (control-plane) Edge Functions
 #                           nation_support_keys. See docs/SUPPORT-LOGIN.md.
 #   - gen-support-key       (admin calls it; keep JWT verification ON) - generates a
 #                           per-nation ES256 keypair; needs nation_support_keys.sql run.
+#   - send-notification     (admin Support-inbox reply; keep JWT verification ON) - the
+#                           same function nations use; its gate accepts an active staff
+#                           member OR a platform super-admin. Needs an email provider
+#                           (EMAIL_PROVIDER + keys) set on the platform project's secrets.
 #
 # These are excluded from deploy-supabase-functions.yml (which targets the
 # NATION project). This workflow reuses the same account-scoped
@@ -40,6 +44,7 @@ on:
       - 'supabase/functions/gen-support-key/**'
       - 'supabase/functions/run-nation-migration/**'
       - 'supabase/functions/platform-ticket-intake/**'
+      - 'supabase/functions/send-notification/**'
       - 'supabase/functions/_shared/**'
       - '.github/workflows/deploy-platform-functions.yml'
   workflow_dispatch:
@@ -97,4 +102,6 @@ jobs:
           supabase functions deploy run-nation-migration --project-ref "$REF" --yes
           echo "──── Deploying platform-ticket-intake to $REF (JWT verify OFF; x-inbox-secret gated) ────"
           supabase functions deploy platform-ticket-intake --project-ref "$REF" --no-verify-jwt --yes
+          echo "──── Deploying send-notification to $REF (JWT verify ON; staff OR super-admin gated) ────"
+          supabase functions deploy send-notification --project-ref "$REF" --yes
           echo "Platform functions deployed."
