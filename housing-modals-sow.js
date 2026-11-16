@@ -1643,9 +1643,16 @@ async function _sowPromptWorkOrderEmail(){
       var boxes = recips.map(function(x){ return { id:x.id, label:x.label, defaultChecked:x.defaultChecked }; });
       if(ctSmsNum){ boxes.push({ id:'_sms', label:'&#128241; Text &middot; ' + _esc(ct.name || 'contractor') + ' at ' + _esc(ctSmsNum), defaultChecked:true }); }
       if(!boxes.length){ if(typeof showToast === 'function') showToast('No contractor email or mobile on file.', {type:'error'}); return; }
+      // Key contacts without a valid email can't be emailed, so they're not
+      // listed above -- name them so it's clear why (and how to include them),
+      // instead of silently dropping them.
+      var _noEmailNames = [];
+      (ct.people || []).forEach(function(p){ if(p && p.name && !_validEmail(p && p.email)) _noEmailNames.push(p.name); });
+      var _woMsg = 'Select how to send this work order (PDF attached to email):';
+      if(_noEmailNames.length){ _woMsg += ' (No email on file for ' + _noEmailNames.join(', ') + ' — add one in the contractor card to email them.)'; }
       var r2 = await showConfirm({
         title:'Send Work Order?',
-        message:'Select how to send this work order (PDF attached to email):',
+        message:_woMsg,
         confirmText:'Send', cancelText:'Cancel',
         checkboxes: boxes
       });
@@ -2970,7 +2977,13 @@ function _sowFireEmails(data, existingForStatus, isNew, sendTenantCopy, saveMode
   // Notify approvers on FIRST save only — subsequent edits don't re-fire
   // so the SOW reviewers don't get spammed during iteration. Fire-and-
   // forget; UI never blocks on delivery.
-  if (isNew && typeof notifySowCreated === 'function') {
+  // Notify approvers only when the request is actually SUBMITTED, not on a draft
+  // save / auto-save (which fired the email before the user hit Submit). Fires
+  // once -- skips a SOW already in an approval state, so a re-submit doesn't
+  // re-notify.
+  var _prevStatus = existingForStatus ? (existingForStatus.approval_status || '') : '';
+  var _alreadyInflight = (_prevStatus === 'submitted' || _prevStatus === 'hm_approved' || _prevStatus === 'ed_approved' || _prevStatus === 'completed');
+  if (saveMode === 'submit' && !_alreadyInflight && typeof notifySowCreated === 'function') {
     notifySowCreated(data, _sowUnitId);
   }
 
