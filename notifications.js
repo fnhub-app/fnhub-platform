@@ -278,7 +278,16 @@ var EMAIL_EVENT_REGISTRY = [
     defaultRecipientRoles: [],
     defaultCcRoles:        [],
     wired:                 true,
-    placeholders:          ['contractorName','unitAddress','projectNumber','totalCost','tenantName','startDate','endDate','nationShort','appLink'],
+    // SMS: text the contractor a portal link to the work order (they sign in by
+    // phone). smsCapable so the per-contact "Text" option can appear in the Send
+    // Work Order dialog; ON by default (the option itself still defaults
+    // unchecked, and the sms_notifications module must be on). ASCII-only to
+    // stay GSM-7. {scopeShort} is a brief scope line; {mrLink} is the Contractor
+    // Portal link (set by notifyWorkOrderToContractor).
+    smsCapable:            true,
+    smsDefault:            true,
+    sms:                   '{nationShort} Housing work order {projectNumber} - {unitAddress}. {scopeShort} Sign in to view: {mrLink} Reply STOP to opt out.',
+    placeholders:          ['contractorName','unitAddress','projectNumber','totalCost','tenantName','startDate','endDate','scopeShort','mrLink','nationShort','appLink'],
     defaults: {
       subject:  '{nationShort} Housing — Work Order: {unitAddress} ({projectNumber})',
       bodyHtml: '<p>Hello {contractorName},</p>'
