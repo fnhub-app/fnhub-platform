@@ -230,6 +230,10 @@ function aiSendMessage() {
 
   var ctx = {
     role:        window._effectiveRole || window.currentRole || '',
+    // The nation's housing policy text, so chat can answer policy questions and
+    // cite it. The ai-chat function also reads the policy live server-side as a
+    // fallback, so this stays current even if _appSettings is stale.
+    policyText:  (typeof _aiPolicyText === 'function') ? _aiPolicyText() : '',
     // Nation identity so the assistant speaks as THIS nation (OCAP / multi-
     // nation), never a hardcoded one. Falls back server-side if absent.
     nation:      (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '',
