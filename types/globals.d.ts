@@ -354,6 +354,7 @@ declare var flushOfflineFiles: any;
 declare var focus: any;
 declare var formatCurrency: any;
 declare var formatPhone: any;
+declare var fmtPhone: any;
 declare var generateAppId: any;
 declare var getContext: any;
 declare var getTermsBody: any;
