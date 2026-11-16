@@ -626,7 +626,20 @@ serve(async (req) => {
     }
 
     // --- Chat mode: tool-use loop with the read-only query_database tool ---
-    const system = buildSystem('chat', context)
+    // Ground policy questions in the nation's CURRENT housing policy: read it
+    // live from housing_settings (service role) so the assistant always has the
+    // latest, independent of client state. Falls back to the client-sent copy.
+    let policyLive = ''
+    try {
+      if (SUPABASE_URL && SUPABASE_SERVICE_KEY) {
+        const admin = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+        const { data: polRow } = await admin.from('housing_settings').select('value').eq('key', 'housing_policy').maybeSingle()
+        const pv: any = (polRow as any)?.value
+        policyLive = typeof pv === 'string' ? pv : (pv?.text || '')
+      }
+    } catch (_) { /* best-effort; chat still works without policy */ }
+    const chatCtx = { ...(context || {}), policyText: policyLive || (context?.policyText || '') }
+    const system = buildSystem('chat', chatCtx)
     const messages = buildMessages(message, history)
     const tablesQueried: string[] = []
     let turns = 0
@@ -1129,6 +1142,13 @@ Rules:
     ? `\n\n## Capital Projects - ${ctx.projects.length} records\nFunded capital initiatives (lot development / house builds), reference numbers CP-YYYY-NN - distinct from the SOW-YYYY-NN "Project #" on maintenance requests. Fields: project_number, name, type, status, funding_source, budget, spent (actual expenses to date), milestones_done/milestones_total, lots_total, units_delivered, start_date, target_date, allocated (true once costs were allocated to units).\n` + JSON.stringify(ctx.projects.slice(0, 30))
     : ''
 
+  // Housing policy -- grounds policy questions in the nation's own policy text
+  // (read live from housing_settings by the handler, so it is always current).
+  const policyChat = String(ctx?.policyText || '').slice(0, 16000)
+  const policyBlock = policyChat
+    ? `\n\n## Housing policy (${nationShort}'s authoritative policy -- ANSWER POLICY QUESTIONS FROM THIS)\nWhen the question is about eligibility, allocation / points / scoring rules, arrears, transfers, evictions, pets, occupancy standards, or any other rule, answer FROM the policy text below and cite the relevant part in plain language. Do NOT invent policy that is not written here; if the policy does not cover it, say so plainly.\n"""\n${policyChat}\n"""`
+    : `\n\n## Housing policy\nNo housing policy text is available to you. If asked a policy question, say the policy has not been loaded yet (an ED can paste it in Settings -> Housing policy) and do NOT invent policy.`
+
   // Compute quick summary stats for the prompt
   const vacantCount = (ctx?.units || []).filter((u: any) => u.status === 'vacant').length
   const pendingApps = (ctx?.apps  || []).filter((a: any) => !['assigned','declined','archived'].includes(a.status)).length
@@ -1145,7 +1165,7 @@ IMPORTANT terminology for this system:
 - "RFQ" = Request for Quotes (sent to contractors for pricing)
 - "Tier" on an application = priority tier (e.g. Emergency, High, Medium, Low)
 - "Capital Project" = a funded initiative (build N houses / develop N lots), numbered CP-YYYY-NN in the housing_projects table. This is DIFFERENT from the SOW-YYYY-NN "Project #" shown on a maintenance request - do not mix them up. Capital projects track milestones, budget vs actual expenses, lots (raw/serviced/built), and units built on those lots; "allocate costs" means dividing the project total equally across its units to set each unit's construction cost.
-${appsJson}${unitsJson}${sowsJson}${rfqsJson}${contractorsJson}${renoJson}${projectsJson}
+${appsJson}${unitsJson}${sowsJson}${rfqsJson}${contractorsJson}${renoJson}${projectsJson}${policyBlock}
 
 ## query_database tool
 You also have a read-only query_database tool for precise or large-data lookups
@@ -1200,6 +1220,7 @@ Rules:
 - For maintenance/repair/work-order questions, use the Maintenance Requests section from the loaded context (the housing_sow table is not directly queryable).
 - The audit log (housing_audit_log) records ACTIONS (who did what, when), NOT records. For "how many / list X" about records - notes, applications, tenants, units, inspections, contractors, RFQs - query the dedicated table for X (e.g. housing_application_notes + tenant_notes for notes). Do not answer record-count questions from the audit log.
 - For "how do I ..." questions, use the How-to knowledge above and tailor to the staff role.
+- For housing POLICY questions (eligibility, points / scoring rules, arrears, transfers, evictions, pets, occupancy standards, "what does the policy say ..."), answer from the Housing policy section above and cite the relevant part in plain language; never invent policy that is not written there.
 - Perform calculations (totals, counts, averages) directly from the data.
 - Answer concisely and confidently. Do not tell staff to check another system if the data is available here or via the tool.
 - This is sensitive community data governed by OCAP principles - keep answers grounded in the records and do not speculate about individuals.`
