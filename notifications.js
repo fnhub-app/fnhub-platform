@@ -2975,11 +2975,20 @@ async function notifyWorkOrderToContractor(sow, unit, contractor, recipientEmail
   // opt-out ledger are the consent backstop, matching the SMS template's intent.
   try {
     if (opts.sms && _eventSmsOn(eventKey)) {
-      var ctNum = String(opts.smsNumber || _contractorSmsNumber(contractor)).trim();
-      if (_SMS_E164_RE.test(ctNum)) {
-        var smsTokens = _emailTokensForWorkOrder(sow, unit, contractor);
-        smsTokens.scopeShort = _smsScopeShort(sow);
-        smsTokens.mrLink     = _contractorPortalLink();
+      // One or more recipient numbers: opts.smsNumbers (per-contact picker) or
+      // the legacy single opts.smsNumber, falling back to the contractor's.
+      var _nums = Array.isArray(opts.smsNumbers) ? opts.smsNumbers.slice()
+                : (opts.smsNumber ? [opts.smsNumber] : [_contractorSmsNumber(contractor)]);
+      var smsTokens = _emailTokensForWorkOrder(sow, unit, contractor);
+      smsTokens.scopeShort = _smsScopeShort(sow);
+      smsTokens.mrLink     = _contractorPortalLink();
+      var _seenNum = {};
+      for (var _ni = 0; _ni < _nums.length; _ni++) {
+        var ctNum = String(_nums[_ni] || '').trim();
+        if (!_SMS_E164_RE.test(ctNum) || _seenNum[ctNum]) continue;
+        _seenNum[ctNum] = true;
+        // Serial await: Graph/Twilio throttle, and _sendEventSms is the shared
+        // one-at-a-time sender.
         await _sendEventSms(eventKey, ctNum, smsTokens, { type: 'sow', id: sow.project_number || '-' });
       }
     }
