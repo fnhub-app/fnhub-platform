@@ -261,7 +261,7 @@
     + '.dlg-bd{padding:16px 18px;font-size:14px;color:var(--ink);white-space:pre-wrap;line-height:1.5;}'
     + '.dlg-bd label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:12px 0 4px;white-space:normal;}'
     + '.dlg-err{color:var(--danger);font-size:12px;margin-top:6px;min-height:14px;}'
-    + '.dlg-ft{display:flex;justify-content:flex-end;gap:8px;padding:4px 18px 16px;}'
+    + '.dlg-ft{display:flex;flex-wrap:wrap;justify-content:flex-end;gap:8px;padding:4px 18px 16px;}'
     + '.dlg-ft .btn{margin-top:0;padding:9px 16px;font-size:14px;}';
     document.head.appendChild(s);
   }
@@ -295,6 +295,8 @@
       }
       html += '</div><div class="dlg-ft">';
       if (opts.cancel !== false) html += '<button class="btn ghost" type="button" id="dlg-cancel">' + esc(opts.cancelText || 'Cancel') + '</button>';
+      // Optional extra footer actions (resolve the promise with {__action:key}).
+      (opts.extraActions || []).forEach(function(a, i){ html += '<button class="btn ghost" type="button" data-dlg-extra="' + i + '">' + esc(a.label || '') + '</button>'; });
       html += '<button class="btn" type="button" id="dlg-ok">' + esc(opts.okText || 'OK') + '</button></div>';
       var box = document.createElement('div'); box.className = 'dlg'; box.innerHTML = html;
       ov.appendChild(box); document.body.appendChild(ov);
@@ -322,6 +324,14 @@
       function cancel(){ done((opts.prompt || opts.fields) ? null : false); }
       var okBtn = box.querySelector('#dlg-ok'); if (okBtn) okBtn.onclick = ok;
       var cBtn = box.querySelector('#dlg-cancel'); if (cBtn) cBtn.onclick = cancel;
+      (opts.extraActions || []).forEach(function(a, i){
+        var xb = box.querySelector('[data-dlg-extra="' + i + '"]');
+        if (xb) xb.onclick = function(){
+          var out = { __action: a.key };
+          if (opts.fields){ opts.fields.forEach(function(f){ var el = box.querySelector('#dlg-f-' + f.key); out[f.key] = (el && el.value || '').trim(); }); }
+          done(out);
+        };
+      });
       ov.addEventListener('click', function(e){ if (e.target === ov) cancel(); });
       function onKey(e){ if (e.key === 'Escape'){ e.preventDefault(); cancel(); } else if (e.key === 'Enter' && !(e.target && e.target.tagName === 'TEXTAREA')){ e.preventDefault(); ok(); } }
       document.addEventListener('keydown', onKey);
@@ -1877,10 +1887,9 @@
       var from = esc(t.reporter_name || t.reporter_email || '(unknown)');
       var src = PS_SRC[t.source] || esc(t.source || '');
       var st = t.platform_status || 'new';
-      var acts = '<button class="btn sm ghost" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">View / Reply</button>';
-      if (st === 'new' || st === 'open') acts += ' <button class="btn sm" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="resolved">Resolve</button>';
-      if (st === 'new') acts = '<button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Start</button> ' + acts;
-      if (st === 'resolved') acts += ' <button class="btn sm ghost" type="button" data-act="ps-status" data-id="' + esc(t.id) + '" data-status="open">Reopen</button>';
+      // One button per row -- Open the ticket; triage (Start/Resolve/Reopen) and
+      // reply all live inside the ticket view.
+      var acts = '<button class="btn sm" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">Open</button>';
       return '<tr>'
         + '<td><div style="font-weight:600;">' + from + '</div><div style="font-size:11px;color:var(--muted);">' + src + (t.reporter_role ? (' &middot; ' + esc(t.reporter_role)) : '') + '</div></td>'
         + '<td>' + esc(t.nation_name || t.subdomain || '') + '</td>'
@@ -1936,10 +1945,21 @@
     var canReply = !!t.reporter_email;
     var bodyHtml = meta + threadBox
       + (canReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">No email on file for this reporter &mdash; you can\'t reply from here.</div>');
+    // Triage buttons live inside the ticket view now (the row only has Open).
+    var st2 = t.platform_status || 'new';
+    var triage = [];
+    if (st2 === 'new') triage.push({ key: 'start', label: 'Start' });
+    if (st2 === 'new' || st2 === 'open') triage.push({ key: 'resolve', label: 'Resolve' });
+    if (st2 === 'resolved') triage.push({ key: 'reopen', label: 'Reopen' });
     var res = await dlgForm(t.subject || 'Support request',
       canReply ? [{ key: 'reply', label: 'Reply (emailed to the reporter)', type: 'textarea', rows: 3, placeholder: 'Type a reply... (leave blank to just close)' }] : [],
-      { bodyHtml: bodyHtml, okText: canReply ? 'Send reply' : 'Close', cancelText: canReply ? 'Close' : null });
+      { bodyHtml: bodyHtml, okText: canReply ? 'Send reply' : 'Close', cancelText: canReply ? 'Close' : null, extraActions: triage });
     if (!res) return;                         // closed
+    if (res.__action){                        // a triage button (Start/Resolve/Reopen)
+      var smap = { start: 'open', resolve: 'resolved', reopen: 'open' };
+      await psSetStatus(id, smap[res.__action] || 'open');
+      return;                                 // status + list + toast updated; view closed
+    }
     var reply = canReply ? ((res.reply || '').trim()) : '';
     if (!reply) return;                       // "Send reply" with an empty box = just close
     var ok = await _psSendReply(t, reply);
@@ -1982,7 +2002,25 @@
     psPaint();
     return true;
   }
+  // Small transient toast (the admin panel had only blocking dialogs). Used so a
+  // triage status change gives visible feedback instead of the row silently
+  // dropping out of a filtered view.
+  function adminToast(msg){
+    try {
+      if (!document.getElementById('admin-toast-style')){
+        var sEl = document.createElement('style'); sEl.id = 'admin-toast-style';
+        sEl.textContent = '.admin-toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(10px);background:var(--dark);color:#fff;padding:10px 16px;border-radius:10px;font-size:13px;font-weight:600;font-family:var(--sans);box-shadow:0 6px 24px rgba(0,0,0,.25);z-index:9999;opacity:0;transition:opacity .18s,transform .18s;pointer-events:none;max-width:88vw;}.admin-toast.show{opacity:1;transform:translateX(-50%) translateY(0);}';
+        document.head.appendChild(sEl);
+      }
+      var el = document.createElement('div'); el.className = 'admin-toast'; el.textContent = String(msg || '');
+      document.body.appendChild(el);
+      requestAnimationFrame(function(){ el.classList.add('show'); });
+      setTimeout(function(){ el.classList.remove('show'); setTimeout(function(){ if (el.parentNode) el.parentNode.removeChild(el); }, 220); }, 2400);
+    } catch (e){}
+  }
   window.psSetStatus = async function(id, status){
+    var prevT = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
+    var prev = prevT ? (prevT.platform_status || 'new') : 'new';
     var patch = { platform_status: status, updated_at: new Date().toISOString() };
     if (status === 'resolved'){ patch.resolved_by = jwtEmail(); patch.resolved_at = new Date().toISOString(); }
     else { patch.resolved_by = null; patch.resolved_at = null; }
@@ -1991,6 +2029,7 @@
     var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
     if (t){ t.platform_status = status; t.resolved_by = patch.resolved_by; t.resolved_at = patch.resolved_at; }
     psPaint();
+    adminToast(status === 'resolved' ? 'Resolved' : (prev === 'resolved' ? 'Reopened' : 'Marked in progress'));
   };
 
   function renderProvisionResults(d){
