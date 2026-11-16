@@ -342,7 +342,7 @@
   function dlgPrompt(label, defaultValue, opts){ opts = opts || {}; return _dlgOpen({ title: opts.title, message: opts.message || '', bodyHtml: opts.bodyHtml, prompt: true, label: label, defaultValue: defaultValue, inputType: opts.inputType, step: opts.step, placeholder: opts.placeholder, validate: opts.validate, okText: opts.okText || 'Save' }); }
   // Multi-field branded form. fields: [{key,label,inputType,defaultValue,step,placeholder,validate(value,soFar)->errMsg|''}].
   // Resolves an object of {key:value} on OK, or null on cancel.
-  function dlgForm(title, fields, opts){ opts = opts || {}; return _dlgOpen({ title: title, message: opts.message || '', bodyHtml: opts.bodyHtml, fields: fields, okText: opts.okText || 'Save', cancelText: opts.cancelText }); }
+  function dlgForm(title, fields, opts){ opts = opts || {}; return _dlgOpen({ title: title, message: opts.message || '', bodyHtml: opts.bodyHtml, fields: fields, okText: opts.okText || 'Save', cancelText: opts.cancelText, extraActions: opts.extraActions }); }
 
   async function sendLink(){
     var em = (document.getElementById('em').value || '').trim();
