@@ -1618,43 +1618,44 @@ async function _sowPromptWorkOrderEmail(){
       if(typeof notifyWorkOrderToContractor !== 'function' || typeof _resolveContractorForEmail !== 'function') return;
       var ct = await _resolveContractorForEmail(sow.contractorId);
       if(!ct){ if(typeof showToast === 'function') showToast('Contractor record not found.', {type:'error'}); return; }
-      // Build the recipient list: the company email (default on) plus each Key
-      // Contact that has an email on file (default off — the user opts each in).
+      // Per-contact send options: for the company and each Key Contact, offer an
+      // EMAIL box (if a valid email) and a TEXT box (if SMS is on and the contact
+      // has a valid mobile), so staff can reach each person by email, text, or
+      // both. Texts link contractors to the portal (they sign in by phone).
       var _validEmail = function(e){ return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e||'').trim()); };
-      var recips = [], seenR = {};
-      var _pushRecip = function(id, email, name, defOn){
+      var _toE = function(p){ var n = (typeof window._toE164 === 'function') ? window._toE164(p) : String(p||'').trim(); return /^\+[1-9]\d{7,14}$/.test(n) ? n : ''; };
+      // SMS is available when the module + event are on AND some number exists.
+      var _smsOn = !!(typeof window._contractorWorkOrderSmsNumber === 'function' && window._contractorWorkOrderSmsNumber(ct));
+      var boxes = [], emailById = {}, smsById = {}, seenE = {}, seenS = {}, _noContact = [];
+      var _addContact = function(idBase, name, email, phone, defEmail){
+        var hit = false;
         var e = String(email||'').trim();
-        if(!_validEmail(e)) return;
-        var key = e.toLowerCase();
-        if(seenR[key]) return;            // never email the same address twice
-        seenR[key] = true;
-        recips.push({ id:id, email:e,
-          label: _esc(name || 'Contact') + ' &middot; <span style="color:var(--muted);">' + _esc(e) + '</span>',
-          defaultChecked: !!defOn });
+        if(_validEmail(e) && !seenE[e.toLowerCase()]){ seenE[e.toLowerCase()] = true; hit = true; emailById['e_'+idBase] = e;
+          boxes.push({ id:'e_'+idBase, label:'&#9993;&#65039; ' + _esc(name) + ' &middot; <span style="color:var(--muted);">' + _esc(e) + '</span>', defaultChecked: !!defEmail }); }
+        if(_smsOn){ var n = _toE(phone); if(n && !seenS[n]){ seenS[n] = true; hit = true; smsById['s_'+idBase] = n;
+          boxes.push({ id:'s_'+idBase, label:'&#128241; Text ' + _esc(name) + ' &middot; <span style="color:var(--muted);">' + _esc(n) + '</span>', defaultChecked:false }); } }
+        return hit;
       };
-      _pushRecip('company', ct.email, (ct.name || 'Company') + ' (company)', true);
+      _addContact('company', (ct.name || 'Company') + ' (company)', ct.email, ct.phone, true);
       (ct.people || []).forEach(function(p, i){
-        _pushRecip('kc_'+i, p && p.email, (p && p.name) ? (p.name + ' (key contact)') : 'Key contact', false);
+        var nm = (p && p.name) ? (p.name + ' (key contact)') : 'Key contact';
+        if(!_addContact('kc'+i, nm, p && p.email, p && p.phone, false) && p && p.name) _noContact.push(p.name);
       });
-      // Text option: contractors sign in to the portal by phone, so offer a text
-      // to the contractor's mobile when the SMS module + event are on. '' hides
-      // the row (module off, or no valid mobile on file).
-      var ctSmsNum = (typeof window._contractorWorkOrderSmsNumber === 'function') ? window._contractorWorkOrderSmsNumber(ct) : '';
-      var boxes = recips.map(function(x){ return { id:x.id, label:x.label, defaultChecked:x.defaultChecked }; });
-      if(ctSmsNum){ boxes.push({ id:'_sms', label:'&#128241; Text &middot; ' + _esc(ct.name || 'contractor') + ' at ' + _esc(ctSmsNum), defaultChecked:true }); }
       if(!boxes.length){ if(typeof showToast === 'function') showToast('No contractor email or mobile on file.', {type:'error'}); return; }
+      var _woMsg = 'Select how to send this work order (PDF attached to email; text links to the portal):';
+      if(_noContact.length){ _woMsg += ' (' + (_smsOn ? 'No email or mobile on file for ' : 'No email on file for ') + _noContact.join(', ') + ' — add one in the contractor card to reach them.)'; }
       var r2 = await showConfirm({
         title:'Send Work Order?',
-        message:'Select how to send this work order (PDF attached to email):',
+        message:_woMsg,
         confirmText:'Send', cancelText:'Cancel',
         checkboxes: boxes
       });
       if(!r2 || !r2.ok) return;
       var picked = (r2.items) || {};
-      var chosen = recips.filter(function(x){ return picked[x.id]; }).map(function(x){ return x.email; });
-      var wantSms = !!picked._sms;
-      if(!chosen.length && !wantSms){ if(typeof showToast === 'function') showToast('Nothing selected — nothing sent.', {type:'info'}); return; }
-      notifyWorkOrderToContractor(sow, unit, ct, chosen, { sms: wantSms, smsNumber: ctSmsNum });
+      var chosenEmails = Object.keys(emailById).filter(function(k){ return picked[k]; }).map(function(k){ return emailById[k]; });
+      var chosenSms = Object.keys(smsById).filter(function(k){ return picked[k]; }).map(function(k){ return smsById[k]; });
+      if(!chosenEmails.length && !chosenSms.length){ if(typeof showToast === 'function') showToast('Nothing selected — nothing sent.', {type:'info'}); return; }
+      notifyWorkOrderToContractor(sow, unit, ct, chosenEmails, { sms: chosenSms.length>0, smsNumbers: chosenSms });
       _sowMarkWorkStarted(unit && unit.id, sow, ct.name || 'the contractor');
     } else {
       if(typeof showToast === 'function') showToast('Assign this request to a contractor or employee to email the work order.', {type:'info'});
@@ -2970,7 +2971,13 @@ function _sowFireEmails(data, existingForStatus, isNew, sendTenantCopy, saveMode
   // Notify approvers on FIRST save only — subsequent edits don't re-fire
   // so the SOW reviewers don't get spammed during iteration. Fire-and-
   // forget; UI never blocks on delivery.
-  if (isNew && typeof notifySowCreated === 'function') {
+  // Notify approvers only when the request is actually SUBMITTED, not on a draft
+  // save / auto-save (which fired the email before the user hit Submit). Fires
+  // once -- skips a SOW already in an approval state, so a re-submit doesn't
+  // re-notify.
+  var _prevStatus = existingForStatus ? (existingForStatus.approval_status || '') : '';
+  var _alreadyInflight = (_prevStatus === 'submitted' || _prevStatus === 'hm_approved' || _prevStatus === 'ed_approved' || _prevStatus === 'completed');
+  if (saveMode === 'submit' && !_alreadyInflight && typeof notifySowCreated === 'function') {
     notifySowCreated(data, _sowUnitId);
   }
 
