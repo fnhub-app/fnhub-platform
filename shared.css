@@ -1759,36 +1759,46 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
    can stay minimal. Padding / gap values were tuned to match the rest of
    the app: 12px vertical input padding, 6px label-to-input gap, 16px
    field-to-field gap. */
-.login-screen        { display: none; position: fixed; inset: 0; z-index: 9999; background: var(--login-bg); align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
-.login-card          { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 20px; }
+/* Modernized light sign-in screen — aligns to the app's new design language
+   (serif title, elevated white card with a brand accent rail, .btn-style
+   actions). All colour is token-driven so each nation's theme flows through;
+   auth-login.js derives --on-accent/--accent-ink/--accent-rgb pre-auth. */
+.login-screen        { display: none; position: fixed; inset: 0; z-index: 9999; background: var(--bg); align-items: center; justify-content: center; padding: 24px; overflow-y: auto; }
+.login-screen::before{ content: ''; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(1100px 520px at 50% -8%, rgba(var(--accent-rgb, 248,228,26), 0.14), transparent 60%); }
+.login-card          { position: relative; width: 100%; max-width: 430px; display: flex; flex-direction: column; gap: 18px; }
 /* Two-factor code prompt shown at sign-in. index.html loads shared.css but NOT
    housing.css (where .modal-overlay gets its fixed full-screen layout), so this
    class carries the positioning itself. Without it the prompt rendered in normal
    flow at the bottom of the login page -- invisible -- and sign-in hung. */
 .mfa-code-overlay    { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
-.login-logo-wrap     { text-align: center; padding-top: 8px; }
-.login-logo-bg       { display: inline-block; background: var(--dark); border-radius: 8px; padding: 10px 16px; }
-.login-logo          { width: 56px; height: 56px; display: block; }
-.login-panel         { background: var(--dark2); border: 1px solid var(--dark3); border-radius: 14px; padding: 28px; display: flex; flex-direction: column; gap: 16px; }
+.login-logo-wrap     { text-align: center; }
+.login-logo-bg       { display: inline-grid; place-items: center; background: var(--dark); border-radius: 14px; width: 58px; height: 58px; box-shadow: var(--shadow); }
+.login-logo          { width: 38px; height: 38px; display: block; }
+.login-panel         { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 30px 28px 26px; display: flex; flex-direction: column; gap: 15px; box-shadow: var(--shadow); overflow: hidden; }
+.login-panel::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--yellow); }
 .login-panel--center { text-align: center; }
-.login-title         { font-size: 15px; font-weight: 700; color: #fff; margin-bottom: 2px; }
-.login-icon-large    { font-size: 2rem; margin-bottom: 12px; }
-.login-help          { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 16px; }
-.login-help--tight   { line-height: 1.6; margin-bottom: 14px; }
-.login-help strong   { color: #fff; }
+.login-head          { margin-bottom: 2px; }
+.login-eyebrow       { font-size: 11px; font-weight: 800; letter-spacing: .8px; text-transform: uppercase; color: var(--accent-ink); margin-bottom: 4px; }
+.login-title         { font-family: var(--serif); font-weight: 400; font-size: 27px; line-height: 1.05; letter-spacing: -.3px; color: var(--text); margin: 0; }
+.login-icon-large    { font-size: 2rem; margin-bottom: 8px; }
+.login-help          { font-size: 13px; color: var(--muted); line-height: 1.7; margin-bottom: 8px; }
+.login-help--tight   { line-height: 1.6; margin-bottom: 6px; }
+.login-help strong   { color: var(--text); }
 .login-field         { display: flex; flex-direction: column; gap: 6px; }
-.login-label         { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); }
-.login-input         { background: var(--dark); border: 1px solid var(--dark-border); border-radius: 8px; padding: 12px 14px; font-size: 14px; color: #fff; font-family: var(--sans); outline: none; width: 100%; box-sizing: border-box; }
-.login-input:focus   { border-color: var(--yellow); }
-.login-row           { display: flex; align-items: center; justify-content: space-between; }
-.login-check         { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 12px; color: var(--muted); }
+.login-label         { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); }
+.login-input         { background: var(--surface); border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 15px; color: var(--text); font-family: var(--sans); outline: none; width: 100%; box-sizing: border-box; transition: border-color .15s, box-shadow .15s; }
+.login-input:focus   { border-color: var(--yellow); box-shadow: 0 0 0 3px rgba(var(--accent-rgb, 248,228,26), 0.30); }
+.login-row           { display: flex; align-items: center; justify-content: space-between; margin-top: -2px; }
+.login-check         { display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px; color: var(--muted); }
 .login-checkbox      { width: 16px; height: 16px; cursor: pointer; accent-color: var(--yellow); margin: 0; }
-.login-link          { background: none; border: none; font-size: 12px; color: var(--yellow); cursor: pointer; padding: 0; font-family: var(--sans); }
+.login-link          { background: none; border: none; font-size: 13px; color: var(--accent-ink); cursor: pointer; padding: 0; font-family: var(--sans); font-weight: 600; text-decoration: none; }
+.login-link:hover    { text-decoration: underline; }
 .login-link--block   { width: 100%; }
-.login-btn           { background: var(--action); border: none; color: var(--action-text); padding: 12px; border-radius: 8px; font-size: 14px; font-weight: 700; font-family: var(--sans); cursor: pointer; width: 100%; }
+.login-btn           { background: var(--yellow); border: 1.5px solid var(--yellow); color: var(--on-accent); padding: 12px; border-radius: 10px; font-size: 14px; font-weight: 700; font-family: var(--sans); cursor: pointer; width: 100%; transition: filter .15s; }
+.login-btn:hover     { filter: brightness(.96); }
 .login-btn:disabled  { opacity: .65; cursor: wait; }
-.login-btn--sm       { font-size: 13px; padding: 10px; margin-bottom: 10px; }
-.login-error         { display: none; background: var(--err-bg); border: 1px solid var(--err-border); border-radius: 8px; padding: 10px 14px; font-size: 12px; color: var(--err-text); text-align: left; }
+.login-btn--sm       { font-size: 13px; padding: 11px; margin-bottom: 10px; }
+.login-error         { display: none; background: #fef2f2; border: 1px solid #fecaca; border-radius: 10px; padding: 10px 14px; font-size: 12px; color: #b91c1c; text-align: left; }
 .login-msg           { display: none; margin-top: 10px; font-size: 12px; padding: 8px 12px; border-radius: 6px; }
 /* NOTE: the .login-audience* chooser styles live inline in index.html (the only
    page with the chooser) so they render even when an older shared.css is cached
