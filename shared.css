@@ -2136,9 +2136,17 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
    cram together on the left with dead space to their right. */
 .hub-wl-summary .wls-lab { flex: 1 1 auto; min-width: 0; }
 .hub-wl-summary .wls-lab b { display: block; font-size: 14.5px; font-weight: 700; color: var(--text); }
-.hub-wl-summary .wls-mini { display: flex; gap: 7px; flex-wrap: wrap; margin-top: 6px; }
-.hub-wl-summary .wls-mini span { font-size: 11.5px; padding: 3px 9px; border-radius: 999px; background: var(--bg); border: 1px solid var(--border); color: var(--muted); }
-.hub-wl-summary .wls-mini b { color: var(--text); }
+.hub-wl-summary .wls-mini { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 10px; }
+/* Stacked count pills: big number over a muted label, in a soft rounded chip
+   (matches the hub concept). */
+.hub-wl-summary .wls-chip {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 3px;
+  padding: 10px 20px; border-radius: 20px;
+  background: var(--bg); border: 1px solid var(--border); min-width: 62px;
+}
+.hub-wl-summary .wls-chip b { font-size: 21px; font-weight: 800; color: var(--text); line-height: 1; }
+.hub-wl-summary .wls-chip i { font-size: 12px; font-style: normal; font-weight: 600; color: var(--muted); }
+.hub-wl-summary .wls-note { font-size: 12.5px; color: var(--muted); }
 .hub-wl-summary .wls-go { margin-left: auto; background: var(--yellow); color: var(--on-accent); border: none; border-radius: 10px; padding: 10px 16px; font-weight: 700; font-size: 13.5px; font-family: var(--sans); cursor: pointer; white-space: nowrap; }
 .hub-wl-summary .wls-go:hover { background: var(--yellow-mid); }
 @media (max-width: 620px) { .hub-wl-summary { flex-wrap: wrap; } .hub-wl-summary .wls-go { margin-left: 0; width: 100%; } }
