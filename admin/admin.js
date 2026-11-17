@@ -339,6 +339,7 @@
 
   // ---- Views -----------------------------------------------------------------
   function showLogin(prefill){
+    app.classList.remove('wide');
     app.innerHTML =
       '<h1>Platform admin sign-in</h1>'
       + '<p class="sub">Restricted to Nation Pathways platform administrators. Enter your email and we\'ll send a secure sign-in link.</p>'
@@ -482,6 +483,7 @@
     var admins = r.ok ? await r.json().catch(function(){return[];}) : [];
     var amAdmin = admins.some(function(a){ return String(a.email||'').toLowerCase() === meEmail; });
     if (!amAdmin){
+      app.classList.remove('wide');
       app.innerHTML = '<div class="center"><div style="font-size:40px;">🚫</div><h1>Not authorized</h1>'
         + '<p class="sub">' + esc(meEmail) + ' is not a platform administrator.</p>'
         + '<button class="btn" type="button" data-act="logout">Sign out</button></div>';
@@ -492,6 +494,7 @@
     var mfaOk = await requireMfa();
     if (!mfaOk) return;
     document.getElementById('btn_out').style.display = '';
+    app.classList.add('wide');   // dashboard uses the wider layout; login/auth views stay narrow
 
     // Load nations.
     var nr = await api('GET', '/nations?select=*&order=created_at.desc');
@@ -1832,14 +1835,14 @@
     var ta = 'style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--hair,#d9dee8);border-radius:9px;"';
     var optc = ' <span style="color:var(--muted);font-weight:400;">(optional)</span>';
 
-    var form = '<div class="card" style="flex:1 1 360px;min-width:300px;">'
+    var form = '<div class="card" style="flex:1.4 1 440px;min-width:320px;">'
       + '<h3>New request</h3>'
       + '<p class="sub" style="margin:2px 0 10px;">Answer in plain language. The finished prompt builds alongside &mdash; copy it to Claude, or save it to the queue.</p>'
       + '<label>Type</label>' + rqPillGroup('type', RQ_TYPES, 'New feature', false)
       + '<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>'
       + '<label>Which part of the app?</label><select id="rq_area">' + opts(RQ_AREAS, 'Not sure') + '</select>'
-      + '<label>Who uses it / should see it?</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">' + roleBoxes + '</div>'
-      + '<label>Building blocks it should reuse' + optc + '</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">' + blockBoxes + '</div>'
+      + '<label>Who uses it / should see it?</label><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;margin-bottom:8px;">' + roleBoxes + '</div>'
+      + '<label>Building blocks it should reuse' + optc + '</label><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;margin-bottom:8px;">' + blockBoxes + '</div>'
       + '<div style="border:1px solid var(--hair,#d9dee8);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--surface-2,#f6f8fc);">'
       +   '<label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0;"><input type="checkbox" id="rq_custom" style="width:auto;"/> Custom feature for ONE nation (licensed module)</label>'
       +   '<div id="rq_custom_wrap" style="display:none;margin-top:8px;">'
@@ -1861,7 +1864,7 @@
       + '<label>Needed by' + optc + '</label><input type="date" id="rq_due" style="max-width:200px;"/>'
       + '</div>';
 
-    var preview = '<div class="card" style="flex:1 1 360px;min-width:300px;">'
+    var preview = '<div class="card" style="flex:1 1 340px;min-width:300px;position:sticky;top:12px;align-self:flex-start;">'
       + '<h3>Finished prompt</h3>'
       + '<pre id="rq_out" style="white-space:pre-wrap;word-wrap:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;background:var(--surface,#f6f8fc);border:1px solid var(--line,#e3e8f0);border-radius:10px;padding:14px;max-height:52vh;overflow:auto;margin:0 0 12px;">Fill in the questions and your prompt will build here.</pre>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
