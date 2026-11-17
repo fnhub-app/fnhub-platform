@@ -1751,6 +1751,13 @@
     h += '</div>';
     return h;
   }
+  // Multi-select pills (toggle any number on). Selection lives in the .on class;
+  // rqReadForm collects [data-rqmulti="<name>"].on. Optional hints -> tooltips.
+  function rqMultiPillGroup(name, arr, hints){
+    return '<div class="rqpills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">'
+      + arr.map(function(v){ var t = (hints && hints[v]) ? (' title="' + esc(hints[v]) + '"') : ''; return '<button type="button" class="rqpill" data-rqmulti="' + name + '" data-v="' + esc(v) + '"' + t + '>' + esc(v) + '</button>'; }).join('')
+      + '</div>';
+  }
 
   function rqBuildPrompt(s, number){
     var L = [], id = number || 'REQ-###';
@@ -1785,8 +1792,8 @@
 
   function rqReadForm(){
     var g = function(id){ var el = document.getElementById(id); return el ? el.value : ''; };
-    var roles = []; RQ_ROLES.forEach(function(r, i){ var cb = document.getElementById('rq_role_' + i); if (cb && cb.checked) roles.push(r); });
-    var blocks = []; RQ_BLOCKS.forEach(function(b, i){ var cb = document.getElementById('rq_block_' + i); if (cb && cb.checked) blocks.push(b); });
+    var roles = []; Array.prototype.forEach.call(document.querySelectorAll('[data-rqmulti="roles"].on'), function(p){ roles.push(p.getAttribute('data-v')); });
+    var blocks = []; Array.prototype.forEach.call(document.querySelectorAll('[data-rqmulti="blocks"].on'), function(p){ blocks.push(p.getAttribute('data-v')); });
     var customEl = document.getElementById('rq_custom');
     return { type:g('rq_type') || RQ_TYPES[0], title:g('rq_title'), area:g('rq_area') || 'Not sure', roles:roles, blocks:blocks,
       isCustom: !!(customEl && customEl.checked), customNation:g('rq_custom_nation'),
@@ -1830,8 +1837,6 @@
     var root = document.getElementById('rq-root'); if (!root) return;
     rqPillStyle();
     var opts = function(arr, sel){ return arr.map(function(a){ return '<option' + (a === sel ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join(''); };
-    var roleBoxes = RQ_ROLES.map(function(r, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;"><input type="checkbox" id="rq_role_' + i + '" style="width:auto;"/> ' + esc(r) + '</label>'; }).join('');
-    var blockBoxes = RQ_BLOCKS.map(function(b, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;" title="' + esc(RQ_BLOCK_HINT[b] || '') + '"><input type="checkbox" id="rq_block_' + i + '" style="width:auto;"/> ' + esc(b) + '</label>'; }).join('');
     var ta = 'style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:9px 11px;border:1.5px solid var(--input-border);border-radius:8px;background:var(--surface);color:var(--ink);"';
     var optc = ' <span style="color:var(--muted);font-weight:400;">(optional)</span>';
     // Field cells for a 2-column form grid: full() spans both columns, cell()
@@ -1839,7 +1844,6 @@
     // beside it, so there's no big empty column on the right.
     var full = function(inner){ return '<div style="grid-column:1/-1;">' + inner + '</div>'; };
     var cell = function(inner){ return '<div style="min-width:0;">' + inner + '</div>'; };
-    var cbGrid = function(boxes){ return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 14px;margin-bottom:4px;">' + boxes + '</div>'; };
 
     var customBox = '<div style="border:1.5px solid var(--hair);border-radius:9px;padding:10px 12px;background:var(--accent-light);">'
       +   '<label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0;"><input type="checkbox" id="rq_custom" style="width:auto;"/> Custom feature for ONE nation (licensed module)</label>'
@@ -1860,13 +1864,13 @@
       +   full('<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>')
       +   cell('<label>Which part of the app?</label><select id="rq_area">' + opts(RQ_AREAS, 'Not sure') + '</select>')
       +   cell('<label>Needed by' + optc + '</label><input type="date" id="rq_due"/>')
-      +   full('<label>Who uses it / should see it?</label>' + cbGrid(roleBoxes))
-      +   full('<label>Building blocks it should reuse' + optc + '</label>' + cbGrid(blockBoxes))
+      +   full('<label>Who uses it / should see it?</label>' + rqMultiPillGroup('roles', RQ_ROLES))
+      +   full('<label>Building blocks it should reuse' + optc + '</label>' + rqMultiPillGroup('blocks', RQ_BLOCKS, RQ_BLOCK_HINT))
       +   full(customBox)
       +   full('<label>What do you want to happen?</label><textarea id="rq_what" rows="4" ' + ta + ' placeholder="Describe it the way you would to a coworker..."></textarea>')
       +   cell('<label>Why does it matter?' + optc + '</label><textarea id="rq_why" rows="3" ' + ta + '></textarea>')
       +   cell('<label>Walk through a real example <span style="color:var(--muted);font-weight:400;">(recommended)</span></label><textarea id="rq_example" rows="3" ' + ta + ' placeholder="First this happens, then that..."></textarea>')
-      +   cell('<label>Should it notify anyone?</label>' + rqPillGroup('notify', RQ_NOTIF, 'No alert', false) + '<input id="rq_notifywho" placeholder="Who gets the alert? e.g. Housing Manager" style="margin-top:4px;"/>')
+      +   cell('<label>Should it notify anyone?</label>' + rqPillGroup('notify', RQ_NOTIF, 'No alert', false) + '<div id="rq_notifywho_wrap" style="display:none;margin-top:4px;"><input id="rq_notifywho" placeholder="Who gets the alert? e.g. Housing Manager"/></div>')
       +   cell('<label>Priority</label>' + rqPillGroup('pri', RQ_PRIS, 'Normal', true))
       +   cell('<label>Rules &amp; limits' + optc + '</label><textarea id="rq_rules" rows="2" ' + ta + '></textarea>')
       +   cell('<label>Anything it must NOT break?' + optc + '</label><textarea id="rq_avoid" rows="2" ' + ta + '></textarea>')
@@ -1937,8 +1941,15 @@
         Array.prototype.forEach.call(root.querySelectorAll('[data-rqpill="' + name + '"]'), function(o){
           o.className = 'rqpill' + (o === b ? (' on' + (pri ? (' ' + v.toLowerCase()) : '')) : '');
         });
+        // The "who gets the alert" field only matters once a channel is picked.
+        if (name === 'notify'){ var ww = document.getElementById('rq_notifywho_wrap'); if (ww) ww.style.display = (v === 'No alert') ? 'none' : 'block'; }
         rqUpdatePreview();
       };
+    });
+
+    // Multi-select pills (roles / building blocks) — toggle any number on.
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rqmulti]'), function(b){
+      b.onclick = function(){ b.classList.toggle('on'); rqUpdatePreview(); };
     });
 
     // Custom-for-one-nation: reveal the nation picker only when ticked.
