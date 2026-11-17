@@ -312,25 +312,9 @@
   <!-- My Worklist moved to its own page (#worklistView, Phase 3). The hub shows
        a compact summary banner (#hub_wl_summary) near the top of the landing. -->
 
-  <!-- Recent activity (collapsible — defaults collapsed) -->
-  <div class="section collapsed" id="sec-recent">
-    <div class="section-header" data-section-toggle="sec-recent" role="button" tabindex="0" aria-controls="emp_recent_activity" aria-expanded="false">
-      <div class="section-header-left">
-        <button type="button" class="section-toggle" aria-label="Toggle Recent activity" onclick="event.stopPropagation();_sectionToggle('sec-recent')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div>
-          <div class="section-title">Recent activity <span class="section-count-pill" id="recent_count_pill">0</span></div>
-          <div class="section-sub">Your last actions across the housing portfolio</div>
-        </div>
-      </div>
-    </div>
-    <div class="section-body">
-      <div class="recent-card">
-        <div id="emp_recent_activity">No recent activity.</div>
-      </div>
-    </div>
-  </div>
+  <!-- Recent activity section removed from the landing (per design). Its
+       renderers (renderRecentActivity / emp_recent_activity) no-op when the
+       element is absent, so nothing else needs to change. -->
 
   <!-- Legacy compat: keep emp_tiles_grid in the DOM for any callers that still
        expect it. Hidden — the landing's quick actions replace the tile grid. -->
