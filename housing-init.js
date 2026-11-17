@@ -2427,6 +2427,8 @@ function applyRoleVisibility(role){
     var featOk = !feat || typeof window.canUseFeature !== 'function' || window.canUseFeature(feat);
     el.style.display = (roleOk && featOk) ? '' : 'none';
   }
+  // Keep the landing hub tidy: hide any section whose tiles are all hidden now.
+  if (typeof window._hubHideEmptySections === 'function') { try { window._hubHideEmptySections(); } catch(e){} }
 }
 
 // _debounce — minimal debouncer for the lookup input.
