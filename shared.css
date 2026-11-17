@@ -2229,29 +2229,26 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
    popover (.lookup-results, styled above) anchors to this relative box. */
 .hub-search {
   position: relative; display: flex; align-items: center; gap: 12px;
-  background: var(--surface); border: 1.5px solid var(--border);
+  background: var(--surface); border: none;
   border-radius: 14px; padding: 13px 16px; margin: 4px 0 18px;
   box-shadow: var(--shadow);
-  transition: border-color .15s ease, box-shadow .15s ease;
+  transition: box-shadow .15s ease;
 }
 .hub-search:focus-within {
-  border-color: var(--yellow);
-  box-shadow: 0 0 0 4px color-mix(in srgb, var(--yellow) 22%, transparent);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--yellow) 22%, transparent), var(--shadow);
 }
 .hub-search-ico { width: 20px; height: 20px; flex-shrink: 0; color: var(--muted); }
 .hub-search:focus-within .hub-search-ico { color: var(--accent-ink); }
-.hub-search-input {
+/* .hub-search prefix raises specificity so these beat the global
+   input[type="text"] rule (border/padding/bg) -- without it the input renders
+   as a bordered "box in a box" (the dark inner border). */
+.hub-search .hub-search-input {
   flex: 1; min-width: 0; border: none; background: transparent; padding: 0;
   font-size: 16px; font-family: var(--sans); color: var(--text);
+  box-shadow: none; border-radius: 0;
 }
-.hub-search-input::placeholder { color: var(--muted); }
-.hub-search-input:focus { outline: none; }
-.hub-search-kbd {
-  flex-shrink: 0; font-size: 12px; font-weight: 700; color: var(--muted);
-  background: var(--bg); border: 1px solid var(--border); border-radius: 6px;
-  padding: 2px 8px; line-height: 1.4;
-}
-@media (max-width: 620px) { .hub-search-kbd { display: none; } }
+.hub-search .hub-search-input::placeholder { color: var(--muted); }
+.hub-search .hub-search-input:focus { outline: none; box-shadow: none; }
 
 .kpi-strip {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
