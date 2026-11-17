@@ -8729,6 +8729,20 @@ function renderWorklist() {
   var total = appItems.length + sowTotalCount + fieldSowItems.length + rfqItems.length + ctItems.length + matchItems.length + unitApprItems.length + draftTotal + tenantMrCount + appSubCount + ctSubCount;
   var pill = document.getElementById('worklist_count_pill'); if (pill) pill.textContent = total;
   var qa   = document.getElementById('qa_pending_count');   if (qa) qa.textContent = total;
+  // Landing hub worklist summary banner (Phase 3) — reuse the counts above so
+  // the banner never drifts from the worklist page.
+  if (typeof _updateWorklistSummary === 'function') {
+    _updateWorklistSummary(total, {
+      'Applications': appItems.length + appSubCount + tenantMrCount,
+      'Reno approvals': sowTotalCount,
+      'Work orders': fieldSowItems.length,
+      'Contractors': ctItems.length + ctSubCount,
+      'Match': matchItems.length,
+      'Inventory': unitApprItems.length,
+      'RFQs': rfqItems.length,
+      'Drafts': draftTotal
+    });
+  }
 
   if (!total) {
     body.innerHTML = '<div style="padding:28px 16px;text-align:center;color:var(--muted);font-size:13px;">'
@@ -10094,22 +10108,16 @@ function showTenants(){
   }
 }
 function showWorklist() {
-  // The standalone worklistView was folded into landingView (Phase B). If
-  // landingView is in DOM (housing.html), expand the section + render. On
-  // any other page, navigate to housing.html?view=worklist so the boot
-  // dispatches into this function with landingView present.
-  if (document.getElementById('landingView') && typeof showLanding === 'function') {
-    if(!window._navSkipPush) pushNav('worklist');
-    showLanding();
-    var sec = document.getElementById('sec-worklist');
-    if (sec) sec.classList.remove('collapsed');
-    if (typeof renderWorklist === 'function') renderWorklist();
+  // Dedicated worklist page (Phase 3). On housing.html show #worklistView and
+  // render the action queue into it; on any other page navigate to
+  // housing.html?view=worklist so the boot dispatcher lands here with the view.
+  var wv = document.getElementById('worklistView');
+  if (wv) {
+    if (!window._navSkipPush && typeof pushNav === 'function') pushNav('worklist');
+    if (typeof hideAllViews === 'function') hideAllViews('worklistView');
+    wv.style.display = 'flex'; wv.style.width = '100%';
     if (typeof setHeaderNavActive === 'function') setHeaderNavActive('worklist');
-    // Bring the worklist section into view — clicking the tab while already
-    // on landing otherwise scrolls nowhere and looks like nothing happened.
-    if (sec && sec.scrollIntoView) {
-      try { sec.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch(_) {}
-    }
+    if (typeof renderWorklist === 'function') renderWorklist();
     // Keep worklist_datetime populated for any downstream readers.
     var dtEl = document.getElementById('worklist_datetime');
     if (dtEl) {
@@ -10121,6 +10129,7 @@ function showWorklist() {
       h = h % 12 || 12;
       dtEl.textContent = days[now.getDay()] + ' · ' + months[now.getMonth()] + ' ' + now.getDate() + ', ' + now.getFullYear() + ' · ' + h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
     }
+    try { window.scrollTo(0, 0); } catch(_) {}
     return;
   }
   // Sub-page (inventory / tenants / match / renos / contractors): navigate
@@ -10128,6 +10137,30 @@ function showWorklist() {
   // and dispatches back into this function on the right DOM.
   window.location.href = 'housing.html?view=worklist';
 }
+// Landing hub worklist summary banner (Phase 3). Reuses the counts renderWorklist
+// already computes; shows a total + per-type breakdown + an "Open worklist" button
+// that routes to the dedicated #worklistView page.
+function _updateWorklistSummary(total, counts){
+  var el = document.getElementById('hub_wl_summary');
+  if (!el) return;
+  var mini = '';
+  if (counts) {
+    Object.keys(counts).forEach(function(k){ var n = counts[k]; if (n > 0) mini += '<span><b>' + n + '</b> ' + k + '</span>'; });
+  }
+  if (total > 0) {
+    el.className = 'hub-wl-summary';
+    el.innerHTML = '<div class="wls-big">' + total + '</div>'
+      + '<div class="wls-lab"><b>Items need your attention</b><div class="wls-mini">' + mini + '</div></div>'
+      + '<button type="button" class="wls-go" onclick="showWorklist()">Open worklist →</button>';
+  } else {
+    el.className = 'hub-wl-summary is-clear';
+    el.innerHTML = '<div class="wls-big">✓</div>'
+      + '<div class="wls-lab"><b>You’re all caught up</b><div class="wls-mini"><span>Nothing in your queue right now</span></div></div>'
+      + '<button type="button" class="wls-go" onclick="showWorklist()">Open worklist →</button>';
+  }
+  el.style.display = '';
+}
+window._updateWorklistSummary = _updateWorklistSummary;
 // ── Add-Contractor modal: lazy mount ─────────────────────────────────────
 // The full markup originally lived only in contractors.html. The SOW modal
 // "Add new contractor" affordance is reachable from any page that opens

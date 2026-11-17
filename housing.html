@@ -156,6 +156,11 @@
     <p id="emp_home_subtitle" class="home-subtitle"></p>
   </div>
 
+  <!-- Worklist summary banner (Phase 3) — compact count + "Open worklist" that
+       routes to the dedicated #worklistView page. Populated by renderWorklist
+       via _updateWorklistSummary(); hidden until it has a count. -->
+  <div id="hub_wl_summary" class="hub-wl-summary" style="display:none;"></div>
+
   <!-- Hidden compat host for legacy renderers — old worklist subtitle / datetime
        still get populated here so housing-views.js writes don't 404. -->
   <div class="visually-hidden">
@@ -304,23 +309,8 @@
     </div>
   </div>
 
-  <!-- Worklist (collapsible — defaults collapsed) -->
-  <div class="section collapsed" id="sec-worklist">
-    <div class="section-header" data-section-toggle="sec-worklist" role="button" tabindex="0" aria-controls="worklist_body" aria-expanded="false">
-      <div class="section-header-left">
-        <button type="button" class="section-toggle" aria-label="Toggle My Worklist" onclick="event.stopPropagation();_sectionToggle('sec-worklist')">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div>
-          <div class="section-title">My Worklist <span class="section-count-pill" id="worklist_count_pill">0</span></div>
-          <div class="section-sub">Items awaiting your action · ranked by priority</div>
-        </div>
-      </div>
-    </div>
-    <div class="section-body">
-      <div id="worklist_body"></div>
-    </div>
-  </div>
+  <!-- My Worklist moved to its own page (#worklistView, Phase 3). The hub shows
+       a compact summary banner (#hub_wl_summary) near the top of the landing. -->
 
   <!-- Recent activity (collapsible — defaults collapsed) -->
   <div class="section collapsed" id="sec-recent">
@@ -1005,6 +995,17 @@
 
 <!-- ═══ CHIEF & COUNCIL DASHBOARD VIEW (content self-injected by council-dashboard.js) ═══ -->
 <div id="leadershipDashView" class="page-view"></div>
+
+<!-- ═══ MY WORKLIST VIEW — the action queue on its own page (Phase 3) ═══════ -->
+<div id="worklistView" class="page-view">
+  <div class="page-header-bar">
+    <div class="phb-title">
+      <h1>My Worklist <span class="section-count-pill" id="worklist_count_pill">0</span></h1>
+      <p>Items awaiting your action · ranked by priority</p>
+    </div>
+  </div>
+  <div id="worklist_body"></div>
+</div>
 
 <!-- ═══ INDIVIDUAL SCORECARD VIEW ═══ -->
 <div id="scorecardView" class="page-view">
