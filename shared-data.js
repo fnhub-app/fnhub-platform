@@ -3608,33 +3608,11 @@ async function sbLoadContractorPeopleRequests(){
 }
 window.sbLoadContractorPeopleRequests = sbLoadContractorPeopleRequests;
 
-// Open Help & Support tickets (status new|open) for the landing-page worklist.
-// Same boot-time pattern as sbLoadContractorSubmissions: no moduleOn() gate here
-// (settings aren't hydrated yet in the boot Promise.all); the _isMgmt call-site
-// gate scopes it to management, the worklist render gates the section on
-// moduleOn('support'), and a nation without the table just 404s -> []. On
-// housing.html support-init.js is NOT loaded, so this is what populates
-// window._supportTickets there (distinct name from support-init's loader).
-async function sbLoadSupportTickets(){
-  try {
-    // Light column set on purpose: the worklist only needs the summary fields,
-    // NOT the heavy base64 `attachments`/`body`/`transcript`/`context` blobs
-    // (keeps the landing page fast — those load on the Support page when a
-    // ticket is opened).
-    var cols = 'id,source,category,subject,reporter_name,reporter_email,status,created_at';
-    var url = SUPABASE_URL + '/rest/v1/support_tickets?select=' + cols + '&status=in.(new,open)&order=created_at.desc&limit=200';
-    var r = await fetch(url, { headers: HOUSING_HEADERS });
-    if(!r.ok){ window._supportTickets = window._supportTickets || []; return window._supportTickets; }
-    var rows = await r.json();
-    window._supportTickets = Array.isArray(rows) ? rows : [];
-    return window._supportTickets;
-  } catch(e){
-    console.warn('[support] load failed:', e);
-    window._supportTickets = window._supportTickets || [];
-    return window._supportTickets;
-  }
-}
-window.sbLoadSupportTickets = sbLoadSupportTickets;
+// Help & Support ticket triage lives ONLY in the admin control plane
+// (admin.fnhub.app). The nation app no longer loads or displays support tickets
+// — the landing-page worklist section and the staff support.html triage page
+// were removed. The in-app filing widget (support-widget.js) still files
+// tickets; they are reviewed in the control plane.
 
 // PATCH a submission's status (approved / rejected / read) + reviewer stamp, and
 // drop it from the in-memory open queue. Returns true, throws on HTTP error.
@@ -8916,44 +8894,10 @@ function renderWorklist() {
     html += sectionWrap('👥', 'Contractor Team Requests', ctPplItems.length, '', _view === 'cards' ? wlGrid(cprCards) : cprRows, 0);
   }
 
-  // Support Tickets — open Help & Support tickets (status new|open) filed from
-  // the staff app or either portal. Management review queue; clicking opens the
-  // ticket's triage modal on the Support page (support.html?ticket=<id>). Gated
-  // by the support module (hydrated by render time) in addition to management.
-  var supItems = (isManagement && (typeof moduleOn !== 'function' || moduleOn('support'))) ? (window._supportTickets || []) : [];
-  if (supItems.length) {
-    var _supSrcLbl = { staff:'Staff', member:'Member', contractor:'Contractor' };
-    var supRows = '', supCards = '';
-    supItems.slice().sort(function(a,b){
-      // Unseen ('new') first, then newest.
-      var ap = (a.status==='new')?0:1, bp = (b.status==='new')?0:1;
-      if(ap!==bp) return ap-bp;
-      return String(b.created_at||'').localeCompare(String(a.created_at||''));
-    }).forEach(function(t){
-      var idJs = esc(String(t.id)).replace(/'/g, "\\'");
-      var isNew = (t.status === 'new');
-      var subject = t.subject || 'Support request';
-      var who = t.reporter_name || t.reporter_email || _supSrcLbl[t.source] || 'Someone';
-      var cat = t.category || 'other';
-      var src = _supSrcLbl[t.source] || 'Staff';
-      var pillTxt = isNew ? 'NEW' : 'OPEN';
-      var pillColor = isNew ? 'var(--warn-amber-text)' : 'var(--info-blue)';
-      var openFn = "window.location.href='support.html?ticket='+encodeURIComponent('" + idJs + "')";
-      var btn = '<button type="button" onclick="' + openFn + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">Open &rarr;</button>';
-      var info = '<span style="font-size:14px;flex-shrink:0;">🛟</span>'
-               + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(subject) + '</span>'
-               + '<span style="font-size:11px;color:var(--muted);width:160px;flex-shrink:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who + ' · ' + cat + ' · ' + src) + '</span>'
-               + '<span style="font-size:10px;font-weight:800;color:' + pillColor + ';width:66px;flex-shrink:0;">' + pillTxt + '</span>';
-      supRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);">'
-        + '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + info + '</div>'
-        + btn
-        + '</div>';
-      supCards += wlCard({ title: subject, pill:{ text: pillTxt, color: pillColor }, open: openFn,
-        metas:[{k:'From',v:who},{k:'Category',v:cat},{k:'Source',v:src}],
-        actions:[{text:'Open →',onclick:openFn}] });
-    });
-    html += sectionWrap('🛟', 'Support Tickets', supItems.length, '', _view === 'cards' ? wlGrid(supCards) : supRows, 0);
-  }
+  // Support Tickets are intentionally NOT surfaced on the staff landing page —
+  // Help & Support triage lives only in the admin control plane
+  // (admin.fnhub.app, renderPlatformSupport). The staff/member/contractor
+  // ticket-filing widget still works; filed tickets are reviewed in admin.
 
   // My Drafts — in-progress items the current user hasn't submitted yet.
   // Super User sees every staff member's drafts (see _wlCollectDrafts), so
