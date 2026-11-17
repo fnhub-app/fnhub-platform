@@ -1564,7 +1564,7 @@ window._hubHideEmptySections = _hubHideEmptySections;
 function _orderLandingSections(){
   var lv = document.getElementById('landingView'); if (!lv) return;
   var want = [
-    { cls:'home-greeting' }, { cls:'quick-row' }, { id:'hub_wl_summary' },
+    { cls:'home-greeting' }, { cls:'hub-search' }, { id:'hub_wl_summary' },
     { id:'landing_kpi_strip' }, { id:'hub_mount' },
     { cls:'visually-hidden' }, { id:'emp_tiles_grid' }
   ];

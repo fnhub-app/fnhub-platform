@@ -2060,6 +2060,17 @@ function initHousingPage() {
     })();
   }
   else if(view==='contractors') { if(true) showContractors(); }
+  else if(view==='reno-questionnaire'){
+    // Create-menu "Renovation Questionnaire" from a sub-page lands here: show the
+    // landing page, then open the questionnaire once its module script is ready.
+    if(typeof showLanding==='function') showLanding();
+    var _rqTries = 0;
+    (function _rqWait(){
+      if(typeof window.openRenoQuestionnaire==='function'){ window.openRenoQuestionnaire(); return; }
+      if(_rqTries++ >= 20) return;
+      setTimeout(_rqWait, 300);
+    })();
+  }
   else {
     // Fallback when view doesn't match any branch. The Applications
     // dashboard (#dashView) was retired, so every role now lands on the
@@ -2139,6 +2150,7 @@ function renderAppHeader(){
     +         '<button class="create-menu-item" data-create="unit" data-roles="ed,housing_manager,super_user"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg> New Unit <span class="role-gate">ED &middot; HM &middot; SU</span></button>'
     +         '<button class="create-menu-item" data-create="contractor"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg> New Contractor</button>'
     +         '<button class="create-menu-item" data-create="tenant" data-roles="ed,housing_manager,housing_employee_l2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg> New Tenant <span class="role-gate">ED &middot; HM &middot; L2</span></button>'
+    +         (window.moduleOn && moduleOn('renovations') ? '<button class="create-menu-item" data-create="reno-questionnaire"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg> Renovation Questionnaire</button>' : '')
     +       '</div>'
     +     '</div>'
     +     '<div class="avatar-wrap" id="header_user_pill" title="Account">'
@@ -2186,7 +2198,7 @@ window.HEADER_NAV = [
   { key:'inventory',    label:'Inventory',    module:'inventory',    svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>',                                                                                                                                            run:function(){ if(typeof showInventory==='function') showInventory(); else window.location.href='inventory.html'; } },
   { key:'match',        label:'Match',        module:'match',        svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',                                                                                                                       run:function(){ if(typeof showMatch==='function') showMatch(); else window.location.href='match.html'; } },
   { key:'leadership',   label:'Reports',      module:null,           authority:'accessLeadershipDashboard', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',                                                                                                       run:function(){ if(typeof showLeadershipDashboard==='function') showLeadershipDashboard(); else window.location.href='housing.html?view=leadership'; } },
-  { key:'operations', label:'Operations', isGroup:true,
+  { key:'operations', label:'Renovations & Construction', isGroup:true,
     svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>',
     children: [
       { key:'renovations', label:'Renovations', module:'renovations', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>', run:function(){ if(typeof showRenos==='function') showRenos(); else window.location.href='renos.html'; } },
@@ -2197,7 +2209,7 @@ window.HEADER_NAV = [
   },
   // ── Admin — Projects, Email Intake, Support + the Data Health tools. Split
   // out of Operations (which was getting too long to scan on a phone).
-  { key:'admin', label:'Admin', isGroup:true,
+  { key:'admin', label:'Projects & Admin', isGroup:true,
     svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/></svg>',
     children: [
       { key:'projects',    label:'Projects',    module:'projects',     svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>', run:function(){ window.location.href='projects.html'; } },
@@ -2701,6 +2713,11 @@ function _runCreateAction(action){
   } else if(action === 'tenant'){
     if(document.getElementById('addTenantModal') && typeof openAddTenantModal === 'function') openAddTenantModal();
     else window.location.href = 'tenants.html?action=newTenant';
+  } else if(action === 'reno-questionnaire'){
+    // The questionnaire modal self-injects, but its script (reno-questionnaire.js)
+    // only loads on housing.html — deep-link there from any other page.
+    if(typeof window.openRenoQuestionnaire === 'function') window.openRenoQuestionnaire();
+    else window.location.href = 'housing.html?view=reno-questionnaire';
   }
 }
 function _toggleCreateMenu(){
@@ -2794,6 +2811,16 @@ document.addEventListener('DOMContentLoaded', function(){
       var debounced = _debounce(function(e){ _runLookup(e.target.value); }, 200);
       lookupInput.addEventListener('input', debounced);
       lookupInput.addEventListener('focus', function(){ if(lookupInput.value) _renderLookupResults(); });
+      // "/" focuses the slim search bar (matches the kbd hint), unless the user
+      // is already typing in a field or a modal/overlay is open.
+      document.addEventListener('keydown', function(e){
+        if(e.key !== '/' || e.metaKey || e.ctrlKey || e.altKey) return;
+        var a = document.activeElement;
+        if(a && (a.tagName === 'INPUT' || a.tagName === 'TEXTAREA' || a.tagName === 'SELECT' || a.isContentEditable)) return;
+        var lv = document.getElementById('landingView');
+        if(!lv || lv.style.display === 'none' || !document.body.contains(lookupInput)) return;
+        e.preventDefault(); lookupInput.focus();
+      });
     }
   }
 
