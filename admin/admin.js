@@ -183,6 +183,16 @@
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); };
   var _nations = [];   // last-loaded nations list (so Configure can look one up)
 
+  // Per-nation onboarding stage (nations.onboarding_status). A project-mgmt flag,
+  // DISTINCT from `status` (provisioning/active/suspended). Null -> not_started.
+  var ONBOARDING_LABELS = { not_started:'Not started', in_progress:'In progress', blocked:'Blocked', ready:'Ready to launch', live:'Live', complete:'Complete' };
+  var ONBOARDING_COLORS = { not_started:'#8a93a6', in_progress:'#2f6df6', blocked:'#c23b4b', ready:'#b9771a', live:'#1f9d57', complete:'#1f9d57' };
+  function ONBOARDING_NORM(v){ v = String(v || '').toLowerCase(); return ONBOARDING_LABELS[v] ? v : 'not_started'; }
+  function onboardingBadge(v){
+    v = ONBOARDING_NORM(v);
+    return '<span style="display:inline-block;font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 8px;border-radius:999px;color:#fff;background:' + (ONBOARDING_COLORS[v] || '#8a93a6') + ';vertical-align:middle;margin-left:6px;">' + esc(ONBOARDING_LABELS[v]) + '</span>';
+  }
+
   // External destinations referenced by the checklist + field hints. Supabase
   // dashboard deep links use the "/project/_/..." form, which resolves to the
   // operator's last-opened project (or the picker) -- exact refs aren't known
@@ -670,7 +680,7 @@
             : 'no project &middot; $0')
         + '</div>';
       return '<tr>'
-        + '<td><b>' + esc(n.display_name) + '</b><div style="font-size:11px;color:var(--muted);">' + esc(n.subdomain) + '.fnhub.app</div>'
+        + '<td><b>' + esc(n.display_name) + '</b>' + (ONBOARDING_NORM(n.onboarding_status) !== 'not_started' ? onboardingBadge(n.onboarding_status) : '') + '<div style="font-size:11px;color:var(--muted);">' + esc(n.subdomain) + '.fnhub.app</div>'
         +   '<div data-sold-sub="' + esc(n.subdomain) + '" style="font-size:11px;color:var(--muted);margin-top:2px;"></div></td>'
         + '<td><span class="pill ' + esc(st) + '">' + esc(st) + '</span></td>'
         + '<td style="font-size:11px;color:var(--muted);">' + esc(mods.join(', ') || '—') + '</td>'
@@ -1354,6 +1364,8 @@
     // modules_licensed. The toggles render async; a failed fetch just shows an
     // error and no toggles, so nothing can be written by accident.
     var stOpt = function(v,l){ return '<option value="' + v + '"' + (String(n.status||'provisioning') === v ? ' selected' : '') + '>' + l + '</option>'; };
+    var curOb = ONBOARDING_NORM(n.onboarding_status);
+    var obOpt = function(v,l){ return '<option value="' + v + '"' + (curOb === v ? ' selected' : '') + '>' + l + '</option>'; };
     var tab = function(k, l, active){ return '<button class="nic-tab' + (active ? ' active' : '') + '" type="button" data-act="nic-tab" data-tab="' + k + '">' + l + '</button>'; };
     var panel = function(k, html, active){ return '<div class="nic-panel' + (active ? ' active' : '') + '" data-panel="' + k + '">' + html + '</div>'; };
     var modCount = Object.keys(n.modules_licensed || {}).filter(function(k){ return n.modules_licensed[k]; }).length;
@@ -1416,6 +1428,12 @@
       +   '<div class="msg" id="cn-mod-enable-msg"></div>'
       + '</div>'
       + '<div class="card"><h3>Status</h3>'
+      +   '<label>Onboarding stage ' + onboardingBadge(curOb) + '</label>'
+      +   '<select id="cn-onboarding">'
+      +     obOpt('not_started','Not started') + obOpt('in_progress','In progress') + obOpt('blocked','Blocked / waiting')
+      +     obOpt('ready','Ready to launch') + obOpt('live','Live') + obOpt('complete','Onboarding complete')
+      +   '</select>'
+      +   '<p class="sub" style="margin:6px 0 10px;">Where this nation is in its onboarding journey &mdash; a project-management flag for the team. Separate from the registry status below (which controls whether the nation goes live).</p>'
       +   '<label>Registry status</label>'
       +   '<select id="cn-status">' + stOpt('provisioning','Provisioning') + stOpt('active','Active') + stOpt('suspended','Suspended') + '</select>'
       +   '<p class="sub" style="margin:6px 0 0;">Only <b>active</b> nations are published to <code>nations_public</code> and resolve at <code>&lt;subdomain&gt;.fnhub.app</code>.</p>'
@@ -2042,10 +2060,23 @@
       credentials_note: get('cn-cred').trim() || null,
       email: emailCfg,
       status: get('cn-status') || 'provisioning',
+      onboarding_status: get('cn-onboarding') || 'not_started',
       updated_at: new Date().toISOString()
     };
     var btn = document.getElementById('cn-save'); if (btn){ btn.disabled = true; btn.textContent = 'Saving...'; }
     var r = await api('PATCH', '/nations?id=eq.' + encodeURIComponent(id), patch, 'return=minimal');
+    // onboarding_status is a newer column; if its migration hasn't been run yet,
+    // drop just that field and retry so the rest of the config still saves.
+    if (!r.ok){
+      var t0 = await r.text().catch(function(){ return ''; });
+      if (/onboarding_status/.test(t0)){
+        delete patch.onboarding_status;
+        r = await api('PATCH', '/nations?id=eq.' + encodeURIComponent(id), patch, 'return=minimal');
+        if (r.ok){ adminToast('Saved. Run nation_onboarding_status.sql on the platform project to store the onboarding stage.'); await audit('nation_configured', id, name); showDashboard(); return; }
+      } else {
+        setMsg('cn-msg','Could not save: ' + t0); if (btn){ btn.disabled = false; btn.textContent = 'Save changes'; } return;
+      }
+    }
     if (r.ok){ await audit('nation_configured', id, name); showDashboard(); }
     else { var t = await r.text(); setMsg('cn-msg','Could not save: ' + t); if (btn){ btn.disabled = false; btn.textContent = 'Save changes'; } }
   };
