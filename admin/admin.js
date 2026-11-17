@@ -1856,9 +1856,9 @@
       +   '<div class="sub" style="margin:6px 0 0;font-size:11px;">Ticking this tells Claude to build it as a per-nation module, gated and licensed only to that nation (invisible to everyone else).</div>'
       + '</div>';
 
-    var form = '<div class="card" style="flex:1.5 1 480px;min-width:320px;">'
+    var form = '<div class="card">'
       + '<h3>New request</h3>'
-      + '<p class="sub" style="margin:2px 0 12px;">Answer in plain language. The finished prompt builds alongside &mdash; copy it to Claude, or save it to the queue.</p>'
+      + '<p class="sub" style="margin:2px 0 12px;">Answer in plain language &mdash; the finished prompt builds below as you go. Then copy it to Claude, or save it to the queue.</p>'
       + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 20px;align-items:start;">'
       +   full('<label>Type</label>' + rqPillGroup('type', RQ_TYPES, 'New feature', false))
       +   full('<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>')
@@ -1877,15 +1877,15 @@
       + '</div>'
       + '</div>';
 
-    var preview = '<div class="card" style="flex:1 1 320px;min-width:300px;position:sticky;top:12px;align-self:flex-start;">'
+    var preview = '<div class="card">'
       + '<h3>Finished prompt</h3>'
-      + '<pre id="rq_out" style="white-space:pre-wrap;word-wrap:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:var(--ink);background:var(--bg);border:1.5px solid var(--hair);border-radius:10px;padding:14px;min-height:260px;max-height:60vh;overflow:auto;margin:0 0 12px;">Fill in the questions and your prompt will build here.</pre>'
-      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      + '<pre id="rq_out" style="white-space:pre-wrap;word-wrap:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:var(--ink);background:var(--bg);border:1.5px solid var(--hair);border-radius:10px;padding:14px;min-height:140px;max-height:48vh;overflow:auto;margin:0 0 12px;">Fill in the questions and your prompt will build here.</pre>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'
       +   '<button class="btn" type="button" id="rq_copy">Copy prompt</button>'
       +   '<button class="btn ghost" type="button" id="rq_save">Save to queue</button>'
       +   '<button class="btn ghost" type="button" id="rq_clear">Clear</button>'
+      +   '<span class="sub" style="font-size:11px;margin-left:auto;">Screenshots help &mdash; attach them in chat after you paste.</span>'
       + '</div>'
-      + '<p class="sub" style="margin:10px 0 0;font-size:11px;">Screenshots make requests clearer &mdash; attach them in the chat with Claude after you paste the prompt.</p>'
       + '</div>';
 
     var listRows = (_rqTickets || []).map(function(t){
@@ -1909,16 +1909,19 @@
     var nNew = (_rqTickets || []).filter(function(t){ return (t.status || 'new') === 'new'; }).length;
     var nBld = (_rqTickets || []).filter(function(t){ return t.status === 'building'; }).length;
     var nDone = (_rqTickets || []).filter(function(t){ return t.status === 'done'; }).length;
-    var listCard = '<div class="card"><h3>Request queue <button class="btn sm ghost" type="button" id="rq_refresh">&#8635; Refresh</button></h3>'
-      + '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 10px;">'
-      +   '<div><div style="font-size:22px;font-weight:700;">' + nNew + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">New</div></div>'
-      +   '<div><div style="font-size:22px;font-weight:700;">' + nBld + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">In progress</div></div>'
-      +   '<div><div style="font-size:22px;font-weight:700;">' + nDone + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Done</div></div>'
-      + '</div>'
-      + (listRows ? '<div style="overflow-x:auto;"><table><thead><tr><th>#</th><th>Request</th><th>Status</th><th></th></tr></thead><tbody>' + listRows + '</tbody></table></div>' : '<p class="sub">No saved requests yet.</p>')
+    // Queue status strip (top of the tab) — quick counts + Refresh.
+    var countBlock = function(n, l){ return '<div><div style="font-size:22px;font-weight:700;line-height:1;">' + n + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-top:3px;">' + l + '</div></div>'; };
+    var kpiStrip = '<div class="card" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">'
+      + '<div style="display:flex;gap:28px;flex-wrap:wrap;">' + countBlock(nNew, 'New') + countBlock(nBld, 'In progress') + countBlock(nDone, 'Done') + '</div>'
+      + '<button class="btn sm ghost" type="button" id="rq_refresh">&#8635; Refresh</button>'
+      + '</div>';
+    // Saved requests table (bottom of the tab).
+    var savedCard = '<div class="card"><h3>Saved requests</h3>'
+      + (listRows ? '<div style="overflow-x:auto;"><table><thead><tr><th>#</th><th>Request</th><th>Status</th><th></th></tr></thead><tbody>' + listRows + '</tbody></table></div>' : '<p class="sub" style="margin-top:4px;">No saved requests yet.</p>')
       + '</div>';
 
-    root.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px;">' + form + preview + '</div>' + listCard;
+    // Linear top-to-bottom flow: status -> form -> finished prompt + actions -> saved list.
+    root.innerHTML = kpiStrip + form + preview + savedCard;
 
     // Wire (assign onX so repeated paints don't stack listeners).
     root.oninput = rqUpdatePreview;
