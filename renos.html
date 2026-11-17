@@ -1676,9 +1676,9 @@ function renderRenoApprovalsView() {
     var approveBtn = '';
     if(sow && !locked){
       if(APPROVAL_AUTHORITY.can('approveSowUnderThreshold', role) && appr.key==='pending_hm')
-        approveBtn = '<button data-ra-approve="'+uid+'"'+dataProj+' data-ra-role="hm" style="background:var(--yellow);border:none;color:var(--dark);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;">✓ Approve</button>';
+        approveBtn = '<button class="btn btn-primary btn-sm" data-ra-approve="'+uid+'"'+dataProj+' data-ra-role="hm">✓ Approve</button>';
       else if(APPROVAL_AUTHORITY.can('approveSowOverThreshold', role) && (appr.key==='pending_ed'||appr.key==='pending_hm'))
-        approveBtn = '<button data-ra-approve="'+uid+'"'+dataProj+' data-ra-role="ed" style="background:var(--yellow);border:none;color:var(--dark);padding:4px 10px;border-radius:6px;font-size:11px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;">'+(appr.key==='pending_hm'?'Override →':'✓ Approve')+'</button>';
+        approveBtn = '<button class="btn btn-primary btn-sm" data-ra-approve="'+uid+'"'+dataProj+' data-ra-role="ed">'+(appr.key==='pending_hm'?'Override →':'✓ Approve')+'</button>';
     }
 
     // Project # cell — strip the address prefix (redundant — first column shows it)
