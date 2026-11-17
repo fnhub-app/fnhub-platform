@@ -10145,7 +10145,7 @@ function _updateWorklistSummary(total, counts){
   if (!el) return;
   var mini = '';
   if (counts) {
-    Object.keys(counts).forEach(function(k){ var n = counts[k]; if (n > 0) mini += '<span><b>' + n + '</b> ' + k + '</span>'; });
+    Object.keys(counts).forEach(function(k){ var n = counts[k]; if (n > 0) mini += '<span class="wls-chip"><b>' + n + '</b><i>' + k + '</i></span>'; });
   }
   if (total > 0) {
     el.className = 'hub-wl-summary';
@@ -10155,7 +10155,7 @@ function _updateWorklistSummary(total, counts){
   } else {
     el.className = 'hub-wl-summary is-clear';
     el.innerHTML = '<div class="wls-big">✓</div>'
-      + '<div class="wls-lab"><b>You’re all caught up</b><div class="wls-mini"><span>Nothing in your queue right now</span></div></div>'
+      + '<div class="wls-lab"><b>You’re all caught up</b><div class="wls-mini"><span class="wls-note">Nothing in your queue right now</span></div></div>'
       + '<button type="button" class="wls-go" onclick="showWorklist()">Open worklist →</button>';
   }
   el.style.display = '';
