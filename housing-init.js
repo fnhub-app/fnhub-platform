@@ -2182,6 +2182,7 @@ function _syncAIHeaderBtn() {
 //   run        — function called on click (returns nothing)
 window.HEADER_NAV = [
   { key:'home',         label:'Home',         module:null,           svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12l9-9 9 9"/><path d="M5 10v10h14V10"/></svg>',                                                                                                                                                                                                                run:function(){ if(document.getElementById('landingView') && typeof showLanding==='function') showLanding(); else if(document.getElementById('landingView') && typeof showEmployeeHome==='function') showEmployeeHome(); else window.location.href='housing.html'; } },
+  { key:'worklist',     label:'My Worklist',  module:null,           svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 2h6a1 1 0 0 1 1 1v1h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2V3a1 1 0 0 1 1-1z"/><path d="M9 12l2 2 4-4"/></svg>', run:function(){ if(typeof showWorklist==='function') showWorklist(); else window.location.href='housing.html?view=worklist'; } },
   { key:'inventory',    label:'Inventory',    module:'inventory',    svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>',                                                                                                                                            run:function(){ if(typeof showInventory==='function') showInventory(); else window.location.href='inventory.html'; } },
   { key:'match',        label:'Match',        module:'match',        svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>',                                                                                                                       run:function(){ if(typeof showMatch==='function') showMatch(); else window.location.href='match.html'; } },
   { key:'leadership',   label:'Reports',      module:null,           authority:'accessLeadershipDashboard', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',                                                                                                       run:function(){ if(typeof showLeadershipDashboard==='function') showLeadershipDashboard(); else window.location.href='housing.html?view=leadership'; } },
@@ -2953,8 +2954,9 @@ document.addEventListener('DOMContentLoaded', function(){
     if(typeof applyRoleVisibility === 'function') applyRoleVisibility(role);
     _renderWorklistCountPills();
     // Re-render the worklist body if the section is currently expanded.
-    var sec = document.getElementById('sec-worklist');
-    if(sec && !sec.classList.contains('collapsed') && typeof renderWorklist === 'function'){
+    // Worklist moved to its own page; refresh it whenever its body exists so the
+    // hub summary banner + count stay current.
+    if(document.getElementById('worklist_body') && typeof renderWorklist === 'function'){
       renderWorklist();
     }
   };

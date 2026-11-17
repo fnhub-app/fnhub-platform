@@ -2050,8 +2050,7 @@ function archiveUnit(unitId) {
     if(typeof _renderLandingKpis === 'function')        _renderLandingKpis();
     if(typeof _renderWorklistCountPills === 'function') _renderWorklistCountPills();
     if(typeof renderRecentActivity === 'function')      renderRecentActivity(role);
-    var _wlSec = document.getElementById('sec-worklist');
-    if(_wlSec && !_wlSec.classList.contains('collapsed') && typeof renderWorklist === 'function'){
+    if(document.getElementById('worklist_body') && typeof renderWorklist === 'function'){
       renderWorklist();
     }
     showToast('Unit archived — all documents preserved', {type:'info'});
@@ -2087,8 +2086,7 @@ function unarchiveUnit(unitId) {
     if(typeof _renderLandingKpis === 'function')        _renderLandingKpis();
     if(typeof _renderWorklistCountPills === 'function') _renderWorklistCountPills();
     if(typeof renderRecentActivity === 'function')      renderRecentActivity(role);
-    var _wlSec = document.getElementById('sec-worklist');
-    if(_wlSec && !_wlSec.classList.contains('collapsed') && typeof renderWorklist === 'function'){
+    if(document.getElementById('worklist_body') && typeof renderWorklist === 'function'){
       renderWorklist();
     }
     showToast(addr + ' restored to active inventory', {type:'info'});
