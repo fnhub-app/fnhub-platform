@@ -367,16 +367,21 @@ body {
   display: flex; align-items: center; gap: 8px;
   width: 100%; box-sizing: border-box;
 }
+/* Back button — a quiet outlined "ghost" pill (was a loud solid-yellow fill).
+   Back is secondary navigation, so it stays understated; the brand accent comes
+   in on hover. The .back-btn-yellow class name is kept (used app-wide) even
+   though it's no longer a yellow fill. */
 .back-btn-yellow {
-  background: var(--yellow); border: 1.5px solid var(--yellow); color: var(--on-accent);
-  padding: 8px 16px; border-radius: var(--radius, 8px);
+  background: var(--surface); border: 1px solid var(--border); color: var(--text);
+  padding: 8px 15px 8px 11px; border-radius: 9px;
   font-size: 13px; font-weight: 600; font-family: var(--sans);
-  cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
-  transition: background 0.15s ease, box-shadow 0.15s ease;
-  white-space: nowrap;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 7px;
+  transition: background .15s ease, border-color .15s ease, color .15s ease;
+  white-space: nowrap; box-shadow: 0 1px 2px rgba(0,0,0,.04);
 }
-.back-btn-yellow:hover { background: var(--yellow-mid); }
-.back-btn-yellow svg   { flex-shrink: 0; }
+.back-btn-yellow:hover { background: var(--bg); border-color: var(--accent-ink); color: var(--accent-ink); }
+.back-btn-yellow svg   { flex-shrink: 0; color: var(--muted); transition: color .15s ease; }
+.back-btn-yellow:hover svg { color: var(--accent-ink); }
 
 /* View containers — zero out top padding so page-back-row sits flush.
    The view's inline padding handles left/right/bottom.
@@ -1004,7 +1009,7 @@ input[type="date"]::-webkit-calendar-picker-indicator {
   .dash-filters input, .filter-bar input { min-width: 100%; }
   /* Back button — bigger tap target on mobile */
   .page-back-row   { padding-top: 12px; }
-  .back-btn-yellow { padding: 9px 18px; font-size: 13px; }
+  .back-btn-yellow { padding: 9px 16px 9px 13px; font-size: 13px; }
 }
 
 /* ── ≤480px Small mobile ── */
