@@ -2134,7 +2134,10 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 /* ── Page hero (reusable baseline for inner pages) ──────────────────────────
    Accent rail · icon · eyebrow · serif title · subtitle, with an optional
    right-side meta. Pair with hub tile sections for a hero+tiles page. */
-.page-hero { display: flex; align-items: center; gap: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px; margin-bottom: 22px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
+/* padding: a touch less on the bottom than the top — the serif title + subtitle
+   line-heights make the block read top-heavy, so equal padding looks
+   bottom-airy; 22/18 balances it optically. */
+.page-hero { display: flex; align-items: center; gap: 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 22px 24px 18px; margin-bottom: 22px; box-shadow: var(--shadow); position: relative; overflow: hidden; }
 .page-hero::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 5px; background: var(--yellow); }
 .page-hero-ic { width: 58px; height: 58px; border-radius: 16px; background: var(--yellow-light); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
 .page-hero-ic svg { width: 28px; height: 28px; }
@@ -2144,7 +2147,18 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .page-hero-tx p { margin: 6px 0 0; font-size: 14px; color: var(--muted); }
 .page-hero-meta { font-size: 12.5px; color: var(--muted); white-space: nowrap; align-self: flex-start; }
 .page-hero-meta b { color: var(--accent-ink); }
-@media (max-width: 640px) { .page-hero { flex-wrap: wrap; } .page-hero-meta { width: 100%; } }
+/* Right-aligned actions slot for list-page heroes (holds the page's buttons +
+   any List/Cards toggle). */
+.page-hero-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-left: auto; }
+/* Scroll-collapse: shrink the hero to a compact bar once the list scrolls
+   (mirrors the old .page-header-bar.is-scrolled behaviour). */
+.page-hero.is-scrolled { padding-top: 14px; padding-bottom: 14px; }
+.page-hero.is-scrolled .page-hero-eyebrow,
+.page-hero.is-scrolled .page-hero-tx p { display: none; }
+.page-hero.is-scrolled .page-hero-ic { width: 42px; height: 42px; }
+.page-hero.is-scrolled .page-hero-ic svg { width: 22px; height: 22px; }
+.page-hero.is-scrolled .page-hero-tx h1 { font-size: clamp(20px, 2.4vw, 26px); }
+@media (max-width: 640px) { .page-hero { flex-wrap: wrap; } .page-hero-meta { width: 100%; } .page-hero-actions { margin-left: 0; width: 100%; } }
 .hub-tile-badge { position: absolute; top: 12px; right: 12px; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; background: var(--yellow); color: var(--on-accent); font-size: 11.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
 /* Finance hero band — role-gated, rendered at the end of the hub */
 .hub-fin        { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: var(--yellow-light); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 19px 22px; margin-top: 24px; box-shadow: var(--shadow); }
