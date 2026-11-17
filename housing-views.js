@@ -535,7 +535,7 @@ function renderMatchView(){
   // list scrolls, freeing space on tablet/mobile (shared-ui.js). Idempotent —
   // safe to call on every render.
   (function(){
-    var _hdr = document.querySelector('#matchView .page-header-bar');
+    var _hdr = document.querySelector('#matchView .page-hero');
     var _area = document.querySelector('.content-area');
     if (_hdr && _area && typeof _initScrollCollapse === 'function') _initScrollCollapse(_area, _hdr);
   })();
