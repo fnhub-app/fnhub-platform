@@ -337,9 +337,45 @@
     adminToast('Authenticator removed. Sign out and back in to set up a new one.');
   };
 
+  // ---- Dashboard navigation (Phase 1 redesign) -------------------------------
+  // The grouped left rail + per-section page-hero. Each entry drives both the
+  // rail button and the hero (icon/eyebrow/title/subtitle) that nicTab() swaps
+  // in. Keys match the existing .nic-panel data-panel values, so routing is
+  // unchanged — only the chrome around the panels is new.
+  var ICO = {
+    home:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18"/><path d="M5 21V8l7-5 7 5v13"/><path d="M9 21v-6h6v6"/></svg>',
+    chat:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+    check:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>',
+    gear:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+    add:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7V4h16v3"/><path d="M9 20h6"/><path d="M12 4v16"/></svg>',
+    db:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5v14a9 3 0 0 0 18 0V5"/><path d="M3 12a9 3 0 0 0 18 0"/></svg>',
+    users:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
+    doc:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/></svg>',
+    shield:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>'
+  };
+  var DASH_NAV = [
+    { k:'nations',   grp:'Overview', label:'Nations',       icon:ICO.home,   eyebrow:'Control Plane', title:'Nations',          sub:'Every nation on the platform',                               count:true },
+    { k:'support',   grp:'Overview', label:'Support',       icon:ICO.chat,   eyebrow:'Control Plane', title:'Support inbox',    sub:'Help requests mirrored from every nation',                   count:true },
+    { k:'requests',  grp:'Overview', label:'Requests',      icon:ICO.check,  eyebrow:'Control Plane', title:'Build requests',   sub:'Development ticket queue' },
+    { k:'provision', grp:'Overview', label:'Provision',     icon:ICO.gear,   eyebrow:'Control Plane', title:'Provision',        sub:'Set up a new nation across Supabase, GitHub, and Cloudflare' },
+    { k:'addnation', grp:'Overview', label:'Add a nation',  icon:ICO.add,    eyebrow:'Control Plane', title:'Add a nation',     sub:'Register a nation in the platform directory' },
+    { k:'migrations',grp:'Overview', label:'Migrations',    icon:ICO.db,     eyebrow:'Control Plane', title:'Fleet migrations', sub:'Run a SQL migration across every nation' },
+    { k:'resellers', grp:'Business', label:'Resellers',     icon:ICO.users,  eyebrow:'Business',      title:'Resellers',        sub:'Agreements, commission statements, and sales' },
+    { k:'sop',       grp:'System',   label:'Onboarding SOP',icon:ICO.doc,    eyebrow:'System',        title:'Onboarding SOP',   sub:'The standard operating procedure for onboarding a nation' },
+    { k:'admins',    grp:'System',   label:'Administrators',icon:ICO.shield, eyebrow:'System',        title:'Administrators',   sub:'Platform administrators and two-factor' }
+  ];
+  function dashNavMeta(k){ for (var i=0;i<DASH_NAV.length;i++){ if (DASH_NAV[i].k===k) return DASH_NAV[i]; } return DASH_NAV[0]; }
+  // The dynamic inner HTML of .page-hero-tx for a section (icon is swapped
+  // separately on #dash-hero-ic). esc() is defined earlier in this IIFE.
+  function dashHeroTx(m){
+    return '<div class="page-hero-eyebrow">' + esc(m.eyebrow) + '</div>'
+      + '<h1>' + esc(m.title) + '</h1>'
+      + '<p class="sub">' + esc(m.sub) + '</p>';
+  }
+
   // ---- Views -----------------------------------------------------------------
   function showLogin(prefill){
-    app.classList.remove('wide');
+    app.className = 'wrap';
     app.innerHTML =
       '<h1>Platform admin sign-in</h1>'
       + '<p class="sub">Restricted to Nation Pathways platform administrators. Enter your email and we\'ll send a secure sign-in link.</p>'
@@ -483,7 +519,7 @@
     var admins = r.ok ? await r.json().catch(function(){return[];}) : [];
     var amAdmin = admins.some(function(a){ return String(a.email||'').toLowerCase() === meEmail; });
     if (!amAdmin){
-      app.classList.remove('wide');
+      app.className = 'wrap';
       app.innerHTML = '<div class="center"><div style="font-size:40px;">🚫</div><h1>Not authorized</h1>'
         + '<p class="sub">' + esc(meEmail) + ' is not a platform administrator.</p>'
         + '<button class="btn" type="button" data-act="logout">Sign out</button></div>';
@@ -494,7 +530,7 @@
     var mfaOk = await requireMfa();
     if (!mfaOk) return;
     document.getElementById('btn_out').style.display = '';
-    app.classList.add('wide');   // dashboard uses the wider layout; login/auth views stay narrow
+    app.className = 'dash';   // dashboard uses the full-width rail shell; login/auth views stay narrow (.wrap)
 
     // Load nations.
     var nr = await api('GET', '/nations?select=*&order=created_at.desc');
@@ -518,34 +554,45 @@
     });
     totCost = Math.round(totCost * 100) / 100;
 
-    var tab = function(k, l, active){ return '<button class="nic-tab' + (active ? ' active' : '') + '" type="button" data-act="nic-tab" data-tab="' + k + '">' + l + '</button>'; };
     var panel = function(k, html, active){ return '<div class="nic-panel' + (active ? ' active' : '') + '" data-panel="' + k + '">' + html + '</div>'; };
-    var tile = function(l, v){ return '<div class="nic-strip-tile"><div class="l">' + esc(l) + '</div><div class="v">' + v + '</div></div>'; };
+    var kpi = function(l, v, m, ico){ return '<div class="dash-kpi"><div class="l">' + (ico||'') + '<span>' + esc(l) + '</span></div><div class="v">' + v + '</div><div class="m">' + esc(m) + '</div></div>'; };
+    var MONEY_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
+    // Grouped left rail, built from DASH_NAV (nations selected by default).
+    var railHtml = '', lastGrp = '';
+    DASH_NAV.forEach(function(m){
+      if (m.grp !== lastGrp){ railHtml += '<div class="rail-grp">' + esc(m.grp) + '</div>'; lastGrp = m.grp; }
+      var badge = (m.k === 'nations') ? '<span class="cnt">' + nations.length + '</span>' : '';
+      railHtml += '<button type="button"' + (m.k === 'nations' ? ' class="active"' : '') + ' data-act="nic-tab" data-tab="' + m.k + '">'
+        + m.icon + '<span>' + esc(m.label) + '</span>' + badge + '</button>';
+    });
+    // Overview KPI cards (replace the flat .nic-strip tiles), shown atop Nations.
+    var kpisHtml = '<div class="dash-kpis">'
+      + kpi('Nations', String(nations.length), 'across all regions', ICO.home)
+      + kpi('Active', String(activeCount), 'live subscriptions', ICO.check)
+      + kpi('Data usage', esc(fmtBytes(totDb)), esc(fmtBytes(totFiles)) + ' files', ICO.db)
+      + kpi('Est. hosting', _money(totCost) + ' CAD', 'this month', MONEY_ICO)
+      + '</div>';
+    var _ref = _refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '';
+    var nav0 = DASH_NAV[0];
 
     app.innerHTML =
-      '<div class="nic-shell">'
-      + '<div class="nic-hero">'
-      +   '<h1>Platform Admin</h1>'
-      +   '<div class="nic-sub">Nation Pathways control plane &middot; signed in as <code>' + esc(meEmail) + '</code></div>'
-      // The control-plane project ref, one click to copy — it's needed for the
-      // platform SQL editor, workflow inputs, and function deploys, and was
-      // otherwise only findable by dissecting the Supabase URL.
-      // Explicit light styling: the ghost-button classes assume a light card,
-      // so on this dark hero the button rendered black-on-black (invisible).
-      +   '<div class="nic-sub" style="margin-top:4px;">Platform project ref: <code id="plat-ref">' + esc(_refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '') + '</code> '
-      +     '<button class="btn sm ghost" type="button" data-act="copy-text" data-copy="' + esc(_refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '') + '" style="padding:2px 10px;font-size:11px;">Copy</button></div>'
-      + '</div>'
-      + '<div class="nic-strip">'
-      +   tile('Nations', String(nations.length))
-      +   tile('Active', String(activeCount))
-      +   tile('Data usage', esc(fmtBytes(totDb)) + ' db &middot; ' + esc(fmtBytes(totFiles)) + ' files')
-      +   tile('Est. hosting cost', _money(totCost) + ' CAD')
-      + '</div>'
-      + '<div class="nic-tabs">'
-      +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('requests', 'Requests') + tab('provision', 'Provision') + tab('sop', 'Onboarding SOP') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
-      + '</div>'
-      + '<div class="nic-body">'
-      +   panel('nations',   nationsCard(nations, usageBySub), true)
+      '<div class="shell">'
+      + '<nav class="rail">' + railHtml + '</nav>'
+      + '<div class="main">'
+      // page-hero: the icon + eyebrow + title + subtitle swap per section via
+      // nicTab() (#dash-hero-ic / #dash-hero-tx). The signed-in identity and the
+      // control-plane project ref (one click to copy — needed for the platform
+      // SQL editor, workflow inputs and function deploys) stay in the actions.
+      +   '<div class="page-hero">'
+      +     '<div class="page-hero-ic" id="dash-hero-ic">' + nav0.icon + '</div>'
+      +     '<div class="page-hero-tx" id="dash-hero-tx">' + dashHeroTx(nav0) + '</div>'
+      +     '<div class="page-hero-actions">'
+      +       '<span class="page-hero-who">signed in as <code>' + esc(meEmail) + '</code></span>'
+      +       (_ref ? '<button class="btn sm ghost" type="button" data-act="copy-text" data-copy="' + esc(_ref) + '">Project ref <code id="plat-ref">' + esc(_ref) + '</code> &#8690;</button>' : '')
+      +     '</div>'
+      +   '</div>'
+      + '<div style="margin-top:4px;">'
+      +   panel('nations',   kpisHtml + nationsCard(nations, usageBySub), true)
       // Support renders lazily the first time its tab opens (fetches the
       // aggregated inbox from the control plane).
       +   panel('support',  '<div id="ps-root"><p class="sub" style="margin-top:14px;">Loading support inbox...</p></div>', false)
@@ -564,19 +611,20 @@
       // Resellers renders lazily (reseller.js) the first time its tab opens.
       +   panel('resellers', '<div id="rs-root"><p class="sub" style="margin-top:14px;">Loading…</p></div>', false)
       +   panel('admins',    adminsCard(admins, meEmail), false)
-      + '</div>'
-      + '</div>';
+      + '</div>'   // panels wrapper
+      + '</div>'   // .main
+      + '</div>';  // .shell
     wireAddNation();
     // Fill each nation's "Sold by" line (reseller.js loads the reseller data).
     if (typeof window.rsDecorateNations === 'function') window.rsDecorateNations();
     // Surface the fail-open two-factor warning (set by requireMfa) if present.
     if (window._mfaBanner){
-      var _hero = document.querySelector('.nic-hero');
+      var _hero = document.querySelector('.page-hero');
       if (_hero){
         var _w = document.createElement('div');
         _w.style.cssText = 'margin-top:12px;padding:10px 12px;background:#fdecec;border:1px solid #f5c2c2;border-radius:8px;color:#b91c1c;font-size:12px;line-height:1.5;';
         _w.textContent = '⚠ ' + window._mfaBanner;
-        _hero.appendChild(_w);
+        _hero.insertAdjacentElement('afterend', _w);
       }
       window._mfaBanner = '';
     }
@@ -1341,6 +1389,7 @@
     window._nicSetupState = (n.setup_checklist && typeof n.setup_checklist === 'object') ? n.setup_checklist : {};
     window._nicSetupSub = String(n.subdomain || '').toLowerCase();
     document.getElementById('btn_out').style.display = '';
+    app.className = 'wrap wide';   // nation-detail keeps the centred .nic-shell layout (dashboard uses .dash)
     app.innerHTML = configureView(n);
     renderNationDocsCard(n.subdomain);
     wireDocFileInput();
@@ -1678,6 +1727,15 @@
   window.nicTab = function(name){
     Array.prototype.forEach.call(document.querySelectorAll('.nic-tab'), function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
     Array.prototype.forEach.call(document.querySelectorAll('.nic-panel'), function(p){ p.classList.toggle('active', p.getAttribute('data-panel') === name); });
+    // Dashboard rail + page-hero (absent on the per-nation detail view, which
+    // uses .nic-tab/.nic-hero instead — the guard keeps this a no-op there).
+    var rail = document.querySelector('.rail');
+    if (rail){
+      Array.prototype.forEach.call(rail.querySelectorAll('button[data-tab]'), function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
+      var meta = dashNavMeta(name);
+      var ic = document.getElementById('dash-hero-ic'); if (ic) ic.innerHTML = meta.icon;
+      var tx = document.getElementById('dash-hero-tx'); if (tx) tx.innerHTML = dashHeroTx(meta);
+    }
     if (name === 'resellers' && typeof window.renderResellers === 'function') window.renderResellers();
     if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
     if (name === 'requests' && typeof window.renderBuildTickets === 'function') window.renderBuildTickets();
@@ -2171,6 +2229,7 @@
       var on = licensed ? !!licensed[m[0]] : true;
       return '<label style="display:inline-flex;align-items:center;gap:6px;font-weight:600;margin:0 12px 8px 0;"><input type="checkbox" class="pv-mod" value="' + m[0] + '" style="width:auto;"' + (on ? ' checked' : '') + '/> ' + esc(m[1]) + '</label>';
     }).join('');
+    app.className = 'wrap wide';   // provision wizard uses the centred narrow layout (dashboard uses .dash)
     app.innerHTML = '<button class="btn sm ghost" type="button" data-act="' + (n ? 'configure' : 'home') + '"' + (n ? ' data-id="' + v(n.id) + '"' : '') + '>&larr; Back</button>'
       + '<h1 style="margin-top:12px;">' + (n ? 'Provision ' + v(n.display_name) : 'Provision a nation') + '</h1>'
       + '<p class="sub">Assisted: you created the Supabase project; this runs schema, bucket, first ED, and registry.</p>'

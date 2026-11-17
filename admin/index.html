@@ -105,6 +105,51 @@
   .nic-footer .msg.err{background:none;border:none;color:var(--danger);padding:0}
   .nic-footer .msg.ok{background:none;border:none;color:var(--ok);padding:0}
   @media(max-width:640px){.nic-strip{grid-template-columns:repeat(2,1fr)}}
+
+  /* ============================================================
+     Dashboard shell (Phase 1 redesign) — grouped left rail +
+     page-hero + KPI cards. Replaces the 9 wrapping .nic-tabs on
+     the dashboard. The per-nation detail view keeps .nic-* above.
+     ============================================================ */
+  #app.dash{max-width:none;margin:0;padding:0}
+  .shell{display:grid;grid-template-columns:234px 1fr;max-width:1320px;margin:0 auto;min-height:calc(100vh - 110px)}
+  .rail{border-right:1px solid var(--hair);padding:18px 12px;background:var(--surface)}
+  .rail-grp{font-size:10px;font-weight:800;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);margin:16px 10px 6px}
+  .rail-grp:first-child{margin-top:0}
+  .rail button{display:flex;width:100%;text-align:left;align-items:center;gap:10px;padding:8px 10px;border:none;background:none;border-radius:8px;color:var(--ink);font-size:13.5px;font-weight:600;font-family:inherit;cursor:pointer;margin-bottom:2px;transition:var(--tr)}
+  .rail button svg{width:17px;height:17px;flex-shrink:0;color:var(--muted)}
+  .rail button:hover{background:var(--bg)}
+  .rail button.active{background:var(--accent-light);color:var(--accent)}
+  .rail button.active svg{color:var(--accent)}
+  .rail button .cnt{margin-left:auto;font-size:10px;font-weight:800;background:var(--accent-bar);color:#fff;border-radius:999px;padding:1px 7px;min-width:18px;text-align:center}
+  .main{padding:22px 26px 48px;min-width:0}
+  /* page-hero: icon chip + eyebrow + serif title + actions (mirrors the
+     nation app's shared.css .page-hero). */
+  .page-hero{display:flex;align-items:flex-start;gap:16px;background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);box-shadow:var(--shadow);padding:20px 22px;position:relative;overflow:hidden}
+  .page-hero::before{content:'';position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--accent-bar)}
+  .page-hero-ic{flex-shrink:0;width:46px;height:46px;border-radius:12px;background:var(--accent-light);color:var(--accent);display:grid;place-items:center}
+  .page-hero-ic svg{width:24px;height:24px}
+  .page-hero-tx{flex:1;min-width:0}
+  .page-hero-eyebrow{font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--accent-bar);margin-bottom:3px}
+  .page-hero-tx h1{font-family:var(--serif);font-weight:400;font-size:27px;line-height:1.1;margin:0 0 4px;letter-spacing:-.2px}
+  .page-hero-tx .sub{margin:0}
+  .page-hero-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center;justify-content:flex-end}
+  .page-hero-who{font-size:12px;color:var(--muted)}
+  /* KPI cards (replace the flat .nic-strip tiles on the overview) */
+  .dash-kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin:16px 0}
+  .dash-kpi{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);box-shadow:var(--shadow);padding:13px 15px}
+  .dash-kpi .l{font-size:10px;font-weight:800;letter-spacing:.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:6px;margin-bottom:7px}
+  .dash-kpi .l svg{width:13px;height:13px;color:var(--accent-bar);flex-shrink:0}
+  .dash-kpi .v{font-size:23px;font-family:var(--serif);font-weight:400;line-height:1.05}
+  .dash-kpi .m{font-size:11px;color:var(--muted);margin-top:4px}
+  @media(max-width:900px){
+    .shell{grid-template-columns:1fr}
+    .rail{display:flex;flex-wrap:wrap;gap:4px;border-right:none;border-bottom:1px solid var(--hair);padding:10px}
+    .rail-grp{display:none}
+    .rail button{width:auto;margin-bottom:0}
+    .dash-kpis{grid-template-columns:repeat(2,1fr)}
+  }
+  @media(max-width:560px){.dash-kpis{grid-template-columns:1fr}.page-hero{flex-wrap:wrap}.page-hero-actions{justify-content:flex-start}}
 </style>
 </head>
 <body>
