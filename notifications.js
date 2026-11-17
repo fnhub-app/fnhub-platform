@@ -137,6 +137,23 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'contractor_submission',
+    label:                 'Contractor Submission Needs Review (Text Alert)',
+    description:           'Texts staff when a contractor uploads something that needs review/approval in the Contractor Portal -- an invoice, a WSIB or insurance certificate, or a request to add a team member. Fired server-side from the contractor-upload function. Use the recipients below to choose WHO is texted (default Housing Manager) and the Text channel to turn it on/off; the message wording (contractor name, property address, document type, app link) is composed by the system. Requires the SMS / Text Notifications module and a recipient who has opted in with a mobile. Photos, notes, and progress updates do NOT text -- they are flagged on the worklist.',
+    defaultRecipientRoles: ['housing_manager'],
+    defaultCcRoles:        [],
+    wired:                 true,
+    smsCapable:            true,
+    smsDefault:            true,
+    sms:                   '{nationShort} Housing: {contractorName} submitted {docType}{projectAddress}. Review/approve in the housing app: {appLink} Reply STOP to opt out.',
+    placeholders:          ['contractorName','docType','projectAddress','appLink','nationShort'],
+    defaults: {
+      subject:  '{nationShort} Housing — Contractor submission needs review',
+      bodyHtml: '<p>A contractor submitted something that needs review in the Contractor Portal. Open {nationShort} Housing to review and approve it.</p>'
+              + '<p style="margin:22px 0 4px;"><a href="{appLink}" style="{brandBtnStyle}">Open {nationShort} Housing &rarr;</a></p>'
+    }
+  },
+  {
     key:                   'application_confirmation_to_applicant',
     label:                 'Applicant Confirmation (PDF Copy)',
     description:           'Sent to the applicant (and co-applicant if a separate email) on every submit, with a PDF copy of the application attached.',
