@@ -696,6 +696,15 @@ function initLoginPage() {
     try { document.documentElement.style.setProperty('--yellow', _nc.primary_color); } catch (e) {}
     // Header / dark surfaces on the sign-in screen follow the brand colour too.
     try { if (typeof window._applyBrandDark === 'function') window._applyBrandDark(_nc.primary_color); } catch (e) {}
+    // _applyTheme hasn't run pre-auth, so derive the accent-dependent tokens the
+    // light sign-in screen needs (readable button text, accent-ink links, the
+    // focus-ring/glow rgb) from the brand colour directly -- same helpers.
+    try {
+      var _r = document.documentElement.style;
+      if (typeof window._onAccent === 'function')   _r.setProperty('--on-accent', window._onAccent(_nc.primary_color));
+      if (typeof window._accentInk === 'function')  _r.setProperty('--accent-ink', window._accentInk(_nc.primary_color));
+      if (typeof window._hexToRgbStr === 'function'){ var _rgb = window._hexToRgbStr(_nc.primary_color); if (_rgb) _r.setProperty('--accent-rgb', _rgb); }
+    } catch (e) {}
   }
 
   loadRememberedEmail();

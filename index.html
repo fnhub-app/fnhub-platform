@@ -12,11 +12,11 @@
      HTML is served fresh, so these rules always ride with the chooser markup.
      Tokens (--dark-border/--muted/--yellow/--sans) predate this and resolve from
      any shared.css version. */
-  .login-audience        { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--dark-border); }
-  .login-audience-label  { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); text-align: center; margin-bottom: 10px; }
+  .login-audience        { margin-top: 10px; padding-top: 16px; border-top: 1px solid var(--border); }
+  .login-audience-label  { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .7px; color: var(--muted); text-align: center; margin-bottom: 10px; }
   .login-audience-btns   { display: flex; flex-direction: column; gap: 8px; }
-  .login-audience-btn    { display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; border: 1px solid var(--dark-border); border-radius: 8px; padding: 11px 14px; font-size: 13px; font-weight: 600; color: #fff; font-family: var(--sans); text-decoration: none; cursor: pointer; }
-  .login-audience-btn:hover { border-color: var(--yellow); color: var(--yellow); }
+  .login-audience-btn    { display: flex; align-items: center; justify-content: center; gap: 8px; background: transparent; border: 1.5px solid var(--border); border-radius: 10px; padding: 12px 14px; font-size: 13px; font-weight: 600; color: var(--text); font-family: var(--sans); text-decoration: none; cursor: pointer; transition: border-color .15s; }
+  .login-audience-btn:hover { border-color: var(--muted); }
 </style>
 <script>try{var _t=sessionStorage.getItem("clfn_theme_css");if(_t)document.documentElement.style.cssText+=";"+_t;}catch(e){}</script>
 
@@ -46,7 +46,10 @@
       <div id="timeout-banner" style="display:none;background:#fef2f2;border:1px solid #fca5a5;border-radius:8px;padding:10px 14px;margin-bottom:14px;font-size:13px;color:#b91c1c;text-align:center;">
         &#9201; Your session timed out due to inactivity. Please sign in again.
       </div>
-      <div class="login-title">Sign in to your account</div>
+      <div class="login-head">
+        <div class="login-eyebrow">Housing Portal</div>
+        <div class="login-title">Welcome back</div>
+      </div>
 
       <div class="login-field">
         <label class="login-label" for="signin-email">Email</label>
