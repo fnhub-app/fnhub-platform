@@ -1440,12 +1440,33 @@ function renderHub(mount){
   if (!mount || !window.HEADER_NAV || !window.HUB_SECTIONS) return;
   // Group section-tagged items (flattening group children). Finance is the hero.
   var bySection = {};
+  var synthetic = {};   // synthetic tiles (Data Health, Get Help) that aren't in HEADER_NAV
+  var dhItems = [];     // the five Data Health tools — collapsed into one tile
   function consider(it){
     if (!it || it.divider || it.hero || !it.section || it.section === 'finance') return;
     if (!_hubModuleOk(it) || !_hubFeatureOk(it)) return;
+    if (it.key && it.key.indexOf('dh_') === 0) { dhItems.push(it); return; }  // collapse below
     (bySection[it.section] = bySection[it.section] || []).push(it);
   }
   window.HEADER_NAV.forEach(function(it){ consider(it); if (it.children) it.children.forEach(consider); });
+
+  // Collapse the Data Health cleanup tools into a single tile (opens a menu),
+  // so Projects & Admin isn't flooded with five rarely-used utilities.
+  if (dhItems.length) {
+    var dhTile = { key:'datahealth', label:'Data Health', section:'projects_admin',
+      roles: dhItems[0].roles || 'ed,housing_manager,super_user',
+      svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+      run: function(){ if (typeof _hubOpenDataHealth === 'function') _hubOpenDataHealth(); } };
+    synthetic.datahealth = dhTile;
+    (bySection.projects_admin = bySection.projects_admin || []).push(dhTile);
+  }
+  // "Get Help / Report an Issue" — out of the avatar menu, onto the hub as its
+  // own tile in Help (opens the support widget).
+  var helpTile = { key:'gethelp', label:'Get Help / Report an Issue', section:'insights_help', help:true,
+    svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="4"/><line x1="4.93" y1="4.93" x2="9.17" y2="9.17"/><line x1="14.83" y1="14.83" x2="19.07" y2="19.07"/><line x1="14.83" y1="9.17" x2="19.07" y2="4.93"/><line x1="9.17" y1="14.83" x2="4.93" y2="19.07"/></svg>',
+    run: function(){ if (typeof window.openSupportWidget === 'function') window.openSupportWidget(); } };
+  synthetic.gethelp = helpTile;
+  (bySection.insights_help = bySection.insights_help || []).push(helpTile);
 
   var html = '';
   window.HUB_SECTIONS.forEach(function(sec){
@@ -1456,7 +1477,8 @@ function renderHub(mount){
       var roleList = _hubRoleList(it);
       var roles = roleList ? ' data-roles="' + roleList + '"' : '';
       var feat  = (it.key && window.FEATURE_KEYS && FEATURE_KEYS.indexOf(it.key) !== -1) ? ' data-feature="' + it.key + '"' : '';
-      html += '<button type="button" class="hub-tile" data-hubnav="' + (it.key || '') + '"' + roles + feat + '>'
+      var cls   = 'hub-tile' + (it.help ? ' hub-tile-help' : '');
+      html += '<button type="button" class="' + cls + '" data-hubnav="' + (it.key || '') + '"' + roles + feat + '>'
             + '<span class="hub-tile-ic">' + (it.svg || '') + '</span><span class="hub-tile-nm">' + (it.label || '') + '</span></button>';
     });
     html += '</div></div>';
@@ -1474,9 +1496,10 @@ function renderHub(mount){
   }
 
   mount.innerHTML = html;
-  // Wire each tile to its nav entry's run().
+  // Wire each tile to its nav entry's run() (synthetic tiles first).
   mount.querySelectorAll('[data-hubnav]').forEach(function(btn){
-    var item = _hubFindByKey(btn.getAttribute('data-hubnav'));
+    var key = btn.getAttribute('data-hubnav');
+    var item = synthetic[key] || _hubFindByKey(key);
     if (item && typeof item.run === 'function') btn.addEventListener('click', item.run);
   });
   // Re-apply role visibility so data-roles tiles hide for the wrong role, then
@@ -1484,6 +1507,40 @@ function renderHub(mount){
   if (typeof applyRoleVisibility === 'function'){ try { applyRoleVisibility(); } catch(e){} }
   _hubHideEmptySections(mount);
 }
+// Data Health tile -> a small menu of the cleanup tools (reads the dh_* entries
+// from HEADER_NAV, gated by module + role, each running its own run()).
+function _hubOpenDataHealth(){
+  var role = window.currentRole || window._realRole || '';
+  function roleAllows(rl){
+    if (!rl) return true;
+    var a = String(rl).split(',').map(function(s){ return s.trim(); }).filter(Boolean);
+    return !a.length || a.indexOf(role) !== -1 || (role === 'super_user' && a.indexOf('ed') !== -1);
+  }
+  var tools = [];
+  (window.HEADER_NAV || []).forEach(function(it){
+    if (it.children) it.children.forEach(function(c){
+      if (c.key && c.key.indexOf('dh_') === 0 && _hubModuleOk(c) && _hubFeatureOk(c) && roleAllows(c.roles)) tools.push(c);
+    });
+  });
+  if (!tools.length) return;
+  var ov = document.getElementById('hub_dh_overlay');
+  if (!ov){
+    ov = document.createElement('div'); ov.id = 'hub_dh_overlay'; ov.className = 'hub-dh-ov';
+    document.body.appendChild(ov);
+    ov.addEventListener('click', function(e){ if (e.target === ov) ov.classList.remove('on'); });
+  }
+  ov.innerHTML = '<div class="hub-dh-sheet" role="dialog" aria-label="Data Health tools">'
+    + '<div class="hub-dh-h"><span>Data Health</span><button type="button" class="hub-dh-x" aria-label="Close">&times;</button></div>'
+    + '<div class="hub-dh-list">'
+    + tools.map(function(c, i){ return '<button type="button" class="hub-dh-item" data-dh="' + i + '"><span class="hub-dh-ic">' + (c.svg || '') + '</span><span>' + (c.label || '') + '</span></button>'; }).join('')
+    + '</div></div>';
+  ov.classList.add('on');
+  ov.querySelector('.hub-dh-x').onclick = function(){ ov.classList.remove('on'); };
+  ov.querySelectorAll('[data-dh]').forEach(function(b){
+    b.onclick = function(){ ov.classList.remove('on'); var t = tools[+b.getAttribute('data-dh')]; if (t && typeof t.run === 'function') t.run(); };
+  });
+}
+window._hubOpenDataHealth = _hubOpenDataHealth;
 // Hide hub sections whose tiles are all role/feature-hidden (no empty header).
 // Also called at the end of applyRoleVisibility so a late role-resolve or an
 // ED "view as" switch keeps the hub sections tidy without a re-render.
