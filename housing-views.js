@@ -1498,6 +1498,28 @@ function _hubHideEmptySections(mount){
 window.renderHub = renderHub;
 window._hubHideEmptySections = _hubHideEmptySections;
 
+// Physically order the landing sections. Robust — doesn't depend on the flex
+// container (some render states leave #landingView as block, where CSS `order`
+// is ignored). appendChild moves each node to the end, so after running the
+// list in order the DOM order is exactly: greeting -> search + quick actions ->
+// worklist summary -> KPIs -> hub tiles (+ Finance hero) -> recent activity,
+// with the hidden legacy hosts pushed to the end.
+function _orderLandingSections(){
+  var lv = document.getElementById('landingView'); if (!lv) return;
+  var want = [
+    { cls:'home-greeting' }, { cls:'quick-row' }, { id:'hub_wl_summary' },
+    { id:'landing_kpi_strip' }, { id:'hub_mount' }, { id:'sec-recent' },
+    { cls:'visually-hidden' }, { id:'emp_tiles_grid' }
+  ];
+  want.forEach(function(w){
+    var el = w.id
+      ? document.getElementById(w.id)
+      : Array.prototype.filter.call(lv.children, function(c){ return c.classList && c.classList.contains(w.cls); })[0];
+    if (el && el.parentElement === lv) lv.appendChild(el);
+  });
+}
+window._orderLandingSections = _orderLandingSections;
+
 function showLanding() {
   if (!document.getElementById('landingView')) {
     // Sub-page navigation: bounce back to housing.html.
@@ -1570,6 +1592,9 @@ function showLanding() {
   // from HEADER_NAV and gated by module + role.
   var _hubMount = document.getElementById('hub_mount');
   if (_hubMount && typeof renderHub === 'function') renderHub(_hubMount);
+
+  // Put the landing sections in the right order (search up top, hub prominent).
+  if (typeof _orderLandingSections === 'function') _orderLandingSections();
 
   // Refresh the action worklist so freshly created/submitted items (e.g. a new
   // application just submitted) appear immediately on return to the landing page,
