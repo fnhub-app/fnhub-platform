@@ -1602,7 +1602,7 @@ function _orderLandingSections(){
   var lv = document.getElementById('landingView'); if (!lv) return;
   var want = [
     { cls:'home-greeting' }, { cls:'hub-search' }, { id:'hub_wl_summary' },
-    { id:'landing_kpi_strip' }, { id:'hub_mount' },
+    { id:'hub_mount' },
     { cls:'visually-hidden' }, { id:'emp_tiles_grid' }
   ];
   want.forEach(function(w){
@@ -1716,6 +1716,9 @@ function _appIsPortal(a){
 // landing render. Finance metrics intentionally excluded — landing stays
 // housing-only.
 function _renderLandingKpis(){
+  // Landing KPI strip was removed from housing.html; this no-ops cleanly so the
+  // many post-save refresh call sites (guarded or not) stay valid.
+  if (!document.getElementById('landing_kpi_strip')) return;
   function setKpi(id, val){
     var el = document.getElementById(id);
     if (el) el.textContent = (val == null ? '—' : String(val));
