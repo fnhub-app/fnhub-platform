@@ -16,6 +16,9 @@ create table if not exists public.platform_build_tickets (
   req_type    text,                            -- New feature | Change | Fix | ...
   area        text,                            -- which part of the app
   roles       jsonb not null default '[]',     -- who uses it / should see it
+  blocks      jsonb not null default '[]',     -- reusable building blocks (Document Library, Contract generation, ...)
+  is_custom   boolean not null default false,  -- per-nation licensed custom module?
+  custom_nation text,                          -- which nation (when is_custom)
   what        text,                            -- the main ask
   why         text,
   example     text,
@@ -31,6 +34,11 @@ create table if not exists public.platform_build_tickets (
   created_at  timestamptz not null default now(),
   updated_at  timestamptz not null default now()
 );
+
+-- Upgrade an already-created table (re-running this file is idempotent).
+alter table public.platform_build_tickets add column if not exists blocks jsonb not null default '[]';
+alter table public.platform_build_tickets add column if not exists is_custom boolean not null default false;
+alter table public.platform_build_tickets add column if not exists custom_nation text;
 
 create index if not exists platform_build_tickets_idx
   on public.platform_build_tickets (status, created_at desc);

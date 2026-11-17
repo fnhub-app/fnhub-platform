@@ -1667,11 +1667,33 @@
   // optimized build prompt, saved to the control-plane `platform_build_tickets`
   // table (super-admin RLS; run supabase/platform/build_tickets.sql). The admin
   // browser reads/writes directly as a verified super-admin. Dashboard -> Requests.
-  var RQ_TYPES = ['New feature','Change to something','Fix a problem','Wording change','New report / export','Question / idea'];
+  var RQ_TYPES = ['New feature','Change to something','Fix a problem','Performance','Security','Refactor / cleanup','Audit / review','Wording change','New report / export','Question / idea'];
+  // Per-type guidance injected into the prompt so tech requests are framed right.
+  var RQ_TYPE_NUDGE = {
+    'Security':'This is a SECURITY task: weigh authentication/authorization, RLS, input validation / injection, data exposure across roles and nations, and secrets handling. Gate by role and the multi-tenant boundary, and call out any risk you find even if it is outside the immediate ask.',
+    'Audit / review':'This is an AUDIT / REVIEW: investigate and REPORT findings (most-severe first), verifying each before you report it. Do NOT change behaviour unless I ask -- propose fixes and wait.',
+    'Refactor / cleanup':'This is a REFACTOR: do NOT change behaviour. Keep the same inputs/outputs, follow existing patterns, reduce duplication, and keep every repo check green.',
+    'Performance':'This is a PERFORMANCE task: make it faster / lighter without changing behaviour. Avoid regressions, and say what you measured or expect to improve and why.'
+  };
   var RQ_AREAS = ['Not sure','Home / Worklist','Dashboard & KPIs','Inventory (units)','Tenants','Match','Applications','Renovations / Maintenance Requests','RFQ / Contracts','Contractors','Contractor Portal','Inspections','Finance','Capital Projects','Email Intake','Community / Applicant Portal','Notifications (email & text)','AI Assistant','Help & Support','Settings','Admin control plane','Across the whole app'];
   var RQ_ROLES = ['Executive Director','Housing Manager','Housing Employee','Field Employee','Finance / CFO','Contractor','Community Member','Chief & Council'];
   var RQ_NOTIF = ['No alert','Email','Text','Email + Text'];
   var RQ_PRIS  = ['Urgent','High','Normal','Low'];
+  // Reusable building blocks a request can lean on. The hint maps each to the
+  // real component Claude should reuse, so the prompt steers toward existing code.
+  var RQ_BLOCKS = ['Document Library','Form generator','Photo Library','Contract generation','Report / export','Email notification','Text (SMS) notification','Approval workflow','Map / location','AI assist'];
+  var RQ_BLOCK_HINT = {
+    'Document Library':'the shared DocLibrary component (per-entity file uploads)',
+    'Form generator':'a data-entry form/modal in the app\'s existing style',
+    'Photo Library':'photo uploads via DocLibrary (image category) / the unit-photo pattern',
+    'Contract generation':'the jsPDF contract/agreement generator (like the RFQ contract / lease agreement)',
+    'Report / export':'the shared Export dropdown (CSV/Excel) and the jsPDF+autotable report pattern',
+    'Email notification':'the notifications.js EMAIL_EVENT_REGISTRY (add a registered event + notify helper)',
+    'Text (SMS) notification':'the SMS pipeline (send-sms / _sendEventSms, module + opt-in gated)',
+    'Approval workflow':'APPROVAL_AUTHORITY role-gating + a status chain',
+    'Map / location':'the TIC map / Set Location & Photo (Leaflet) pattern',
+    'AI assist':'the ai-chat Edge Function (draft/chat), role-gated'
+  };
   var _rqTickets = [];
 
   function rqClean(s){ return (s || '').replace(/^\s+|\s+$/g, ''); }
@@ -1689,6 +1711,26 @@
   }
 
   // Assemble the optimized, ready-to-paste prompt from the answers.
+  // Selection pills (chip buttons) that write to a hidden input, so rqReadForm
+  // keeps reading g('rq_<name>') unchanged. pri=true tints Urgent/High.
+  function rqPillStyle(){
+    if (document.getElementById('rq-pill-style')) return;
+    var s = document.createElement('style'); s.id = 'rq-pill-style';
+    s.textContent = '.rqpill{display:inline-block;border:1px solid var(--line,#dfe3ec);background:var(--surface-2,#f1f4fa);color:var(--muted);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;}'
+      + '.rqpill:hover{border-color:var(--accent);}'
+      + '.rqpill.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}'
+      + '.rqpill.on.urgent{background:#c23b4b;border-color:#c23b4b;}'
+      + '.rqpill.on.high{background:#b9771a;border-color:#b9771a;}';
+    document.head.appendChild(s);
+  }
+  function rqPillGroup(name, arr, sel, pri){
+    var h = '<input type="hidden" id="rq_' + name + '" value="' + esc(sel) + '"/>';
+    h += '<div class="rqpills" style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px;">';
+    h += arr.map(function(v){ var on = (v === sel); var extra = pri ? (' ' + v.toLowerCase()) : ''; return '<button type="button" class="rqpill' + (on ? ' on' + extra : '') + '" data-rqpill="' + name + '" data-v="' + esc(v) + '">' + esc(v) + '</button>'; }).join('');
+    h += '</div>';
+    return h;
+  }
+
   function rqBuildPrompt(s, number){
     var L = [], id = number || 'REQ-###';
     L.push('[' + id + ' · ' + s.type + ' · Priority: ' + s.pri + ' · Area: ' + s.area + ']');
@@ -1697,9 +1739,12 @@
     L.push('');
     L.push('Context: This is the fnhub multi-tenant First Nations housing app (vanilla-JS single-page app + Supabase, deployed on Cloudflare). Please follow the conventions in CLAUDE.md. I am not a coder -- explain decisions in plain language, and if anything here is unclear or could be done more than one way, ask me before building.');
     L.push('');
+    if (RQ_TYPE_NUDGE[s.type]){ L.push(RQ_TYPE_NUDGE[s.type]); L.push(''); }
+    if (s.isCustom){ L.push('BUILD AS A PER-NATION CUSTOM MODULE' + (rqClean(s.customNation) ? (' for ' + rqClean(s.customNation)) : '') + ': a bespoke feature for ONE nation. Build it as a LICENSED optional module (use the custom_module scaffold -- custom.html / custom-init.js -- and the "Per-nation custom modules" recipe in CLAUDE.md): register a new module key, gate the feature behind moduleOn(\'<key>\'), and license it ONLY to this nation so it stays invisible/off for every other nation. Per-nation data rides housing_settings jsonb or a table run only on that nation\'s project.'); L.push(''); }
     L.push('What I want:'); L.push(rqClean(s.what) || '(describe what should happen)');
     if (rqClean(s.why)){ L.push(''); L.push('Why this matters (the problem to solve):'); L.push(rqClean(s.why)); }
     if (s.roles.length){ L.push(''); L.push('Who uses it / who should see it: ' + s.roles.join(', ') + '. Gate access and visibility by role where it matters.'); }
+    if (s.blocks && s.blocks.length){ L.push(''); L.push('Reuse these existing building blocks where possible (do not reinvent them):'); s.blocks.forEach(function(b){ L.push('- ' + b + ' -- ' + (RQ_BLOCK_HINT[b] || b) + '.'); }); }
     if (rqClean(s.example)){ L.push(''); L.push('Example walkthrough:'); L.push(rqClean(s.example)); }
     if (s.notify !== 'No alert'){ var who = rqClean(s.notifyWho); L.push(''); L.push('Notifications: send by ' + s.notify.toLowerCase() + (who ? (' to ' + who) : '') + '. Make the recipients/role configurable, defaulting to the Housing Manager unless I said otherwise.'); }
     if (rqClean(s.rules)){ L.push(''); L.push('Rules & limits:'); L.push(rqClean(s.rules)); }
@@ -1709,6 +1754,7 @@
     L.push('- It does what is described above and reads clearly to the people who use it.');
     if (s.roles.length) L.push('- Only the right people see/use it -- gated by role (' + s.roles.join(', ') + ').');
     if (s.notify !== 'No alert') L.push('- The alert reaches the right people by ' + s.notify.toLowerCase() + ', and can be turned on/off / configured.');
+    if (s.isCustom) L.push('- It is a gated module licensed only to the intended nation, and invisible/off for every other nation.');
     L.push('- It follows CLAUDE.md conventions and the multi-tenant rule (no hard-coded nation names).');
     L.push('- Nothing else in the app breaks; it still works on a phone.');
     L.push('');
@@ -1719,7 +1765,10 @@
   function rqReadForm(){
     var g = function(id){ var el = document.getElementById(id); return el ? el.value : ''; };
     var roles = []; RQ_ROLES.forEach(function(r, i){ var cb = document.getElementById('rq_role_' + i); if (cb && cb.checked) roles.push(r); });
-    return { type:g('rq_type') || RQ_TYPES[0], title:g('rq_title'), area:g('rq_area') || 'Not sure', roles:roles,
+    var blocks = []; RQ_BLOCKS.forEach(function(b, i){ var cb = document.getElementById('rq_block_' + i); if (cb && cb.checked) blocks.push(b); });
+    var customEl = document.getElementById('rq_custom');
+    return { type:g('rq_type') || RQ_TYPES[0], title:g('rq_title'), area:g('rq_area') || 'Not sure', roles:roles, blocks:blocks,
+      isCustom: !!(customEl && customEl.checked), customNation:g('rq_custom_nation'),
       what:g('rq_what'), why:g('rq_why'), example:g('rq_example'), notify:g('rq_notify') || 'No alert',
       notifyWho:g('rq_notifywho'), rules:g('rq_rules'), avoid:g('rq_avoid'), pri:g('rq_pri') || 'Normal', due:g('rq_due') };
   }
@@ -1743,34 +1792,55 @@
       return;
     }
     _rqTickets = await r.json().catch(function(){ return []; });
+    // Populate nations for the custom-module nation picker if this tab was
+    // opened before the overview loaded them.
+    if (!(_nations && _nations.length)){
+      try { var nr = await api('GET', '/nations?select=id,subdomain,display_name,short&order=display_name.asc'); if (nr.ok){ _nations = await nr.json().catch(function(){ return []; }); } } catch (e) {}
+    }
     rqPaint();
   };
 
+  function rqNationList(){
+    return (_nations || []).map(function(n){ return rqClean(n.display_name || n.short || n.subdomain); })
+      .filter(function(v){ return !!v; })
+      .sort(function(a, b){ return a.toLowerCase() < b.toLowerCase() ? -1 : 1; });
+  }
   function rqPaint(){
     var root = document.getElementById('rq-root'); if (!root) return;
+    rqPillStyle();
     var opts = function(arr, sel){ return arr.map(function(a){ return '<option' + (a === sel ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join(''); };
     var roleBoxes = RQ_ROLES.map(function(r, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;"><input type="checkbox" id="rq_role_' + i + '" style="width:auto;"/> ' + esc(r) + '</label>'; }).join('');
+    var blockBoxes = RQ_BLOCKS.map(function(b, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;" title="' + esc(RQ_BLOCK_HINT[b] || '') + '"><input type="checkbox" id="rq_block_' + i + '" style="width:auto;"/> ' + esc(b) + '</label>'; }).join('');
     var ta = 'style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--hair,#d9dee8);border-radius:9px;"';
     var optc = ' <span style="color:var(--muted);font-weight:400;">(optional)</span>';
 
     var form = '<div class="card" style="flex:1 1 360px;min-width:300px;">'
       + '<h3>New request</h3>'
       + '<p class="sub" style="margin:2px 0 10px;">Answer in plain language. The finished prompt builds alongside &mdash; copy it to Claude, or save it to the queue.</p>'
-      + '<label>Type</label><select id="rq_type">' + opts(RQ_TYPES, 'New feature') + '</select>'
+      + '<label>Type</label>' + rqPillGroup('type', RQ_TYPES, 'New feature', false)
       + '<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>'
       + '<label>Which part of the app?</label><select id="rq_area">' + opts(RQ_AREAS, 'Not sure') + '</select>'
       + '<label>Who uses it / should see it?</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">' + roleBoxes + '</div>'
+      + '<label>Building blocks it should reuse' + optc + '</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">' + blockBoxes + '</div>'
+      + '<div style="border:1px solid var(--hair,#d9dee8);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--surface-2,#f6f8fc);">'
+      +   '<label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0;"><input type="checkbox" id="rq_custom" style="width:auto;"/> Custom feature for ONE nation (licensed module)</label>'
+      +   '<div id="rq_custom_wrap" style="display:none;margin-top:8px;">'
+      +     '<input type="hidden" id="rq_custom_nation" value=""/>'
+      +     '<input id="rq_custom_nation_search" autocomplete="off" placeholder="Search nations&hellip;"/>'
+      +     '<div id="rq_custom_nation_chosen" class="sub" style="margin:6px 0 0;font-size:12px;display:none;"></div>'
+      +     '<div id="rq_custom_nation_list" style="max-height:150px;overflow:auto;border:1px solid var(--hair,#d9dee8);border-radius:8px;margin-top:6px;background:var(--surface,#fff);"></div>'
+      +   '</div>'
+      +   '<div class="sub" style="margin:6px 0 0;font-size:11px;">Ticking this tells Claude to build it as a per-nation module, gated and licensed only to that nation (invisible to everyone else).</div>'
+      + '</div>'
       + '<label>What do you want to happen?</label><textarea id="rq_what" rows="4" ' + ta + ' placeholder="Describe it the way you would to a coworker..."></textarea>'
       + '<label>Why does it matter?' + optc + '</label><textarea id="rq_why" rows="2" ' + ta + '></textarea>'
       + '<label>Walk through a real example <span style="color:var(--muted);font-weight:400;">(recommended)</span></label><textarea id="rq_example" rows="3" ' + ta + ' placeholder="First this happens, then that..."></textarea>'
-      + '<label>Should it notify anyone?</label><select id="rq_notify">' + opts(RQ_NOTIF, 'No alert') + '</select>'
+      + '<label>Should it notify anyone?</label>' + rqPillGroup('notify', RQ_NOTIF, 'No alert', false)
       + '<input id="rq_notifywho" placeholder="Who gets the alert? e.g. Housing Manager" style="margin-top:6px;"/>'
       + '<label>Rules &amp; limits' + optc + '</label><textarea id="rq_rules" rows="2" ' + ta + '></textarea>'
       + '<label>Anything it must NOT break?' + optc + '</label><textarea id="rq_avoid" rows="2" ' + ta + '></textarea>'
-      + '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
-      +   '<div style="flex:1 1 140px;"><label>Priority</label><select id="rq_pri">' + opts(RQ_PRIS, 'Normal') + '</select></div>'
-      +   '<div style="flex:1 1 140px;"><label>Needed by' + optc + '</label><input type="date" id="rq_due"/></div>'
-      + '</div>'
+      + '<label>Priority</label>' + rqPillGroup('pri', RQ_PRIS, 'Normal', true)
+      + '<label>Needed by' + optc + '</label><input type="date" id="rq_due" style="max-width:200px;"/>'
       + '</div>';
 
     var preview = '<div class="card" style="flex:1 1 360px;min-width:300px;">'
@@ -1786,6 +1856,8 @@
 
     var listRows = (_rqTickets || []).map(function(t){
       var meta = esc(t.req_type || '') + ' · ' + esc(t.area || '') + ' · ' + esc(t.priority || 'Normal')
+        + (t.is_custom ? (' · custom' + (t.custom_nation ? (' (' + esc(t.custom_nation) + ')') : '')) : '')
+        + ((t.blocks && t.blocks.length) ? (' · ' + t.blocks.length + ' block' + (t.blocks.length > 1 ? 's' : '')) : '')
         + (t.due_date ? (' · due ' + esc(rqFmtDue(t.due_date))) : '') + ' · ' + esc(timeAgo(t.created_at));
       var st = t.status || 'new';
       var cyc = st === 'new' ? '<button class="btn sm ghost" type="button" data-rq="start" data-id="' + esc(t.id) + '">Start</button>'
@@ -1824,7 +1896,76 @@
     Array.prototype.forEach.call(root.querySelectorAll('[data-rq]'), function(b){
       b.onclick = function(){ rqRowAction(b.getAttribute('data-rq'), b.getAttribute('data-id')); };
     });
+
+    // Selection pills -> write the chosen value into the hidden input, flip the
+    // active class within the group, and refresh the live prompt preview.
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rqpill]'), function(b){
+      b.onclick = function(){
+        var name = b.getAttribute('data-rqpill'), v = b.getAttribute('data-v');
+        var hid = document.getElementById('rq_' + name); if (hid) hid.value = v;
+        var pri = (name === 'pri');
+        Array.prototype.forEach.call(root.querySelectorAll('[data-rqpill="' + name + '"]'), function(o){
+          o.className = 'rqpill' + (o === b ? (' on' + (pri ? (' ' + v.toLowerCase()) : '')) : '');
+        });
+        rqUpdatePreview();
+      };
+    });
+
+    // Custom-for-one-nation: reveal the nation picker only when ticked.
+    var cbCustom = document.getElementById('rq_custom');
+    var customWrap = document.getElementById('rq_custom_wrap');
+    if (cbCustom && customWrap){
+      cbCustom.onchange = function(){
+        customWrap.style.display = cbCustom.checked ? 'block' : 'none';
+        if (cbCustom.checked) rqRenderNationList('');
+        rqUpdatePreview();
+      };
+    }
+    // Nation search: filter the list as you type.
+    var natSearch = document.getElementById('rq_custom_nation_search');
+    if (natSearch) natSearch.oninput = function(){ rqRenderNationList(natSearch.value); };
+    rqRenderNationList('');
+
     rqUpdatePreview();
+  }
+
+  // Render the searchable nation list (all nations top-level, filtered by query).
+  function rqRenderNationList(q){
+    var list = document.getElementById('rq_custom_nation_list'); if (!list) return;
+    var hid = document.getElementById('rq_custom_nation');
+    var chosen = hid ? hid.value : '';
+    var all = rqNationList();
+    var needle = rqClean(q).toLowerCase();
+    var rows = all.filter(function(n){ return !needle || n.toLowerCase().indexOf(needle) !== -1; });
+    if (!all.length){
+      list.innerHTML = '<div class="sub" style="padding:8px 10px;font-size:12px;">No nations loaded yet. Type the nation name in the search box &mdash; it will still be saved on the request.</div>';
+    } else if (!rows.length){
+      list.innerHTML = '<div class="sub" style="padding:8px 10px;font-size:12px;">No match. The typed name will be saved as-is.</div>';
+    } else {
+      list.innerHTML = rows.map(function(n){
+        var on = (n === chosen);
+        return '<button type="button" data-nat="' + esc(n) + '" style="display:block;width:100%;text-align:left;border:0;border-bottom:1px solid var(--hair,#eef1f6);background:' + (on ? 'var(--accent,#2f6df6)' : 'transparent') + ';color:' + (on ? '#fff' : 'inherit') + ';padding:8px 11px;font:inherit;cursor:pointer;">' + (on ? '&#10003; ' : '') + esc(n) + '</button>';
+      }).join('');
+    }
+    // Free-typed value (not in the list) is still honoured.
+    if (hid && needle && all.indexOf(rqClean(q)) === -1 && rows.indexOf(rqClean(q)) === -1){ hid.value = rqClean(q); }
+    Array.prototype.forEach.call(list.querySelectorAll('[data-nat]'), function(b){
+      b.onclick = function(){ rqPickNation(b.getAttribute('data-nat')); };
+    });
+    rqSyncNationChosen();
+  }
+  function rqPickNation(name){
+    var hid = document.getElementById('rq_custom_nation'); if (hid) hid.value = name;
+    var s = document.getElementById('rq_custom_nation_search'); if (s) s.value = '';
+    rqRenderNationList('');
+    rqUpdatePreview();
+  }
+  function rqSyncNationChosen(){
+    var hid = document.getElementById('rq_custom_nation');
+    var box = document.getElementById('rq_custom_nation_chosen'); if (!box) return;
+    var v = hid ? rqClean(hid.value) : '';
+    if (v){ box.style.display = 'block'; box.innerHTML = 'Selected nation: <b>' + esc(v) + '</b>'; }
+    else { box.style.display = 'none'; box.innerHTML = ''; }
   }
 
   function rqCopy(txt, okMsg){
@@ -1837,6 +1978,7 @@
     if (!rqClean(s.what) && !rqClean(s.title)){ adminToast('Add a title or describe what you want first.'); return; }
     var number = rqNextNumber();
     var row = { number:number, title:rqClean(s.title), req_type:s.type, area:s.area, roles:s.roles,
+      blocks:s.blocks, is_custom:!!s.isCustom, custom_nation:(rqClean(s.customNation) || null),
       what:rqClean(s.what), why:rqClean(s.why), example:rqClean(s.example), notify:s.notify, notify_who:rqClean(s.notifyWho),
       rules:rqClean(s.rules), avoid:rqClean(s.avoid), priority:s.pri, due_date:(s.due || null), status:'new',
       prompt:rqBuildPrompt(s, number), created_by:(typeof jwtEmail === 'function' ? jwtEmail() : null) };
@@ -1850,6 +1992,7 @@
     var t = (_rqTickets || []).filter(function(x){ return String(x.id) === String(id); })[0]; if (!t) return;
     if (act === 'copy'){
       var p = t.prompt || rqBuildPrompt({ type:t.req_type, title:t.title, area:t.area, roles:(t.roles || []),
+        blocks:(t.blocks || []), isCustom:!!t.is_custom, customNation:t.custom_nation,
         what:t.what, why:t.why, example:t.example, notify:t.notify, notifyWho:t.notify_who, rules:t.rules,
         avoid:t.avoid, pri:t.priority, due:t.due_date }, t.number);
       rqCopy(p, 'Copied ' + (t.number || '')); return;
