@@ -1772,8 +1772,12 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
    flow at the bottom of the login page -- invisible -- and sign-in hung. */
 .mfa-code-overlay    { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 16px; background: rgba(0, 0, 0, 0.55); }
 .login-logo-wrap     { text-align: center; }
-.login-logo-bg       { display: inline-grid; place-items: center; background: var(--dark); border-radius: 14px; width: 58px; height: 58px; box-shadow: var(--shadow); }
-.login-logo          { width: 38px; height: 38px; display: block; }
+/* Clean white "app icon" tile — no dark frame. The nation logo (which often
+   has its own light background) fills the tile and is clipped to its rounded
+   corners, so there's no double-framing; a light border + soft shadow give it
+   a professional lift that works for any nation's logo. */
+.login-logo-bg       { display: inline-grid; place-items: center; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; width: 64px; height: 64px; box-shadow: var(--shadow); overflow: hidden; }
+.login-logo          { width: 100%; height: 100%; object-fit: contain; display: block; }
 .login-panel         { position: relative; background: var(--surface); border: 1px solid var(--border); border-radius: 16px; padding: 30px 28px 26px; display: flex; flex-direction: column; gap: 15px; box-shadow: var(--shadow); overflow: hidden; }
 .login-panel::before { content: ''; position: absolute; left: 0; right: 0; top: 0; height: 4px; background: var(--yellow); }
 .login-panel--center { text-align: center; }
