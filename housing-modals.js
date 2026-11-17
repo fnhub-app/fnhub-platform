@@ -269,7 +269,7 @@ function udpRenderMatchesTable(unitId){
     var aidEsc = String(a.id).replace(/'/g,"\\'");
     var uidEsc = String(unitId).replace(/'/g,"\\'");
     var action = isVacant
-      ? '<button type="button" onclick="udpAssignFromUnit(\'' + aidEsc + '\',\'' + uidEsc + '\')" style="background:var(--yellow);border:none;color:var(--dark);padding:6px 12px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;white-space:nowrap;">Assign →</button>'
+      ? '<button type="button" onclick="udpAssignFromUnit(\'' + aidEsc + '\',\'' + uidEsc + '\')" class="btn btn-primary">Assign →</button>'
       : '<span style="font-size:11px;color:var(--muted);">—</span>';
     return '<tr style="border-bottom:1px solid var(--border);">'
       + '<td style="padding:10px 10px;vertical-align:top;">'
@@ -489,9 +489,9 @@ function openUnitEditModal(unitId){
     var role = window.currentRole || 'housing_employee_l1';
     if(APPROVAL_AUTHORITY.can('archiveUnit', role)) {
       if(u.archived) {
-        archWrap.innerHTML = '<button type="button" onclick="unarchiveUnit(\''+unitId.replace(/'/g,"\\'")+'\')" style="background:none;border:1.5px solid var(--muted);color:var(--muted);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;display:flex;align-items:center;gap:6px;">📤 Restore Unit</button>';
+        archWrap.innerHTML = '<button type="button" onclick="unarchiveUnit(\''+unitId.replace(/'/g,"\\'")+'\')" class="btn btn-ghost">📤 Restore Unit</button>';
       } else {
-        archWrap.innerHTML = '<button type="button" onclick="archiveUnit(\''+unitId.replace(/'/g,"\\'")+'\')" style="background:none;border:1.5px solid var(--danger);color:var(--danger);padding:6px 14px;border-radius:8px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;display:flex;align-items:center;gap:6px;">🏚️ Archive Unit</button>';
+        archWrap.innerHTML = '<button type="button" onclick="archiveUnit(\''+unitId.replace(/'/g,"\\'")+'\')" class="btn btn-danger-ghost">🏚️ Archive Unit</button>';
       }
     } else {
       archWrap.innerHTML = '';
@@ -1927,7 +1927,7 @@ function _udpLocEnsureModal(cb) {
               '<label style="font-size:11px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Longitude</label>' +
               '<input id="udp-loc-lng" type="text" readonly placeholder="Click map" style="width:100%;box-sizing:border-box;border:1px solid var(--border);border-radius:6px;padding:6px 8px;font-size:13px;background:var(--bg);color:var(--text);">' +
             '</div>' +
-            '<button id="udp-loc-geolocate" style="background:var(--bg);border:1px solid var(--border);border-radius:7px;padding:7px 10px;font-size:12px;font-weight:600;cursor:pointer;color:var(--text);">&#127919; Use my location</button>' +
+            '<button id="udp-loc-geolocate" class="btn btn-ghost">&#127919; Use my location</button>' +
           '</div>' +
           '<div style="flex:1;display:flex;flex-direction:column;">' +
             '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);padding:10px 12px 4px;">Map — click to place pin</div>' +
