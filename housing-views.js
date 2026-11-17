@@ -1673,10 +1673,11 @@ function _appIsPortal(a){
   return !!(a && (a.source === 'portal' || a.portal_submission_id || a.last_portal_merge));
 }
 
-// _renderLandingKpis — Open Apps · Critical · Vacant · Awaiting Match.
-// All counts come from the in-memory `applications` and `housingUnits`
-// arrays so no extra Supabase round-trips run on every landing render.
-// Finance metrics intentionally excluded — landing stays housing-only.
+// _renderLandingKpis — "Portfolio at a glance": Units · Occupancy · Vacant ·
+// Waitlist · Insp. Overdue. All counts come from the in-memory `applications`
+// and `housingUnits` arrays so no extra Supabase round-trips run on every
+// landing render. Finance metrics intentionally excluded — landing stays
+// housing-only.
 function _renderLandingKpis(){
   function setKpi(id, val){
     var el = document.getElementById(id);
@@ -1686,141 +1687,40 @@ function _renderLandingKpis(){
   // Exclude lot records (record_type:'lot') from all housing-unit KPIs/counts.
   var units = ((typeof housingUnits  !== 'undefined' && housingUnits)  ? housingUnits  : [])
     .filter(function(u){ return !(typeof _isLot==='function' && _isLot(u)); });
+  var active = units.filter(function(u){ return u && !u.archived; });
 
-  var STATUS = (typeof APP_STATUS !== 'undefined') ? APP_STATUS : {
-    SUBMITTED: 'submitted', FILE_UPDATE: 'file_update',
-    MGR_APPROVED: 'mgr_approved', ED_APPROVED: 'ed_approved'
-  };
+  // Units / Occupancy / Vacant - straight off the unit stock.
+  var totalUnits = active.length;
+  var occupied   = active.filter(function(u){ return u.assignedTo || u.assignedName; }).length;
+  var occupancyPct = totalUnits ? Math.round(occupied / totalUnits * 100) : 0;
+  var vacant = active.filter(function(u){ return (u.status||'').toLowerCase() === 'vacant'; }).length;
 
-  var openApps = apps.filter(function(a){
-    if(!a || a.archived) return false;
-    // Deceased and BCR-ineligible applicants live outside the pipeline counts
-    // (same rule as every Applications-by-Type row).
-    if(a.deceased) return false;
-    if(typeof appIsBcrIneligible === 'function' && appIsBcrIneligible(a)) return false;
-    return a.status === STATUS.SUBMITTED
-        || a.status === STATUS.FILE_UPDATE
-        || a.status === STATUS.MGR_APPROVED;
-  }).length;
-
-  var vacant = units.filter(function(u){
-    return u && !u.archived && u.status === 'vacant';
-  }).length;
-  // Vacant-card breakdown: houses out of service (same state tests as the
-  // reconcile report's buckets, so the two never disagree).
-  var condemnedN = units.filter(function(u){
-    return u && !u.archived && (u.status||'').toLowerCase() === 'condemned';
-  }).length;
-  // "Of which under repair" — a SUBSET of the vacant headline, not a separate
-  // pool. sbLoadUnits migrates status='under_repair' to status 'vacant' +
-  // under_renovation=true at boot, so every unoccupied unit under repair IS
-  // vacant-status; the old "exclude vacant status" guard (meant to stop a
-  // double count) therefore excluded them all and pinned this row at 0. As an
-  // explicit of-which subset there is nothing to double count.
-  var underRepairN = units.filter(function(u){
-    if(!u || u.archived) return false;
-    if(u.assignedTo || u.assignedName) return false;   // occupied units being repaired aren't vacant stock
-    return (u.status||'').toLowerCase() === 'vacant' && !!u.under_renovation;
-  }).length;
-  // "Of which with an open Maintenance Request" — derived LIVE from the SOW
-  // data (hasActiveSows in shared-sow.js: not completed / cancelled /
-  // archived), unlike the under-renovation row above, which reads the unit's
-  // persisted under_renovation flag (flipped when a request is approved,
-  // cleared when the last one completes). The two rows cross-check each
-  // other: a gap means either a stale flag or an open request that hasn't
-  // been approved yet.
-  var vacantOpenSowN = units.filter(function(u){
-    if(!u || u.archived) return false;
-    if(u.assignedTo || u.assignedName) return false;
-    if((u.status||'').toLowerCase() !== 'vacant') return false;
-    return typeof hasActiveSows === 'function' && hasActiveSows(u.id);
-  }).length;
-
-  // Application-type breakdown (active = non-archived, not declined):
-  //   new_housing      → New Applications (seeking a new unit)
-  //   existing_tenant  → File Updates
-  //   transfer_request → House Requests (existing tenant transfer)
-  // Housed = linked to a real unit. Derived live from the units, so unlinking a
-  // tenant returns them to the New Applications waitlist automatically.
-  var _housedIdx = (typeof buildHousedIndex === 'function') ? buildHousedIndex(units) : {};
+  // Waitlist - seeking-a-unit applicants not yet housed. Same population as the
+  // old "New Applications = the real waitlist" headline: non-archived, not
+  // declined / deceased / BCR-blocked, appIsWaitlistType, and not housed.
+  var _housedIdx = (typeof buildHousedIndex === 'function') ? buildHousedIndex(active) : {};
   function _isHoused(a){ return (typeof appIsHoused === 'function') ? appIsHoused(a, _housedIdx) : (a.status === 'assigned' || !!a.assignedUnit || !!_housedIdx[a.id]); }
-  // BCR-listed applicants (banished / evicted for harbouring) are ineligible —
-  // out of the type counts entirely; Match still lists them flagged.
-  var _bcrBlocked = function(a){ return typeof appIsBcrIneligible === 'function' && appIsBcrIneligible(a); };
-  function _activeOfType(pred, excludeHoused){
-    return apps.filter(function(a){
-      if(!a || a.archived || a.status === 'declined') return false;
-      if(a.deceased) return false;   // deceased apps live in their own group
-      if(_bcrBlocked(a)) return false;
-      if(excludeHoused && _isHoused(a)) return false;
-      return pred(a.appType || 'new_housing');
-    }).length;
-  }
-  // New Applications = the real waitlist: seeking-a-unit apps that are NOT
-  // housed. Commercial (business/department) applications are excluded — they
-  // request buildings, not waitlist spots, and were inflating this count.
-  var newApps       = _activeOfType(appIsWaitlistType, true);
-  // Subset annotation: new applications still sitting in DRAFT (started but
-  // never submitted) — same population rules as the New Applications row.
-  var draftApps = apps.filter(function(a){
-    if(!a || a.archived || a.status !== 'draft' || a.deceased) return false;
+  function _bcrBlocked(a){ return typeof appIsBcrIneligible === 'function' && appIsBcrIneligible(a); }
+  var waitlist = apps.filter(function(a){
+    if(!a || a.archived || a.status === 'declined' || a.deceased) return false;
     if(_bcrBlocked(a) || _isHoused(a)) return false;
-    return appIsWaitlistType(a.appType);
+    return (typeof appIsWaitlistType === 'function') ? appIsWaitlistType(a.appType) : ((a.appType||'new_housing') === 'new_housing');
   }).length;
-  // Subset annotation: doubled-up members — on reserve without a home of
-  // their own (staying with family). Same population rules as New Applications.
-  var doubledApps = apps.filter(function(a){
-    if(!a || a.archived || a.status === 'declined' || a.status === 'draft' || a.deceased) return false;
-    if(_bcrBlocked(a) || _isHoused(a)) return false;
-    if(!appIsWaitlistType(a.appType)) return false;
-    return a.livingSituation === 'family_on_reserve';
+
+  // Inspections overdue - active units whose next_inspection_due is in the past.
+  var _today = new Date(); _today.setHours(0,0,0,0);
+  var inspOverdue = active.filter(function(u){
+    var d = u.next_inspection_due || u.nextInspectionDue;
+    if(!d) return false;
+    var dd = new Date(d);
+    return !isNaN(dd.getTime()) && dd < _today;
   }).length;
-  var fileUpdates   = _activeOfType(function(t){ return t === 'existing_tenant'; });
-  var houseRequests = _activeOfType(function(t){ return t === 'transfer_request'; });
 
-  // Online (self-serve) applications — submitted or updated by members through
-  // the applicant portal. Same population rules as the type card (non-archived,
-  // not declined/deceased/BCR-blocked), but housed apps stay counted: a portal
-  // application that got someone housed is still a self-serve application.
-  function _portalOfType(pred){
-    return apps.filter(function(a){
-      if(!a || a.archived || a.status === 'declined' || a.deceased) return false;
-      if(_bcrBlocked(a)) return false;
-      if(!(typeof _appIsPortal === 'function' ? _appIsPortal(a) : (a.source === 'portal' || a.portal_submission_id || a.last_portal_merge))) return false;
-      return !pred || pred(a.appType || 'new_housing');
-    }).length;
-  }
-  var portalTotal     = _portalOfType(null);
-  var portalNew       = _portalOfType(appIsWaitlistType);
-  var portalUpdates   = _portalOfType(function(t){ return t === 'existing_tenant'; });
-  var portalTransfers = _portalOfType(function(t){ return t === 'transfer_request'; });
-
-  setKpi('kpi_open_apps',       openApps);
-  setKpi('kpi_vacant',          vacant);
-  setKpi('kpi_under_repair',    underRepairN);
-  setKpi('kpi_vacant_open_sow', vacantOpenSowN);
-  setKpi('kpi_condemned',       condemnedN);
-  setKpi('kpi_new_apps',        newApps);
-  setKpi('kpi_draft_apps',      draftApps);
-  setKpi('kpi_doubled_apps',    doubledApps);
-  setKpi('kpi_file_updates',    fileUpdates);
-  setKpi('kpi_house_requests',  houseRequests);
-  setKpi('kpi_portal_apps',      portalTotal);
-  setKpi('kpi_portal_new',       portalNew);
-  setKpi('kpi_portal_updates',   portalUpdates);
-  setKpi('kpi_portal_transfers', portalTransfers);
-
-  // (Likely-Housed / Reconcile / Archived-Applications quick actions moved to
-  // the Operations nav dropdown's Data Health section — housing-init.js.)
-
-  // Scroll-collapse: shrink the KPI strip to icon-only once the page scrolls,
-  // freeing space on tablet/mobile (shared-ui.js). _initScrollCollapse is
-  // itself idempotent, so calling it on every render is safe.
-  var _kpiStrip = document.getElementById('landing_kpi_strip');
-  var _contentArea = document.querySelector('.content-area');
-  if (_kpiStrip && _contentArea && typeof _initScrollCollapse === 'function') {
-    _initScrollCollapse(_contentArea, _kpiStrip);
-  }
+  setKpi('kpi_units',        totalUnits);
+  setKpi('kpi_occupancy',    totalUnits ? (occupancyPct + '%') : null);
+  setKpi('kpi_vacant',       vacant);
+  setKpi('kpi_waitlist',     waitlist);
+  setKpi('kpi_insp_overdue', inspOverdue);
 }
 
 var _kpiDrillData = null; // { title, headers, rows, colWidths, filename }
