@@ -1,0 +1,66 @@
+# Mark control-plane Requests-queue tickets DONE when their PR merges.
+#
+# The admin Requests queue (Dashboard -> Requests, platform_build_tickets) issues
+# REQ-NNN numbers. When a PR that references one is MERGED, this closes the loop:
+# it finds every REQ-NNN in the PR title + body and sets those tickets to
+# status='done' in the control-plane database.
+#
+# No new secret: it reuses SUPABASE_ACCESS_TOKEN + SUPABASE_PLATFORM_PROJECT_ID
+# (already used for platform function deploys) and runs one narrow UPDATE via the
+# Supabase Management API SQL endpoint (postgres role; bypasses RLS). The REQ
+# values are extracted with a strict REQ-[0-9]+ regex, so the PR text (untrusted)
+# can never inject SQL. Same-repo PRs only; a no-op when no REQ is referenced or
+# the secrets are unset.
+name: Mark REQ tickets done on merge
+
+on:
+  pull_request:
+    types: [closed]
+
+permissions:
+  contents: read
+
+jobs:
+  mark-done:
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+    steps:
+      - name: Mark referenced REQ tickets done
+        env:
+          SB_TOKEN:  ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SB_REF:    ${{ secrets.SUPABASE_PLATFORM_PROJECT_ID }}
+          PR_TITLE:  ${{ github.event.pull_request.title }}
+          PR_BODY:   ${{ github.event.pull_request.body }}
+          PR_NUM:    ${{ github.event.pull_request.number }}
+        run: |
+          set -euo pipefail
+          if [ -z "${SB_TOKEN:-}" ] || [ -z "${SB_REF:-}" ]; then
+            echo "Platform secrets not set; skipping."; exit 0
+          fi
+
+          # Strict match: only REQ- followed by digits (no injection possible).
+          reqs=$(printf '%s\n%s\n' "${PR_TITLE:-}" "${PR_BODY:-}" | grep -oE 'REQ-[0-9]+' | sort -u || true)
+          if [ -z "$reqs" ]; then
+            echo "PR #${PR_NUM:-?} references no REQ-NNN ticket; nothing to mark."; exit 0
+          fi
+          echo "PR #${PR_NUM:-?} references: $(echo "$reqs" | tr '\n' ' ')"
+
+          # Build a quoted IN-list from the strictly-validated values.
+          inlist=$(echo "$reqs" | awk '{printf "%s'\''%s'\''", (NR>1 ? "," : ""), $0}')
+          sql="update public.platform_build_tickets set status='done', updated_at=now() where number in (${inlist}) and status <> 'done';"
+
+          # Run via the Supabase Management API (same credential as function deploys).
+          http=$(curl -sS -o /tmp/resp.json -w '%{http_code}' -X POST \
+            "https://api.supabase.com/v1/projects/${SB_REF}/database/query" \
+            -H "Authorization: Bearer ${SB_TOKEN}" \
+            -H "Content-Type: application/json" \
+            --data "$(jq -nc --arg q "$sql" '{query:$q}')")
+          echo "Management API HTTP ${http}"
+          cat /tmp/resp.json || true
+          echo
+          if [ "$http" != "200" ] && [ "$http" != "201" ]; then
+            echo "::warning::Could not mark REQ tickets done (HTTP ${http}). They can be closed manually in Dashboard -> Requests."
+            # Don't fail the merge pipeline over a best-effort status update.
+            exit 0
+          fi
+          echo "Marked done: $(echo "$reqs" | tr '\n' ' ')"
