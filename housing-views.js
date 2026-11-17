@@ -121,31 +121,54 @@ function _cardPill(text, bg, color) {
   if (!text) return '';
   return '<span style="flex-shrink:0;font-size:10px;font-weight:700;color:' + (color||'var(--muted)') + ';background:' + (bg||'var(--bg)') + ';border:1px solid var(--border);border-radius:20px;padding:2px 8px;white-space:nowrap;">' + text + '</span>';
 }
+// Two-letter initials for a card avatar (letters preferred; strips emoji/punct).
+function _cardInitials(s) {
+  s = String(s || '').replace(/[^0-9A-Za-z\s]/g, ' ').trim();
+  var p = s.split(/\s+/).filter(Boolean);
+  if (!p.length) return '—';
+  if (p.length >= 2) return (p[0][0] + p[1][0]).toUpperCase();
+  return p[0].slice(0, 2).toUpperCase();
+}
+// Shared card tile for the Cards view (Inventory, Match, Tenants, Contractors,
+// reno approvals, renos list). All identity fields beyond title/pill/metas/
+// actions are OPTIONAL so existing callers keep working:
+//   o.avatar     — avatar text (else derived from title); o.avatarAlt → amber
+//   o.sub        — secondary line under the title
+//   o.stat       — {n, pill?} right-side serif number (else o.pill sits top-right)
 function _cardTile(o) {
   var metas = (o.metas||[]).filter(function(m){ return m && m.v != null && String(m.v) !== ''; }).map(function(m){
-    return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:5px;">'
+    return '<div style="display:flex;justify-content:space-between;gap:10px;font-size:12px;margin-top:6px;">'
       + '<span style="color:var(--muted);flex-shrink:0;">' + m.k + '</span>'
       + '<span style="color:var(--text);font-weight:600;text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + m.v + '</span></div>';
   }).join('');
   var badges = (o.badges||[]).join(' ');
   var actions = (o.actions||[]).map(function(a){
     if (a.html) return a.html;
-    return '<button type="button" onclick="' + a.onclick + '" style="flex:1;background:' + (a.ghost ? 'none' : 'var(--yellow)') + ';color:' + (a.ghost ? 'var(--muted)' : 'var(--dark)') + ';'
-      + 'border:' + (a.ghost ? '1px solid var(--border)' : 'none') + ';border-radius:7px;padding:8px 10px;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + a.text + '</button>';
+    // Standard .btn family: ghost = secondary, primary = yellow. flex:1 fills.
+    return '<button type="button" class="btn ' + (a.ghost ? 'btn-ghost' : 'btn-primary') + '" onclick="' + a.onclick + '" style="flex:1;white-space:nowrap;">' + a.text + '</button>';
   }).join('');
-  return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:13px 14px;display:flex;flex-direction:column;">'
-    + '<div ' + (o.open ? 'onclick="' + o.open + '"' : '') + ' style="cursor:' + (o.open ? 'pointer' : 'default') + ';">'
-    +   '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">'
-    +     '<span style="font-size:14px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:2px;">' + o.title + '</span>'
-    +     _cardPill(o.pill && o.pill.text, o.pill && o.pill.bg, o.pill && o.pill.color)
+  var av = (o.avatar != null && String(o.avatar) !== '') ? String(o.avatar) : _cardInitials(o.title);
+  var serif = "'DM Serif Display',Georgia,serif";
+  // Right side: a serif stat (score) with an optional pill under it, else the pill.
+  var right = o.stat
+    ? '<div style="text-align:right;flex-shrink:0;"><div style="font-family:' + serif + ';font-size:24px;line-height:1;">' + o.stat.n + '</div>'
+        + (o.stat.pill ? '<div style="margin-top:3px;">' + _cardPill(o.stat.pill.text, o.stat.pill.bg, o.stat.pill.color) + '</div>' : '') + '</div>'
+    : _cardPill(o.pill && o.pill.text, o.pill && o.pill.bg, o.pill && o.pill.color);
+  return '<div style="border:1px solid var(--border);border-radius:12px;background:var(--surface);box-shadow:var(--shadow);padding:13px 14px;display:flex;flex-direction:column;">'
+    + '<div ' + (o.open ? 'onclick="' + o.open + '"' : '') + ' style="cursor:' + (o.open ? 'pointer' : 'default') + ';display:flex;align-items:center;gap:11px;">'
+    +   '<div style="width:40px;height:40px;border-radius:11px;flex-shrink:0;display:grid;place-items:center;font-family:' + serif + ';font-size:15px;background:' + (o.avatarAlt ? 'var(--yellow)' : 'var(--dark)') + ';color:' + (o.avatarAlt ? 'var(--dark)' : 'var(--surface)') + ';">' + escapeHtml(av) + '</div>'
+    +   '<div style="flex:1;min-width:0;">'
+    +     '<div style="font-size:14px;font-weight:700;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + o.title + '</div>'
+    +     (o.sub ? '<div style="font-size:11.5px;color:var(--muted);margin-top:1px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + o.sub + '</div>' : '')
     +   '</div>'
-    +   (badges ? '<div style="margin-top:4px;">' + badges + '</div>' : '')
-    +   metas
+    +   right
     + '</div>'
+    +   (badges ? '<div style="margin-top:9px;">' + badges + '</div>' : '')
+    +   (metas ? '<div style="margin-top:10px;border-top:1px solid var(--border);padding-top:9px;">' + metas + '</div>' : '')
     // flex-wrap: three+ actions (e.g. Override/Archive/Progress on the reno
     // kanban's narrow columns) wrap to a second row instead of overflowing the
     // card — the buttons are nowrap by design, so wrapping is the relief valve.
-    + (actions ? '<div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:11px;">' + actions + '</div>' : '')
+    + (actions ? '<div style="display:flex;flex-wrap:wrap;gap:7px;margin-top:12px;">' + actions + '</div>' : '')
     + '</div>';
 }
 
@@ -453,7 +476,7 @@ function renderInventoryView(){
 
   // Card renderer — same statusStyle/uid/badge logic as the table row, laid
   // out as a _cardTile instead of a <tr>.
-  function _invCardHtml(u){
+  function _invCardHtml(u, i){
     var ss = statusStyle[u.status]||{bg:'#f0f0ec',c:'var(--gray)',label:u.status||'Unknown'};
     var addr = u.num+' '+u.street;
     var bath = (u.bathrooms&&u.bathrooms!=='0'&&u.bathrooms!=='nan') ? u.bathrooms : '';
@@ -478,6 +501,8 @@ function renderInventoryView(){
     }
     return _cardTile({
       title: addr,
+      avatar: u.num || _cardInitials(u.street),
+      avatarAlt: !!(i % 2),
       pill: {text: ss.label, bg: ss.bg, color: ss.c},
       badges: badges,
       metas: metas,
@@ -759,8 +784,10 @@ function renderMatchView(){
     && APPROVAL_AUTHORITY.can('deleteApplication', window.currentRole);
   function _matchDelBtn(appId, block){
     if(!_canDeleteApp) return '';
-    return '<button data-del-app="'+appId+'" title="Delete (archive) application"'
-      + (block ? ' style="background:transparent;border:1px solid var(--danger);color:var(--danger);padding:8px 12px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;white-space:nowrap;"'
+    // block=true is the Cards-view action (standard ghost .btn, icon-only);
+    // block=false is the compact table-row variant (left as-is for now).
+    return '<button data-del-app="'+appId+'" title="Archive application"'
+      + (block ? ' class="btn btn-ghost" style="flex:0 0 auto;padding:8px 12px;"'
                : ' style="background:transparent;border:1px solid var(--border);color:var(--danger);padding:6px 9px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;line-height:1;"')
       + '>🗑</button>';
   }
@@ -871,23 +898,24 @@ function renderMatchView(){
     if (isTransfer) badges.push('<span style="display:inline-block;font-size:10px;font-weight:700;background:var(--warn-amber-bg);color:var(--warn-amber-text);border:1px solid var(--warn-amber-border);padding:1px 7px;border-radius:4px;white-space:nowrap;">🏠 On Rez'+(curAddr?' · '+curAddr:'')+'</span>');
     if (_bcrIneligibleBadge(app)) badges.push(_bcrIneligibleBadge(app));
     if (_arrearsWarnBadge(app)) badges.push(_arrearsWarnBadge(app));
+    var subBits = [app.reserve, sl].filter(function(x){ return x && String(x).trim(); });
     var metas = [
-      {k:'Score',     v: app.score||0},
-      {k:'Reserve',   v: app.reserve||''},
       {k:'Best Unit', v: best ? (best.unit.num+' '+best.unit.street+' · '+matchPct+'% match') : 'Unmatched'},
-      {k:'Status',    v: sl},
       {k:'Has House', v: hasHouseReal ? ('Yes'+(curAddr?' — '+curAddr:'')) : 'No'}
     ];
     var actions = [];
     if (hasUnit) {
       actions.push({html:'<div style="flex:1;text-align:center;font-size:11px;font-weight:700;color:var(--success);padding:8px 0;">✓ '+(app.assignedAddress||'Assigned')+'</div>'});
     } else if (canAssign) {
-      actions.push({html:'<button type="button" data-assign-app="'+app.id+'" data-assign-unit="'+(best?best.unit.id:'')+'" style="flex:1;background:var(--yellow);border:none;color:var(--dark);padding:8px 10px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;white-space:nowrap;">Assign →</button>'});
+      actions.push({html:'<button type="button" class="btn btn-primary" data-assign-app="'+app.id+'" data-assign-unit="'+(best?best.unit.id:'')+'" style="flex:1;white-space:nowrap;">Assign →</button>'});
     }
     if (_canDeleteApp) actions.push({html: _matchDelBtn(app.id, true)});
     return _cardTile({
       title: name,
-      pill: {text: tier, bg:'var(--bg)', color: tCol},
+      avatar: _cardInitials(((app.fn||'')+' '+(app.ln||'')).trim()),
+      avatarAlt: !!(i % 2),
+      sub: escapeHtml(subBits.join(' · ')),
+      stat: {n: (app.score||0), pill: {text: tier, bg:'var(--bg)', color: tCol}},
       badges: badges,
       metas: metas,
       open: "openAppFromMatch('"+app.id+"')",
@@ -1053,7 +1081,7 @@ function renderTenantsView(){
 
   // Card renderer — same status/badge/reno-score logic as the table row,
   // laid out as a _cardTile instead of a <tr>.
-  function _tenCardHtml(u){
+  function _tenCardHtml(u, i){
     var _showRenoScore = (ROLE.isManagement(window.currentRole));
     var uid = String(u.id).replace(/'/g,"\\'");
     var badges = [];
@@ -1069,6 +1097,8 @@ function renderTenantsView(){
     var _openCall = u.assignedName ? "openTenantCard('"+uid+"')" : "openUnitEditModal('"+uid+"')";
     return _cardTile({
       title: u.assignedName || 'No tenant assigned',
+      avatar: u.assignedName ? _cardInitials(u.assignedName) : (u.num || ''),
+      avatarAlt: !!(i % 2),
       pill: {text: (u.status==='reserved'?'Reserved':'Occupied'), bg: (u.status==='reserved'?'#faf5ff':'var(--info-blue-bg)'), color: (u.status==='reserved'?'#7c3aed':'#1d4ed8')},
       badges: badges,
       metas: [{k:'Address', v: ((u.num||'')+' '+(u.street||'')).trim()}].concat(metas),
