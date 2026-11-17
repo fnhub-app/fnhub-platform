@@ -661,7 +661,11 @@ function hideAllViews(keepId) {
     'dashView','employeeHomeView','worklistView','landingView',
     'inventoryView','matchView','tenantsView',
     'renoApprovalsView','renosView','contractorsView',
-    'renosLoadingView'
+    'renosLoadingView',
+    // Self-injected on housing.html; without this it was never hidden when
+    // navigating back to the landing, so the Reports dashboard lingered at the
+    // bottom of the landing hub after being opened once.
+    'leadershipDashView'
   ];
   var extra = window._extraViewIds || [];
   base.concat(extra).forEach(function(id) {
