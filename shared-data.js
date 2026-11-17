@@ -7594,6 +7594,47 @@ function _staffExpiryChip(u){
   else { style='background:#f4f4f0;color:#555;border:1px solid var(--border);'; label='Expires '+s; }
   return '<span title="Access expiry" style="display:inline-block;font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;'+style+'">🕒 '+label+'</span>';
 }
+// Row overflow-menu controller (reusable on any .std-rowmenu in a data table).
+// The popover is positioned FIXED on open so an overflow:auto table wrapper
+// can't clip it. One menu open at a time; closes on outside click, menu-item
+// click, or scroll.
+function _closeAllRowMenus(){
+  document.querySelectorAll('.std-rowmenu.open').forEach(function(w){
+    w.classList.remove('open');
+    var p = w.querySelector('.std-rowmenu-pop');
+    if(p){ p.style.position=''; p.style.top=''; p.style.right=''; p.style.left=''; }
+  });
+}
+window._closeAllRowMenus = _closeAllRowMenus;
+function toggleRowMenu(btn){
+  var wrap = btn && btn.closest ? btn.closest('.std-rowmenu') : null;
+  if(!wrap) return;
+  var wasOpen = wrap.classList.contains('open');
+  _closeAllRowMenus();
+  if(wasOpen) return;
+  wrap.classList.add('open');
+  var pop = wrap.querySelector('.std-rowmenu-pop');
+  if(pop){
+    var r = btn.getBoundingClientRect();
+    pop.style.position = 'fixed';
+    pop.style.top   = (r.bottom + 6) + 'px';
+    pop.style.right = (window.innerWidth - r.right) + 'px';
+    pop.style.left  = 'auto';
+  }
+}
+window.toggleRowMenu = toggleRowMenu;
+if(!window._rowMenuWired){
+  window._rowMenuWired = true;
+  document.addEventListener('click', function(e){
+    var t = e.target;
+    if(!(t instanceof Element)) return;
+    if(t.closest('.std-kebab')) return;                 // its own onclick toggles
+    if(t.closest('.std-rowmenu-pop button')){ setTimeout(_closeAllRowMenus, 0); return; } // close after the action runs
+    _closeAllRowMenus();                                 // outside click
+  });
+  window.addEventListener('scroll', function(){ _closeAllRowMenus(); }, true);
+}
+
 async function renderHousingUserTable(){
   var tbody = document.getElementById('userTableBody');
   if(!tbody) return;
@@ -7602,7 +7643,7 @@ async function renderHousingUserTable(){
   var _laSeq = (window._userTableLaSeq = (window._userTableLaSeq || 0) + 1);
   // Per-role 2FA requirement panel renders alongside the Users table (ED-only).
   if (typeof renderMfaPolicyPanel === 'function') renderMfaPolicyPanel();
-  tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">Loading…</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">Loading…</td></tr>';
   try {
     var filter   = window._staffFilter === 'inactive' ? 'inactive' : 'active';
     var activeQ  = filter === 'inactive' ? 'eq.false' : 'eq.true';
@@ -7624,7 +7665,7 @@ async function renderHousingUserTable(){
     var _activeMap = {};
     if(!staff||!staff.length){
       var emptyMsg = filter === 'inactive' ? 'No deactivated staff.' : 'No staff found.';
-      tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">'+emptyMsg+'</td></tr>';
+      tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--muted);font-size:12px;font-style:italic;">'+emptyMsg+'</td></tr>';
       return;
     }
     var roleColors = {
@@ -7686,18 +7727,22 @@ async function renderHousingUserTable(){
           // Active: Edit + (Send Reset | Send Sign-in Link) + Deactivate.
           // Magic-link users sign in by an admin-issued link, so they get
           // "Send Sign-in Link" instead of the password-reset action.
-          var _sendBtn = (u.magic_link === true)
-            ? '<button onclick="sendStaffMagicLink(\''+escapeHtml(u.email)+'\',this)" class="btn btn-ghost btn-sm">Send Sign-in Link</button>'
-            : '<button onclick="sendStaffPasswordReset(\''+escapeHtml(u.email)+'\',this)" class="btn btn-ghost btn-sm">Send Reset</button>';
+          // Overflow menu: keep Edit visible; the rest (Send Reset / Sign-in
+          // Link, Reset 2FA, Deactivate) collapse into a kebab (>3 actions).
+          var _sendItem = (u.magic_link === true)
+            ? '<button onclick="sendStaffMagicLink(\''+escapeHtml(u.email)+'\',this)">&#9993;&#65039; Send Sign-in Link</button>'
+            : '<button onclick="sendStaffPasswordReset(\''+escapeHtml(u.email)+'\',this)">&#9993;&#65039; Send Reset</button>';
           // Reset 2FA: ED/super_user only (lost-device safety net before enforcement).
-          var _reset2fa = (window.currentRole === 'ed' || window.currentRole === 'super_user')
-            ? '<button onclick="adminResetUserMfa(\''+escapeHtml(u.email)+'\',this)" class="btn btn-ghost btn-sm" title="Remove their two-factor so they can set it up again">Reset 2FA</button>'
+          var _reset2faItem = (window.currentRole === 'ed' || window.currentRole === 'super_user')
+            ? '<button onclick="adminResetUserMfa(\''+escapeHtml(u.email)+'\',this)">&#128260; Reset 2FA</button>'
             : '';
           actionsHtml = '<div class="flex-end gap-8">'
             +'<button onclick="_sbEditStaffModal('+u.id+')" class="btn btn-ghost btn-sm">Edit</button>'
-            +_sendBtn
-            +_reset2fa
-            +'<button onclick="deactivateStaff('+u.id+',this)" class="btn btn-sm" style="border-color:var(--danger-border);color:var(--danger);">Deactivate</button>'
+            +'<div class="std-rowmenu"><button type="button" class="std-kebab" aria-haspopup="menu" aria-label="More actions for '+escapeHtml(u.name)+'" onclick="toggleRowMenu(this)">&#8942;</button>'
+            +'<div class="std-rowmenu-pop" role="menu">'
+            + _sendItem + _reset2faItem
+            +'<button class="danger" onclick="deactivateStaff('+u.id+',this)">&#10005; Deactivate</button>'
+            +'</div></div>'
             +'</div>';
         }
       }
@@ -7713,12 +7758,15 @@ async function renderHousingUserTable(){
         + ' style="font-size:12px;color:var(--muted);"'
         + (lastActive ? ' title="'+escapeHtml(lastActive)+'"' : '')
         + '>'+escapeHtml(_fmtRelativeTime(lastActive))+'</td>';
+      // Identity cell: avatar · name · email (+ access-expiry chip). Replaces the
+      // old separate avatar / name / email columns.
+      var _expiry = _staffExpiryChip(u);
       return '<tr>'
-        +'<td class="std-row-avatar-cell"><div class="std-row-avatar">'+escapeHtml(initials)+'</div></td>'
-        +'<td style="font-weight:600;">'+escapeHtml(u.name)
-          + (function(){ var c=_staffExpiryChip(u); return c ? '<div style="margin-top:3px;">'+c+'</div>' : ''; })()
-        +'</td>'
-        +'<td style="color:var(--muted);font-size:12px;">'+escapeHtml(u.email)+'</td>'
+        +'<td><div class="std-id"><div class="std-row-avatar">'+escapeHtml(initials)+'</div>'
+          +'<div><div class="std-id-main">'+escapeHtml(u.name)+'</div>'
+          +'<div class="std-id-sub">'+escapeHtml(u.email)+'</div>'
+          + (_expiry ? '<div style="margin-top:4px;">'+_expiry+'</div>' : '')
+          +'</div></div></td>'
         +'<td><span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;background:'+rc.bg+';color:'+rc.c+';">'+escapeHtml(rl)+'</span></td>'
         +lastLoginCell
         +'<td class="std-cell-right">'+actionsHtml+'</td>'
@@ -7749,7 +7797,7 @@ async function renderHousingUserTable(){
       });
     }
   } catch(e){
-    tbody.innerHTML='<tr><td colspan="6" style="text-align:center;color:var(--danger);font-size:12px;">Error loading staff: '+escapeHtml(e.message)+'</td></tr>';
+    tbody.innerHTML='<tr><td colspan="4" style="text-align:center;color:var(--danger);font-size:12px;">Error loading staff: '+escapeHtml(e.message)+'</td></tr>';
   }
 }
 
