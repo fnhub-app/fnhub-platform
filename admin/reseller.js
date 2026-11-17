@@ -297,7 +297,7 @@
       +   '<div class="btns">' + btn('Save owner', 'rs-owner-save') + msgBox('rs-o-msg') + '</div>'
       + '</div>'
       + '<div class="card"><h3>Resellers ' + btn('+ Add reseller', 'rs-open-reseller', ' data-id="new"') + '</h3>'
-      +   '<div class="tbl-wrap"><table><thead><tr><th>Reseller</th><th>Agreement</th><th class="num">Customers</th><th class="num">Owing</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      +   '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Reseller</th><th>Agreement</th><th class="num">Customers</th><th class="num">Owing</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '</div>';
   }
 
@@ -345,7 +345,7 @@
       + '</div>'
       + (id === 'new' ? '' :
         '<div class="card"><h3>Agreements ' + btn('+ New agreement', 'rs-agr-new', ' data-id="' + esc(id) + '"') + '</h3>'
-        + '<div class="tbl-wrap"><table><thead><tr><th>Number</th><th>Status</th><th>Effective</th><th class="num">Rate</th><th></th></tr></thead><tbody>' + agRows + '</tbody></table></div>'
+        + '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Number</th><th>Status</th><th>Effective</th><th class="num">Rate</th><th></th></tr></thead><tbody>' + agRows + '</tbody></table></div>'
         + '<p class="note">A new agreement starts as a draft with the contract\'s default terms. Fill in the terms and signatures, generate the contract, then activate it once both parties have signed.</p></div>');
   }
 
@@ -776,7 +776,7 @@
     var locked = a.terminated_date && a.terminated_date <= today();
     return '<div class="card"><h3>Reseller customers (s.7)</h3>'
       + '<p class="sub" style="margin:0;">Leads the reseller submits. Only <b>registered</b> customers linked to a nation earn commission, and only once that nation starts paying (s.6.4). If two resellers submit the same prospect, the first one to submit gets it (s.7.4).</p>'
-      + '<div class="tbl-wrap"><table><thead><tr><th>Prospect</th><th>Nation</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Prospect</th><th>Nation</th><th>Submitted</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + (locked ? '' :
         '<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:700;font-size:13px;">+ Submit a lead</summary><div class="rs-grid">'
         + fld('Prospect name', 'rs-c-name', '', { ph: 'e.g. the nation\'s name' })
@@ -868,7 +868,7 @@
     var locked = a.terminated_date && a.terminated_date < addDays(today(), -(a.expense_claim_days || 60));
     return '<div class="card"><h3>Marketing expenses (s.9.7)</h3>'
       + '<p class="sub" style="margin:0;">Trade shows, travel and admin costs are reimbursed only when the Owner approved them <b>in writing before</b> they were spent, up to the approved maximum. The reseller claims with receipts within ' + (a.expense_claim_days || 60) + ' days, and claims are paid with the next monthly statement at cost. They are not commission and are never clawed back.</p>'
-      + '<div class="tbl-wrap"><table><thead><tr><th>Expense</th><th class="num">Approved max</th><th class="num">Claimed</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Expense</th><th class="num">Approved max</th><th class="num">Claimed</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '<p class="note">Approved (open): ' + money(tot.approved) + ' &middot; claimed, awaiting statement: ' + money(tot.claimed) + ' &middot; reimbursed: ' + money(tot.paid) + '</p>'
       + (locked ? '' :
         '<details style="margin-top:12px;"><summary style="cursor:pointer;font-weight:700;font-size:13px;">+ Record a written pre-approval</summary><div class="rs-grid">'
@@ -951,7 +951,7 @@
     agrStatements(a.id).forEach(function(s){ if (s.status === 'paid') paid += Number(s.amount_due) || 0; else if (s.status === 'issued') owing += Number(s.amount_due) || 0; });
     return '<div class="card"><h3>Monthly commission statements (s.9)</h3>'
       + '<p class="sub" style="margin:0;">Due ' + (a.payment_days || 30) + ' days after each month-end. Commission is ' + Number(a.commission_rate) + '% of Net Revenue actually <b>collected</b> from registered customers (s.7–8). Paid to date: <b>' + money(paid) + '</b> &middot; issued, unpaid: <b>' + money(owing) + '</b>.</p>'
-      + '<div class="tbl-wrap"><table><thead><tr><th>Month</th><th>Status</th><th>Due</th><th class="num">Net revenue</th><th class="num">Amount due</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Month</th><th>Status</th><th>Due</th><th class="num">Net revenue</th><th class="num">Amount due</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '<div id="rs-stmt"></div></div>';
   }
 
@@ -1057,7 +1057,7 @@
     host.innerHTML = '<div style="margin-top:18px;padding-top:14px;border-top:2px solid var(--accent);">'
       + '<h3 style="margin:0 0 4px;">Statement &middot; ' + esc(fmtMonth(st.period_month)) + ' ' + pill(st.status) + '</h3>'
       + '<p class="note" style="margin-top:0;">Gross = recurring Subscription Fees collected (incl. tax), taken from invoices paid this month. Setup, consulting, travel and interest are excluded (s.7.3). Hosting is pre-filled from the nation\'s estimated platform cost. Check every figure before issuing.</p>'
-      + '<div class="tbl-wrap"><table><thead><tr><th>Customer</th><th class="num">Gross collected</th><th class="num">Hosting</th><th class="num">Processing</th><th class="num">Taxes</th><th class="num">Refunds / credits</th><th class="num">Net revenue</th><th class="num">Commission ' + Number(st.commission_rate) + '%</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
+      + '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Customer</th><th class="num">Gross collected</th><th class="num">Hosting</th><th class="num">Processing</th><th class="num">Taxes</th><th class="num">Refunds / credits</th><th class="num">Net revenue</th><th class="num">Commission ' + Number(st.commission_rate) + '%</th></tr></thead><tbody>' + rows + '</tbody></table></div>'
       + '<div class="rs-grid3">'
       +   fld('Clawback / offset (s.9.2)', 'rs-s-clawback', (Number(st.clawback) || 0).toFixed(2), { type: 'number', step: '0.01', dis: !draft })
       +   fld('Clawback note', 'rs-s-clawback_note', st.clawback_note, { dis: !draft, ph: 'e.g. Refund on NP-2026-07' })
@@ -1571,7 +1571,7 @@
     }).join('');
     host.innerHTML = '<h3>Sales by seller</h3>'
       + '<p class="sub" style="margin:0;">Every nation by who sold it, with invoice payments received in the last 12 months (since ' + esc(fmtMonth(since)) + '). Record the seller on each nation\'s <b>Dashboard &rarr; Overview &rarr; Sold by</b>.</p>'
-      + '<div class="tbl-wrap"><table><thead><tr><th>Seller</th><th class="num">Nations</th><th class="num">Collected</th><th class="num">Recurring</th><th class="num">Commission paid</th><th class="num">Commission owing</th></tr></thead><tbody>' + rows
+      + '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Seller</th><th class="num">Nations</th><th class="num">Collected</th><th class="num">Recurring</th><th class="num">Commission paid</th><th class="num">Commission owing</th></tr></thead><tbody>' + rows
       + '<tr><td><b>Total</b></td><td class="num"><b>' + tot.n + '</b></td><td class="num"><b>' + money(tot.c) + '</b></td><td class="num"><b>' + money(tot.r) + '</b></td><td class="num"><b>' + money(tot.p) + '</b></td><td class="num"><b>' + money(tot.o) + '</b></td></tr>'
       + '</tbody></table></div>'
       + '<p class="note">"Collected" is all invoice payments; "Recurring" is the subscription share that earns commission (add-ons such as the AI assistant and text notifications are excluded). A payment counts in the month of the invoice\'s last payment date.</p>';

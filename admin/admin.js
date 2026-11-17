@@ -2487,36 +2487,35 @@
     var nRes = all.filter(function(t){ return (t.platform_status||'new') === 'resolved'; }).length;
     var rowsData = all.filter(psMatchesFilter);
     var filt = function(k, l){ return '<option value="' + k + '"' + (_psFilter === k ? ' selected' : '') + '>' + l + '</option>'; };
-    var rows = rowsData.length ? rowsData.map(function(t){
+    var rows = rowsData.length ? rowsData.map(function(t, i){
       var from = esc(t.reporter_name || t.reporter_email || '(unknown)');
       var src = PS_SRC[t.source] || esc(t.source || '');
       var st = t.platform_status || 'new';
-      // One button per row -- Open the ticket; triage (Start/Resolve/Reopen) and
-      // reply all live inside the ticket view.
-      var acts = '<button class="btn sm" type="button" data-act="ps-view" data-id="' + esc(t.id) + '">Open</button>';
-      return '<tr>'
-        + '<td><div style="font-weight:600;">' + from + '</div><div style="font-size:11px;color:var(--muted);">' + src + (t.reporter_role ? (' &middot; ' + esc(t.reporter_role)) : '') + '</div></td>'
+      // The whole row opens the ticket (data-act=ps-view); triage (Start/Resolve/
+      // Reopen) and reply all live inside the ticket view.
+      return '<tr class="clickable" data-act="ps-view" data-id="' + esc(t.id) + '">'
+        + '<td><div class="std-id"><div class="std-id-av' + (i % 2 ? ' alt' : '') + '">' + esc((from.replace(/[^A-Za-z0-9]/g,'')[0]) || '?') + '</div>'
+        +   '<div style="min-width:0;"><div class="std-id-main">' + from + '</div>'
+        +   '<div class="std-id-sub">' + src + (t.reporter_role ? (' &middot; ' + esc(t.reporter_role)) : '') + '</div></div></div></td>'
         + '<td>' + esc(t.nation_name || t.subdomain || '') + '</td>'
         + '<td>' + esc(t.category || '') + '</td>'
         + '<td style="max-width:220px;"><div style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(t.subject || '(no subject)') + '</div></td>'
-        + '<td style="white-space:nowrap;">' + esc(timeAgo(t.received_at)) + '</td>'
+        + '<td style="white-space:nowrap;color:var(--muted);font-size:12px;">' + esc(timeAgo(t.received_at)) + '</td>'
         + '<td>' + psPill(st) + '</td>'
-        + '<td><div class="row-actions">' + acts + '</div></td>'
+        + '<td class="std-rowend"><span class="std-chev">&rsaquo;</span></td>'
         + '</tr>';
     }).join('') : '<tr><td colspan="7" class="empty">No tickets with this filter.</td></tr>';
     root.innerHTML =
-      '<div class="card"><h3>Support inbox'
-      +   '<button class="btn sm ghost" type="button" data-act="ps-refresh">&#8635; Refresh</button></h3>'
-      +   '<p class="sub" style="margin:2px 0 10px;">Help requests and issue reports mirrored from every nation. Triage here is platform-side only and is never pushed back to the nation.</p>'
-      +   '<div style="display:flex;gap:14px;flex-wrap:wrap;margin-bottom:10px;">'
-      +     '<div><div style="font-size:22px;font-weight:700;">' + nNew + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">New</div></div>'
-      +     '<div><div style="font-size:22px;font-weight:700;">' + nOpen + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">In progress</div></div>'
-      +     '<div><div style="font-size:22px;font-weight:700;">' + nRes + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Resolved</div></div>'
+      '<p class="sub" style="margin:0 0 12px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;">Help requests and issue reports mirrored from every nation. Triage here is platform-side only and is never pushed back to the nation.'
+      +   '<button class="btn sm ghost" type="button" data-act="ps-refresh" style="margin-left:auto;">&#8635; Refresh</button></p>'
+      +   '<div class="dash-kpis" style="grid-template-columns:repeat(3,1fr);">'
+      +     '<div class="dash-kpi"><div class="l">New</div><div class="v">' + nNew + '</div></div>'
+      +     '<div class="dash-kpi"><div class="l">In progress</div><div class="v">' + nOpen + '</div></div>'
+      +     '<div class="dash-kpi"><div class="l">Resolved</div><div class="v">' + nRes + '</div></div>'
       +   '</div>'
-      +   '<label for="ps-filter" style="margin:0 0 5px;">Show</label>'
-      +   '<select id="ps-filter" style="max-width:260px;">' + filt('openish','Open (new + in progress)') + filt('new','New only') + filt('resolved','Resolved') + filt('all','All') + '</select>'
-      +   '<div style="overflow-x:auto;"><table><thead><tr><th>From</th><th>Nation</th><th>Category</th><th>Subject</th><th>Received</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
-      + '</div>';
+      +   '<label for="ps-filter" style="margin:4px 0 5px;">Show</label>'
+      +   '<select id="ps-filter" style="max-width:260px;margin-bottom:12px;">' + filt('openish','Open (new + in progress)') + filt('new','New only') + filt('resolved','Resolved') + filt('all','All') + '</select>'
+      +   '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>From</th><th>Nation</th><th>Category</th><th>Subject</th><th>Received</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     var sel = document.getElementById('ps-filter');
     if (sel) sel.addEventListener('change', function(){ _psFilter = sel.value || 'openish'; psPaint(); });
   }
@@ -3755,13 +3754,15 @@
         if (x.paid_date) meta.push((bal > 0.005 ? 'last pmt ' : 'paid ') + esc(x.paid_date));
         if (bal > 0.005 && (x.status === 'sent' || x.status === 'partial')) meta.push('<b style="color:var(--danger);">balance ' + _money(bal) + '</b>');
         return '<tr>'
-          + '<td><button class="btn sm ghost" type="button" data-act="inv-view" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '" title="View invoice PDF" style="margin:0;padding:2px 6px;font-weight:700;text-decoration:underline;">' + esc(x.number) + '</button></td>'
-          + '<td style="font-size:11px;color:var(--muted);">' + esc(x.issue_date || '') + '</td>'
-          + '<td style="font-variant-numeric:tabular-nums;">' + _money(x.total, x.currency) + '</td>'
+          + '<td><div class="std-id"><div style="min-width:0;">'
+          +   '<div class="std-id-main"><button class="btn sm ghost" type="button" data-act="inv-view" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '" title="View invoice PDF" style="margin:0;padding:2px 6px;font-weight:700;text-decoration:underline;">' + esc(x.number) + '</button></div>'
+          +   (x.issue_date ? '<div class="std-id-sub">issued ' + esc(x.issue_date) + '</div>' : '')
+          + '</div></div></td>'
+          + '<td class="num">' + _money(x.total, x.currency) + '</td>'
           + '<td><span class="pill ' + st[1] + '">' + st[0] + '</span>' + (meta.length ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">' + meta.join(' · ') + '</div>' : '') + '</td>'
-          + '<td><div class="row-actions">' + acts + '</div></td></tr>';
+          + '<td class="std-rowend"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">' + acts + '</div></td></tr>';
       }).join('');
-      host.innerHTML = '<table><thead><tr><th>Invoice</th><th>Issued</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>';
+      host.innerHTML = '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>Invoice</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
     }
     // Carry-forward banner in the New invoice area: total unpaid balance across
     // all owing invoices, one click to add it as a line on the next invoice.
