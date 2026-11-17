@@ -150,6 +150,40 @@
     .dash-kpis{grid-template-columns:repeat(2,1fr)}
   }
   @media(max-width:560px){.dash-kpis{grid-template-columns:1fr}.page-hero{flex-wrap:wrap}.page-hero-actions{justify-content:flex-start}}
+
+  /* ============================================================
+     std-table (Phase 2 redesign) — light table card + identity
+     cells + kebab overflow menu. Mirrors the nation app's
+     shared.css .std-table, in the platform palette. Overrides the
+     global th/td above via higher specificity.
+     ============================================================ */
+  .std-sec-h{font-size:12px;font-weight:800;letter-spacing:.3px;text-transform:uppercase;color:var(--muted);margin:18px 0 8px}
+  .std-sec-h:first-child{margin-top:4px}
+  .std-table-card{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);box-shadow:var(--shadow);overflow:visible}
+  .std-table-card .std-scroll{overflow-x:auto;border-radius:var(--radius)}
+  .std-table{width:100%;border-collapse:collapse;font-size:13px;margin:0}
+  .std-table th{text-align:left;background:var(--bg);color:var(--muted);font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.5px;padding:11px 14px;border-top:none;border-bottom:1px solid var(--line)}
+  .std-table td{padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:middle}
+  .std-table tbody tr:last-child td{border-bottom:none}
+  .std-table tbody tr.clickable{cursor:pointer;transition:background .12s}
+  .std-table tbody tr.clickable:hover td{background:var(--accent-light)}
+  .std-id{display:flex;align-items:center;gap:11px;min-width:0}
+  .std-id-av{width:34px;height:34px;border-radius:9px;background:var(--accent);color:#fff;display:grid;place-items:center;font-size:13px;flex-shrink:0;font-family:var(--serif);text-transform:uppercase}
+  .std-id-av.alt{background:var(--accent-bar)}
+  .std-id-main{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+  .std-id-sub{font-size:11.5px;color:var(--muted);overflow-wrap:anywhere}
+  .std-rowend{text-align:right;white-space:nowrap}
+  .std-chev{color:var(--muted);font-size:18px;line-height:1}
+  .num{font-variant-numeric:tabular-nums}
+  /* kebab overflow menu (used by Phase 2b multi-action rows) */
+  .std-kebab{background:none;border:1px solid var(--hair);border-radius:7px;width:30px;height:30px;cursor:pointer;color:var(--muted);font-size:16px;line-height:1;padding:0}
+  .std-kebab:hover{border-color:var(--muted);color:var(--ink)}
+  .std-rowmenu{position:relative;display:inline-block}
+  .std-rowmenu-pop{position:absolute;right:0;top:calc(100% + 4px);background:var(--surface);border:1px solid var(--hair);border-radius:9px;box-shadow:var(--shadow);padding:5px;min-width:150px;z-index:20;display:none}
+  .std-rowmenu-pop.open{display:block}
+  .std-rowmenu-pop button{display:block;width:100%;text-align:left;background:none;border:none;border-radius:6px;padding:7px 10px;font-size:12.5px;font-weight:600;font-family:inherit;color:var(--ink);cursor:pointer}
+  .std-rowmenu-pop button:hover{background:var(--bg)}
+  .std-rowmenu-pop button.danger{color:var(--danger)}
 </style>
 </head>
 <body>

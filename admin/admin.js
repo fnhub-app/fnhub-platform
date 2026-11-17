@@ -712,10 +712,17 @@
     };
   }
 
+  // Two-letter initials for an identity-cell avatar (first letters of the first
+  // two words, else the first two characters).
+  function stdInitials(s){
+    var p = String(s||'').trim().split(/\s+/).filter(Boolean);
+    if (p.length >= 2) return (p[0][0] + p[1][0]);
+    return String(s||'?').replace(/[^A-Za-z0-9]/g,'').slice(0,2) || '?';
+  }
   function nationsCard(nations, usageBySub){
     usageBySub = usageBySub || {};
     var totLive = 0, totBase = 0, totOver = 0, totAi = 0;
-    var rows = nations.length ? nations.map(function(n){
+    var rows = nations.length ? nations.map(function(n, i){
       var st = n.status || 'provisioning';
       var mods = Object.keys(n.modules_licensed || {}).filter(function(k){ return n.modules_licensed[k]; });
       var u = usageBySub[n.subdomain];
@@ -730,17 +737,17 @@
             ? '<b>' + _money(c.total) + '</b>/mo CAD <span style="color:var(--muted);">(' + costBits.join(' + ') + ')</span>'
             : 'no project &middot; $0')
         + '</div>';
-      return '<tr>'
-        + '<td><b>' + esc(n.display_name) + '</b>' + (ONBOARDING_NORM(n.onboarding_status) !== 'not_started' ? onboardingBadge(n.onboarding_status) : '') + '<div style="font-size:11px;color:var(--muted);">' + esc(n.subdomain) + '.fnhub.app</div>'
-        +   '<div data-sold-sub="' + esc(n.subdomain) + '" style="font-size:11px;color:var(--muted);margin-top:2px;"></div></td>'
+      // The whole row opens the nation's information card (data-act=configure);
+      // Open / Enter / Suspend live inside that card (Dashboard -> Overview).
+      return '<tr class="clickable" data-act="configure" data-id="' + esc(n.id) + '">'
+        + '<td><div class="std-id"><div class="std-id-av' + (i % 2 ? ' alt' : '') + '">' + esc(stdInitials(n.display_name)) + '</div>'
+        +   '<div><div class="std-id-main">' + esc(n.display_name) + (ONBOARDING_NORM(n.onboarding_status) !== 'not_started' ? onboardingBadge(n.onboarding_status) : '') + '</div>'
+        +   '<div class="std-id-sub">' + esc(n.subdomain) + '.fnhub.app</div>'
+        +   '<div class="std-id-sub" data-sold-sub="' + esc(n.subdomain) + '" style="margin-top:2px;"></div></div></div></td>'
         + '<td><span class="pill ' + esc(st) + '">' + esc(st) + '</span></td>'
-        + '<td style="font-size:11px;color:var(--muted);">' + esc(mods.join(', ') || '—') + '</td>'
+        + '<td style="font-size:11px;color:var(--muted);max-width:220px;">' + esc(mods.join(', ') || '—') + '</td>'
         + '<td style="font-size:12px;">' + usageCell(u) + costLine + '</td>'
-        // One action per row — Open / Enter / Suspend moved into the nation's
-        // information card (Dashboard -> Overview tab) to declutter the list.
-        + '<td><div class="row-actions">'
-        +   '<button class="btn sm ghost" type="button" data-act="configure" data-id="' + esc(n.id) + '">Dashboard</button>'
-        + '</div></td></tr>';
+        + '<td class="std-rowend"><span class="std-chev">&rsaquo;</span></td></tr>';
     }).join('') : '<tr><td colspan="5" class="empty">No nations yet. Add one below.</td></tr>';
     var grand = Math.round((totBase + totOver + totAi) * 100) / 100;
     var summary = nations.length
@@ -750,10 +757,10 @@
         + '</div>'
         + '<p class="sub" style="margin:6px 0 0;font-size:11px;">Per live nation (CAD, converted from USD at ' + USD_CAD + '): Supabase compute $' + SUPA_COST.computeUsd + ', a share of the $' + SUPA_COST.proOrgUsd + ' Pro <b>organization</b> fee (divided across live nations), Twilio number $' + SUPA_COST.twilioNumberUsd + ', typical sign-in texts $' + SUPA_COST.signinSmsUsd + ', help chat $' + SUPA_COST.helpChatUsd + ', email $' + SUPA_COST.emailUsd + ', plus the nation\'s actual AI token usage (reported) and any Supabase overage. The 100 GB storage and 8 GB database allowances are <b>shared across the whole Supabase organization</b>, not per project, so overage ($0.125/GB db, $0.0213/GB storage) is an attribution estimate. A provisioning-only registry row is $0. Usage is reported by each nation\'s app when a manager opens Settings &rarr; Nation. Editable per statement on the Resellers tab.</p>'
       : '';
-    return '<div class="card"><h3>Registered nations</h3>'
-      + '<table><thead><tr><th>Nation</th><th>Status</th><th>Licensed modules</th><th>Usage &amp; est. cost</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
-      + summary
-      + '</div>';
+    return '<div class="std-table-card"><div class="std-scroll"><table class="std-table">'
+      + '<thead><tr><th>Nation</th><th>Status</th><th>Licensed modules</th><th>Usage &amp; est. cost</th><th></th></tr></thead>'
+      + '<tbody>' + rows + '</tbody></table></div></div>'
+      + summary;
   }
 
   // Sequential, numbered reference of the full "add a nation" workflow across
@@ -1229,17 +1236,21 @@
   }
 
   function adminsCard(admins, meEmail){
-    var rows = admins.map(function(a){
+    var rows = admins.map(function(a, i){
       var em = String(a.email||'');
       var isMe = em.toLowerCase() === meEmail;
-      return '<tr><td>' + esc(em) + (isMe ? ' <span style="color:var(--muted);font-size:11px;">(you)</span>' : '') + '</td>'
-        + '<td style="font-size:11px;color:var(--muted);">' + esc(a.added_by||'') + '</td>'
-        + '<td>' + (isMe ? '' : '<button class="btn sm danger" data-act="rm-admin" data-email="' + esc(em) + '">Remove</button>') + '</td></tr>';
+      return '<tr>'
+        + '<td><div class="std-id"><div class="std-id-av' + (i % 2 ? ' alt' : '') + '">' + esc((em[0]||'?')) + '</div>'
+        +   '<div><div class="std-id-main">' + esc(em) + (isMe ? ' <span style="color:var(--muted);font-size:11px;font-weight:600;">(you)</span>' : '') + '</div>'
+        +   '<div class="std-id-sub">added by ' + esc(a.added_by || '—') + '</div></div></div></td>'
+        + '<td class="std-rowend">' + (isMe ? '' : '<button class="btn sm danger" data-act="rm-admin" data-email="' + esc(em) + '">Remove</button>') + '</td></tr>';
     }).join('');
-    return '<div class="card"><h3>Platform administrators</h3>'
-      + '<table><thead><tr><th>Email</th><th>Added by</th><th></th></tr></thead><tbody>' + rows + '</tbody></table>'
-      + '<div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end;flex-wrap:wrap;">'
-      +   '<div style="flex:1;min-width:200px;"><label>Add administrator</label><input id="adm-email" type="email" placeholder="name@example.com"/></div>'
+    return '<div class="std-sec-h">Platform administrators</div>'
+      + '<div class="std-table-card"><div class="std-scroll"><table class="std-table">'
+      +   '<thead><tr><th>Administrator</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>'
+      + '<div class="card" style="margin-top:16px;"><h3>Add administrator</h3>'
+      + '<div style="display:flex;gap:8px;margin-top:4px;align-items:flex-end;flex-wrap:wrap;">'
+      +   '<div style="flex:1;min-width:200px;"><label>Email address</label><input id="adm-email" type="email" placeholder="name@example.com"/></div>'
       +   '<button class="btn sm" type="button" data-act="add-admin">Add</button>'
       + '</div><div class="msg" id="adm-msg"></div></div>'
       + '<div class="card"><h3>Two-factor authentication</h3>'
