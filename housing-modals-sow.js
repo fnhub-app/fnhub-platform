@@ -811,7 +811,7 @@ function _openSowPicker(unitId, activeList) {
         + (scopePreview ? '<div style="font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + escapeHtml(scopePreview) + '</div>' : '')
         + '<div style="font-size:12px;font-weight:700;color:var(--text);margin-top:4px;">' + amount + '</div>'
       + '</div>'
-      + '<button data-pick-pn="' + pn + '" style="flex-shrink:0;background:var(--yellow);border:none;color:var(--dark);padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;">Open →</button>'
+      + '<button data-pick-pn="' + pn + '" class="btn btn-primary" style="flex-shrink:0;">Open →</button>'
       + '</div>';
   }
 
@@ -834,7 +834,7 @@ function _openSowPicker(unitId, activeList) {
       + '<span style="font-size:11px;color:var(--muted);">' + sorted.length + ' active request' + (sorted.length !== 1 ? 's' : '')
       +   (function(){ var t = sorted.reduce(function(acc,x){ return acc + (typeof x.amount === 'number' ? x.amount : (parseFloat(String(x.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0)); }, 0); return (t && sorted.length > 1) ? (' · ' + (typeof formatCurrency === 'function' ? formatCurrency(t) : ('$' + t)) + ' total') : ''; })()
       + '</span>'
-      + '<button id="sowPickerNew" style="background:none;border:1.5px solid var(--border);color:var(--text);padding:7px 16px;border-radius:7px;font-size:12px;font-weight:700;cursor:pointer;font-family:DM Sans,sans-serif;">+ New Request</button>'
+      + '<button id="sowPickerNew" class="btn btn-ghost">+ New Request</button>'
     + '</div>'
     + '</div>';
 
