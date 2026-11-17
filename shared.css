@@ -2073,6 +2073,41 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
    ─────────────────────────────────────────────────────────────────────────── */
 
 /* KPI strip */
+/* ── Landing hub (Phase 2) — tiled nav sections rendered from HEADER_NAV ──
+   Tiles collapse 4 -> 3 (tablet) -> 2 (phone); tap targets stay large. All
+   colours are theme tokens so the hub reads in light and dark. */
+.hub            { margin: 4px 0 8px; }
+.hub-sec        { margin-top: 20px; }
+.hub-sec:first-child { margin-top: 4px; }
+.hub-sec-h      { display: flex; align-items: baseline; gap: 11px; margin: 0 0 12px; }
+.hub-sec-t      { font-weight: 700; font-size: 13px; letter-spacing: .05em; text-transform: uppercase; color: var(--text); }
+.hub-sec-rule   { flex: 1; height: 1px; background: var(--border); }
+.hub-tiles      { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.hub-tile       {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 15px 14px; display: flex; flex-direction: column; gap: 10px; min-height: 96px;
+  position: relative; text-align: left; color: var(--text); cursor: pointer;
+  font-family: var(--sans); transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+}
+.hub-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--yellow); }
+.hub-tile:active { transform: translateY(0); }
+.hub-tile:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
+.hub-tile-ic    { width: 36px; height: 36px; border-radius: 10px; background: var(--yellow-light); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.hub-tile-ic svg { width: 20px; height: 20px; }
+.hub-tile-nm    { font-weight: 600; font-size: 14px; line-height: 1.25; }
+.hub-tile-badge { position: absolute; top: 12px; right: 12px; min-width: 21px; height: 21px; padding: 0 6px; border-radius: 999px; background: var(--yellow); color: var(--on-accent); font-size: 11.5px; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+/* Finance hero band — role-gated, rendered at the end of the hub */
+.hub-fin        { display: flex; align-items: center; gap: 20px; flex-wrap: wrap; background: var(--yellow-light); border: 1px solid var(--yellow); border-radius: var(--radius); padding: 19px 22px; margin-top: 24px; box-shadow: var(--shadow); }
+.hub-fin-ic     { width: 52px; height: 52px; border-radius: 14px; background: var(--yellow); color: var(--on-accent); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.hub-fin-ic svg { width: 27px; height: 27px; }
+.hub-fin-tx     { flex: 1; min-width: 180px; }
+.hub-fin-tx h3  { margin: 0; font-size: 20px; font-weight: 700; color: var(--text); }
+.hub-fin-tx p   { margin: 4px 0 0; font-size: 13px; color: var(--muted); }
+.hub-fin-go     { background: var(--yellow); color: var(--on-accent); border: none; border-radius: 10px; padding: 11px 18px; font-weight: 700; font-size: 14px; font-family: var(--sans); cursor: pointer; white-space: nowrap; }
+.hub-fin-go:hover { background: var(--yellow-mid); }
+@media (max-width: 1000px) { .hub-tiles { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 640px)  { .hub-tiles { grid-template-columns: repeat(2, 1fr); } .hub-fin-go { width: 100%; } }
+
 .kpi-strip {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
   margin-bottom: 24px;

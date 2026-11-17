@@ -1403,6 +1403,101 @@ window._currentExportView = null; // set by each showXxx function
 // landing. Stop-A version: render greeting + role tag + active-nav state.
 // Lookup wiring, collapsible state, count pills, and worklist body are
 // populated in Stop B (housing-init.js).
+// ── Landing hub (Phase 2) — render tiled nav sections from HEADER_NAV ────────
+// Reuses the exact gating renderHeaderNav() uses: module (CLFN_MODULES.isEnabled),
+// per-user feature access (canUseFeature), and role (data-roles + the shared
+// applyRoleVisibility pass, with authority-derived roles for items like Reports).
+// Finance renders as a hero band. Mounted into #hub_mount by showLanding().
+function _hubModuleOk(it){
+  return !(it && it.module && window.CLFN_MODULES && typeof CLFN_MODULES.isEnabled === 'function' && !CLFN_MODULES.isEnabled(it.module));
+}
+function _hubFeatureOk(it){
+  if (!(it && it.key)) return true;
+  if (!(window.FEATURE_KEYS && FEATURE_KEYS.indexOf(it.key) !== -1)) return true;
+  return !(typeof window.canUseFeature === 'function' && !window.canUseFeature(it.key));
+}
+function _hubRoleList(it){
+  var roleList = it.roles || '';
+  if (it.authority && window.APPROVAL_AUTHORITY && typeof APPROVAL_AUTHORITY.get === 'function'){
+    var ar = APPROVAL_AUTHORITY.get(it.authority);
+    if (Array.isArray(ar)){
+      var rr = ar.slice();
+      if (rr.indexOf('ed') !== -1 && rr.indexOf('super_user') === -1) rr.push('super_user');
+      roleList = rr.join(',');
+    }
+  }
+  return roleList;
+}
+function _hubFindByKey(key){
+  var found = null;
+  (window.HEADER_NAV || []).forEach(function(it){
+    if (it.key === key) found = it;
+    if (it.children) it.children.forEach(function(c){ if (c.key === key) found = c; });
+  });
+  return found;
+}
+function renderHub(mount){
+  if (!mount || !window.HEADER_NAV || !window.HUB_SECTIONS) return;
+  // Group section-tagged items (flattening group children). Finance is the hero.
+  var bySection = {};
+  function consider(it){
+    if (!it || it.divider || it.hero || !it.section || it.section === 'finance') return;
+    if (!_hubModuleOk(it) || !_hubFeatureOk(it)) return;
+    (bySection[it.section] = bySection[it.section] || []).push(it);
+  }
+  window.HEADER_NAV.forEach(function(it){ consider(it); if (it.children) it.children.forEach(consider); });
+
+  var html = '';
+  window.HUB_SECTIONS.forEach(function(sec){
+    var items = bySection[sec.key] || [];
+    if (!items.length) return;
+    html += '<div class="hub-sec"><div class="hub-sec-h"><span class="hub-sec-t">' + sec.label + '</span><span class="hub-sec-rule"></span></div><div class="hub-tiles">';
+    items.forEach(function(it){
+      var roleList = _hubRoleList(it);
+      var roles = roleList ? ' data-roles="' + roleList + '"' : '';
+      var feat  = (it.key && window.FEATURE_KEYS && FEATURE_KEYS.indexOf(it.key) !== -1) ? ' data-feature="' + it.key + '"' : '';
+      html += '<button type="button" class="hub-tile" data-hubnav="' + (it.key || '') + '"' + roles + feat + '>'
+            + '<span class="hub-tile-ic">' + (it.svg || '') + '</span><span class="hub-tile-nm">' + (it.label || '') + '</span></button>';
+    });
+    html += '</div></div>';
+  });
+
+  // Finance hero (shortcut for Phase 2 — live stats need the finance data layer,
+  // which isn't loaded on the hub; added in a later pass).
+  var fin = _hubFindByKey('finance');
+  if (fin && _hubModuleOk(fin) && _hubFeatureOk(fin)){
+    var finRoles = fin.roles ? ' data-roles="' + fin.roles + '"' : '';
+    html += '<div class="hub-fin"' + finRoles + '>'
+          + '<div class="hub-fin-ic">' + (fin.svg || '') + '</div>'
+          + '<div class="hub-fin-tx"><h3>Finance</h3><p>Rent ledger, loans, invoices, arrangements, collections and utilities — the money side of housing in one place.</p></div>'
+          + '<button type="button" class="hub-fin-go" data-hubnav="finance">Open Finance →</button></div>';
+  }
+
+  mount.innerHTML = html;
+  // Wire each tile to its nav entry's run().
+  mount.querySelectorAll('[data-hubnav]').forEach(function(btn){
+    var item = _hubFindByKey(btn.getAttribute('data-hubnav'));
+    if (item && typeof item.run === 'function') btn.addEventListener('click', item.run);
+  });
+  // Re-apply role visibility so data-roles tiles hide for the wrong role, then
+  // hide any section whose tiles all got hidden (so no empty header shows).
+  if (typeof applyRoleVisibility === 'function'){ try { applyRoleVisibility(); } catch(e){} }
+  _hubHideEmptySections(mount);
+}
+// Hide hub sections whose tiles are all role/feature-hidden (no empty header).
+// Also called at the end of applyRoleVisibility so a late role-resolve or an
+// ED "view as" switch keeps the hub sections tidy without a re-render.
+function _hubHideEmptySections(mount){
+  mount = mount || document.getElementById('hub_mount');
+  if (!mount) return;
+  mount.querySelectorAll('.hub-sec').forEach(function(sec){
+    var any = Array.prototype.some.call(sec.querySelectorAll('.hub-tile'), function(t){ return t.style.display !== 'none'; });
+    sec.style.display = any ? '' : 'none';
+  });
+}
+window.renderHub = renderHub;
+window._hubHideEmptySections = _hubHideEmptySections;
+
 function showLanding() {
   if (!document.getElementById('landingView')) {
     // Sub-page navigation: bounce back to housing.html.
@@ -1470,6 +1565,11 @@ function showLanding() {
 
   // KPI strip — housing-only metrics from the in-memory caches.
   _renderLandingKpis();
+
+  // Landing hub tiles (Phase 2) — sectioned nav tiles + Finance hero, rendered
+  // from HEADER_NAV and gated by module + role.
+  var _hubMount = document.getElementById('hub_mount');
+  if (_hubMount && typeof renderHub === 'function') renderHub(_hubMount);
 
   // Refresh the action worklist so freshly created/submitted items (e.g. a new
   // application just submitted) appear immediately on return to the landing page,
