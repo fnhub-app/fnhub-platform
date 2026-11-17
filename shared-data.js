@@ -3941,6 +3941,95 @@ async function _wlViewContractorSub(id){
 }
 window._wlViewContractorSub = _wlViewContractorSub;
 
+// ── Photo lightbox gallery ───────────────────────────────────────────────────
+// Clicking a reel thumbnail opens a full-screen viewer that steps through ALL
+// the photos in that strip: click the image (or ‹ ›, or arrow keys) to advance,
+// Esc / ✕ / backdrop to close. Signed URLs reuse the thumbnail cache.
+function _wlEnsureLightbox(){
+  if (document.getElementById('wl-lightbox')) return;
+  var st = document.createElement('style'); st.id = 'wl-lb-style';
+  st.textContent =
+    '#wl-lightbox{position:fixed;inset:0;z-index:4000;display:none;align-items:center;justify-content:center;background:rgba(0,0,0,0.92);}'
+  + '#wl-lightbox.on{display:flex;}'
+  + '#wl-lb-img{max-width:92vw;max-height:88vh;object-fit:contain;border-radius:6px;cursor:pointer;user-select:none;-webkit-user-drag:none;}'
+  + '.wl-lb-btn{position:absolute;border:1px solid var(--border);background:var(--surface);color:var(--text);border-radius:50%;width:48px;height:48px;font-size:26px;line-height:1;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;opacity:.95;}'
+  + '.wl-lb-btn:hover{background:var(--yellow);color:var(--dark);}'
+  + '#wl-lb-prev{left:16px;top:calc(50% - 24px);}#wl-lb-next{right:16px;top:calc(50% - 24px);}'
+  + '#wl-lb-close{top:16px;right:16px;width:40px;height:40px;font-size:20px;}'
+  + '#wl-lb-counter{position:absolute;top:18px;left:18px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:999px;padding:5px 13px;font-size:13px;font-weight:700;font-family:DM Sans,sans-serif;}'
+  + '#wl-lb-caption{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);max-width:88vw;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:12px;font-family:DM Sans,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}';
+  document.head.appendChild(st);
+  var ov = document.createElement('div'); ov.id = 'wl-lightbox';
+  ov.innerHTML =
+    '<div id="wl-lb-counter"></div>'
+  + '<button type="button" id="wl-lb-close" class="wl-lb-btn" aria-label="Close">&#10005;</button>'
+  + '<button type="button" id="wl-lb-prev" class="wl-lb-btn" aria-label="Previous">&#8249;</button>'
+  + '<img id="wl-lb-img" alt="Photo"/>'
+  + '<button type="button" id="wl-lb-next" class="wl-lb-btn" aria-label="Next">&#8250;</button>'
+  + '<div id="wl-lb-caption"></div>';
+  document.body.appendChild(ov);
+  ov.addEventListener('click', function(e){ if(e.target === ov) _wlCloseLightbox(); });
+  ov.querySelector('#wl-lb-close').addEventListener('click', function(e){ e.stopPropagation(); _wlCloseLightbox(); });
+  ov.querySelector('#wl-lb-prev').addEventListener('click', function(e){ e.stopPropagation(); _wlLbShow(-1); });
+  ov.querySelector('#wl-lb-next').addEventListener('click', function(e){ e.stopPropagation(); _wlLbShow(1); });
+  ov.querySelector('#wl-lb-img').addEventListener('click', function(e){ e.stopPropagation(); _wlLbShow(1); });
+  document.addEventListener('keydown', function(e){
+    if(!document.getElementById('wl-lightbox') || !document.getElementById('wl-lightbox').classList.contains('on')) return;
+    if(e.key === 'Escape') _wlCloseLightbox();
+    else if(e.key === 'ArrowRight') _wlLbShow(1);
+    else if(e.key === 'ArrowLeft') _wlLbShow(-1);
+  });
+}
+async function _wlLbSignedUrl(path){
+  if(!path) return '';
+  window._wlThumbCache = window._wlThumbCache || {};
+  if(window._wlThumbCache[path]) return window._wlThumbCache[path];
+  try { var u = (typeof sbGetSignedUrl === 'function') ? await sbGetSignedUrl(path) : ''; if(u) window._wlThumbCache[path] = u; return u || ''; }
+  catch(_e){ return ''; }
+}
+async function _wlRenderLbImage(){
+  var lb = window._wlLb; if(!lb || !lb.paths.length) return;
+  var img = document.getElementById('wl-lb-img'); if(!img) return;
+  var ctr = document.getElementById('wl-lb-counter'), cap = document.getElementById('wl-lb-caption');
+  if(ctr) ctr.textContent = (lb.i + 1) + ' / ' + lb.paths.length;
+  if(cap){ var nm = lb.names[lb.i] || ''; cap.textContent = nm; cap.style.display = nm ? '' : 'none'; }
+  var single = lb.paths.length < 2;
+  var pv = document.getElementById('wl-lb-prev'), nx = document.getElementById('wl-lb-next');
+  if(pv) pv.style.display = single ? 'none' : '';
+  if(nx) nx.style.display = single ? 'none' : '';
+  var url = await _wlLbSignedUrl(lb.paths[lb.i]);
+  if(url) img.src = url;
+  // Preload the next image so a click feels instant.
+  if(!single) _wlLbSignedUrl(lb.paths[(lb.i + 1) % lb.paths.length]);
+}
+window._wlLbShow = function(delta){
+  var lb = window._wlLb; if(!lb || !lb.paths.length) return;
+  lb.i = (lb.i + delta + lb.paths.length) % lb.paths.length;
+  _wlRenderLbImage();
+};
+function _wlCloseLightbox(){
+  var ov = document.getElementById('wl-lightbox'); if(ov) ov.classList.remove('on');
+  var img = document.getElementById('wl-lb-img'); if(img) img.removeAttribute('src');
+}
+window._wlCloseLightbox = _wlCloseLightbox;
+// Open the lightbox from a clicked reel thumbnail, gathering every photo in the
+// same strip (in display order) so the viewer can page through the whole batch.
+window._wlThumbClick = function(el){
+  _wlEnsureLightbox();
+  var track = el && el.closest ? el.closest('.wl-reel-track') : null;
+  var thumbs = track ? Array.prototype.slice.call(track.querySelectorAll('.wl-ctthumb[data-ctthumb-path]')) : [el];
+  var paths = [], names = [], start = 0;
+  thumbs.forEach(function(t, idx){
+    paths.push(t.getAttribute('data-ctthumb-path'));
+    names.push(t.getAttribute('title') || '');
+    if(t === el) start = idx;
+  });
+  if(!paths.length){ return; }
+  window._wlLb = { paths: paths, names: names, i: start };
+  document.getElementById('wl-lightbox').classList.add('on');
+  _wlRenderLbImage();
+};
+
 // Open the maintenance request (SOW) a submission is filed against, so staff can
 // see the full scope / Payments tab before approving an invoice. Opens the SOW
 // modal in place when it's loaded (housing.html landing page); otherwise deep-
@@ -8862,7 +8951,7 @@ function renderWorklist() {
         // Thumbnails hydrate after render (signed URLs are async) — each tile
         // carries its storage path + opens the full photo on click.
         var strip = s.items.map(function(x){
-          return '<div class="wl-ctthumb" data-ctthumb-path="' + esc(x.file_path) + '" onclick="_wlViewContractorSub(\'' + esc(x.id).replace(/'/g,"\\'") + '\')" title="' + esc(x.file_name||'photo') + '" style="height:58px;width:58px;flex-shrink:0;border-radius:6px;border:1px solid var(--border);background:var(--bg) center center/cover no-repeat;cursor:pointer;"></div>';
+          return '<div class="wl-ctthumb" data-ctthumb-path="' + esc(x.file_path) + '" onclick="_wlThumbClick(this)" title="' + esc(x.file_name||'photo') + '" style="height:58px;width:58px;flex-shrink:0;border-radius:6px;border:1px solid var(--border);background:var(--bg) center center/cover no-repeat;cursor:pointer;"></div>';
         }).join('');
         var gHead = '<span style="font-size:14px;flex-shrink:0;">📷</span>'
           + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(gWho) + '</span>'
