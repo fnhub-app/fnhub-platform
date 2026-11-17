@@ -8025,6 +8025,7 @@ function renderRenosView(){
         var _tier = _rs>=40?{l:'Critical',c:'var(--danger)',bg:'var(--danger-bg)'}:_rs>=25?{l:'High',c:'#7a6000',bg:'#fef9ec'}:_rs>=12?{l:'Medium',c:'#1d4ed8',bg:'var(--info-blue-bg)'}:{l:'Low',c:'var(--success)',bg:'var(--success-bg)'};
         return _cardTile({
           title: _rnEsc(((u.num||'')+' '+(u.street||'')).trim()),
+          avatar: _rnEsc(u.num || ''),
           pill: isCondemned ? {text:'🚫 Condemned', bg:'var(--danger-bg)', color:'var(--danger)'} : {text:'🔨 Under Repair', bg:'var(--warn-amber-bg)', color:'var(--warn-amber)'},
           badges: ['<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:8px;background:'+_tier.bg+';color:'+_tier.c+';">'+_rs+' · '+_tier.l+'</span>'],
           metas: [

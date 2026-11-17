@@ -1794,6 +1794,7 @@ function _raCardTileFor(r, role, hmLimit) {
   actions.push({text:'📊 Progress', onclick:"event.stopPropagation();openRenoProgress('"+uid+"')", ghost:true});
   return _cardTile({
     title: esc(((u.num||'')+' '+(u.street||'')).trim()) + (locked ? ' 🔒' : ''),
+    avatar: esc(u.num || ''),
     pill: {text: appr.label, bg: appr.bg, color: appr.c},
     badges: badges,
     metas: [
