@@ -48,12 +48,14 @@
 
   <!-- LIST VIEW — header is static; table+search rendered by renderRfqList() like the worklist -->
   <div id="rfqListView">
-    <div class="page-header-bar" style="margin-bottom:16px;">
-      <div>
+    <div class="page-hero" style="margin-bottom:16px;">
+      <div class="page-hero-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="12" y2="17"/></svg></div>
+      <div class="page-hero-tx">
+        <div class="page-hero-eyebrow">Renovations &amp; Construction</div>
         <h1>Request for Quotes</h1>
         <p id="rfqListSub">Manage competitive bid processes for qualifying maintenance requests</p>
       </div>
-      <div class="page-header-actions">
+      <div class="page-hero-actions">
         <button class="btn btn-ghost" onclick="openProjectSchedule()">📅 Project Schedule</button>
         <button class="btn btn-primary" onclick="showRfqForm(null,null,null)">+ New RFQ</button>
       </div>
