@@ -1626,25 +1626,29 @@ body.is-sow-only .modal-overlay { visibility: visible; }
    iPad-portrait viewport that's wider than the mobile breakpoint but
    narrower than the full table). The mobile stacked layout below
    sets it back to visible. */
-.ct-table-wrap   { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; }
+.ct-table-wrap   { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; overflow-x: auto; box-shadow: var(--shadow); }
 .ct-table        { width: 100%; border-collapse: collapse; }
-.ct-table thead tr { background: var(--dark); }
+/* Light header to match the shared .std-table (was a dark fill — #270 only
+   restyled .std-table, not this separate contractor table). */
+.ct-table thead tr { background: var(--bg); }
 .ct-table th     {
-  padding: 10px 14px;
+  padding: 11px 14px;
   text-align: left;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: .6px;
+  letter-spacing: .5px;
   color: var(--muted);
   white-space: nowrap;
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
 }
 .ct-th-num         { text-align: right; }
 .ct-th-w           { width: 40px; }
 .ct-th-sortable    { cursor: pointer; user-select: none; transition: color .15s; }
 .ct-th-sortable:hover { color: var(--accent-ink); }
 .ct-row            { border-bottom: 1px solid var(--border); cursor: pointer; transition: background .12s; }
-.ct-row:hover      { background: var(--bg); }
+.ct-row:hover      { background: var(--yellow-light); }
 .ct-row > td       { padding: 11px 14px; font-size: 13px; }
 .ct-row-avatar     { width: 40px; padding-right: 0 !important; }
 .ct-row-name       { font-weight: 600; }
