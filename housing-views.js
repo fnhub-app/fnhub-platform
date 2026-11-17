@@ -193,9 +193,11 @@ function showSettings(){
   _showView('settingsView');
   setNavActive('tab_settings');
   populateSettings();
-  // Show Users tab first — each tab renders lazily when clicked via showSettingsSection
-  showSettingsSection('sec_users');
-  // Apply role-based locks after the Users tab has rendered
+  // Open the tile hub first (hero + tiles). Each tile opens its section lazily
+  // via showSettingsSection; "All Settings" returns to the hub.
+  if (typeof showSettingsHub === 'function') showSettingsHub();
+  else showSettingsSection('sec_users');
+  // Apply role-based locks (input disabling + lock banners on the sections).
   setTimeout(applySettingsRoleLocks, 100);
 }
 

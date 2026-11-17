@@ -631,6 +631,71 @@ var SETTINGS_GROUP_DEFAULT_SECTION = {
   app:   'sec_app_scoring'
 };
 
+// ── Settings hub (tile + hero layout) ──────────────────────────────────────
+// The Settings page is a hero + tile sections. Each tile opens its existing
+// .settings-section panel via showSettingsSection(); showSettingsHub() returns
+// to the tile menu. Data-driven, like renderHub() for the landing. Icons are
+// inner SVG paths wrapped at render time. Role gating rides data-roles (carried
+// from the old sub-tabs + the applySettingsRoleLocks ED-only tabs) +
+// applyRoleVisibility().
+var SETTINGS_TILES = [
+  { group:'Administration', items:[
+    { sec:'sec_users',              label:'Users',                  sub:'Add, edit &amp; set staff roles',               ic:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+    { sec:'sec_nation',             label:'Nation',                 sub:'Branding, contact, modules &amp; intake email', ic:'<circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>' },
+    { sec:'sec_themes',             label:'Themes',                 sub:'Colours, logo &amp; fonts',                     ic:'<path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/>' },
+    { sec:'sec_notifications',      label:'Email',                  sub:'Notification recipients &amp; templates',       roles:'ed,super_user', ic:'<path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/>' },
+    { sec:'sec_audit',              label:'Audit Log',              sub:'Full activity history',                         roles:'ed,super_user', ic:'<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>' },
+    { sec:'sec_approval_authority', label:'Approval Authority',     sub:'Who can approve what',                          roles:'ed,super_user', ic:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>' },
+    { sec:'sec_terms',              label:'Terms &amp; Conditions', sub:'Applicant terms text',                          roles:'ed,super_user', ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>' },
+    { sec:'sec_contracts',          label:'Contracts',              sub:'Lease &amp; contract clause library',           roles:'ed,super_user', ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M9 15l2 2 4-4"/>' },
+    { sec:'sec_config',             label:'Config',                 sub:'Integrations &amp; advanced',                   roles:'ed,super_user', ic:'<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>' },
+    { sec:'sec_maint_qr',           label:'Unit Labels',            sub:'Maintenance QR labels',                         roles:'ed,super_user', ic:'<path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/>' },
+  ]},
+  { group:'Application Settings', items:[
+    { sec:'sec_app_scoring',     label:'Application Scoring', sub:'Need &amp; urgency scoring model',  ic:'<polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>' },
+    { sec:'sec_required_fields', label:'Required Fields',    sub:'Which fields are mandatory',       ic:'<polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>' },
+    { sec:'sec_unit_match',      label:'Unit Matching',      sub:'Match-priority factors',           ic:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
+    { sec:'sec_reno_score',      label:'Reno Priority',      sub:'Renovation scoring model',         ic:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>' },
+    { sec:'sec_budget',          label:'Reno Budget',        sub:'HM budget limit &amp; routing',    ic:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+    { sec:'sec_occupancy',       label:'Occupancy',          sub:'Occupancy standards',              roles:'ed,super_user', ic:'<path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/>' },
+    { sec:'sec_rent_model',      label:'Rent Model',         sub:'Rent calculation model',           ic:'<rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/>' },
+    { sec:'sec_policy_rules',    label:'Policy Rules',       sub:'Housing policy rules engine',      ic:'<line x1="12" y1="3" x2="12" y2="21"/><line x1="5" y1="7" x2="19" y2="7"/><path d="M5 7l-3 6a4 4 0 0 0 6 0z"/><path d="M19 7l-3 6a4 4 0 0 0 6 0z"/><line x1="8" y1="21" x2="16" y2="21"/>' },
+  ]},
+];
+var _SETTINGS_SECTION_IDS = ['sec_users','sec_app_scoring','sec_required_fields','sec_unit_match','sec_reno_score','sec_budget','sec_nation','sec_themes','sec_approval_authority','sec_notifications','sec_terms','sec_contracts','sec_config','sec_maint_qr','sec_audit','sec_occupancy','sec_rent_model','sec_policy_rules'];
+
+function renderSettingsHub(){
+  var mount = document.getElementById('settings_hub_tiles');
+  if(!mount) return;
+  var html='';
+  SETTINGS_TILES.forEach(function(g){
+    html += '<div class="hub-sec"><div class="hub-sec-h"><span class="hub-sec-t">'+g.group+'</span><span class="hub-sec-rule"></span></div><div class="hub-tiles">';
+    g.items.forEach(function(it){
+      var roles = it.roles ? ' data-roles="'+it.roles+'"' : '';
+      html += '<button type="button" class="hub-tile"'+roles+' onclick="showSettingsSection(\''+it.sec+'\')">'
+            + '<span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">'+it.ic+'</svg></span>'
+            + '<span class="hub-tile-nm">'+it.label+'</span>'
+            + '<span class="hub-tile-sub">'+it.sub+'</span>'
+            + '</button>';
+    });
+    html += '</div></div>';
+  });
+  mount.innerHTML = html;
+  if(typeof applyRoleVisibility==='function'){ try { applyRoleVisibility(); } catch(e){} }
+}
+window.renderSettingsHub = renderSettingsHub;
+
+// Show the tile hub (the Settings landing); hide every section + the section
+// back row. Called by showSettings() and the "All Settings" back button.
+function showSettingsHub(){
+  var hub = document.getElementById('settings_hub'); if(hub) hub.style.display='';
+  var back = document.getElementById('settings_section_back'); if(back) back.style.display='none';
+  _SETTINGS_SECTION_IDS.forEach(function(id){ var el=document.getElementById(id); if(el) el.style.display='none'; });
+  if(typeof _stopAuditAutoRefresh==='function') _stopAuditAutoRefresh();
+  renderSettingsHub();
+}
+window.showSettingsHub = showSettingsHub;
+
 function showSettingsGroup(groupId) {
   // Toggle group-bar pill state
   ['admin','app'].forEach(function(g){
@@ -686,6 +751,10 @@ function _wireSettingsCollapsibles() {
 window._wireSettingsCollapsibles = _wireSettingsCollapsibles;
 
 function showSettingsSection(section) {
+  // Tile+hero layout: opening a section hides the tile hub and reveals the
+  // "All Settings" back row; showSettingsHub() reverses this.
+  var _hub = document.getElementById('settings_hub'); if(_hub) _hub.style.display='none';
+  var _secBack = document.getElementById('settings_section_back'); if(_secBack) _secBack.style.display='';
   var sections = ['sec_users','sec_app_scoring','sec_required_fields','sec_unit_match','sec_reno_score','sec_budget','sec_nation','sec_themes','sec_approval_authority','sec_notifications','sec_terms','sec_contracts','sec_config','sec_maint_qr','sec_audit','sec_occupancy','sec_rent_model','sec_policy_rules'];
   sections.forEach(function(id){
     var el=document.getElementById(id);
