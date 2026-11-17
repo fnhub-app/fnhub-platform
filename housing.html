@@ -170,87 +170,24 @@
 
   <!-- KPI strip — housing-only metrics. Populated by _renderLandingKpis() in
        housing-views.js. Hidden when none of the values are available. -->
-  <div class="kpi-strip" id="landing_kpi_strip">
-    <div class="kpi-card kpi-clickable" data-kpi="open-apps" onclick="showHousingKpiDrilldown('open')" role="button" tabindex="0">
-      <span class="kpi-icon">📋</span>
-      <div class="kpi-label">Open Applications</div>
-      <div class="kpi-value" id="kpi_open_apps">—</div>
-      <div class="kpi-meta">Pending HM or ED review</div>
-    </div>
-    <div class="kpi-card kpi-accent-success kpi-clickable" data-kpi="vacant" onclick="showHousingKpiDrilldown('vacant')" role="button" tabindex="0">
-      <span class="kpi-icon">🏠</span>
-      <div class="kpi-label">Vacant Units</div>
-      <div class="kpi-value" id="kpi_vacant">—</div>
-      <div class="kpi-meta">Available for assignment</div>
-      <div class="kpi-breakdown" style="display:flex;flex-direction:column;margin-top:6px;">
-        <div onclick="event.stopPropagation();showHousingKpiDrilldown('under_repair')" role="button" tabindex="0" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer;">
-          <span style="font-size:12px;color:var(--text);" title="Subset of the vacant count above: vacant units currently flagged under repair or renovation (the flag is set when a maintenance request is approved and cleared when the last one completes) — occupied units being repaired are not counted">&#8627; of which under repair / renovation</span>
-          <span style="font-size:15px;font-weight:800;color:var(--text);" id="kpi_under_repair">—</span>
-        </div>
-        <div onclick="event.stopPropagation();showHousingKpiDrilldown('vacant_open_sow')" role="button" tabindex="0" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;border-bottom:1px solid var(--border);cursor:pointer;">
-          <span style="font-size:12px;color:var(--text);" title="Subset of the vacant count above, counted LIVE from the maintenance-request data: vacant units with at least one open (not completed or cancelled) maintenance request. Compare with the row above — a gap means a stale under-renovation flag or an open request awaiting approval">&#8627; of which with an open maintenance request</span>
-          <span style="font-size:15px;font-weight:800;color:var(--text);" id="kpi_vacant_open_sow">—</span>
-        </div>
-        <div onclick="event.stopPropagation();showHousingKpiDrilldown('condemned')" role="button" tabindex="0" style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:4px 0;cursor:pointer;">
-          <span style="font-size:12px;color:var(--text);">Condemned</span>
-          <span style="font-size:15px;font-weight:800;color:var(--text);" id="kpi_condemned">—</span>
-        </div>
-      </div>
-    </div>
-    <div class="kpi-card" data-kpi="app-types" style="display:flex;flex-direction:column;">
-      <span class="kpi-icon">📊</span>
-      <div class="kpi-label">Applications by Type</div>
-      <div class="kpi-breakdown" style="display:flex;flex-direction:column;margin-top:6px;">
-        <div onclick="showHousingKpiDrilldown('new_apps')" role="button" tabindex="0" title="Seeking a new unit"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:6px 0;">
-          <span style="font-size:12px;color:var(--text);">New Applications</span>
-          <span style="font-size:17px;font-weight:800;color:var(--text);" id="kpi_new_apps">—</span>
-        </div>
-        <div onclick="showHousingKpiDrilldown('draft_apps')" role="button" tabindex="0" title="New applications started but not yet submitted"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:0 0 6px 12px;">
-          <span style="font-size:11px;color:var(--muted);">&#8627; of which in Draft</span>
-          <span style="font-size:14px;font-weight:800;color:var(--muted);" id="kpi_draft_apps">—</span>
-        </div>
-        <div onclick="showHousingKpiDrilldown('doubled_apps')" role="button" tabindex="0" title="New applications from members on reserve without a home of their own (staying with family)"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:0 0 6px 12px;border-bottom:1px solid var(--border);">
-          <span style="font-size:11px;color:var(--muted);">&#8627; of which Doubled Up</span>
-          <span style="font-size:14px;font-weight:800;color:var(--muted);" id="kpi_doubled_apps">—</span>
-        </div>
-        <div onclick="showHousingKpiDrilldown('file_updates')" role="button" tabindex="0" title="Existing tenant · file update"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:6px 0;border-bottom:1px solid var(--border);">
-          <span style="font-size:12px;color:var(--text);">File Update</span>
-          <span style="font-size:17px;font-weight:800;color:var(--text);" id="kpi_file_updates">—</span>
-        </div>
-        <div onclick="showHousingKpiDrilldown('house_requests')" role="button" tabindex="0" title="Existing tenant · transfer"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:6px 0;">
-          <span style="font-size:12px;color:var(--text);">Existing House Request</span>
-          <span style="font-size:17px;font-weight:800;color:var(--text);" id="kpi_house_requests">—</span>
-        </div>
-      </div>
-    </div>
-    <div class="kpi-card kpi-clickable" data-kpi="portal-apps" onclick="showHousingKpiDrilldown('portal_apps')" role="button" tabindex="0">
-      <span class="kpi-icon">🌐</span>
-      <div class="kpi-label">Online (Self-Serve)</div>
-      <div class="kpi-value" id="kpi_portal_apps">—</div>
-      <div class="kpi-meta">Applications members submitted themselves</div>
-      <div class="kpi-breakdown" style="display:flex;flex-direction:column;margin-top:6px;">
-        <div onclick="event.stopPropagation();showHousingKpiDrilldown('portal_new')" role="button" tabindex="0" title="Seeking a new unit — submitted online"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:4px 0;border-bottom:1px solid var(--border);">
-          <span style="font-size:12px;color:var(--text);">New Applications</span>
-          <span style="font-size:15px;font-weight:800;color:var(--text);" id="kpi_portal_new">—</span>
-        </div>
-        <div onclick="event.stopPropagation();showHousingKpiDrilldown('portal_updates')" role="button" tabindex="0" title="Existing tenant file updates — submitted or merged from the portal"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:4px 0;border-bottom:1px solid var(--border);">
-          <span style="font-size:12px;color:var(--text);">File Updates</span>
-          <span style="font-size:15px;font-weight:800;color:var(--text);" id="kpi_portal_updates">—</span>
-        </div>
-        <div onclick="event.stopPropagation();showHousingKpiDrilldown('portal_transfers')" role="button" tabindex="0" title="Transfer requests — submitted or merged from the portal"
-             style="display:flex;align-items:center;justify-content:space-between;gap:10px;cursor:pointer;padding:4px 0;">
-          <span style="font-size:12px;color:var(--text);">Transfer Requests</span>
-          <span style="font-size:15px;font-weight:800;color:var(--text);" id="kpi_portal_transfers">—</span>
-        </div>
-      </div>
-    </div>
+  <!-- Portfolio at a glance - simple stat tiles (Units / Occupancy / Vacant /
+       Waitlist / Insp. Overdue), populated by _renderLandingKpis(). Replaced the
+       old detailed drill-down KPI cards to match the hub concept. -->
+  <div class="pf-head">
+    <span class="pf-title">Portfolio at a glance</span>
+    <a class="pf-link" onclick="if(typeof showLeadershipDashboard==='function')showLeadershipDashboard()" role="button" tabindex="0">View all reports &rarr;</a>
+  </div>
+  <div class="kpi-strip kpi-strip-pf" id="landing_kpi_strip">
+    <div class="kpi-card kpi-clickable" onclick="if(typeof showInventory==='function')showInventory();else location.href='inventory.html'" role="button" tabindex="0">
+      <div class="kpi-value" id="kpi_units">&mdash;</div><div class="kpi-label">Units</div></div>
+    <div class="kpi-card">
+      <div class="kpi-value" id="kpi_occupancy">&mdash;</div><div class="kpi-label">Occupancy</div></div>
+    <div class="kpi-card kpi-accent-success kpi-clickable" onclick="showHousingKpiDrilldown('vacant')" role="button" tabindex="0">
+      <div class="kpi-value" id="kpi_vacant">&mdash;</div><div class="kpi-label">Vacant</div></div>
+    <div class="kpi-card kpi-clickable" onclick="showHousingKpiDrilldown('new_apps')" role="button" tabindex="0">
+      <div class="kpi-value" id="kpi_waitlist">&mdash;</div><div class="kpi-label">Waitlist</div></div>
+    <div class="kpi-card kpi-accent-warn kpi-clickable" onclick="location.href='inspections.html'" role="button" tabindex="0">
+      <div class="kpi-value" id="kpi_insp_overdue">&mdash;</div><div class="kpi-label">Insp. Overdue</div></div>
   </div>
 
   <!-- Landing hub (Phase 2) — tiled sections rendered from HEADER_NAV by

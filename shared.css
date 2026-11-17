@@ -2209,6 +2209,21 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .kpi-card.kpi-clickable { cursor: pointer; transition: var(--tr); }
 .kpi-card.kpi-clickable:hover { border-color: var(--yellow); transform: translateY(-1px); box-shadow: 0 4px 12px rgba(0,0,0,.08); }
 
+/* ── Portfolio at a glance — simple stat tiles (big number over a label), the
+   landing's "Units / Occupancy / Vacant / Waitlist / Insp. Overdue" row. The
+   compound .kpi-strip.kpi-strip-pf selector (0,2,0) beats every single-class
+   .kpi-strip rule so the 5→3→2 responsive grid is self-contained. */
+.pf-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 2px 0 10px; }
+.pf-title { font-size: 11px; font-weight: 700; letter-spacing: .8px; text-transform: uppercase; color: var(--muted); }
+.pf-link { font-size: 13px; font-weight: 700; color: var(--accent-ink); cursor: pointer; white-space: nowrap; }
+.pf-link:hover { text-decoration: underline; }
+.kpi-strip.kpi-strip-pf { grid-template-columns: repeat(5, 1fr); }
+.kpi-strip.kpi-strip-pf .kpi-card { padding: 18px; }
+.kpi-strip.kpi-strip-pf .kpi-value { font-size: clamp(30px, 3vw, 44px); margin-bottom: 2px; }
+.kpi-strip.kpi-strip-pf .kpi-label { margin: 6px 0 0; }
+@media (max-width: 1100px) { .kpi-strip.kpi-strip-pf { grid-template-columns: repeat(3, 1fr); } }
+@media (max-width: 680px)  { .kpi-strip.kpi-strip-pf { grid-template-columns: repeat(2, 1fr); } }
+
 /* Scroll-collapse (tablet/mobile space-saver, mirrors the MyChart hero/tile
    -> icon-row pattern, see .tic-strip.is-scrolled in housing.css): each card
    carries a hidden .kpi-icon glyph. Once _initScrollCollapse (shared-ui.js)
