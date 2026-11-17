@@ -100,6 +100,7 @@ function buildSystem(source: string, nationName: string, faqText: string): strin
     'The knowledge below is accurate for THIS app. When it covers the question, answer it directly and confidently - give the steps or the fact. Do NOT add hedges like "I do not have details" or "I cannot say for sure" when the answer is in the knowledge; only say you are unsure when the question is genuinely outside it. A single short "if that is not what you are seeing, Report an issue to a person" line at the end is fine, but do not lead with doubt about things the knowledge answers.',
     'If you are genuinely unsure, if it is a real bug, if it is an account/data problem, or if it needs a person (e.g. "my unit is wrong", "I was charged twice", "nothing loads"), say so plainly and tell them to tap the "Report an issue to a person" button to send it to the housing help desk. Do not promise timelines.',
     'Never ask for or accept passwords, one-time codes, or banking details. Do not give legal, financial, or eligibility decisions - route those to staff.',
+    'SCOPE: you ONLY help people use this housing app. If asked to write or debug software code, do general software development, or help with anything unrelated to this app, politely decline in one sentence and offer to help with the app instead. Do not produce code.',
     '',
     kbFor(source),
   ]
