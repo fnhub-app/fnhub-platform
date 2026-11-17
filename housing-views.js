@@ -405,7 +405,7 @@ function renderInventoryView(){
     var type = _fmtUnitType(u.type) || '—';
     var funder = _fmtFunder(u.funder)||'—';
     var uid = u.id.replace(/'/g,"\\'");
-    return '<tr style="border-bottom:1px solid var(--border);transition:background .12s;" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'\'">'
+    return '<tr style="border-bottom:1px solid var(--border);transition:background .12s;" onmouseover="this.style.background=\'var(--yellow-light)\'" onmouseout="this.style.background=\'\'">'
       +'<td style="padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="openUnitEditModal(\''+uid+'\')">'+'<span style="text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:2px;">'+addr+'</span>'
       +(u.isElders?' <span style="font-size:9px;background:var(--warn-amber-bg);color:var(--warn-amber);border:1px solid var(--warn-amber-border);padding:1px 5px;border-radius:6px;">ELDERS UNIT</span>':'')
       +' '+_assignmentTypeBadge(u)
@@ -820,11 +820,13 @@ function renderMatchView(){
     return '<tr style="border-bottom:1px solid var(--border);transition:background .12s;">'
       +'<td style="padding:12px 14px;color:var(--muted);font-size:12px;font-weight:600;width:32px;">'+(i+1)+'</td>'
       +'<td style="padding:12px 10px;cursor:pointer;" onclick="openAppFromMatch(\''+app.id+'\');">'
+        +'<div class="std-id"><div class="std-row-avatar">'+escapeHtml(((app.fn||'').charAt(0)+(app.ln||'').charAt(0)).toUpperCase()||'?')+'</div><div>'
         +'<div style="font-weight:700;font-size:13px;color:var(--text);text-decoration:underline;text-underline-offset:2px;">'+name+'</div>'
         +'<div class="js-lbl-sm">'+app.id+'</div>'
         +(isTransfer?'<div style="margin-top:4px;"><span style="display:inline-block;font-size:10px;font-weight:700;background:var(--warn-amber-bg);color:var(--warn-amber-text);border:1px solid var(--warn-amber-border);padding:1px 7px;border-radius:4px;white-space:nowrap;">🏠 On Rez'+(curAddr?' · '+curAddr:'')+'</span> <span style="font-size:10px;color:var(--muted);font-weight:600;">transfer</span></div>':'')
         +(_bcrIneligibleBadge(app) ? '<div style="margin-top:4px;">'+_bcrIneligibleBadge(app)+'</div>' : '')
         +(_arrearsWarnBadge(app) ? '<div style="margin-top:4px;">'+_arrearsWarnBadge(app)+'</div>' : '')
+        +'</div></div>'
       +'</td>'
       +'<td style="padding:12px 10px;white-space:nowrap;font-size:18px;font-weight:800;color:'+tCol+';">'+(app.score||0)+'</td>'
       +'<td style="padding:12px 10px;white-space:nowrap;font-size:11px;font-weight:700;color:'+tCol+';">'+tier+'</td>'
