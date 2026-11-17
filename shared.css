@@ -1041,15 +1041,18 @@ input[type="date"]::-webkit-calendar-picker-indicator {
 }
 
 /* ── Standard table card + cell + pill (used by DocLibrary + finance) ── */
-.std-table-card       { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.std-table-card       { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
 .std-table-hdr        { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--border); gap: 8px; flex-wrap: wrap; }
 .std-table-count      { font-size: 11px; font-weight: 700; color: var(--muted); }
 .std-table            { width: 100%; border-collapse: collapse; font-size: 13px; }
-.std-table th         { padding: 9px 14px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: var(--yellow); text-align: left; vertical-align: top; background: var(--dark2); }
-.std-table td         { padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+/* Light table header (restyled from the old dark-fill / yellow-text thead) —
+   uppercase muted labels on a subtle bg, bordered top & bottom. Applies to
+   every .std-table in the app. */
+.std-table th         { padding: 11px 14px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; color: var(--muted); text-align: left; vertical-align: middle; background: var(--bg); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+.std-table td         { padding: 12px 14px; border-bottom: 1px solid var(--border); vertical-align: middle; }
 .std-table tr:last-child td { border-bottom: none; }
 .std-table tr.clickable { cursor: pointer; }
-.std-table tr.clickable:hover td { background: var(--surface); }
+.std-table tr.clickable:hover td { background: var(--yellow-light); }
 .empty-row { }
 .std-table tr.empty-row td,
 tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
