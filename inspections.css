@@ -43,7 +43,9 @@
   text-transform: uppercase;
   letter-spacing: .5px;
   color: var(--muted);
-  padding: 9px 12px;
+  padding: 11px 12px;
+  background: var(--bg);
+  border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
   white-space: nowrap;
 }
@@ -53,7 +55,7 @@
   vertical-align: middle;
 }
 .insp-table tr:last-child td { border-bottom: none; }
-.insp-table tr:hover td { background: var(--bg); cursor: pointer; }
+.insp-table tr:hover td { background: var(--yellow-light); cursor: pointer; }
 
 /* Status badges */
 .insp-badge {
