@@ -633,7 +633,8 @@ function renderNationPanel(){
     email_intake: 'Email Intake (Forward-to-File)',
     sms_notifications: 'Text / SMS Notifications',
     contractor_portal: 'Contractor Portal',
-    support:      'Help & Support (Report an Issue)'
+    support:      'Help & Support (Report an Issue)',
+    custom_module: 'Custom Module (starter template)'
   };
   var humanize = function(name){
     if(MODULE_LABELS[name]) return MODULE_LABELS[name];

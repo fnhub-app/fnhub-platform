@@ -2201,6 +2201,9 @@ window.HEADER_NAV = [
     children: [
       { key:'projects',    label:'Projects',    module:'projects',     svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-6h6v6"/></svg>', run:function(){ window.location.href='projects.html'; } },
       { key:'mail',        label:'Email Intake', module:'email_intake', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z"/><polyline points="22,6 12,13 2,6"/></svg>', run:function(){ window.location.href='mail.html'; } },
+      // STARTER CUSTOM MODULE (template) — hidden unless the nation is licensed +
+      // enables `custom_module`. Rename/move this entry when you build a real one.
+      { key:'custom',      label:'Custom Module', module:'custom_module', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M17.5 14v7M14 17.5h7"/></svg>', run:function(){ window.location.href='custom.html'; } },
       // ── Data Health — compliance / cleanup tools (moved from Quick Actions).
       // Management-only visibility (data-roles); each opener re-checks its own
       // gate. run functions are serialized into inline onclick strings, so
@@ -2345,6 +2348,7 @@ function _currentNavKey(){
   if(window.location.pathname.indexOf('inspections.html')  !== -1) return 'operations';
   if(window.location.pathname.indexOf('projects.html')     !== -1) return 'admin';
   if(window.location.pathname.indexOf('mail.html')         !== -1) return 'admin';
+  if(window.location.pathname.indexOf('custom.html')       !== -1) return 'admin';
   if(window.location.pathname.indexOf('finance.html')      !== -1) return 'finance';
   if(vis('tenantsView'))      return 'tenants';
   if(vis('settingsView'))     return 'settings';

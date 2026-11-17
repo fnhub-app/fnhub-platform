@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<!-- ============================================================
+     custom.html — STARTER CUSTOM MODULE (template)
+     ------------------------------------------------------------
+     A ready-to-fill scaffold for a per-nation bespoke feature. It ships
+     DORMANT: the `custom_module` key defaults OFF in both _enabled and
+     _licensed (shared-config.js), so this page is invisible everywhere until
+     a nation is LICENSED for it (admin control plane) AND a super user ENABLES
+     it (Settings -> Nation -> Modules). One shared codebase, gated per nation.
+
+     To make a real module from this template:
+       1. Pick a key + label: rename `custom_module` everywhere (shared-config.js
+          _enabled/_licensed, scoring.js MODULE_LABELS, admin/admin.js MODULES +
+          MODULE_DEFAULT_ENABLED, housing-init.js nav entry, this file +
+          custom-init.js). A good key is lowercase_snake (e.g. cultural_programs).
+       2. Rename this file + custom-init.js to match (e.g. cultural.html /
+          cultural-init.js) and update the nav entry's href.
+       3. Build the feature in custom-init.js's renderCustomModule(); store data
+          in the nation's own DB (housing_settings jsonb for config, or a
+          dedicated table + migration run only on that nation's project).
+       4. License it ONLY to the nation that wants it; bill it as an add-on if
+          applicable (same path as the AI add-on).
+     ============================================================ -->
+<title>{NATION_SHORT} Housing — Custom Module</title>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="shared.css"/>
+<script>try{var _t=sessionStorage.getItem("clfn_theme_css");if(_t)document.documentElement.style.cssText+=";"+_t;}catch(e){}</script>
+
+<link rel="stylesheet" href="housing.css"/>
+
+<script src="shared.js"></script>
+<script src="shared-config.js"></script>
+<script src="shared-auth.js"></script>
+<script src="shared-ui.js"></script>
+<script src="approval-authority.js"></script>
+<script src="shared-data.js"></script>
+<script src="notifications.js"></script>
+<script src="shared-contract.js"></script>
+<script src="scoring.js"></script>
+<script src="housing-views.js"></script>
+<script src="housing-settings.js"></script>
+<script src="housing-modals.js"></script>
+<script src="shared-sow.js"></script>
+<script src="housing-modals-sow.js"></script>
+<script src="housing-app.js"></script>
+<script src="help-training.js"></script>
+<script src="resources.js"></script>
+<script src="support-widget.js"></script>
+<script src="housing-init.js"></script>
+<script src="ai-assistant.js"></script>
+
+<style>body{ opacity:0; transition:opacity .15s ease; }</style>
+</head>
+<body>
+
+<div id="app_header_host"></div>
+
+<div class="app-wrapper" id="appWrapper">
+  <div class="content-area">
+    <div id="customView" class="page-view-wide">
+
+      <div class="page-back-row">
+        <button onclick="history.back()" class="back-btn-yellow">&#8592; Back</button>
+      </div>
+
+      <div class="page-header-bar">
+        <div class="phb-title">
+          <h1 id="custom_title">Custom Module</h1>
+          <p id="custom_subtitle">A nation-specific feature. Replace this with your own.</p>
+        </div>
+        <div class="phb-actions">
+          <!-- TODO: your document-generation / export buttons go here (top-right). -->
+        </div>
+      </div>
+
+      <!-- KPI strip (optional) -->
+      <div id="custom_kpi_strip" style="display:flex;gap:12px;flex-wrap:wrap;margin-bottom:16px;"></div>
+
+      <!-- Main content mount — renderCustomModule() fills this -->
+      <div id="custom_body"></div>
+
+    </div><!-- /customView -->
+  </div>
+</div>
+
+<!-- Modal host (if your feature needs one) -->
+<div id="custom_modal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:2000;align-items:center;justify-content:center;padding:16px;"></div>
+
+<!-- Toast host (shared) -->
+<div id="toast_host" style="position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;"></div>
+
+<script src="custom-init.js"></script>
+</body>
+</html>

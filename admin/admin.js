@@ -24,7 +24,8 @@
     ['renovations','Renovations'], ['rfq','RFQ'], ['mapping','Mapping'],
     ['inspections','Inspections'], ['ai_assistant','AI Assistant'],
     ['projects','Capital Projects'], ['email_intake','Email Intake'],
-    ['sms_notifications','SMS / Text Notifications'], ['contractor_portal','Contractor Portal']
+    ['sms_notifications','SMS / Text Notifications'], ['contractor_portal','Contractor Portal'],
+    ['custom_module','Custom Module (starter)']
   ];
   // Default ENABLED state per optional module, mirroring CLFN_MODULES._enabled
   // in shared-config.js. A nation whose saved module_enablement omits a key
@@ -34,7 +35,8 @@
   var MODULE_DEFAULT_ENABLED = {
     finance:true, match:true, contractors:true, renovations:true, rfq:true,
     mapping:true, inspections:true, ai_assistant:true, projects:true,
-    email_intake:true, sms_notifications:true, contractor_portal:false
+    email_intake:true, sms_notifications:true, contractor_portal:false,
+    custom_module:false
   };
 
   // Nation Pathways fee schedule for the invoice builder. EXACT prices -- do not
