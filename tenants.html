@@ -84,12 +84,14 @@
       Back
     </button>
   </div>
-  <div class="page-header-bar">
-    <div class="phb-title">
+  <div class="page-hero">
+    <div class="page-hero-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="page-hero-tx">
+      <div class="page-hero-eyebrow">Housing</div>
       <h1>Tenants</h1>
       <p>Occupied and reserved units — <span id="tenant_count" style="font-weight:600;color:var(--text);">—</span> tenants</p>
     </div>
-    <div class="phb-actions">
+    <div class="page-hero-actions">
       <button type="button" onclick="if(typeof openBcrManager==='function')openBcrManager()" class="btn btn-ghost">⛔ BCR List</button>
       <button type="button" onclick="if(typeof openTenantMergeManager==='function')openTenantMergeManager()" class="btn btn-ghost">⇉ Merge Duplicates</button>
       <button type="button" onclick="openAddTenantModal()" class="btn btn-primary">

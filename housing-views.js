@@ -293,7 +293,7 @@ function renderInventoryView(){
   // list scrolls, freeing space on tablet/mobile (shared-ui.js). Idempotent —
   // safe to call on every render.
   (function(){
-    var _hdr = document.querySelector('#inventoryView .page-header-bar');
+    var _hdr = document.querySelector('#inventoryView .page-hero');
     var _area = document.querySelector('.content-area');
     if (_hdr && _area && typeof _initScrollCollapse === 'function') _initScrollCollapse(_area, _hdr);
   })();
@@ -977,7 +977,7 @@ function renderTenantsView(){
   // list scrolls, freeing space on tablet/mobile (shared-ui.js). Idempotent —
   // safe to call on every render.
   (function(){
-    var _hdr = document.querySelector('#tenantsView .page-header-bar');
+    var _hdr = document.querySelector('#tenantsView .page-hero');
     var _area = document.querySelector('.content-area');
     if (_hdr && _area && typeof _initScrollCollapse === 'function') _initScrollCollapse(_area, _hdr);
   })();
