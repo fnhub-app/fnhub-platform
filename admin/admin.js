@@ -420,13 +420,14 @@
       +   tile('Est. hosting cost', _money(totCost) + ' CAD')
       + '</div>'
       + '<div class="nic-tabs">'
-      +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('provision', 'Provision') + tab('sop', 'Onboarding SOP') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
+      +   tab('nations', 'Nations', true) + tab('support', 'Support') + tab('requests', 'Requests') + tab('provision', 'Provision') + tab('sop', 'Onboarding SOP') + tab('addnation', 'Add a nation') + tab('migrations', 'Migrations') + tab('resellers', 'Resellers') + tab('admins', 'Administrators')
       + '</div>'
       + '<div class="nic-body">'
       +   panel('nations',   nationsCard(nations, usageBySub), true)
       // Support renders lazily the first time its tab opens (fetches the
       // aggregated inbox from the control plane).
       +   panel('support',  '<div id="ps-root"><p class="sub" style="margin-top:14px;">Loading support inbox...</p></div>', false)
+      +   panel('requests', '<div id="rq-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
       // The wizard stays expanded; the three long reference guides collapse
       // into <details> cards so the tab is scannable (they had grown into one
       // very long scroll).
@@ -1533,7 +1534,215 @@
     Array.prototype.forEach.call(document.querySelectorAll('.nic-panel'), function(p){ p.classList.toggle('active', p.getAttribute('data-panel') === name); });
     if (name === 'resellers' && typeof window.renderResellers === 'function') window.renderResellers();
     if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
+    if (name === 'requests' && typeof window.renderBuildTickets === 'function') window.renderBuildTickets();
   };
+
+  // ===== Requests (development ticket queue) ==================================
+  // A plain-language intake that turns a feature / update / fix request into an
+  // optimized build prompt, saved to the control-plane `platform_build_tickets`
+  // table (super-admin RLS; run supabase/platform/build_tickets.sql). The admin
+  // browser reads/writes directly as a verified super-admin. Dashboard -> Requests.
+  var RQ_TYPES = ['New feature','Change to something','Fix a problem','Wording change','New report / export','Question / idea'];
+  var RQ_AREAS = ['Not sure','Home / Worklist','Dashboard & KPIs','Inventory (units)','Tenants','Match','Applications','Renovations / Maintenance Requests','RFQ / Contracts','Contractors','Contractor Portal','Inspections','Finance','Capital Projects','Email Intake','Community / Applicant Portal','Notifications (email & text)','AI Assistant','Help & Support','Settings','Admin control plane','Across the whole app'];
+  var RQ_ROLES = ['Executive Director','Housing Manager','Housing Employee','Field Employee','Finance / CFO','Contractor','Community Member','Chief & Council'];
+  var RQ_NOTIF = ['No alert','Email','Text','Email + Text'];
+  var RQ_PRIS  = ['Urgent','High','Normal','Low'];
+  var _rqTickets = [];
+
+  function rqClean(s){ return (s || '').replace(/^\s+|\s+$/g, ''); }
+  function rqFmtDue(v){
+    if (!v) return '';
+    var p = String(v).split('-'); if (p.length !== 3) return v;
+    var d = new Date(Number(p[0]), Number(p[1]) - 1, Number(p[2]));
+    if (isNaN(d.getTime())) return v;
+    return d.toLocaleDateString(undefined, { month:'short', day:'numeric', year:'numeric' });
+  }
+  function rqNextNumber(){
+    var m = 0;
+    (_rqTickets || []).forEach(function(t){ var n = parseInt(String(t.number || '').replace(/\D/g, ''), 10) || 0; if (n > m) m = n; });
+    return 'REQ-' + String(m + 1).padStart(3, '0');
+  }
+
+  // Assemble the optimized, ready-to-paste prompt from the answers.
+  function rqBuildPrompt(s, number){
+    var L = [], id = number || 'REQ-###';
+    L.push('[' + id + ' · ' + s.type + ' · Priority: ' + s.pri + ' · Area: ' + s.area + ']');
+    L.push('');
+    if (rqClean(s.title)) L.push('Title: ' + rqClean(s.title));
+    L.push('');
+    L.push('Context: This is the fnhub multi-tenant First Nations housing app (vanilla-JS single-page app + Supabase, deployed on Cloudflare). Please follow the conventions in CLAUDE.md. I am not a coder -- explain decisions in plain language, and if anything here is unclear or could be done more than one way, ask me before building.');
+    L.push('');
+    L.push('What I want:'); L.push(rqClean(s.what) || '(describe what should happen)');
+    if (rqClean(s.why)){ L.push(''); L.push('Why this matters (the problem to solve):'); L.push(rqClean(s.why)); }
+    if (s.roles.length){ L.push(''); L.push('Who uses it / who should see it: ' + s.roles.join(', ') + '. Gate access and visibility by role where it matters.'); }
+    if (rqClean(s.example)){ L.push(''); L.push('Example walkthrough:'); L.push(rqClean(s.example)); }
+    if (s.notify !== 'No alert'){ var who = rqClean(s.notifyWho); L.push(''); L.push('Notifications: send by ' + s.notify.toLowerCase() + (who ? (' to ' + who) : '') + '. Make the recipients/role configurable, defaulting to the Housing Manager unless I said otherwise.'); }
+    if (rqClean(s.rules)){ L.push(''); L.push('Rules & limits:'); L.push(rqClean(s.rules)); }
+    if (rqClean(s.avoid)){ L.push(''); L.push('Must NOT do / must not break:'); L.push(rqClean(s.avoid)); }
+    if (s.due){ L.push(''); L.push('Needed by: ' + rqFmtDue(s.due) + '.'); }
+    L.push(''); L.push('Done when:');
+    L.push('- It does what is described above and reads clearly to the people who use it.');
+    if (s.roles.length) L.push('- Only the right people see/use it -- gated by role (' + s.roles.join(', ') + ').');
+    if (s.notify !== 'No alert') L.push('- The alert reaches the right people by ' + s.notify.toLowerCase() + ', and can be turned on/off / configured.');
+    L.push('- It follows CLAUDE.md conventions and the multi-tenant rule (no hard-coded nation names).');
+    L.push('- Nothing else in the app breaks; it still works on a phone.');
+    L.push('');
+    L.push('When it is ready, put it up as a pull request and tell me in plain language what to review and any setup I need to do (migrations, settings, secrets). If you need a decision from me, ask first rather than guessing.');
+    return L.join('\n');
+  }
+
+  function rqReadForm(){
+    var g = function(id){ var el = document.getElementById(id); return el ? el.value : ''; };
+    var roles = []; RQ_ROLES.forEach(function(r, i){ var cb = document.getElementById('rq_role_' + i); if (cb && cb.checked) roles.push(r); });
+    return { type:g('rq_type') || RQ_TYPES[0], title:g('rq_title'), area:g('rq_area') || 'Not sure', roles:roles,
+      what:g('rq_what'), why:g('rq_why'), example:g('rq_example'), notify:g('rq_notify') || 'No alert',
+      notifyWho:g('rq_notifywho'), rules:g('rq_rules'), avoid:g('rq_avoid'), pri:g('rq_pri') || 'Normal', due:g('rq_due') };
+  }
+  function rqUpdatePreview(){
+    var pre = document.getElementById('rq_out'); if (!pre) return;
+    var s = rqReadForm();
+    var has = rqClean(s.what) || rqClean(s.title);
+    pre.textContent = has ? rqBuildPrompt(s, rqNextNumber()) : 'Fill in the questions and your prompt will build here.';
+  }
+  function rqPill(st){ var map = { 'new':'provisioning', 'building':'active', 'done':'suspended' }; return '<span class="pill ' + (map[st] || 'provisioning') + '">' + esc(st === 'building' ? 'in progress' : (st || 'new')) + '</span>'; }
+
+  window.renderBuildTickets = async function(){
+    var root = document.getElementById('rq-root'); if (!root) return;
+    root.innerHTML = '<p class="sub" style="margin-top:14px;">Loading&hellip;</p>';
+    var r = await api('GET', '/platform_build_tickets?select=*&order=created_at.desc&limit=300');
+    if (!r.ok){
+      var hint = (r.status === 404 || r.status === 400)
+        ? 'Run <code>supabase/platform/build_tickets.sql</code> in the platform SQL Editor to create the requests table, then reload.'
+        : 'HTTP ' + r.status + ' reading requests.';
+      root.innerHTML = '<div class="card"><h3>Requests</h3><p class="sub" style="margin-top:4px;">' + hint + '</p></div>';
+      return;
+    }
+    _rqTickets = await r.json().catch(function(){ return []; });
+    rqPaint();
+  };
+
+  function rqPaint(){
+    var root = document.getElementById('rq-root'); if (!root) return;
+    var opts = function(arr, sel){ return arr.map(function(a){ return '<option' + (a === sel ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join(''); };
+    var roleBoxes = RQ_ROLES.map(function(r, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;"><input type="checkbox" id="rq_role_' + i + '" style="width:auto;"/> ' + esc(r) + '</label>'; }).join('');
+    var ta = 'style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--hair,#d9dee8);border-radius:9px;"';
+    var optc = ' <span style="color:var(--muted);font-weight:400;">(optional)</span>';
+
+    var form = '<div class="card" style="flex:1 1 360px;min-width:300px;">'
+      + '<h3>New request</h3>'
+      + '<p class="sub" style="margin:2px 0 10px;">Answer in plain language. The finished prompt builds alongside &mdash; copy it to Claude, or save it to the queue.</p>'
+      + '<label>Type</label><select id="rq_type">' + opts(RQ_TYPES, 'New feature') + '</select>'
+      + '<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>'
+      + '<label>Which part of the app?</label><select id="rq_area">' + opts(RQ_AREAS, 'Not sure') + '</select>'
+      + '<label>Who uses it / should see it?</label><div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:8px;">' + roleBoxes + '</div>'
+      + '<label>What do you want to happen?</label><textarea id="rq_what" rows="4" ' + ta + ' placeholder="Describe it the way you would to a coworker..."></textarea>'
+      + '<label>Why does it matter?' + optc + '</label><textarea id="rq_why" rows="2" ' + ta + '></textarea>'
+      + '<label>Walk through a real example <span style="color:var(--muted);font-weight:400;">(recommended)</span></label><textarea id="rq_example" rows="3" ' + ta + ' placeholder="First this happens, then that..."></textarea>'
+      + '<label>Should it notify anyone?</label><select id="rq_notify">' + opts(RQ_NOTIF, 'No alert') + '</select>'
+      + '<input id="rq_notifywho" placeholder="Who gets the alert? e.g. Housing Manager" style="margin-top:6px;"/>'
+      + '<label>Rules &amp; limits' + optc + '</label><textarea id="rq_rules" rows="2" ' + ta + '></textarea>'
+      + '<label>Anything it must NOT break?' + optc + '</label><textarea id="rq_avoid" rows="2" ' + ta + '></textarea>'
+      + '<div style="display:flex;gap:12px;flex-wrap:wrap;">'
+      +   '<div style="flex:1 1 140px;"><label>Priority</label><select id="rq_pri">' + opts(RQ_PRIS, 'Normal') + '</select></div>'
+      +   '<div style="flex:1 1 140px;"><label>Needed by' + optc + '</label><input type="date" id="rq_due"/></div>'
+      + '</div>'
+      + '</div>';
+
+    var preview = '<div class="card" style="flex:1 1 360px;min-width:300px;">'
+      + '<h3>Finished prompt</h3>'
+      + '<pre id="rq_out" style="white-space:pre-wrap;word-wrap:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;background:var(--surface,#f6f8fc);border:1px solid var(--line,#e3e8f0);border-radius:10px;padding:14px;max-height:52vh;overflow:auto;margin:0 0 12px;">Fill in the questions and your prompt will build here.</pre>'
+      + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
+      +   '<button class="btn" type="button" id="rq_copy">Copy prompt</button>'
+      +   '<button class="btn ghost" type="button" id="rq_save">Save to queue</button>'
+      +   '<button class="btn ghost" type="button" id="rq_clear">Clear</button>'
+      + '</div>'
+      + '<p class="sub" style="margin:10px 0 0;font-size:11px;">Screenshots make requests clearer &mdash; attach them in the chat with Claude after you paste the prompt.</p>'
+      + '</div>';
+
+    var listRows = (_rqTickets || []).map(function(t){
+      var meta = esc(t.req_type || '') + ' · ' + esc(t.area || '') + ' · ' + esc(t.priority || 'Normal')
+        + (t.due_date ? (' · due ' + esc(rqFmtDue(t.due_date))) : '') + ' · ' + esc(timeAgo(t.created_at));
+      var st = t.status || 'new';
+      var cyc = st === 'new' ? '<button class="btn sm ghost" type="button" data-rq="start" data-id="' + esc(t.id) + '">Start</button>'
+              : st === 'building' ? '<button class="btn sm ghost" type="button" data-rq="done" data-id="' + esc(t.id) + '">Mark done</button>'
+              : '<button class="btn sm ghost" type="button" data-rq="reopen" data-id="' + esc(t.id) + '">Reopen</button>';
+      return '<tr>'
+        + '<td style="white-space:nowrap;font-weight:700;">' + esc(t.number || '') + '</td>'
+        + '<td><div style="font-weight:600;">' + esc(t.title || '(untitled)') + '</div><div style="font-size:11px;color:var(--muted);">' + meta + '</div></td>'
+        + '<td>' + rqPill(st) + '</td>'
+        + '<td><div class="row-actions" style="display:flex;gap:5px;flex-wrap:wrap;">'
+        +   '<button class="btn sm" type="button" data-rq="copy" data-id="' + esc(t.id) + '">Copy</button>' + cyc
+        +   '<button class="btn sm ghost" type="button" data-rq="del" data-id="' + esc(t.id) + '">Delete</button>'
+        + '</div></td></tr>';
+    }).join('');
+    var nNew = (_rqTickets || []).filter(function(t){ return (t.status || 'new') === 'new'; }).length;
+    var nBld = (_rqTickets || []).filter(function(t){ return t.status === 'building'; }).length;
+    var nDone = (_rqTickets || []).filter(function(t){ return t.status === 'done'; }).length;
+    var listCard = '<div class="card"><h3>Request queue <button class="btn sm ghost" type="button" id="rq_refresh">&#8635; Refresh</button></h3>'
+      + '<div style="display:flex;gap:14px;flex-wrap:wrap;margin:4px 0 10px;">'
+      +   '<div><div style="font-size:22px;font-weight:700;">' + nNew + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">New</div></div>'
+      +   '<div><div style="font-size:22px;font-weight:700;">' + nBld + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">In progress</div></div>'
+      +   '<div><div style="font-size:22px;font-weight:700;">' + nDone + '</div><div style="font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;">Done</div></div>'
+      + '</div>'
+      + (listRows ? '<div style="overflow-x:auto;"><table><thead><tr><th>#</th><th>Request</th><th>Status</th><th></th></tr></thead><tbody>' + listRows + '</tbody></table></div>' : '<p class="sub">No saved requests yet.</p>')
+      + '</div>';
+
+    root.innerHTML = '<div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px;">' + form + preview + '</div>' + listCard;
+
+    // Wire (assign onX so repeated paints don't stack listeners).
+    root.oninput = rqUpdatePreview;
+    root.onchange = rqUpdatePreview;
+    document.getElementById('rq_copy').onclick = function(){ var s = rqReadForm(); rqCopy(rqBuildPrompt(s, rqNextNumber()), 'Prompt copied'); };
+    document.getElementById('rq_clear').onclick = function(){ rqPaint(); };
+    document.getElementById('rq_save').onclick = rqSave;
+    document.getElementById('rq_refresh').onclick = function(){ window.renderBuildTickets(); };
+    Array.prototype.forEach.call(root.querySelectorAll('[data-rq]'), function(b){
+      b.onclick = function(){ rqRowAction(b.getAttribute('data-rq'), b.getAttribute('data-id')); };
+    });
+    rqUpdatePreview();
+  }
+
+  function rqCopy(txt, okMsg){
+    function fb(){ try { var t = document.createElement('textarea'); t.value = txt; t.style.position = 'fixed'; t.style.opacity = '0'; document.body.appendChild(t); t.select(); document.execCommand('copy'); document.body.removeChild(t); adminToast(okMsg); } catch(e){ adminToast('Select the text to copy it.'); } }
+    try { if (navigator.clipboard && navigator.clipboard.writeText){ navigator.clipboard.writeText(txt).then(function(){ adminToast(okMsg); }, fb); } else fb(); } catch(e){ fb(); }
+  }
+
+  async function rqSave(){
+    var s = rqReadForm();
+    if (!rqClean(s.what) && !rqClean(s.title)){ adminToast('Add a title or describe what you want first.'); return; }
+    var number = rqNextNumber();
+    var row = { number:number, title:rqClean(s.title), req_type:s.type, area:s.area, roles:s.roles,
+      what:rqClean(s.what), why:rqClean(s.why), example:rqClean(s.example), notify:s.notify, notify_who:rqClean(s.notifyWho),
+      rules:rqClean(s.rules), avoid:rqClean(s.avoid), priority:s.pri, due_date:(s.due || null), status:'new',
+      prompt:rqBuildPrompt(s, number), created_by:(typeof jwtEmail === 'function' ? jwtEmail() : null) };
+    var r = await api('POST', '/platform_build_tickets', row, 'return=minimal');
+    if (!r.ok){ var d = await r.text().catch(function(){ return ''; }); adminToast('Could not save (' + r.status + ').'); console.warn('[requests] save failed', d); return; }
+    adminToast('Saved ' + number);
+    await window.renderBuildTickets();
+  }
+
+  async function rqRowAction(act, id){
+    var t = (_rqTickets || []).filter(function(x){ return String(x.id) === String(id); })[0]; if (!t) return;
+    if (act === 'copy'){
+      var p = t.prompt || rqBuildPrompt({ type:t.req_type, title:t.title, area:t.area, roles:(t.roles || []),
+        what:t.what, why:t.why, example:t.example, notify:t.notify, notifyWho:t.notify_who, rules:t.rules,
+        avoid:t.avoid, pri:t.priority, due:t.due_date }, t.number);
+      rqCopy(p, 'Copied ' + (t.number || '')); return;
+    }
+    if (act === 'del'){
+      var ok = await dlgConfirm('Delete ' + (t.number || 'this request') + '? This cannot be undone.', { title:'Delete request', okText:'Delete' });
+      if (!ok) return;
+      var rd = await api('DELETE', '/platform_build_tickets?id=eq.' + encodeURIComponent(id), null, 'return=minimal');
+      if (!rd.ok){ adminToast('Delete failed (' + rd.status + ').'); return; }
+      adminToast('Deleted'); await window.renderBuildTickets(); return;
+    }
+    var map = { start:'building', done:'done', reopen:'new' };
+    var next = map[act]; if (!next) return;
+    var rp = await api('PATCH', '/platform_build_tickets?id=eq.' + encodeURIComponent(id), { status:next, updated_at:new Date().toISOString() }, 'return=minimal');
+    if (!rp.ok){ adminToast('Update failed (' + rp.status + ').'); return; }
+    adminToast(next === 'building' ? 'Started' : next === 'done' ? 'Marked done' : 'Reopened');
+    await window.renderBuildTickets();
+  }
 
   window.saveNationConfig = async function(id){
     var get = function(x){ return (document.getElementById(x) || {}).value || ''; };
