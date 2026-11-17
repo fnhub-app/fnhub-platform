@@ -1089,14 +1089,17 @@ function renderTenantsView(){
   var tbody=document.getElementById('tenants_tbody');
   if(!tbody) return;
   if(!units.length){
-    tbody.innerHTML='<tr><td colspan="7" style="padding:32px;text-align:center;color:var(--muted);">No tenants match the current filters.</td></tr>';
+    tbody.innerHTML='<tr><td colspan="6" style="padding:32px;text-align:center;color:var(--muted);">No tenants match the current filters.</td></tr>';
     var _tenTheadEmpty = document.getElementById('tenants_thead');
     if (typeof tableBindColumnMenuClicks === 'function')   tableBindColumnMenuClicks(_tenTheadEmpty, 'tenants');
     if (typeof tableRefreshSortIndicators === 'function') tableRefreshSortIndicators(_tenTheadEmpty, 'tenants');
     return;
   }
   tbody.innerHTML=units.map(function(u){
-    var name=u.assignedName||'<span style="color:var(--muted);font-style:italic;">No tenant assigned</span>';
+    var _tname=u.assignedName||'';
+    var tenantCell = _tname
+      ? '<td><div class="std-id"><div class="std-row-avatar">'+escapeHtml((function(){var w=_tname.trim().split(/\s+/);return (w.length>=2?w[0].charAt(0)+w[w.length-1].charAt(0):_tname.slice(0,2)).toUpperCase();})())+'</div><div class="std-id-main">'+escapeHtml(_tname)+'</div></div></td>'
+      : '<td><span style="color:var(--muted);font-style:italic;">No tenant assigned</span></td>';
     var date=u.assignedDate||'—';
     var fileCount=0; // loaded async when panel opens
     var statusBg=u.status==='reserved'?'#faf5ff':'var(--info-blue-bg)';
@@ -1113,25 +1116,25 @@ function renderTenantsView(){
     // fileCount already set above
     return '<tr class="clickable" data-tuid="'+escapeHtml(u.id)+'">'
       +'<td><div class="std-cell-primary">'+escapeHtml(u.num)+' '+escapeHtml(u.street)+(u.isElders?' <span style="font-size:9px;background:var(--warn-amber-bg);color:var(--warn-amber);border:1px solid var(--warn-amber-border);padding:1px 5px;border-radius:6px;">ELDERS UNIT</span>':'')+' '+_assignmentTypeBadge(u)+'</div><div class="tbl-sub">'+escapeHtml(String(u.bedrooms||''))+'-bed'+(u.accessible?' · Accessible':'')+'</div></td>'
-      +'<td class="std-cell-primary">'+escapeHtml(name)+'</td>'
+      +tenantCell
       +'<td class="std-cell-dash">'+date+'</td>'
       +'<td><span class="std-pill std-pill-info">'+(u.status==='reserved'?'Reserved':'Occupied')+'</span></td>'
       +(_showRenoScore?'<td>'+renoCell+'</td>':'')
-      +'<td>'
-        +'<button type="button" data-files-uid="'+u.id+'" title="Tenant Files" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:4px;color:var(--muted);font-size:12px;font-weight:600;padding:3px 6px;border-radius:5px;">'
-          +'\uD83D\uDCCE '+(fileCount>0?'<span style="background:var(--yellow);color:var(--dark);font-size:10px;font-weight:800;padding:1px 5px;border-radius:8px;">'+fileCount+'</span>':'<span style="color:var(--border);font-size:11px;">—</span>')
-        +'</button>'
-      +'</td>'
-      +'<td style="padding:10px 10px;text-align:right;white-space:nowrap;">'
-        +'<button type="button" data-tic-uid="'+u.id+'" title="Tenant Information Card" class="tic-tenant-card-btn">🪪</button>'
-        +'<button type="button" data-sow-uid="'+u.id+'" title="Maintenance Request" style="background:none;border:none;cursor:pointer;color:var(--muted);font-size:14px;">🔨</button>'
-      +'</td>'
+      +'<td class="std-cell-right"><div class="flex-end gap-8">'
+        +'<button type="button" data-tic-uid="'+u.id+'" class="btn btn-ghost btn-sm" title="Tenant Information Card">🪪 Card</button>'
+        +'<div class="std-rowmenu"><button type="button" class="std-kebab" aria-haspopup="menu" aria-label="More actions" onclick="toggleRowMenu(this)">⋮</button>'
+          +'<div class="std-rowmenu-pop" role="menu">'
+            +'<button type="button" data-sow-uid="'+u.id+'">🔨 Maintenance request</button>'
+            +'<button type="button" data-files-uid="'+u.id+'">📎 Tenant files</button>'
+          +'</div></div>'
+      +'</div></td>'
       +'</tr>';
   }).join('');
   tbody.querySelectorAll('[data-tuid]').forEach(function(row){
     row.addEventListener('click',function(e){
       if(e.target.closest('[data-sow-uid]') || e.target.closest('[data-tic-uid]')
-         || e.target.closest('[data-files-uid]') || e.target.closest('[data-reno-sow]')) return;
+         || e.target.closest('[data-files-uid]') || e.target.closest('[data-reno-sow]')
+         || e.target.closest('.std-rowmenu')) return;
       var uid = row.getAttribute('data-tuid');
       // Clicking a tenant row opens their Tenant Information Card (from which the
       // application can be opened/updated). If the unit has no tenant assigned
