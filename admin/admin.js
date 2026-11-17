@@ -224,6 +224,109 @@
     return r;
   }
 
+  // ---- Two-factor (TOTP) -- enforced at admin sign-in ------------------------
+  // The magic-link sign-in establishes an AAL1 session. Super-admins run the
+  // control plane over every nation, so we require a SECOND factor: a TOTP
+  // authenticator code that steps the session up to AAL2 before the dashboard
+  // renders. Built directly on GoTrue MFA REST (no SDK). Enrollment is enforced
+  // (an admin with no factor must set one up). SAFETY: if the platform project
+  // has not enabled TOTP MFA (Supabase -> Authentication -> MFA), enrollment
+  // errors -- we then FAIL OPEN with a warning banner instead of locking every
+  // admin out of the control plane.
+  function _b64urlJson(seg){ try { return JSON.parse(atob(String(seg).replace(/-/g,'+').replace(/_/g,'/'))); } catch(e){ return {}; } }
+  function aalOf(){ var t = getAT(); if (!t) return ''; var p = t.split('.'); return p[1] ? (_b64urlJson(p[1]).aal || '') : ''; }
+  async function _mfaFetch(path, opts){
+    opts = opts || {};
+    opts.headers = Object.assign({ apikey:ANON, Authorization:'Bearer '+getAT(), 'Content-Type':'application/json' }, opts.headers || {});
+    return fetch(AUTH + path, opts);
+  }
+  async function mfaListFactors(){
+    try { var r = await _mfaFetch('/user', { method:'GET' }); if (!r.ok) return { error:r.status }; var d = await r.json(); return { factors:(d && d.factors) || [] }; }
+    catch(e){ return { error:'network' }; }
+  }
+  async function mfaDeleteFactor(id){ try { await _mfaFetch('/factors/'+encodeURIComponent(id), { method:'DELETE' }); } catch(e){} }
+  async function mfaEnroll(){
+    var r = await _mfaFetch('/factors', { method:'POST', body: JSON.stringify({ factor_type:'totp', friendly_name:'Authenticator (' + new Date().toISOString().slice(0,10) + ')' }) });
+    var d = await r.json().catch(function(){ return {}; });
+    if (!r.ok) return { error:(d && (d.msg||d.error_description||d.error)) || ('HTTP '+r.status) };
+    return { id:d.id, qr:(d.totp && d.totp.qr_code) || '', secret:(d.totp && d.totp.secret) || '' };
+  }
+  // Challenge + verify a factor with a 6-digit code; on success GoTrue returns a
+  // fresh AAL2 session, which we persist.
+  async function mfaChallengeVerify(factorId, code){
+    var c = await _mfaFetch('/factors/'+encodeURIComponent(factorId)+'/challenge', { method:'POST', body:'{}' });
+    var cd = await c.json().catch(function(){ return {}; });
+    if (!c.ok) return { error:(cd && (cd.msg||cd.error)) || ('challenge HTTP '+c.status) };
+    var v = await _mfaFetch('/factors/'+encodeURIComponent(factorId)+'/verify', { method:'POST', body: JSON.stringify({ challenge_id:cd.id, code:String(code) }) });
+    var vd = await v.json().catch(function(){ return {}; });
+    if (!v.ok) return { error:(vd && (vd.msg||vd.error_description||vd.error)) || 'That code was not accepted.' };
+    if (vd && vd.access_token) setSession(vd.access_token, vd.refresh_token || getRT());   // now AAL2
+    return { ok:true };
+  }
+  // Prompt for a code and verify (loops until correct or the admin signs out).
+  async function mfaCodePrompt(factorId){
+    for(;;){
+      var res = await dlgForm('Two-factor authentication',
+        [{ key:'code', label:'6-digit code from your authenticator app', placeholder:'123456', validate:function(v){ return /^\d{6}$/.test(v) ? '' : 'Enter the 6-digit code.'; } }],
+        { bodyHtml:'<p style="margin:0;">Enter the current code from your authenticator app to finish signing in.</p>', okText:'Verify', cancelText:'Sign out' });
+      if (!res){ clearSession(); showLogin(); return false; }
+      var vr = await mfaChallengeVerify(factorId, res.code);
+      if (vr.ok) return true;
+      await dlgAlert(vr.error || 'That code was not accepted. Try again.', { title:'Two-factor' });
+    }
+  }
+  // Enforce enrollment when the admin has no factor. Fail open if the project
+  // has not enabled TOTP MFA.
+  async function mfaEnrollFlow(){
+    var en = await mfaEnroll();
+    if (en.error){
+      window._mfaBanner = 'Two-factor is NOT enforced yet: enable TOTP MFA on the platform project (Supabase -> Authentication -> MFA), then every admin will be required to set it up at sign-in. (' + en.error + ')';
+      return true;
+    }
+    var img = en.qr ? ('<img alt="QR code" src="' + en.qr + '" style="width:168px;height:168px;display:block;margin:10px auto;background:#fff;border-radius:8px;padding:6px;"/>') : '';
+    var body = '<p style="margin:0 0 6px;">Set up two-factor authentication to secure the control plane. Required for all administrators.</p>'
+      + '<ol style="margin:4px 0 8px 18px;padding:0;font-size:13px;line-height:1.6;">'
+      +   '<li>Open an authenticator app (Google / Microsoft Authenticator, Authy, 1Password).</li>'
+      +   '<li>Scan this QR code, or enter the key below.</li>'
+      +   '<li>Type the 6-digit code it shows.</li>'
+      + '</ol>' + img
+      + (en.secret ? '<div style="text-align:center;font-size:12px;color:var(--muted);">Key: <code style="font-size:12px;word-break:break-all;">' + esc(en.secret) + '</code></div>' : '');
+    for(;;){
+      var res = await dlgForm('Set up two-factor',
+        [{ key:'code', label:'6-digit code', placeholder:'123456', validate:function(v){ return /^\d{6}$/.test(v) ? '' : 'Enter the 6-digit code.'; } }],
+        { bodyHtml:body, okText:'Turn on 2FA', cancelText:'Sign out' });
+      if (!res){ await mfaDeleteFactor(en.id); clearSession(); showLogin(); return false; }
+      var vr = await mfaChallengeVerify(en.id, res.code);
+      if (vr.ok) return true;
+      await dlgAlert(vr.error || 'That code was not accepted. Try again.', { title:'Set up two-factor' });
+    }
+  }
+  // Gate the dashboard on AAL2. Returns true to proceed, false after aborting.
+  async function requireMfa(){
+    if (aalOf() === 'aal2') return true;                    // already stepped up this session
+    var lf = await mfaListFactors();
+    if (lf.error){                                          // could not read factors -> don't hard-lock
+      window._mfaBanner = 'Could not verify two-factor status; proceeding. If this keeps happening, sign out and back in.';
+      return true;
+    }
+    var factors = lf.factors || [];
+    // Remove dangling unverified factors so they don't accumulate.
+    factors.filter(function(f){ return f.status !== 'verified'; }).forEach(function(f){ mfaDeleteFactor(f.id); });
+    var verified = factors.filter(function(f){ return f.factor_type === 'totp' && f.status === 'verified'; });
+    return verified.length ? await mfaCodePrompt(verified[0].id) : await mfaEnrollFlow();
+  }
+  // Self-service reset (switching devices): remove the signed-in admin's factor
+  // so they enroll a fresh one at the next sign-in.
+  window.mfaResetSelf = async function(){
+    var ok = await dlgConfirm('Remove your current authenticator? You will set up a new one the next time you sign in. Do this only if you are switching devices.', { title:'Reset two-factor', okText:'Remove authenticator' });
+    if (!ok) return;
+    var lf = await mfaListFactors();
+    if (lf.error){ await dlgAlert('Could not reach the two-factor service. Try again.', { title:'Reset two-factor' }); return; }
+    var totp = (lf.factors || []).filter(function(f){ return f.factor_type === 'totp'; });
+    for (var i=0;i<totp.length;i++){ await mfaDeleteFactor(totp[i].id); }
+    adminToast('Authenticator removed. Sign out and back in to set up a new one.');
+  };
+
   // ---- Views -----------------------------------------------------------------
   function showLogin(prefill){
     app.innerHTML =
@@ -374,6 +477,10 @@
         + '<button class="btn" type="button" data-act="logout">Sign out</button></div>';
       return;
     }
+    // Two-factor step-up (AAL2) before anything renders. Aborts (signs out) if
+    // the admin cancels the code / enrollment prompt.
+    var mfaOk = await requireMfa();
+    if (!mfaOk) return;
     document.getElementById('btn_out').style.display = '';
 
     // Load nations.
@@ -449,6 +556,17 @@
     wireAddNation();
     // Fill each nation's "Sold by" line (reseller.js loads the reseller data).
     if (typeof window.rsDecorateNations === 'function') window.rsDecorateNations();
+    // Surface the fail-open two-factor warning (set by requireMfa) if present.
+    if (window._mfaBanner){
+      var _hero = document.querySelector('.nic-hero');
+      if (_hero){
+        var _w = document.createElement('div');
+        _w.style.cssText = 'margin-top:10px;padding:10px 12px;background:rgba(194,59,75,.18);border:1px solid rgba(194,59,75,.6);border-radius:8px;color:#fff;font-size:12px;line-height:1.5;';
+        _w.textContent = '⚠ ' + window._mfaBanner;
+        _hero.appendChild(_w);
+      }
+      window._mfaBanner = '';
+    }
   }
 
   // Human byte formatter for the admin panel (mirrors the nation app's _duFmtBytes).
@@ -1062,7 +1180,12 @@
       + '<div style="display:flex;gap:8px;margin-top:12px;align-items:flex-end;flex-wrap:wrap;">'
       +   '<div style="flex:1;min-width:200px;"><label>Add administrator</label><input id="adm-email" type="email" placeholder="name@example.com"/></div>'
       +   '<button class="btn sm" type="button" data-act="add-admin">Add</button>'
-      + '</div><div class="msg" id="adm-msg"></div></div>';
+      + '</div><div class="msg" id="adm-msg"></div></div>'
+      + '<div class="card"><h3>Two-factor authentication</h3>'
+      +   '<p class="sub" style="margin:2px 0 10px;">Every administrator must verify a 6-digit authenticator code at sign-in, in addition to the email link. It is set up automatically the first time you sign in.</p>'
+      +   '<button class="btn sm ghost" type="button" data-act="mfa-reset">Reset my authenticator</button>'
+      +   '<p class="sub" style="margin:8px 0 0;font-size:11px;">Switching phones? Reset here, then sign out and back in to scan a new code. Locked out with no device? The platform owner removes your factor in Supabase (Authentication &rarr; Users).</p>'
+      + '</div>';
   }
 
   // ---- Actions ---------------------------------------------------------------
@@ -3989,6 +4112,7 @@
       case 'save-config':   window.saveNationConfig(id); break;
       case 'status':        window.adminSetStatus(id, el.getAttribute('data-status') || ''); break;
       case 'add-admin':     window.adminAdd(); break;
+      case 'mfa-reset':     window.mfaResetSelf(); break;
       case 'rm-admin':      window.adminRemove(el.getAttribute('data-email') || ''); break;
       // id is '' from the standalone card, which falls through to the blank
       // wizard; from a Configure page it prefills that nation.
