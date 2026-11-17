@@ -4,7 +4,10 @@
  * Goal: let staff open the app and GENERATE forms (PDFs) with no internet.
  *  - Our own files (pages/JS/CSS/images): NETWORK-FIRST — always fresh online,
  *    fall back to the cached copy when offline. (No build/cache-busting here, so
- *    network-first avoids ever serving stale code to an online user.)
+ *    network-first avoids ever serving stale code to an online user.) This now
+ *    applies to BOTH the HTML documents and the static JS/CSS/image assets; an
+ *    earlier stale-while-revalidate pass on the assets was quietly serving
+ *    one-navigation-stale code and is gone.
  *  - Immutable CDN libs (jsPDF, autotable, Chart.js): CACHE-FIRST so PDF/chart
  *    generation works with zero connection.
  *  - Supabase (REST / Storage / Auth / Functions): NEVER cached — pass straight
@@ -12,7 +15,7 @@
  *
  * Bump CACHE to force every client to drop the old cache on next load.
  * ============================================================ */
-var CACHE = 'clfn-shell-v181';
+var CACHE = 'clfn-shell-v182';
 
 var LIB_HOSTS = ['cdnjs.cloudflare.com', 'cdn.jsdelivr.net'];
 
@@ -91,17 +94,20 @@ self.addEventListener('fetch', function(e){
       );
       return;
     }
-    // Static assets (JS / CSS / images / fonts): STALE-WHILE-REVALIDATE. Serve
-    // the cached copy instantly and refresh it in the background for next time.
-    // This is the page-to-page speed win -- navigations stop re-downloading
-    // ~2.5-3 MB of JS each time. Trade-off: a just-deployed asset can be ONE
-    // navigation stale (the next load picks it up). The HTML above stays fresh,
-    // so a new page never references a file the SW can't then refresh, and the
-    // app tolerates eventual consistency. First visit (cold cache) hits network.
+    // Static assets (JS / CSS / images / fonts): NETWORK-FIRST with cache
+    // fallback. There is NO build-time cache busting here, so an online user
+    // must always get the freshly deployed file. Stale-while-revalidate served
+    // the Cache-API copy first -- and the Cache API ignores the `no-cache`
+    // Cache-Control header -- so a just-deployed asset showed up a navigation
+    // (or more) late, which repeatedly hid landing/header fixes. Going to the
+    // network first restores correct freshness: Cloudflare serves `no-cache`
+    // + ETag, so an UNCHANGED asset is a cheap 304 revalidation (no re-download)
+    // and only a CHANGED asset transfers a body. The copy is still refreshed in
+    // the cache on every success and served when the network is unavailable, so
+    // offline form / PDF generation keeps working.
     e.respondWith(
-      caches.match(req).then(function(hit){
-        var network = fetch(req).then(function(res){ return putInCache(req, res); }).catch(function(){ return hit || Response.error(); });
-        return hit || network;
+      fetch(req).then(function(res){ return putInCache(req, res); }).catch(function(){
+        return caches.match(req).then(function(hit){ return hit || Response.error(); });
       })
     );
     return;
