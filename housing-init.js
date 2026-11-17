@@ -2232,6 +2232,44 @@ window.HEADER_NAV = [
   { key:'settings',     label:'Settings',     module:null,           drawerOnly:true, roles:'ed,housing_manager,super_user', svg:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>', run:function(){ if(typeof showSettings==='function') showSettings(); else window.location.href='housing.html?view=settings'; } }
 ];
 
+// ── Landing hub grouping (Phase 1 of the hub redesign) ──────────────────────
+// The tiled landing hub renders sections of tiles from HEADER_NAV. HUB_SECTIONS
+// is the ordered list of hub sections; the loop below tags each existing nav
+// entry (and group child) with its section, and flags Finance as a hero band.
+// These fields are METADATA ONLY — renderHeaderNav() (the top strip) ignores
+// `section`/`hero`, so this changes nothing visible on its own. The hub
+// renderer (Phase 2) consumes them. Gating is unchanged: the hub reuses each
+// entry's existing `module` / `roles` so a tile shows only when its module is
+// enabled and the viewer's role allows.
+window.HUB_SECTIONS = [
+  { key:'housing',                 label:'Housing' },
+  { key:'renovations_construction', label:'Renovations & Construction' },
+  { key:'projects_admin',          label:'Projects & Admin' },
+  { key:'insights_help',           label:'Insights & Help' }
+];
+(function _tagHubSections(){
+  var SEC = {
+    inventory:'housing', match:'housing', tenants:'housing',
+    renovations:'renovations_construction', rfq:'renovations_construction',
+    contractors:'renovations_construction', inspections:'renovations_construction',
+    projects:'projects_admin', mail:'projects_admin', custom:'projects_admin',
+    dh_mergedupes:'projects_admin', dh_likely:'projects_admin', dh_reconcile:'projects_admin',
+    dh_arimport:'projects_admin', dh_archived:'projects_admin',
+    leadership:'insights_help', res_help:'insights_help', res_sheets:'insights_help'
+  };
+  function tag(list){
+    (list || []).forEach(function(it){
+      if (it && it.key && SEC[it.key]) it.section = SEC[it.key];
+      if (it && it.children) tag(it.children);
+    });
+  }
+  tag(window.HEADER_NAV);
+  // Finance is rendered as a feature hero band on the hub, not a tile.
+  (window.HEADER_NAV || []).forEach(function(it){
+    if (it && it.key === 'finance') { it.section = 'finance'; it.hero = true; }
+  });
+})();
+
 // renderHeaderNav — rebuilds #app_nav from HEADER_NAV. Skips items whose
 // module is disabled. data-roles is only honoured for drawer-only items
 // here; in-strip items use module gating + applyRoleVisibility().
