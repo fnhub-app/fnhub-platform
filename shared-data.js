@@ -8074,7 +8074,7 @@ function renderRenosView(){
         +'<td style="padding:10px 14px;text-align:right;white-space:nowrap;">'
           +'<div style="display:flex;gap:5px;justify-content:flex-end;">'
           +'<button type="button" data-sow-rpid="'+u.id+'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:DM Sans,sans-serif;white-space:nowrap;color:var(--muted);">🔨 Request</button>'
-          +'<button type="button" data-rp-rpid="'+u.id+'" style="background:var(--yellow);border:1px solid var(--yellow);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:DM Sans,sans-serif;white-space:nowrap;color:var(--dark);">📊 Progress</button>'
+          +'<button type="button" class="btn btn-primary btn-sm" data-rp-rpid="'+u.id+'">📊 Progress</button>'
           +'</div>'
         +'</td></tr>';
     }).join('');
@@ -8928,7 +8928,7 @@ function renderWorklist() {
                + '<span style="font-size:10px;font-weight:800;color:' + urgColor + ';width:78px;flex-shrink:0;">' + esc(urg.toUpperCase()) + '</span>';
       tmrRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--surface)\'">'
         + '<div onclick="' + open + '" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">' + info + '</div>'
-        + '<button onclick="' + open + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">Review</button>'
+        + '<button class="btn btn-primary btn-sm" onclick="' + open + '" style="flex-shrink:0;">Review</button>'
         + '</div>';
       tmrCards += wlCard({ title: s.unit_address || s.unit_id, pill:{ text: urg.toUpperCase(), color: urgColor }, open: open,
         metas:[{k:'Category',v:s.category||'—'},{k:'Reported',v:s.description ? String(s.description).slice(0,60) : ''}],
@@ -8957,7 +8957,7 @@ function renderWorklist() {
                + '<span style="font-size:10px;font-weight:800;color:' + (s.status==='changes_requested'?'var(--warn-amber-text)':'var(--muted)') + ';width:64px;flex-shrink:0;">' + esc(String(stLbl).toUpperCase()) + '</span>';
       asRows += '<div style="display:flex;align-items:center;gap:8px;padding:9px 14px;border-top:1px solid var(--border);background:var(--surface);" onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'var(--surface)\'">'
         + '<div onclick="' + open + '" style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;">' + info + '</div>'
-        + '<button onclick="' + open + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">Review</button>'
+        + '<button class="btn btn-primary btn-sm" onclick="' + open + '" style="flex-shrink:0;">Review</button>'
         + '</div>';
       asCards += wlCard({ title: nm, pill:{ text: stLbl }, open: open,
         metas:[{k:'Type',v:typeLbl},{k:'Submitted',v:s.submitted_at ? new Date(s.submitted_at).toLocaleDateString() : ''}],
@@ -9228,8 +9228,7 @@ function renderWorklist() {
         +   '<span style="font-size:11px;color:var(--muted);width:120px;flex-shrink:0;">' + escapeHtml(s.pn || '—') + '</span>'
         +   '<span style="font-size:11px;color:var(--muted);width:180px;flex-shrink:0;">' + escapeHtml(sowStatusBadge({approval_status: s.status}, {variant:'worklist'}).label) + '</span>'
         + '</div>'
-        + '<button onclick="' + approveCall + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;'
-        +   'padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">'
+        + '<button class="btn btn-primary btn-sm" onclick="' + approveCall + '" style="flex-shrink:0;">'
         +   escapeHtml(btnText) + '</button>'
         + '</div>';
     }).join('');
@@ -9267,8 +9266,7 @@ function renderWorklist() {
         +   '<span style="font-size:11px;color:var(--muted);width:120px;flex-shrink:0;">' + escapeHtml(s.pn || '—') + '</span>'
         +   '<span style="font-size:11px;color:var(--muted);width:180px;flex-shrink:0;">' + escapeHtml(statLbl) + '</span>'
         + '</div>'
-        + '<button onclick="' + openCall + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;'
-        +   'padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">Open →</button>'
+        + '<button class="btn btn-primary btn-sm" onclick="' + openCall + '" style="flex-shrink:0;">Open →</button>'
         + '</div>';
     }).join('');
     var fsCards = fieldSowItems.map(function(s) {
@@ -9320,8 +9318,7 @@ function renderWorklist() {
         +   '<span style="font-size:11px;color:var(--muted);width:120px;flex-shrink:0;">' + escapeHtml(c.trade) + '</span>'
         +   '<span style="font-size:11px;color:var(--muted);width:180px;flex-shrink:0;">' + escapeHtml(ctStatusLabel[c.status] || c.status) + '</span>'
         + '</div>'
-        + '<button onclick="' + ctNav + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border:none;border-radius:6px;'
-        +   'padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">'
+        + '<button class="btn btn-primary btn-sm" onclick="' + ctNav + '" style="flex-shrink:0;">'
         +   escapeHtml(ctBtnText[c.status] || 'Review') + '</button>'
         + '</div>';
     }).join('');
