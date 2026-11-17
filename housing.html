@@ -1034,49 +1034,29 @@
 
 <!-- ═══ SETTINGS VIEW ═══ -->
 <div id="settingsView" class="page-view">
-<div class="page-back-row">
-  <button onclick="goBack()" class="back-btn-yellow">
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg>
-    Back
-  </button>
-</div>
-<div class="page-header-bar">
-  <div class="phb-title">
-    <h1>Settings</h1>
-    <p>Manage <span data-nation="short">CLFN</span> Housing Application configuration and scoring models.</p>
+
+<!-- Settings hub: a hero + tile sections, built by renderSettingsHub() in
+     housing-settings.js (data-driven). The detailed .settings-section panels
+     below are UNCHANGED - a tile opens its section via showSettingsSection();
+     the "All Settings" back row returns here. -->
+<div id="settings_hub">
+  <div class="page-back-row">
+    <button onclick="goBack()" class="back-btn-yellow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> Back</button>
   </div>
+  <div class="page-hero">
+    <div class="page-hero-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>
+    <div class="page-hero-tx">
+      <div class="page-hero-eyebrow"><span data-nation="display_name">Constance Lake First Nation</span></div>
+      <h1>Settings</h1>
+      <p>Manage your nation's configuration, users, scoring and workflows.</p>
+    </div>
+  </div>
+  <div class="hub" id="settings_hub_tiles"></div>
 </div>
 
-<!-- Section group bar -->
-<div class="pill-tabs">
-  <button type="button" onclick="showSettingsGroup('admin')" id="sgroup_admin" class="pill-tab active">Admin</button>
-  <button type="button" onclick="showSettingsGroup('app')"   id="sgroup_app"   class="pill-tab">App Settings</button>
-</div>
-
-<!-- Admin sub-tabs -->
-<div class="settings-subtabs active" id="settings_subtabs_admin">
-  <button onclick="showSettingsSection('sec_users')" id="stab_users" class="tab-btn active">&#128101; Users</button>
-  <button onclick="showSettingsSection('sec_nation');renderNationPanel();" id="stab_nation" class="tab-btn">&#127760; Nation</button>
-  <button onclick="showSettingsSection('sec_themes');renderThemesPanel();" id="stab_themes" class="tab-btn">&#127912; Themes</button>
-  <button onclick="showSettingsSection('sec_notifications')" id="stab_notifications" class="tab-btn" data-roles="ed,super_user">&#128231; Email</button>
-  <button onclick="showSettingsSection('sec_terms')" id="stab_terms" class="tab-btn" data-roles="ed,super_user">&#128209; Terms &amp; Conditions</button>
-  <button onclick="showSettingsSection('sec_contracts');renderContractsTab();" id="stab_contracts" class="tab-btn" data-roles="ed,super_user">&#128196; Contracts</button>
-  <button onclick="showSettingsSection('sec_config')" id="stab_config" class="tab-btn" data-roles="ed,super_user">&#128295; Config</button>
-  <button onclick="showSettingsSection('sec_maint_qr');renderLabelsPanel();" id="stab_maint_qr" class="tab-btn" data-roles="ed,super_user">&#127991;&#65039; Unit Labels</button>
-  <button onclick="showSettingsSection('sec_audit');renderAuditLog();" id="stab_audit" class="tab-btn">&#128203; Audit Log</button>
-  <button onclick="showSettingsSection('sec_approval_authority');renderApprovalAuthorityPanel();" id="stab_approval_authority" class="tab-btn">&#128274; Approval Authority</button>
-</div>
-
-<!-- App Settings sub-tabs -->
-<div class="settings-subtabs" id="settings_subtabs_app">
-  <button onclick="showSettingsSection('sec_app_scoring')" id="stab_app_scoring" class="tab-btn">&#11088; Application Scoring</button>
-  <button onclick="showSettingsSection('sec_required_fields');renderRequiredFieldsPanel();" id="stab_required_fields" class="tab-btn">&#128221; Required Fields</button>
-  <button onclick="showSettingsSection('sec_unit_match')" id="stab_unit_match" class="tab-btn">&#127968; Unit Matching</button>
-  <button onclick="showSettingsSection('sec_reno_score')" id="stab_reno_score" class="tab-btn">&#128296; Reno Priority</button>
-  <button onclick="showSettingsSection('sec_budget')" id="stab_budget" class="tab-btn">&#128176; Reno Budget</button>
-  <button onclick="showSettingsSection('sec_occupancy')" id="stab_occupancy" class="tab-btn">&#127960; Occupancy</button>
-  <button onclick="showSettingsSection('sec_rent_model');renderRentModelPanel();" id="stab_rent_model" class="tab-btn">&#128181; Rent Model</button>
-  <button onclick="showSettingsSection('sec_policy_rules');renderPolicyRulesPanel();" id="stab_policy_rules" class="tab-btn">&#9878;&#65039; Policy Rules</button>
+<!-- Back row shown while a settings section is open (returns to the hub). -->
+<div id="settings_section_back" class="page-back-row" style="display:none;">
+  <button onclick="showSettingsHub()" class="back-btn-yellow"><svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"/></svg> All Settings</button>
 </div>
 
 <!-- USERS -->
