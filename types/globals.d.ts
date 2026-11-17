@@ -336,6 +336,7 @@ declare var _viewToggleHtml: any;
 declare var _wlArchiveApp: any;
 declare var _wlArchiveSow: any;
 declare var _wlCancelRfq: any;
+declare var _wlReelNudge: any;
 declare var _wlSetView: any;
 declare var applications: any;
 declare var arrearsAllocationBlock: any;

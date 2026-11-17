@@ -3818,6 +3818,82 @@ async function _wlMarkContractorPhotosRead(idsCsv){
 }
 window._wlMarkContractorPhotosRead = _wlMarkContractorPhotosRead;
 
+// ── Photo "film reel" — a horizontally scrollable thumbnail strip with ‹ ›
+// nav arrows, a visible thin scrollbar, scroll-snap, and drag-to-scroll, so a
+// batch of contractor site photos reads clearly as a scrollable reel instead of
+// looking cut off at the card edge. _wlPhotoReel(stripHtml) wraps the tiles;
+// _wlReelNudge scrolls on arrow click; _wlWireReels adds drag + arrow state.
+function _wlEnsureReelStyle(){
+  if (document.getElementById('wl-reel-style')) return;
+  var st = document.createElement('style'); st.id = 'wl-reel-style';
+  st.textContent =
+    '.wl-reel{position:relative;}'
+  + '.wl-reel-track{display:flex;gap:6px;overflow-x:auto;scroll-behavior:smooth;scroll-snap-type:x proximity;padding:0 2px 6px;-webkit-overflow-scrolling:touch;cursor:grab;}'
+  + '.wl-reel-track.wl-dragging{cursor:grabbing;scroll-behavior:auto;}'
+  + '.wl-reel-track .wl-ctthumb{scroll-snap-align:start;}'
+  + '.wl-reel-track::-webkit-scrollbar{height:8px;}'
+  + '.wl-reel-track::-webkit-scrollbar-thumb{background:var(--border);border-radius:8px;}'
+  + '.wl-reel-track::-webkit-scrollbar-track{background:transparent;}'
+  + '.wl-reel-nav{position:absolute;top:calc(50% - 4px);transform:translateY(-50%);width:30px;height:30px;border-radius:50%;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:17px;line-height:1;font-weight:700;cursor:pointer;display:flex;align-items:center;justify-content:center;opacity:.97;z-index:2;padding:0;}'
+  + '.wl-reel-nav:hover{background:var(--yellow);color:var(--dark);}'
+  + '.wl-reel-nav[disabled]{opacity:0;pointer-events:none;}'
+  + '.wl-reel-prev{left:-6px;}.wl-reel-next{right:-6px;}';
+  document.head.appendChild(st);
+}
+function _wlPhotoReel(stripHtml){
+  _wlEnsureReelStyle();
+  return '<div class="wl-reel">'
+    + '<button type="button" class="wl-reel-nav wl-reel-prev" onclick="_wlReelNudge(this,-1)" aria-label="Scroll left" disabled>&#8249;</button>'
+    + '<div class="wl-reel-track">' + stripHtml + '</div>'
+    + '<button type="button" class="wl-reel-nav wl-reel-next" onclick="_wlReelNudge(this,1)" aria-label="Scroll right">&#8250;</button>'
+    + '</div>';
+}
+function _wlReelTrackFrom(btn){
+  var reel = btn && btn.closest ? btn.closest('.wl-reel') : null;
+  return reel ? reel.querySelector('.wl-reel-track') : null;
+}
+function _wlReelSyncNav(track){
+  var reel = track && track.closest ? track.closest('.wl-reel') : null;
+  if(!reel) return;
+  var prev = reel.querySelector('.wl-reel-prev'), next = reel.querySelector('.wl-reel-next');
+  var max = track.scrollWidth - track.clientWidth - 1;
+  if(prev) prev.disabled = track.scrollLeft <= 1;
+  if(next) next.disabled = track.scrollLeft >= max;
+}
+window._wlReelNudge = function(btn, dir){
+  var track = _wlReelTrackFrom(btn); if(!track) return;
+  track.scrollBy({ left: dir * Math.max(140, Math.round(track.clientWidth * 0.8)), behavior:'smooth' });
+  setTimeout(function(){ _wlReelSyncNav(track); }, 320);
+};
+// Wire drag-to-scroll + arrow enable/disable on every reel after render.
+function _wlWireReels(){
+  var tracks = Array.prototype.slice.call(document.querySelectorAll('.wl-reel-track:not([data-reel-wired])'));
+  tracks.forEach(function(track){
+    track.setAttribute('data-reel-wired','1');
+    _wlReelSyncNav(track);
+    track.addEventListener('scroll', function(){ _wlReelSyncNav(track); }, { passive:true });
+    var down = false, moved = false, startX = 0, startScroll = 0;
+    track.addEventListener('pointerdown', function(e){
+      if(e.button && e.button !== 0) return;
+      down = true; moved = false; startX = e.clientX; startScroll = track.scrollLeft;
+      track.classList.add('wl-dragging');
+    });
+    track.addEventListener('pointermove', function(e){
+      if(!down) return;
+      var dx = e.clientX - startX;
+      if(Math.abs(dx) > 4){ moved = true; }
+      track.scrollLeft = startScroll - dx;
+    });
+    function end(){ if(!down) return; down = false; track.classList.remove('wl-dragging'); _wlReelSyncNav(track); }
+    track.addEventListener('pointerup', end);
+    track.addEventListener('pointercancel', end);
+    track.addEventListener('pointerleave', end);
+    // Suppress the thumbnail click that follows a real drag.
+    track.addEventListener('click', function(e){ if(moved){ e.stopPropagation(); e.preventDefault(); moved = false; } }, true);
+  });
+}
+window._wlWireReels = _wlWireReels;
+
 // Lazy-load the signed-URL thumbnails for any contractor photo film strips in
 // the worklist (the HTML renders placeholders; signed URLs are async). Cached
 // per path for the session (URLs are valid 24h) so re-renders don't re-fetch.
@@ -8797,11 +8873,11 @@ function renderWorklist() {
           : '<div style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;">' + gHead + '</div>';
         csRows += '<div style="display:flex;flex-direction:column;gap:7px;padding:10px 14px;border-top:1px solid var(--border);background:var(--surface);">'
           + '<div style="display:flex;align-items:center;gap:8px;">' + gHeadWrap + csBtnHtml({ t:'✓ Mark all read', fn:'_wlMarkContractorPhotosRead(\'' + gIdsJs + '\')', primary:true }) + '</div>'
-          + '<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;">' + strip + '</div>'
+          + _wlPhotoReel(strip)
           + '</div>';
         csCards += wlCard({ title: gWho, pill:{ text:(gN + ' photos'), color:'var(--muted)' }, open: openSowG,
           metas:[{k:'Type',v:'Photos'},{k:'Project',v:s.sow_project_number||''}],
-          bodyHtml:'<div style="display:flex;gap:6px;overflow-x:auto;padding:6px 0 2px;">' + strip + '</div>',
+          bodyHtml: _wlPhotoReel(strip),
           actions:[{text:'✓ Mark all read', onclick:'_wlMarkContractorPhotosRead(\'' + gIdsJs + '\')'}] });
         return;
       }
@@ -9207,6 +9283,7 @@ function renderWorklist() {
   // Film-strip thumbnails for grouped contractor photos load their signed URLs
   // after the HTML is in the DOM (idempotent; skips already-hydrated tiles).
   if (typeof _wlHydrateContractorThumbs === 'function') { try { _wlHydrateContractorThumbs(); } catch(e){ /* non-fatal */ } }
+  if (typeof _wlWireReels === 'function') { try { _wlWireReels(); } catch(e){ /* non-fatal */ } }
 }
 
 function resetRenoScoreModel() {
