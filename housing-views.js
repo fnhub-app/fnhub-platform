@@ -1508,7 +1508,7 @@ function _orderLandingSections(){
   var lv = document.getElementById('landingView'); if (!lv) return;
   var want = [
     { cls:'home-greeting' }, { cls:'quick-row' }, { id:'hub_wl_summary' },
-    { id:'landing_kpi_strip' }, { id:'hub_mount' }, { id:'sec-recent' },
+    { id:'landing_kpi_strip' }, { id:'hub_mount' },
     { cls:'visually-hidden' }, { id:'emp_tiles_grid' }
   ];
   want.forEach(function(w){
