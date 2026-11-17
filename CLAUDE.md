@@ -143,6 +143,14 @@ Canonical roles (see `shared-config.js` `ROLE` and the role matrix in `PLAN.md` 
 - Renovations enabling auto-enables Contractors (SOWs reference contractors).
 - Hardcoded `'Constance Lake First Nation'` strings are being replaced with `NATION_CONFIG.display_name` / `short` — finance.html is already fully retrofitted (Phase F1); other pages still have inline strings.
 
+**Per-nation custom modules (bespoke features).** A nation wanting a feature nobody else gets is a **licensed optional module**, never a per-nation fork — one codebase, differences driven by config/licensing (the whole point of the module system + the ⛔ hard rule). A **starter scaffold ships in-repo**: `custom.html` + `custom-init.js`, module key **`custom_module`**, which defaults **OFF in both `_enabled` and `_licensed`** so it's invisible everywhere until a nation is **licensed** (admin control plane) **and** a super user **enables** it. To build a real one from the template, register the key in **all four places** (keep them in sync) + add a page:
+  1. `shared-config.js` — `CLFN_MODULES._enabled` + `_licensed` (both default `false` for a bespoke feature).
+  2. `scoring.js` — `MODULE_LABELS` (the Settings → Nation → Modules label).
+  3. `admin/admin.js` — `MODULES` list + `MODULE_DEFAULT_ENABLED` (so it's licensable per nation from the control plane).
+  4. `housing-init.js` — a `HEADER_NAV` entry gated by `module:'<key>'` (+ a `_currentNavKey()` path map for its page).
+  5. A page (`<name>.html` + `<name>-init.js`) mirroring the `mail-init.js`/inspections boot: restore session → resolve role → **hard-gate on `moduleOn('<key>')`** (redirect to housing.html when off, re-checked after settings hydrate) → render. New top-level HTML is auto-served by Cloudflare (no route needed; don't let `.assetsignore` exclude it).
+  Per-nation **data** rides that nation's own DB (`housing_settings` jsonb for config; a dedicated table + migration run only on that nation's project for relational data). License it to the one nation (and bill it as an add-on if applicable — same path as the AI add-on). `moduleOn('<key>')` is the gate; `isEnabled` is true only when licensed AND enabled.
+
 ### Finance module data layer (Phase F3, shipped)
 - `_FIN_TABLES` registry maps each in-memory collection (tenants, rentLedger, loanList, …) to its Supabase table + camelCase↔snake_case mapper.
 - `_bootLoadFinanceData()` fetches all tables in parallel at DOMContentLoaded and hydrates `_memStore`.

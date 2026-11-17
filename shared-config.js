@@ -787,8 +787,13 @@ window.CLFN_MODULES = {
   CORE: ['applications', 'inventory', 'tenants', 'worklist'],
   // contractor_portal defaults OFF (feature in build — Phase CP B1); licensed so
   // a super user can turn it on when the portal is ready for that nation.
-  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false, support: true },
-  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true, support: true },
+  // custom_module is a STARTER TEMPLATE for a per-nation bespoke feature
+  // (custom.html / custom-init.js). It defaults OFF in BOTH maps so it ships
+  // dormant: invisible everywhere until a nation is licensed for it (admin
+  // control plane) AND a super user enables it. Rename the key when you build a
+  // real module from the template.
+  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false, support: true, custom_module: false },
+  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true, support: true, custom_module: false },
 
   isEnabled: function(mod) {
     if(this.CORE.indexOf(mod) !== -1) return true;
