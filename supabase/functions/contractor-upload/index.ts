@@ -21,6 +21,7 @@
 
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { sendTransactionalSms, isE164 } from "../_shared/sms.ts";
 
 const SUPABASE_URL         = Deno.env.get("SUPABASE_URL");
 const SUPABASE_ANON_KEY    = Deno.env.get("SUPABASE_ANON_KEY");
@@ -66,6 +67,123 @@ function cwoStatusFor(sow: Record<string, unknown>, percent: number): string {
   if (percent >= 100) return "awaiting_signoff";
   if (percent > 0) return "in_process";
   return "active";
+}
+
+// ---- Staff SMS alert on a contractor submission that needs review/approval --
+// Texts staff when a contractor uploads something that needs staff action: an
+// invoice (payment approval), a WSIB / insurance certificate (compliance review),
+// or a request to add a team member (access approval). Photos / notes / progress
+// are informational and do NOT text (they are flagged on the worklist).
+// Role-gated: recipients are the roles configured in Settings -> Notifications
+// (event contractor_submission), DEFAULT Housing Manager. Also gated by the
+// sms_notifications module being on and the event's Text channel (default on).
+// The deep link is resolved from a TRUSTED server source only (never the
+// contractor's client, which could inject a phishing link). Best-effort: never
+// throws into the submission path, and is awaited so the sends complete before
+// the function instance is reclaimed.
+const REVIEW_KIND_DOC: Record<string, string> = {
+  invoice:    "an invoice",
+  wsib:       "a WSIB clearance certificate",
+  insurance:  "an insurance certificate",
+  add_person: "a request to add a team member",
+};
+
+function normRole(r: string): string {
+  const v = (r || "").toLowerCase().trim();
+  if (v === "hm" || v === "manager") return "housing_manager";
+  if (v === "employee" || v === "staff") return "housing_employee_l1";
+  if (v === "executive_director" || v === "executivedirector") return "ed";
+  return v;
+}
+
+// deno-lint-ignore no-explicit-any
+async function settingValue(admin: any, key: string): Promise<any> {
+  try {
+    const { data } = await admin.from("housing_settings").select("value").eq("key", key).limit(1);
+    if (data && data.length) {
+      let v = data[0].value;
+      if (typeof v === "string") { try { v = JSON.parse(v); } catch (_e) { /* leave as string */ } }
+      return v;
+    }
+  } catch (_e) { /* ignore */ }
+  return null;
+}
+
+// Trusted staff-app base URL for the deep link. NEVER derived from contractor
+// input. Priority: housing_settings.app_base_url -> APP_BASE_URL secret ->
+// derive from housing_settings.intake_email (<sub>@fnhub.app). '' if unknown.
+// deno-lint-ignore no-explicit-any
+async function resolveAppBaseUrl(admin: any): Promise<string> {
+  const direct = await settingValue(admin, "app_base_url");
+  const ds = (typeof direct === "string") ? direct : (direct && direct.url);
+  if (ds && /^https:\/\/[a-z0-9.-]+$/i.test(String(ds).trim())) return String(ds).trim().replace(/\/+$/, "");
+  const envUrl = (Deno.env.get("APP_BASE_URL") || "").trim();
+  if (/^https:\/\/[a-z0-9.-]+$/i.test(envUrl)) return envUrl.replace(/\/+$/, "");
+  const intake = await settingValue(admin, "intake_email");
+  const ie = (typeof intake === "string") ? intake : (intake && (intake.address || intake.email));
+  const m = String(ie || "").trim().match(/^([a-z0-9-]+)@fnhub\.app$/i);
+  if (m) return "https://" + m[1].toLowerCase() + ".fnhub.app";
+  return "";
+}
+
+// deno-lint-ignore no-explicit-any
+async function notifyStaffOfSubmission(admin: any, info: {
+  kind: string; contractorId: string; address: string; amount: number | null;
+}): Promise<void> {
+  try {
+    const docType = REVIEW_KIND_DOC[info.kind];
+    if (!docType) return;   // only review/approval kinds notify
+
+    // Gate 1: the SMS module must be enabled for this nation.
+    const modules = await settingValue(admin, "module_enablement");
+    if (!modules || modules.sms_notifications !== true) return;
+
+    // Gate 2: the event's Text channel (default ON when unset).
+    const templates = await settingValue(admin, "email_templates");
+    const evt = (templates && templates.contractor_submission) || {};
+    if (evt.channels && typeof evt.channels === "object" && evt.channels.sms === false) return;
+
+    // Recipients: configured roles (default Housing Manager), active + opted-in.
+    const roles = (Array.isArray(evt.recipientRoles) && evt.recipientRoles.length)
+      ? evt.recipientRoles.map((r: unknown) => normRole(String(r)))
+      : ["housing_manager"];
+    const { data: staffRows } = await admin
+      .from("staff").select("name, role, sms_number, sms_opt_in")
+      .eq("is_active", true).eq("sms_opt_in", true);
+    // deno-lint-ignore no-explicit-any
+    const recipients = (staffRows || []).filter((s: any) =>
+      roles.indexOf(normRole(String(s.role || ""))) !== -1 && isE164(s.sms_number));
+    if (!recipients.length) return;
+
+    // Contractor name (for the message) and the trusted app link.
+    let contractorName = "A contractor";
+    try {
+      const { data: cRows } = await admin.from("housing_contractors").select("name").eq("id", info.contractorId).limit(1);
+      if (cRows && cRows.length && cRows[0].name) contractorName = String(cRows[0].name);
+    } catch (_e) { /* keep generic */ }
+    const base = await resolveAppBaseUrl(admin);
+    const link = base ? (base + "/housing.html") : "";
+    const brand = (Deno.env.get("EMAIL_BRAND") || "").trim();
+
+    const amtTxt = (info.kind === "invoice" && info.amount && info.amount > 0)
+      ? " for $" + Number(info.amount).toFixed(2) : "";
+    const where = info.address ? (" at " + info.address) : "";
+    const body = (brand ? brand + ": " : "")
+      + contractorName + " submitted " + docType + amtTxt + where
+      + ". Review/approve in the housing app" + (link ? ": " + link : "")
+      + ". Reply STOP to opt out.";
+
+    for (const r of recipients) {
+      await sendTransactionalSms(admin, {
+        to: String(r.sms_number).trim(),
+        body,
+        event: "contractor_submission",
+        entity_type: "contractor",
+        entity_id: info.contractorId,
+        actor: "contractor_portal",
+      });
+    }
+  } catch (_e) { /* best-effort: never disturb the submission */ }
 }
 
 serve(async (req: Request) => {
@@ -165,6 +283,7 @@ serve(async (req: Request) => {
         actor: user.phone || user.id, created_at: nowIso,
       });
     } catch (_e) { /* non-fatal: the request row above is the authoritative record */ }
+    await notifyStaffOfSubmission(admin, { kind: "add_person", contractorId, address: "", amount: null });
     return jsonResponse({ ok: true, kind: "add_person" });
   }
 
@@ -370,6 +489,13 @@ serve(async (req: Request) => {
   if (kind === "invoice" && !recorded) {
     return jsonResponse({ error: "The invoice was received but could not be queued for review. Please try again." }, 500);
   }
+
+  // Text staff (role-gated, default Housing Manager) for the review/approval
+  // kinds -- invoice / WSIB / insurance. No-ops for photos. See the helper.
+  await notifyStaffOfSubmission(admin, {
+    kind, contractorId, address: woAddress,
+    amount: (kind === "invoice") ? amount : null,
+  });
 
   return jsonResponse({ ok: true, name: displayName });
 });
