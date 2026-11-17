@@ -2107,6 +2107,19 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .hub-fin-go:hover { background: var(--yellow-mid); }
 @media (max-width: 1000px) { .hub-tiles { grid-template-columns: repeat(3, 1fr); } }
 @media (max-width: 640px)  { .hub-tiles { grid-template-columns: repeat(2, 1fr); } .hub-fin-go { width: 100%; } }
+/* Help tile tint (Get Help / Report an Issue) */
+.hub-tile-help .hub-tile-ic { background: var(--success-bg); color: var(--success); }
+/* Data Health tile -> a small menu of the cleanup tools */
+.hub-dh-ov       { position: fixed; inset: 0; background: rgba(17,17,16,.45); z-index: 300; display: none; align-items: center; justify-content: center; padding: 20px; }
+.hub-dh-ov.on    { display: flex; }
+.hub-dh-sheet    { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; box-shadow: var(--shadow); width: 100%; max-width: 420px; max-height: 80vh; overflow: auto; }
+.hub-dh-h        { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px 12px; font-family: var(--serif); font-size: 19px; color: var(--text); border-bottom: 1px solid var(--border); }
+.hub-dh-x        { background: none; border: none; font-size: 22px; line-height: 1; color: var(--muted); cursor: pointer; font-family: var(--sans); }
+.hub-dh-list     { padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.hub-dh-item     { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border: none; background: none; border-radius: 10px; font-family: var(--sans); font-size: 14px; font-weight: 600; color: var(--text); cursor: pointer; text-align: left; width: 100%; }
+.hub-dh-item:hover { background: var(--bg); }
+.hub-dh-ic       { width: 32px; height: 32px; border-radius: 8px; background: var(--yellow-light); color: var(--accent-ink); display: flex; align-items: center; justify-content: center; flex: 0 0 auto; }
+.hub-dh-ic svg   { width: 17px; height: 17px; }
 
 /* Worklist summary banner on the hub (Phase 3) — routes to #worklistView */
 .hub-wl-summary        { display: flex; align-items: center; gap: 16px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--yellow); border-radius: var(--radius); padding: 15px 17px; margin: 4px 0 20px; box-shadow: var(--shadow); }
