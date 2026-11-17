@@ -168,28 +168,6 @@
     <div id="worklist_subtitle"></div>
   </div>
 
-  <!-- KPI strip — housing-only metrics. Populated by _renderLandingKpis() in
-       housing-views.js. Hidden when none of the values are available. -->
-  <!-- Portfolio at a glance - simple stat tiles (Units / Occupancy / Vacant /
-       Waitlist / Insp. Overdue), populated by _renderLandingKpis(). Replaced the
-       old detailed drill-down KPI cards to match the hub concept. -->
-  <div class="pf-head">
-    <span class="pf-title">Portfolio at a glance</span>
-    <a class="pf-link" onclick="if(typeof showLeadershipDashboard==='function')showLeadershipDashboard()" role="button" tabindex="0">View all reports &rarr;</a>
-  </div>
-  <div class="kpi-strip kpi-strip-pf" id="landing_kpi_strip">
-    <div class="kpi-card kpi-clickable" onclick="if(typeof showInventory==='function')showInventory();else location.href='inventory.html'" role="button" tabindex="0">
-      <div class="kpi-value" id="kpi_units">&mdash;</div><div class="kpi-label">Units</div></div>
-    <div class="kpi-card">
-      <div class="kpi-value" id="kpi_occupancy">&mdash;</div><div class="kpi-label">Occupancy</div></div>
-    <div class="kpi-card kpi-accent-success kpi-clickable" onclick="showHousingKpiDrilldown('vacant')" role="button" tabindex="0">
-      <div class="kpi-value" id="kpi_vacant">&mdash;</div><div class="kpi-label">Vacant</div></div>
-    <div class="kpi-card kpi-clickable" onclick="showHousingKpiDrilldown('new_apps')" role="button" tabindex="0">
-      <div class="kpi-value" id="kpi_waitlist">&mdash;</div><div class="kpi-label">Waitlist</div></div>
-    <div class="kpi-card kpi-accent-warn kpi-clickable" onclick="location.href='inspections.html'" role="button" tabindex="0">
-      <div class="kpi-value" id="kpi_insp_overdue">&mdash;</div><div class="kpi-label">Insp. Overdue</div></div>
-  </div>
-
   <!-- Landing hub (Phase 2) — tiled sections rendered from HEADER_NAV by
        renderHub() in housing-views.js, gated by module + role. Finance renders
        as a hero band at the end. Additive for now; the worklist moves to its
