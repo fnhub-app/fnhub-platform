@@ -308,10 +308,26 @@
    start of the header (left side, so it never overlaps right-aligned header
    buttons). Controls inside the header still work (the JS ignores clicks on
    buttons/inputs). */
+/* Settings section headers: LIGHT treatment so they match the new light tables
+   below (was the dark .modal-hdr bar). Scoped to #settingsView, so the dark
+   .modal-hdr used by modals across the app is untouched. The section headers
+   here carry only .btn-primary / .btn-ghost buttons, both of which read fine on
+   a light surface. */
+#settingsView .settings-section .modal-hdr {
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+#settingsView .settings-section .modal-hdr .lbl-yellow { color: var(--accent-ink); }
+#settingsView .settings-section .modal-hdr .modal-hdr-title,
+#settingsView .settings-section .modal-hdr h2 { color: var(--text); }
+#settingsView .settings-section .modal-hdr p,
+#settingsView .settings-section .modal-hdr .modal-hdr-sub,
+#settingsView .settings-section .modal-hdr .txt-sm-meta { color: var(--muted); }
+
 #settingsView .settings-section .card.stg-collapse > .modal-hdr { cursor: pointer; }
 #settingsView .settings-section .card.stg-collapse > .modal-hdr .stg-chev {
   display: inline-block; flex-shrink: 0; align-self: center; margin-right: 2px;
-  font-size: 13px; color: var(--txt-on-dark); opacity: .85;
+  font-size: 13px; color: var(--muted); opacity: .85;
   transition: transform .18s ease;
 }
 #settingsView .settings-section .card.stg-collapse.stg-open > .modal-hdr .stg-chev {
