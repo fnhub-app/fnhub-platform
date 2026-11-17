@@ -533,7 +533,7 @@
       // Explicit light styling: the ghost-button classes assume a light card,
       // so on this dark hero the button rendered black-on-black (invisible).
       +   '<div class="nic-sub" style="margin-top:4px;">Platform project ref: <code id="plat-ref">' + esc(_refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '') + '</code> '
-      +     '<button class="btn sm" type="button" data-act="copy-text" data-copy="' + esc(_refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '') + '" style="padding:2px 10px;font-size:11px;background:transparent;color:#fff;border:1px solid rgba(255,255,255,.5);border-radius:7px;cursor:pointer;">Copy</button></div>'
+      +     '<button class="btn sm ghost" type="button" data-act="copy-text" data-copy="' + esc(_refFromUrl(window.PLATFORM_SUPABASE_URL || '') || '') + '" style="padding:2px 10px;font-size:11px;">Copy</button></div>'
       + '</div>'
       + '<div class="nic-strip">'
       +   tile('Nations', String(nations.length))
@@ -574,7 +574,7 @@
       var _hero = document.querySelector('.nic-hero');
       if (_hero){
         var _w = document.createElement('div');
-        _w.style.cssText = 'margin-top:10px;padding:10px 12px;background:rgba(194,59,75,.18);border:1px solid rgba(194,59,75,.6);border-radius:8px;color:#fff;font-size:12px;line-height:1.5;';
+        _w.style.cssText = 'margin-top:12px;padding:10px 12px;background:#fdecec;border:1px solid #f5c2c2;border-radius:8px;color:#b91c1c;font-size:12px;line-height:1.5;';
         _w.textContent = '⚠ ' + window._mfaBanner;
         _hero.appendChild(_w);
       }
@@ -1737,7 +1737,7 @@
   function rqPillStyle(){
     if (document.getElementById('rq-pill-style')) return;
     var s = document.createElement('style'); s.id = 'rq-pill-style';
-    s.textContent = '.rqpill{display:inline-block;border:1px solid var(--line,#dfe3ec);background:var(--surface-2,#f1f4fa);color:var(--muted);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;}'
+    s.textContent = '.rqpill{display:inline-block;border:1.5px solid var(--hair,#e8e6df);background:var(--bg,#fafaf8);color:var(--ink);border-radius:999px;padding:6px 13px;font-size:13px;font-weight:500;cursor:pointer;font-family:inherit;transition:all .15s ease;}'
       + '.rqpill:hover{border-color:var(--accent);}'
       + '.rqpill.on{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600;}'
       + '.rqpill.on.urgent{background:#c23b4b;border-color:#c23b4b;}'
@@ -1832,41 +1832,50 @@
     var opts = function(arr, sel){ return arr.map(function(a){ return '<option' + (a === sel ? ' selected' : '') + '>' + esc(a) + '</option>'; }).join(''); };
     var roleBoxes = RQ_ROLES.map(function(r, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;"><input type="checkbox" id="rq_role_' + i + '" style="width:auto;"/> ' + esc(r) + '</label>'; }).join('');
     var blockBoxes = RQ_BLOCKS.map(function(b, i){ return '<label style="display:flex;align-items:center;gap:7px;font-weight:400;margin:0;" title="' + esc(RQ_BLOCK_HINT[b] || '') + '"><input type="checkbox" id="rq_block_' + i + '" style="width:auto;"/> ' + esc(b) + '</label>'; }).join('');
-    var ta = 'style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:9px 11px;border:1px solid var(--hair,#d9dee8);border-radius:9px;"';
+    var ta = 'style="width:100%;box-sizing:border-box;resize:vertical;font-family:inherit;font-size:14px;padding:9px 11px;border:1.5px solid var(--input-border);border-radius:8px;background:var(--surface);color:var(--ink);"';
     var optc = ' <span style="color:var(--muted);font-weight:400;">(optional)</span>';
+    // Field cells for a 2-column form grid: full() spans both columns, cell()
+    // takes one. Keeps the form roughly as tall as the sticky preview rail
+    // beside it, so there's no big empty column on the right.
+    var full = function(inner){ return '<div style="grid-column:1/-1;">' + inner + '</div>'; };
+    var cell = function(inner){ return '<div style="min-width:0;">' + inner + '</div>'; };
+    var cbGrid = function(boxes){ return '<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:6px 14px;margin-bottom:4px;">' + boxes + '</div>'; };
 
-    var form = '<div class="card" style="flex:1.4 1 440px;min-width:320px;">'
-      + '<h3>New request</h3>'
-      + '<p class="sub" style="margin:2px 0 10px;">Answer in plain language. The finished prompt builds alongside &mdash; copy it to Claude, or save it to the queue.</p>'
-      + '<label>Type</label>' + rqPillGroup('type', RQ_TYPES, 'New feature', false)
-      + '<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>'
-      + '<label>Which part of the app?</label><select id="rq_area">' + opts(RQ_AREAS, 'Not sure') + '</select>'
-      + '<label>Who uses it / should see it?</label><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;margin-bottom:8px;">' + roleBoxes + '</div>'
-      + '<label>Building blocks it should reuse' + optc + '</label><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:6px 14px;margin-bottom:8px;">' + blockBoxes + '</div>'
-      + '<div style="border:1px solid var(--hair,#d9dee8);border-radius:9px;padding:10px 12px;margin-bottom:8px;background:var(--surface-2,#f6f8fc);">'
+    var customBox = '<div style="border:1.5px solid var(--hair);border-radius:9px;padding:10px 12px;background:var(--accent-light);">'
       +   '<label style="display:flex;align-items:center;gap:8px;font-weight:600;margin:0;"><input type="checkbox" id="rq_custom" style="width:auto;"/> Custom feature for ONE nation (licensed module)</label>'
       +   '<div id="rq_custom_wrap" style="display:none;margin-top:8px;">'
       +     '<input type="hidden" id="rq_custom_nation" value=""/>'
       +     '<input id="rq_custom_nation_search" autocomplete="off" placeholder="Search nations&hellip;"/>'
       +     '<div id="rq_custom_nation_chosen" class="sub" style="margin:6px 0 0;font-size:12px;display:none;"></div>'
-      +     '<div id="rq_custom_nation_list" style="max-height:150px;overflow:auto;border:1px solid var(--hair,#d9dee8);border-radius:8px;margin-top:6px;background:var(--surface,#fff);"></div>'
+      +     '<div id="rq_custom_nation_list" style="max-height:150px;overflow:auto;border:1.5px solid var(--hair);border-radius:8px;margin-top:6px;background:var(--surface);"></div>'
       +   '</div>'
       +   '<div class="sub" style="margin:6px 0 0;font-size:11px;">Ticking this tells Claude to build it as a per-nation module, gated and licensed only to that nation (invisible to everyone else).</div>'
-      + '</div>'
-      + '<label>What do you want to happen?</label><textarea id="rq_what" rows="4" ' + ta + ' placeholder="Describe it the way you would to a coworker..."></textarea>'
-      + '<label>Why does it matter?' + optc + '</label><textarea id="rq_why" rows="2" ' + ta + '></textarea>'
-      + '<label>Walk through a real example <span style="color:var(--muted);font-weight:400;">(recommended)</span></label><textarea id="rq_example" rows="3" ' + ta + ' placeholder="First this happens, then that..."></textarea>'
-      + '<label>Should it notify anyone?</label>' + rqPillGroup('notify', RQ_NOTIF, 'No alert', false)
-      + '<input id="rq_notifywho" placeholder="Who gets the alert? e.g. Housing Manager" style="margin-top:6px;"/>'
-      + '<label>Rules &amp; limits' + optc + '</label><textarea id="rq_rules" rows="2" ' + ta + '></textarea>'
-      + '<label>Anything it must NOT break?' + optc + '</label><textarea id="rq_avoid" rows="2" ' + ta + '></textarea>'
-      + '<label>Priority</label>' + rqPillGroup('pri', RQ_PRIS, 'Normal', true)
-      + '<label>Needed by' + optc + '</label><input type="date" id="rq_due" style="max-width:200px;"/>'
       + '</div>';
 
-    var preview = '<div class="card" style="flex:1 1 340px;min-width:300px;position:sticky;top:12px;align-self:flex-start;">'
+    var form = '<div class="card" style="flex:1.5 1 480px;min-width:320px;">'
+      + '<h3>New request</h3>'
+      + '<p class="sub" style="margin:2px 0 12px;">Answer in plain language. The finished prompt builds alongside &mdash; copy it to Claude, or save it to the queue.</p>'
+      + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 20px;align-items:start;">'
+      +   full('<label>Type</label>' + rqPillGroup('type', RQ_TYPES, 'New feature', false))
+      +   full('<label>Short title</label><input id="rq_title" placeholder="e.g. Text the manager when a contractor sends an invoice"/>')
+      +   cell('<label>Which part of the app?</label><select id="rq_area">' + opts(RQ_AREAS, 'Not sure') + '</select>')
+      +   cell('<label>Needed by' + optc + '</label><input type="date" id="rq_due"/>')
+      +   full('<label>Who uses it / should see it?</label>' + cbGrid(roleBoxes))
+      +   full('<label>Building blocks it should reuse' + optc + '</label>' + cbGrid(blockBoxes))
+      +   full(customBox)
+      +   full('<label>What do you want to happen?</label><textarea id="rq_what" rows="4" ' + ta + ' placeholder="Describe it the way you would to a coworker..."></textarea>')
+      +   cell('<label>Why does it matter?' + optc + '</label><textarea id="rq_why" rows="3" ' + ta + '></textarea>')
+      +   cell('<label>Walk through a real example <span style="color:var(--muted);font-weight:400;">(recommended)</span></label><textarea id="rq_example" rows="3" ' + ta + ' placeholder="First this happens, then that..."></textarea>')
+      +   cell('<label>Should it notify anyone?</label>' + rqPillGroup('notify', RQ_NOTIF, 'No alert', false) + '<input id="rq_notifywho" placeholder="Who gets the alert? e.g. Housing Manager" style="margin-top:4px;"/>')
+      +   cell('<label>Priority</label>' + rqPillGroup('pri', RQ_PRIS, 'Normal', true))
+      +   cell('<label>Rules &amp; limits' + optc + '</label><textarea id="rq_rules" rows="2" ' + ta + '></textarea>')
+      +   cell('<label>Anything it must NOT break?' + optc + '</label><textarea id="rq_avoid" rows="2" ' + ta + '></textarea>')
+      + '</div>'
+      + '</div>';
+
+    var preview = '<div class="card" style="flex:1 1 320px;min-width:300px;position:sticky;top:12px;align-self:flex-start;">'
       + '<h3>Finished prompt</h3>'
-      + '<pre id="rq_out" style="white-space:pre-wrap;word-wrap:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;background:var(--surface,#f6f8fc);border:1px solid var(--line,#e3e8f0);border-radius:10px;padding:14px;max-height:52vh;overflow:auto;margin:0 0 12px;">Fill in the questions and your prompt will build here.</pre>'
+      + '<pre id="rq_out" style="white-space:pre-wrap;word-wrap:break-word;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;line-height:1.55;color:var(--ink);background:var(--bg);border:1.5px solid var(--hair);border-radius:10px;padding:14px;min-height:260px;max-height:60vh;overflow:auto;margin:0 0 12px;">Fill in the questions and your prompt will build here.</pre>'
       + '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
       +   '<button class="btn" type="button" id="rq_copy">Copy prompt</button>'
       +   '<button class="btn ghost" type="button" id="rq_save">Save to queue</button>'

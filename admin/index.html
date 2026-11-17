@@ -77,12 +77,14 @@
   code{background:var(--accent-light);border:1px solid var(--hair);border-radius:5px;padding:1px 5px;font-size:12px}
   /* Nation Information Card -- TIC-style shell (hero + strip + tabs + body + footer) */
   .nic-shell{background:var(--surface);border:1px solid var(--hair);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-top:14px}
-  .nic-hero{background:var(--dark);color:#fff;padding:24px 18px 20px}
-  .nic-hero .back{background:none;border:1px solid #444;color:#ccc;border-radius:7px;padding:5px 11px;font-size:12px;font-weight:700;font-family:inherit;cursor:pointer;margin-bottom:10px}
-  .nic-hero .back:hover{border-color:var(--accent-bar);color:var(--accent-bar)}
-  .nic-hero h1{color:#fff;margin:0 0 2px;font-size:21px}
-  .nic-hero .nic-sub{color:#bdbdb6;font-size:12px}
-  .nic-hero .nic-sub code{background:rgba(255,255,255,.12);border-color:transparent;color:#fff}
+  /* Light page-header-bar — mirrors the nation app's .page-header-bar (serif
+     title + muted subtitle + amber left accent bar + bottom divider). */
+  .nic-hero{position:relative;background:var(--surface);color:var(--text);padding:22px 18px 18px 24px;border-bottom:1px solid var(--hair)}
+  .nic-hero::before{content:'';position:absolute;left:0;top:16px;bottom:16px;width:4px;background:var(--accent-bar);border-radius:2px}
+  .nic-hero .back{background:none;border:1.5px solid var(--hair);color:var(--ink);border-radius:7px;padding:5px 11px;font-size:12px;font-weight:600;font-family:inherit;cursor:pointer;margin-bottom:12px;transition:var(--tr)}
+  .nic-hero .back:hover{border-color:var(--accent);color:var(--accent)}
+  .nic-hero h1{color:var(--text);margin:0 0 3px;font-size:26px}
+  .nic-hero .nic-sub{color:var(--muted);font-size:12px}
   .nic-strip{display:grid;grid-template-columns:repeat(4,1fr);gap:1px;background:var(--line)}
   .nic-strip-tile{background:var(--surface);padding:10px 14px;min-width:0}
   .nic-strip-tile .l{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);margin-bottom:4px}
