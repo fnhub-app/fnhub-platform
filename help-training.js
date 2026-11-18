@@ -32,12 +32,13 @@
   // BUMP THIS whenever the procedures are updated to match app changes so staff
   // can see how current the guidance is. A single doc may override it with its
   // own `rev` field once its content diverges from the rest of the set.
-  var SOP_REVISION = '2026-11-09';
+  var SOP_REVISION = '2026-11-18';
 
   // Revision history shown at the foot of every document. Add a new entry
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-18', change: 'Added a Unit Codes & Keys SOP: automatic unit codes and back-fill, the per-unit Key Inventory tab (add / issue / return / lost / retire), printable key tags (code + QR, no address), key-pickup instructions that reach the contractor portal, and enabling the optional Key Inventory module.' },
     { date: '2026-11-09', change: 'Added step-flow and approval-chain infographics to every SOP — the two end-to-end guides, each module, and each Settings tab — so key workflows read at a glance.' },
     { date: '2026-11-09', change: 'Added a Notes & File Records SOP: where each kind of note is stored, the Tenant Card as the single place that shows every note about a person, the new “has notes” worklist chips, destination hints on note fields, and Internal Notes shown on the approval scorecard.' },
     { date: '2026-11-03', change: 'Noted that a unit’s utility bills now also appear on the unit card’s Documents tab (cross-linked with the Tenant card’s Utilities tab).' },
@@ -1781,6 +1782,52 @@
     + '<li><strong>Entity vs. person.</strong> Unit, contractor and Maintenance-Request notes live with that record &mdash; they are about the property, the company or the job &mdash; and are read there, not on a person&rsquo;s Tenant Card.</li>'
     + '</ul>';
 
+  var MOD_KEYS = `
+    <p>Every housing unit can be given a short <strong>Unit Code</strong> &mdash; the nation's short name plus a number (shown here with a sample prefix, <code>ABC-014</code>) &mdash; and each unit keeps a <strong>Key Inventory</strong> of its physical keys. Keys are labelled by the code instead of the address, so a lost key never reveals which home it opens. The same code and key details follow a job through to the contractor.</p>
+    <div class="ht-fig"><div class="ht-flow">
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Unit gets a code</div><div class="ht-fsub">Assigned automatically, nation prefix + number.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Record the keys</div><div class="ht-fsub">Add each key on the unit's Keys tab.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">Issue / return</div><div class="ht-fsub">Track who holds each key, with a full history.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Print tags</div><div class="ht-fsub">Code + QR on each tag — no address.</div></div>
+    </div></div>
+    <h2>Turning it on</h2>
+    <p>Key Inventory is an <strong>optional module</strong> and is <strong>off by default</strong>. A super user turns it on under <strong>Settings &rarr; Nation &rarr; Modules &rarr; Key Inventory</strong>. Unit codes themselves are always on; only the Keys tab, key tags, and key-pickup instructions depend on the module.</p>
+    <h2>Unit codes</h2>
+    <ul>
+    <li>Each unit's code is <strong>assigned automatically</strong> &mdash; the nation's short name plus a running number (with a sample prefix: <code>ABC-001</code>, <code>ABC-002</code>). It does not change when a unit is re-addressed.</li>
+    <li>The first time a manager opens <strong>Inventory</strong> after the feature ships, any units without a code are <strong>back-filled</strong> in address order (a brief "Assigning unit codes" message shows).</li>
+    <li>The code appears beside the address in the Inventory list and cards, on the Edit Unit card, and on the Tenant Information Card.</li>
+    </ul>
+    <h2>The Keys tab</h2>
+    <p>Open a unit's <strong>Edit Unit</strong> card and choose the <strong>Keys</strong> tab. It shows a summary (how many keys are on hand, issued, or lost) and one row per key.</p>
+    <table><thead><tr><th>Action</th><th>What it does</th></tr></thead><tbody>
+    <tr><td>Add key(s)</td><td>Record a key by type (House, Mailbox, Garage, Mechanical, Other) and optional label; add several copies at once.</td></tr>
+    <tr><td>Issue</td><td>Record who is taking a key (tenant, staff or contractor) and the date. The key shows as <em>Issued</em>.</td></tr>
+    <tr><td>Return</td><td>Mark a key back on hand and clear the holder.</td></tr>
+    <tr><td>Mark lost / Mark found</td><td>Flag a key as lost, or bring a found key back on hand.</td></tr>
+    <tr><td>Edit</td><td>Change a key's type, label or notes.</td></tr>
+    <tr><td>Retire</td><td>Remove a key from the active list but keep it in the record. <strong>Management only.</strong></td></tr>
+    </tbody></table>
+    <p>Every action is written to the <strong>Audit Log</strong>, so each key has a complete chain of custody. <strong>Field employees</strong> see the Keys tab read-only.</p>
+    <h2>Printing key tags</h2>
+    <ol>
+    <li>On the Keys tab, click <strong>Print tags</strong>.</li>
+    <li>A sheet prints with one tag per key: the <strong>unit code</strong> in large type, the key type/label, and a <strong>QR code</strong> that opens the unit in the app. <strong>No address</strong> is printed.</li>
+    <li>Attach a tag to each key. Staff and contractors identify the unit by its code, and can scan the QR to open the unit.</li>
+    </ol>
+    <h2>Key-pickup instructions for contractors</h2>
+    <ul>
+    <li>At the foot of the Keys tab, fill <strong>Key Pickup Instructions</strong> (for example, "Collect keys from the housing office") and <strong>Save</strong>.</li>
+    <li>The note &mdash; and the unit code &mdash; appear on the <strong>contractor's work order and portal</strong>, so the contractor knows how to get the keys without the address being on them.</li>
+    <li>Saving pushes the note to any active contractor work orders right away.</li>
+    </ul>
+    <h2>Who can do what</h2>
+    <ul>
+    <li><strong>Housing office</strong> (managers and housing employees): view, add, issue, return, and edit keys; set pickup instructions; print tags.</li>
+    <li><strong>Management</strong> (Housing Manager / Executive Director): also retire keys.</li>
+    <li><strong>Field employees</strong>: read-only.</li>
+    </ul>`;
+
   // DOCS registry. cat drives the sidebar grouping; order within a category is
   // the array order. Keep each html in sync with its Claude Doc master.
   var DOCS = [
@@ -1790,6 +1837,7 @@
 
     { id: 'mod-applications', cat: 'Modules', title: 'Applications',                  html: MOD_APPLICATIONS },
     { id: 'mod-inventory',    cat: 'Modules', title: 'Inventory (Units)',             html: MOD_INVENTORY },
+    { id: 'mod-keys',         cat: 'Modules', title: 'Unit Codes & Keys',             html: MOD_KEYS },
     { id: 'mod-tenants',      cat: 'Modules', title: 'Tenants & TIC',                 html: MOD_TENANTS },
     { id: 'mod-worklist',     cat: 'Modules', title: 'My Worklist',                   html: MOD_WORKLIST },
     { id: 'mod-match',        cat: 'Modules', title: 'Match',                         html: MOD_MATCH },
