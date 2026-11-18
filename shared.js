@@ -753,27 +753,29 @@ window.showPrompt = function(opts) {
     document.body.appendChild(ov);
     var input = document.getElementById(fieldId);
     var confirmBtn = ov.querySelector('[data-cn-confirm]');
-    function syncRequired(){
-      if(!opts.required || !confirmBtn) return;
-      var v = (input && input.value ? input.value.trim() : '');
-      confirmBtn.disabled = !v;
-      confirmBtn.style.opacity = v ? '' : '.45';
+    function close(result){ if (ov.parentNode) ov.parentNode.removeChild(ov); resolve(result); }
+    // For a required field, keep the confirm button ENABLED (always tappable)
+    // and validate on click. Disabling it until the input fired an `input`
+    // event left the button stuck greyed out on some touch devices (iPad), so
+    // staff could type but never tap "Save" — see the arrears-note dialog.
+    function submit(){
+      var val = input ? input.value : '';
+      if(opts.required && !String(val).trim()){
+        if(input){ input.style.borderColor = 'var(--danger)'; input.focus(); }
+        return;   // keep the dialog open until a value is entered
+      }
+      close(val);
     }
-    syncRequired();
     if(input){
-      input.addEventListener('input', syncRequired);
+      input.addEventListener('input', function(){ if(input.style.borderColor) input.style.borderColor = ''; });
       // Enter submits on single-line input; Ctrl/Cmd-Enter submits on textarea.
       input.addEventListener('keydown', function(e){
-        if(e.key === 'Enter' && (!opts.multiline || e.ctrlKey || e.metaKey)){
-          e.preventDefault();
-          if(!confirmBtn.disabled) confirmBtn.click();
-        }
+        if(e.key === 'Enter' && (!opts.multiline || e.ctrlKey || e.metaKey)){ e.preventDefault(); submit(); }
       });
       setTimeout(function(){ input.focus(); }, 30);
     }
-    function close(result){ if (ov.parentNode) ov.parentNode.removeChild(ov); resolve(result); }
     ov.querySelectorAll('[data-cn-cancel]').forEach(function(b){ b.onclick = function(){ close(null); }; });
-    confirmBtn.onclick = function(){ close(input ? input.value : ''); };
+    confirmBtn.onclick = submit;
     ov.addEventListener('click', function(e){ if (e.target === ov) close(null); });
   });
 };
