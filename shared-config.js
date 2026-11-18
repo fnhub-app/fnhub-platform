@@ -792,8 +792,10 @@ window.CLFN_MODULES = {
   // dormant: invisible everywhere until a nation is licensed for it (admin
   // control plane) AND a super user enables it. Rename the key when you build a
   // real module from the template.
-  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false, support: true, custom_module: false },
-  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true, support: true, custom_module: false },
+  // key_inventory defaults OFF (licensed so a super user can turn it on): the
+  // unit Keys tab / key tags / key-pickup are opt-in per nation, not mandatory.
+  _enabled:  { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: false, support: true, custom_module: false, key_inventory: false },
+  _licensed: { finance: true, match: true, contractors: true, renovations: true, rfq: true, mapping: true, ai_assistant: true, inspections: true, projects: true, email_intake: true, sms_notifications: true, contractor_portal: true, support: true, custom_module: false, key_inventory: true },
 
   isEnabled: function(mod) {
     if(this.CORE.indexOf(mod) !== -1) return true;

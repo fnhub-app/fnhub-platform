@@ -442,13 +442,24 @@ function openUnitEditModal(unitId){
   unitEditStatusChange();
   _ueCurrentUnitId = unitId;
   renderEditUnitPhotoPreview(unitId);
-  // Keys tab (Phase 2) — injected once per modal so all three #unitEditModal
-  // copies (inventory/tenants/match) get it without duplicating markup.
-  // _ueSwitchTab works purely by class toggle + ue_panel_<name> id lookup.
+  // Keys tab (Phase 2-4) — gated behind the OPTIONAL key_inventory module
+  // (opt-in per nation; off by default, so keys are never mandatory). Injected
+  // once per modal so all three #unitEditModal copies (inventory/tenants/match)
+  // get it without duplicating markup; _ueSwitchTab works purely by class toggle
+  // + ue_panel_<name> id. When the module is off, any previously-injected tab is
+  // removed so toggling it off takes effect without a reload.
+  var _keysOn = (typeof moduleOn === 'function') ? moduleOn('key_inventory') : false;
   (function(){
     var _m = document.getElementById('unitEditModal'); if(!_m) return;
     var _tabs = _m.querySelector('.tic-tabs');
-    if(_tabs && !_tabs.querySelector('[data-ue-tab="keys"]')){
+    var _existTab = _tabs && _tabs.querySelector('[data-ue-tab="keys"]');
+    var _existPanel = document.getElementById('ue_panel_keys');
+    if(!_keysOn){
+      if(_existTab && _existTab.parentNode) _existTab.parentNode.removeChild(_existTab);
+      if(_existPanel && _existPanel.parentNode) _existPanel.parentNode.removeChild(_existPanel);
+      return;
+    }
+    if(_tabs && !_existTab){
       var _btn = document.createElement('button');
       _btn.type = 'button'; _btn.className = 'tic-tab'; _btn.setAttribute('data-ue-tab','keys');
       _btn.setAttribute('data-ue-keep',''); _btn.setAttribute('role','tab'); _btn.textContent = 'Keys';
@@ -464,7 +475,7 @@ function openUnitEditModal(unitId){
       _wrap.appendChild(_p);
     }
   })();
-  if(typeof _keysRenderPanel === 'function'){
+  if(_keysOn && typeof _keysRenderPanel === 'function'){
     var _ueKeysMount = document.getElementById('ue_keys_mount');
     if(_ueKeysMount) _keysRenderPanel(_ueKeysMount, u, { readOnly: (window.currentRole === 'field_employee') });
   }
