@@ -416,8 +416,9 @@
     var badges = [];
     var stream = t[TIC_C.housing_stream];
     if(stream) badges.push('<span class="std-pill std-pill-info">' + _ticEsc(stream) + '</span>');
-    var status = t[TIC_C.tenancy_status] || u.status;
-    if(status) badges.push('<span class="std-pill std-pill-info">' + _ticEsc(status) + '</span>');
+    // Tenancy-status pill intentionally omitted from the hero — it duplicates
+    // the "Tenancy Status" tile in the glance strip right below, and dropping it
+    // keeps the hero compact on phones.
     var band   = t[TIC_C.band_membership] || ((_ticState.application || {}).band) || '';
     if(band) badges.push('<span class="std-pill std-pill-info">' + _ticEsc(band) + '</span>');
     // Internal application score (scored app types only) — click opens the
@@ -435,10 +436,9 @@
           + (_bcr.bcrd_date ? ' (' + _ticEsc(_bcr.bcrd_date) + ')' : '') + '</span>');
       }
     }
-    // Last-note-age nudge: red when there are no notes or the newest is older
-    // than the stale threshold, so staff are prompted to keep the file current.
-    var _na = _ticLastNoteInfo();
-    if(_na){ badges.push(_na.badge); }
+    // Last-note-age nudge pill intentionally omitted from the hero (removed per
+    // request to reclaim space). Note history still lives on the Notes tab;
+    // _ticLastNoteInfo() is kept in case the nudge is reinstated elsewhere.
     _ticEl('tic_hero_badges').innerHTML = badges.join('');
   }
   // Click the hero Score chip -> open the scoring sheet for this application.
@@ -2770,7 +2770,7 @@
         + '<button type="button" onclick="window._ticOpenEvictionNoticeModal && window._ticOpenEvictionNoticeModal(\'immediate\')" class="header-export-item">Notice of IMMEDIATE Eviction (Safety Risk)</button>' )
       : '';
     return '<div class="export-dropdown">'
-      +   '<button type="button" onclick="toggleExportMenu(this)" class="btn btn-primary">&#128196; Generate Forms &#9660;</button>'
+      +   '<button type="button" onclick="toggleExportMenu(this)" class="btn btn-primary">&#128196; Forms &#9660;</button>'
       +   '<div class="header-export-menu header-export-menu--wide">'
       +     '<div class="header-export-group">Occupancy Agreements</div>'
       +     '<button type="button" onclick="window._ticOpenLeaseModal && window._ticOpenLeaseModal()" class="header-export-item">'+(nationShort())+' Residential Occupancy Agreement</button>'
