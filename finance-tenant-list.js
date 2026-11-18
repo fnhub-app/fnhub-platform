@@ -154,7 +154,7 @@ function renderTenantList() {
       var statusText = st.charAt(0).toUpperCase() + st.slice(1);
       var unitCell = t.unit ? t.unit : '<span class="std-cell-dash">—</span>';
       var typeCell = typeLabels[t.type] || (t.type||'').replace(/-/g,' ') || '<span class="std-cell-dash">—</span>';
-      var hccBadge = t.homeCare ? '<span class="pill" style="font-size:9px;background:#0891b2;color:#fff;border:none;vertical-align:middle;margin-left:4px;">&#127968; H&amp;CC</span>' : '';
+      var hccBadge = t.homeCare ? '<span class="pill" style="font-size:9px;background:var(--info-blue);color:var(--white,#fff);border:none;vertical-align:middle;margin-left:4px;">&#127968; H&amp;CC</span>' : '';
       return '<tr class="clickable" onclick="openFinanceCard(\''+safeId+'\')">'+
         '<td class="std-row-avatar-cell"><div class="std-row-avatar">'+initials+'</div></td>'+
         '<td class="std-cell-primary">'+tenantNameHtml(t)+hccBadge+'</td>'+

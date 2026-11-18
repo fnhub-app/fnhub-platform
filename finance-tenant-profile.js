@@ -48,7 +48,7 @@ function renderTenantProfile(tid) {
       '<div style="flex:1;">'+
         '<div style="font-size:13px;font-weight:700;color:var(--danger);margin-bottom:2px;">Account Flagged \u2014 Collections</div>'+
         '<div style="font-size:12px;color:#7f1d1d;margin-bottom:8px;">Auto-payments suspended. Manual payments only.</div>'+
-        '<button class="btn btn-ghost btn-sm" style="font-size:11px;border-color:var(--danger);color:var(--danger);" onclick="resolveCollectionFromTIC(\''+tid+'\')">&#10003; Mark Resolved</button>'+
+        '<button class="btn btn-danger-ghost btn-sm" style="font-size:11px;" onclick="resolveCollectionFromTIC(\''+tid+'\')">&#10003; Mark Resolved</button>'+
       '</div>';
   }
 
@@ -721,7 +721,7 @@ function renderTicHistory(tid) {
       '<td class="std-cell-tail" style="white-space:nowrap;">'+
         '<button class="btn btn-ghost btn-sm" title="View voucher" onclick="openVoucher(window._txnVoucherCache[\'txn_'+r.id+'\'])">&#128203;</button> '+
         (canVoid
-          ? '<button class="btn btn-ghost btn-sm" title="Void / reverse this transaction" style="color:var(--danger);" onclick="voidTicTransaction(\''+ledgerAttr+'\',\''+idAttr+'\',\''+tid+'\')">&#8634; Void</button>'
+          ? '<button class="btn btn-danger-ghost btn-sm" title="Void / reverse this transaction" onclick="voidTicTransaction(\''+ledgerAttr+'\',\''+idAttr+'\',\''+tid+'\')">&#8634; Void</button>'
           : '<span class="std-cell-dash" style="font-size:11px;">\u2014</span>')+
       '</td>'+
     '</tr>';
@@ -928,7 +928,7 @@ function buildLedgerTable(entries, type) {
     return {e:e, charge:charge, payment:payment, bal:running};
   }).reverse();
 
-  var html = '<div class="tbl-wrap"><table class="tbl">' +
+  var html = '<div class="std-table-card"><table class="std-table">' +
     '<thead><tr><th>Date</th><th>Description</th><th>Charge</th><th>Payment</th><th>Balance</th><th>Method</th><th></th></tr></thead><tbody>';
 
   rows.forEach(function(r){
