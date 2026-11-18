@@ -476,6 +476,7 @@ function openPrjModal(id) {
   if (!modal) return;
   modal.innerHTML = _prjBuildModalHTML();
   modal.classList.add('is-open');
+  try { var _prjFoot = modal.querySelector('.tic-footer'); if (_prjFoot && typeof cardFooter === 'function') cardFooter(_prjFoot); } catch (_e) {}
 
   _prjRenderOverview();
   _prjRenderMilestones();

@@ -437,6 +437,7 @@ function openUnitEditModal(unitId){
   renderEditUnitPhotoPreview(unitId);
   _ueSwitchTab('overview');
   var _uem=document.getElementById('unitEditModal'); if(_uem){_uem.style.removeProperty('display');_uem.style.setProperty('display','flex','important');}
+  try { if(_uem && typeof cardFooter === 'function') cardFooter(_uem.querySelector('.tic-footer')); } catch(_e){}
   // Scroll-collapse: shrink the info strip to icon-only once the tab body
   // scrolls, freeing space on tablet/mobile (shared-ui.js). _initScrollCollapse
   // is itself idempotent, so calling it on every open is safe.

@@ -1299,3 +1299,154 @@ window._initScrollCollapse = _initScrollCollapse;
     try { g.tabs[nx].scrollIntoView({ inline: 'center', block: 'nearest' }); } catch (_e) {}
   }, { passive: true });
 })();
+
+// ── Card footer: Actions sheet + full-width primary ──────────────────────────
+// Standard bottom-of-card layout shared by every .tic-shell / .modal-footer
+// record modal (TIC, Maintenance Request, Edit Unit, Contractor Card, Capital
+// Project, Inspection, ...). Instead of cramming every action into one wrapping
+// row (which squished on phones), cardFooter(footerEl) re-lays an existing
+// footer into: a single "Actions" button that opens a grouped bottom sheet of
+// all the secondary actions, then [Cancel] + the one yellow primary, full width.
+//
+// The original <button> nodes are REUSED (moved, never recreated), so their ids,
+// inline onclick, delegated handlers, role gates and live show/hide state all
+// keep working untouched. The sheet is rebuilt from their CURRENT visibility
+// each time it opens (a button the card has hidden is left out), and a sheet
+// item fires the real button's own click, so inline-onclick footers and
+// event-delegated footers both work. Idempotent (guarded per footer element);
+// if no primary action is present the footer is left exactly as-is.
+function cardFooter(footerEl) {
+  try {
+    var el = /** @type {any} */ (footerEl);
+    if (!el || el.dataset.cfApplied) return;
+    var btns = Array.prototype.slice.call(el.querySelectorAll('button, .btn'));
+    var primary = null, cancel = null, secondary = [];
+    btns.forEach(function (b) {
+      var bb = /** @type {any} */ (b);
+      if (primary == null && bb.classList.contains('btn-primary')) { primary = bb; return; }
+      var t = (bb.textContent || '').trim();
+      if (cancel == null && (bb.getAttribute('data-cf-cancel') != null || t === 'Cancel' || t === 'Close')) { cancel = bb; return; }
+      secondary.push(bb);
+    });
+    if (primary == null) return; // no anchor action — leave the footer untouched
+
+    var src = document.createElement('div');
+    src.className = 'cf-src';
+    secondary.forEach(function (b) { src.appendChild(b); });
+
+    var bar = document.createElement('div');
+    bar.className = 'cf-bar';
+    if (secondary.length) {
+      var ab = document.createElement('button');
+      ab.type = 'button';
+      ab.className = 'btn btn-ghost cf-actions';
+      ab.setAttribute('aria-haspopup', 'dialog');
+      ab.innerHTML = 'Actions <span class="cf-chev" aria-hidden="true">&#9662;</span>';
+      ab.addEventListener('click', function () { openCardSheet(src); });
+      bar.appendChild(ab);
+    }
+    var prow = document.createElement('div');
+    prow.className = 'cf-primary-row';
+    if (cancel) prow.appendChild(cancel);
+    prow.appendChild(primary);
+    bar.appendChild(prow);
+
+    el.appendChild(bar);
+    el.appendChild(src);
+    el.classList.add('cf-applied');
+    // Some footers carry an inline display:flex (e.g. the inspection modal),
+    // which would beat the .cf-applied{display:block} rule — neutralize it so the
+    // Actions row + primary stack correctly.
+    el.style.display = 'block';
+    el.dataset.cfApplied = '1';
+  } catch (e) { try { console.warn('[cardFooter]', e); } catch (_e) {} }
+}
+
+// Pick which sheet group a secondary button belongs to. A button may override
+// this with an explicit data-cf-group attribute; otherwise it's inferred from
+// the label/style so no per-button markup change is needed to roll this out.
+function _cfGroupOf(b) {
+  var bb = /** @type {any} */ (b);
+  var t = (bb.textContent || '').toLowerCase();
+  var st = bb.getAttribute('style') || '';
+  if (bb.classList.contains('btn-ok') || /approve|recommend|sign[ -]?off|mark complete|reopen/.test(t)) return 'Approvals';
+  if (/match|allocate|payment request|invite|portal|assign|award|set up contract/.test(t)) return 'Workflow';
+  if (/work order|tenant form|letter|progress report|rfq|pdf|print|\bqr\b|report|agreement|statement|voucher|contract|forms?\b/.test(t)) return 'Documents';
+  if (bb.classList.contains('btn-danger') || bb.classList.contains('btn-danger-ghost') || /var\(--danger/.test(st) || /cancel request|delete|archive|void|remove|new request|unlock|dismiss/.test(t)) return 'Manage';
+  return 'More';
+}
+
+function _ensureCardSheet() {
+  if (document.getElementById('cardSheet')) return;
+  var ovl = document.createElement('div');
+  ovl.id = 'cardSheet';
+  ovl.className = 'cf-sheet-ovl';
+  ovl.innerHTML =
+    '<div class="cf-sheet" role="dialog" aria-modal="true" aria-label="Actions">' +
+      '<div class="cf-grab" aria-hidden="true"></div>' +
+      '<div class="cf-sheet-h">Actions</div>' +
+      '<div class="cf-sheet-body"></div>' +
+      '<button type="button" class="cf-done">Done</button>' +
+    '</div>';
+  document.body.appendChild(ovl);
+  ovl.addEventListener('click', function (e) { if (e.target === ovl) closeCardSheet(); });
+  var done = ovl.querySelector('.cf-done');
+  if (done) done.addEventListener('click', closeCardSheet);
+  document.addEventListener('keydown', function (e) {
+    var ev = /** @type {any} */ (e);
+    if (ev.key === 'Escape' && ovl.classList.contains('open')) closeCardSheet();
+  });
+}
+
+// Build + open the shared bottom sheet from a cf-src container of real buttons.
+function openCardSheet(src) {
+  _ensureCardSheet();
+  var ovl = /** @type {any} */ (document.getElementById('cardSheet'));
+  var body = ovl.querySelector('.cf-sheet-body');
+  var kids = Array.prototype.slice.call(src.children).filter(function (b) {
+    return /** @type {any} */ (b).style.display !== 'none';
+  });
+  var order = ['Approvals', 'Workflow', 'Documents', 'Manage', 'More'];
+  var byG = {};
+  kids.forEach(function (b) {
+    var g = /** @type {any} */ (b).getAttribute('data-cf-group') || _cfGroupOf(b);
+    (byG[g] = byG[g] || []).push(b);
+  });
+  var flat = [];
+  var html = '';
+  order.forEach(function (g) {
+    if (!byG[g]) return;
+    html += '<div class="cf-grp">' + g + '</div>';
+    byG[g].forEach(function (b) {
+      var bb = /** @type {any} */ (b);
+      var st = bb.getAttribute('style') || '';
+      var kind = '';
+      if (bb.classList.contains('btn-danger') || bb.classList.contains('btn-danger-ghost') || /var\(--danger/.test(st)) kind = ' cf-danger';
+      else if (bb.classList.contains('btn-ok') || /var\(--success/.test(st)) kind = ' cf-ok';
+      html += '<button type="button" class="cf-item' + kind + '"' + (bb.disabled ? ' disabled' : '') + '>' + escapeHtml((bb.textContent || '').trim()) + '</button>';
+      flat.push(bb);
+    });
+  });
+  body.innerHTML = html || '<div class="cf-empty">No other actions right now.</div>';
+  var items = body.querySelectorAll('.cf-item');
+  for (var i = 0; i < items.length; i++) {
+    (function (it, b) {
+      it.addEventListener('click', function () {
+        closeCardSheet();
+        if (b && !b.disabled) b.click();
+      });
+    })(items[i], flat[i]);
+  }
+  ovl.classList.add('open');
+  try { document.body.classList.add('cf-sheet-lock'); } catch (_e) {}
+}
+
+function closeCardSheet() {
+  var ovl = document.getElementById('cardSheet');
+  if (ovl) ovl.classList.remove('open');
+  try { document.body.classList.remove('cf-sheet-lock'); } catch (_e) {}
+}
+
+window.cardFooter = cardFooter;
+window.openCardSheet = openCardSheet;
+window.closeCardSheet = closeCardSheet;

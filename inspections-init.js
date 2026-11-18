@@ -355,6 +355,7 @@ function openInspectionModal(id) {
     + '</div>';
 
   modal.style.display = 'flex';
+  try { var _inspFoot = modal.querySelector('.modal-footer'); if (_inspFoot && typeof cardFooter === 'function') cardFooter(_inspFoot); } catch (_e) {}
 
   // Wire unit searchable select
   var unitItems = (window.housingUnits || [])
