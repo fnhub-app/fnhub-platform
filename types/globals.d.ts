@@ -66,6 +66,9 @@ interface Window {
   _unitKeysCache: Record<string, any[]>;          // shared-data.js (per-unit loaded keys)
   _keysRenderPanel: (...args: any[]) => any;      // shared-data.js (render a unit's key inventory)
   _keysRefresh: (...args: any[]) => any;          // shared-data.js (re-render the keys panel)
+  _qrLoadLib: (...args: any[]) => Promise<any>;   // housing-modals.js (lazy-load qrcodejs)
+  QRCode: any;                                    // qrcodejs CDN global
+  nationPortalBase: (...args: any[]) => string;   // base URL for nation-facing deep links
   _unitCodeBackfillDone: boolean;                 // housing-views.js (one-shot unit-code backfill guard)
   nextUnitCode: (...args: any[]) => any;          // shared-data.js (unit-code generator)
   backfillUnitCodes: (...args: any[]) => any;     // shared-data.js (assign codes to code-less units)
