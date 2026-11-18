@@ -4862,6 +4862,243 @@ function arrearsAssignmentGate(app, unit, role, reinvoke, opts){
 }
 window.arrearsAssignmentGate = arrearsAssignmentGate;
 
+// ── Arrears write-off recommendations (finance_writeoffs) ────────────────────
+// Management recommends writing off an uncollectable arrears account on the TIC
+// Rent & Arrears tab (status 'pending_ed'); the ED approves or declines; on
+// approval the recommendation PDF is emailed to the nation finance mailbox
+// (status 'sent_to_finance'). The record lives in the finance table
+// finance_writeoffs (mapped into finance-data.js _FIN_TABLES); it is created and
+// approved from the housing side via REST with the staff bearer token. The app
+// does NOT post the ledger credit — finance posts the actual write-off entry.
+var _WRITEOFF_REASONS = [
+  { k:'uncollectable',      label:'Uncollectable' },
+  { k:'deceased',           label:'Deceased' },
+  { k:'bankruptcy',         label:'Bankruptcy' },
+  { k:'left_no_forwarding', label:'Left — no forwarding address' },
+  { k:'hardship',           label:'Financial hardship' },
+  { k:'other',              label:'Other' }
+];
+function _writeOffReasonLabel(k){ for(var i=0;i<_WRITEOFF_REASONS.length;i++){ if(_WRITEOFF_REASONS[i].k===k) return _WRITEOFF_REASONS[i].label; } return k||'—'; }
+function _woMoney(n){ try { return (typeof window.formatCurrency==='function') ? window.formatCurrency(Number(n||0)) : ('$'+Number(n||0).toFixed(2)); } catch(e){ return '$'+Number(n||0).toFixed(2); } }
+function _woFmtDate(iso){ if(!iso) return '—'; try { return new Date(iso).toLocaleDateString('en-CA'); } catch(e){ return String(iso).slice(0,10); } }
+function _woIsEd(){ var r = window.currentRole; var ed = (typeof ROLE!=='undefined') ? ROLE.ED : 'ed'; return r===ed || r==='super_user'; }
+function _woEl(id){ return /** @type {any} */ (document.getElementById(id)); }
+function _woHeaders(extra){ return Object.assign({}, (window.HOUSING_HEADERS||{}), { 'Content-Type':'application/json' }, extra||{}); }
+function _woNation(){ try { return (window.NATION_CONFIG && window.NATION_CONFIG.id) || ''; } catch(e){ return ''; } }
+function _woField(label, val){ var has = (val!=null && val!=='' && val!=='—'); return '<div class="tic-field"><div class="tic-field-lbl">'+escapeHtml(label)+'</div><div class="tic-field-val'+(has?'':' tic-empty')+'">'+(has?escapeHtml(val):'—')+'</div></div>'; }
+function _woStatusBadge(status){
+  var c = (status==='sent_to_finance') ? 'var(--success)' : (status==='declined' ? 'var(--danger)' : 'var(--accent-ink)');
+  var lbl = status==='pending_ed' ? 'Pending ED approval' : (status==='sent_to_finance' ? 'Sent to finance' : (status==='declined' ? 'Declined' : (status||'')));
+  return '<span style="font-weight:800;color:'+c+';">'+escapeHtml(lbl)+'</span>';
+}
+
+function sbLoadWriteOffsForName(name){
+  if(!name) return Promise.resolve([]);
+  var q = SUPABASE_URL + '/rest/v1/finance_writeoffs?select=*&archived=eq.false&tenant_name=eq.' + encodeURIComponent(name) + '&order=recommended_at.desc';
+  return fetch(q, { headers:_woHeaders() }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
+}
+function sbLoadPendingWriteOffs(){
+  var q = SUPABASE_URL + '/rest/v1/finance_writeoffs?select=*&archived=eq.false&status=eq.pending_ed&order=recommended_at.desc&limit=200';
+  return fetch(q, { headers:_woHeaders() }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
+}
+window.sbLoadPendingWriteOffs = sbLoadPendingWriteOffs;
+function sbCreateWriteOff(data){
+  var body = Object.assign({ nation_id:_woNation(), status:'pending_ed' }, data);
+  return fetch(SUPABASE_URL + '/rest/v1/finance_writeoffs', { method:'POST', headers:_woHeaders({ 'Prefer':'return=representation' }), body: JSON.stringify(body) })
+    .then(function(r){ if(!r.ok) throw new Error('create failed ('+r.status+')'); return r.json(); });
+}
+function sbUpdateWriteOff(id, patch){
+  return fetch(SUPABASE_URL + '/rest/v1/finance_writeoffs?id=eq.' + encodeURIComponent(id), { method:'PATCH', headers:_woHeaders({ 'Prefer':'return=representation' }), body: JSON.stringify(patch) })
+    .then(function(r){ if(!r.ok) throw new Error('update failed ('+r.status+')'); return r.json(); });
+}
+
+function openWriteOffModal(name, tenantId, balance){
+  if(!(typeof ROLE!=='undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole))){ if(typeof showToast==='function') showToast('Only management can recommend a write-off.', {type:'error'}); return; }
+  var bal = Number(balance||0);
+  var reasons = _WRITEOFF_REASONS.map(function(r){ return '<option value="'+r.k+'">'+r.label+'</option>'; }).join('');
+  var fieldCss = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);';
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay modal-overlay-centered modal-z-1100 is-open';
+  ov.innerHTML =
+    '<div class="modal-body" style="max-width:540px;width:100%;background:var(--surface);border-radius:14px;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.4);padding:0;">'
+    + '<div class="modal-hdr"><div><h2>Recommend Write-Off</h2><p>'+escapeHtml(name)+' · arrears '+_woMoney(bal)+'</p></div><button class="modal-close" data-wo-cancel>&times;</button></div>'
+    + '<div class="modal-body-stack" style="padding:18px 20px;display:flex;flex-direction:column;gap:14px;">'
+    +   '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Reason <span style="color:var(--danger);">*</span></label><select id="wo_reason" style="'+fieldCss+'">'+reasons+'</select></div>'
+    +   '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Recommended write-off amount <span style="color:var(--danger);">*</span></label><input id="wo_amount" type="text" value="'+_woMoney(bal)+'" oninput="window.fmtCurrency && window.fmtCurrency(this)" style="'+fieldCss+'"/></div>'
+    +   '<div><label style="display:block;font-size:12px;font-weight:600;margin-bottom:5px;">Justification <span style="color:var(--danger);">*</span></label><textarea id="wo_just" rows="4" placeholder="Why this account should be written off; collection efforts to date; detail for finance." style="'+fieldCss+'resize:vertical;"></textarea></div>'
+    +   '<div style="font-size:12px;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--yellow);border-radius:8px;padding:9px 11px;">Creates a recommendation for ED approval. After approval it is emailed to the finance mailbox; finance posts the actual write-off entry.</div>'
+    + '</div>'
+    + '<div class="modal-footer"><button class="btn btn-ghost" data-wo-cancel>Cancel</button><button class="btn btn-primary" data-wo-submit>Submit recommendation</button></div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+  var cancels = ov.querySelectorAll('[data-wo-cancel]'); for(var i=0;i<cancels.length;i++){ cancels[i].addEventListener('click', close); }
+  var submit = ov.querySelector('[data-wo-submit]');
+  if(submit) submit.addEventListener('click', function(){
+    var reason = (_woEl('wo_reason')||{}).value || '';
+    var amt = parseFloat(String((_woEl('wo_amount')||{}).value||'').replace(/[^0-9.\-]/g,'')) || 0;
+    var just = String((_woEl('wo_just')||{}).value||'').trim();
+    if(!reason || !just){ if(typeof showToast==='function') showToast('Reason and justification are required.', {type:'error'}); return; }
+    var payload = {
+      tenant_id: tenantId || null, tenant_name: name,
+      balance_at_rec: bal, recommended_amount: amt,
+      reason: reason, justification: just,
+      recommended_by: (window.HOUSING_SESSION && HOUSING_SESSION.name) || window.currentRole || 'staff',
+      recommended_at: new Date().toISOString(),
+      created_by: (window.HOUSING_SESSION && HOUSING_SESSION.email) || ''
+    };
+    sbCreateWriteOff(payload).then(function(rows){
+      close();
+      if(typeof showToast==='function') showToast('Write-off recommendation submitted for ED approval.', {type:'info'});
+      try { if(typeof auditEntry==='function') auditEntry((rows&&rows[0]&&rows[0].id)||name, 'writeoff_recommended', 'Recommended write-off of '+_woMoney(amt)+' for '+name+' ('+_writeOffReasonLabel(reason)+')', window.currentRole); } catch(e){}
+      if(typeof _ticRefreshWriteOff==='function') _ticRefreshWriteOff();
+    }).catch(function(e){ if(typeof showToast==='function') showToast('Could not submit: '+e.message, {type:'error'}); });
+  });
+}
+window.openWriteOffModal = openWriteOffModal;
+
+function writeOffApproveSend(id){
+  if(!_woIsEd()){ if(typeof showToast==='function') showToast('Only the Executive Director can approve a write-off.', {type:'error'}); return; }
+  var doIt = function(){
+    fetch(SUPABASE_URL+'/rest/v1/finance_writeoffs?select=*&id=eq.'+encodeURIComponent(id), { headers:_woHeaders() }).then(function(r){ return r.json(); }).then(function(rows){
+      var wo = rows && rows[0]; if(!wo){ if(typeof showToast==='function') showToast('Write-off not found.', {type:'error'}); return; }
+      var now = new Date().toISOString();
+      var edName = (window.HOUSING_SESSION && HOUSING_SESSION.name) || 'Executive Director';
+      sbUpdateWriteOff(id, { status:'sent_to_finance', ed_approved_by:edName, ed_approved_at:now, sent_to_finance_at:now }).then(function(){
+        try { if(typeof auditEntry==='function') auditEntry(id, 'writeoff_approved_sent', 'ED approved + sent to finance: write-off of '+_woMoney(wo.recommended_amount)+' for '+(wo.tenant_name||''), window.currentRole); } catch(e){}
+        _writeOffEmailFinance(wo, edName).then(function(){
+          if(typeof showToast==='function') showToast('Approved — recommendation emailed to finance.', {type:'info'});
+        }).catch(function(e){ if(typeof showToast==='function') showToast('Approved, but the finance email did not send: '+e.message, {type:'error'}); });
+        if(typeof _ticRefreshWriteOff==='function') _ticRefreshWriteOff();
+      }).catch(function(e){ if(typeof showToast==='function') showToast('Could not update: '+e.message, {type:'error'}); });
+    });
+  };
+  if(typeof showConfirm==='function'){
+    showConfirm({ title:'Approve & send to finance?', message:'This approves the write-off recommendation and emails the recommendation PDF to the finance mailbox. Finance posts the actual write-off entry.', confirmText:'Approve & send', cancelText:'Cancel' }).then(function(ok){ if(ok) doIt(); });
+  } else { doIt(); }
+}
+window.writeOffApproveSend = writeOffApproveSend;
+
+function writeOffDecline(id){
+  if(!_woIsEd()){ if(typeof showToast==='function') showToast('Only the Executive Director can decline a write-off.', {type:'error'}); return; }
+  var finish = function(reason){
+    var now = new Date().toISOString();
+    var edName = (window.HOUSING_SESSION && HOUSING_SESSION.name) || 'Executive Director';
+    sbUpdateWriteOff(id, { status:'declined', declined_by:edName, declined_at:now, decline_reason:(reason||'').trim()||null }).then(function(){
+      try { if(typeof auditEntry==='function') auditEntry(id, 'writeoff_declined', 'ED declined write-off recommendation'+((reason||'').trim()?(' — '+reason.trim()):''), window.currentRole); } catch(e){}
+      if(typeof showToast==='function') showToast('Write-off recommendation declined.', {type:'info'});
+      if(typeof _ticRefreshWriteOff==='function') _ticRefreshWriteOff();
+    }).catch(function(e){ if(typeof showToast==='function') showToast('Could not decline: '+e.message, {type:'error'}); });
+  };
+  if(typeof showPrompt==='function'){
+    showPrompt({ title:'Decline write-off', message:'Reason for declining (optional):', placeholder:'e.g. Pursue a repayment arrangement first.', confirmText:'Decline', cancelText:'Cancel', multiline:true }).then(function(reason){ if(reason===null) return; finish(reason); });
+  } else { finish(''); }
+}
+window.writeOffDecline = writeOffDecline;
+
+async function _writeOffBuildPdfBase64(wo, edName){
+  try {
+    await window.loadJsPdf();
+    var JS = (window.jspdf && window.jspdf.jsPDF) || /** @type {any} */ (window).jsPDF;
+    var doc = new JS({ unit:'pt', format:'letter' });
+    var title = (window.NATION_CONFIG && window.NATION_CONFIG.display_name) || 'First Nation Housing';
+    var x = 54, y = 66;
+    doc.setFont('helvetica','bold'); doc.setFontSize(16); doc.text(String(title), x, y); y += 20;
+    doc.setFont('helvetica','normal'); doc.setFontSize(12); doc.text('Arrears Write-Off Recommendation', x, y); y += 24;
+    doc.setDrawColor(200); doc.line(x, y, 558, y); y += 22;
+    var row = function(label, val){ doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text(String(label), x, y); doc.setFont('helvetica','normal'); doc.text(String(val==null?'':val), x+190, y); y += 18; };
+    row('Account / Tenant:', wo.tenant_name||'');
+    row('Arrears at recommendation:', _woMoney(wo.balance_at_rec));
+    row('Recommended write-off:', _woMoney(wo.recommended_amount));
+    row('Reason:', _writeOffReasonLabel(wo.reason));
+    row('Recommended by:', wo.recommended_by||'');
+    row('Recommended on:', _woFmtDate(wo.recommended_at));
+    y += 8; doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Justification', x, y); y += 16;
+    doc.setFont('helvetica','normal'); doc.setFontSize(10);
+    var lines = doc.splitTextToSize(String(wo.justification||'—'), 504); doc.text(lines, x, y); y += (lines.length*13) + 24;
+    doc.setDrawColor(200); doc.line(x, y, 558, y); y += 22;
+    doc.setFont('helvetica','bold'); doc.setFontSize(10); doc.text('Executive Director approval', x, y); y += 18;
+    doc.setFont('helvetica','normal');
+    row('Approved by:', edName||'');
+    row('Approved on:', _woFmtDate(wo.ed_approved_at || new Date().toISOString()));
+    doc.setFontSize(9); doc.setTextColor(120); doc.text('Submitted to finance for posting. The housing app does not post the ledger entry.', x, y + 12);
+    var uri = doc.output('datauristring');
+    return uri.substring(uri.indexOf(',') + 1);
+  } catch(e){ try { console.warn('[writeoff] pdf failed', e); } catch(_e){} return ''; }
+}
+
+async function _writeOffEmailFinance(wo, edName){
+  var finEmail = (window.NATION_CONFIG && (window.NATION_CONFIG.finance_email || window.NATION_CONFIG.housing_email)) || '';
+  if(!finEmail) throw new Error('no finance mailbox configured (Settings → Nation → finance email)');
+  var short = (window.NATION_CONFIG && window.NATION_CONFIG.short) || 'Housing';
+  var pdfBase64 = await _writeOffBuildPdfBase64(wo, edName);
+  var subject = short + ' — Write-Off Recommendation (ED approved): ' + (wo.tenant_name||'') + ' — ' + _woMoney(wo.recommended_amount);
+  var bodyHtml =
+    '<p>A write-off recommendation has been <b>approved by the Executive Director</b> and is submitted to finance for posting.</p>'
+    + '<ul>'
+    + '<li><b>Account:</b> ' + escapeHtml(wo.tenant_name||'') + '</li>'
+    + '<li><b>Recommended write-off:</b> ' + _woMoney(wo.recommended_amount) + '</li>'
+    + '<li><b>Arrears at recommendation:</b> ' + _woMoney(wo.balance_at_rec) + '</li>'
+    + '<li><b>Reason:</b> ' + escapeHtml(_writeOffReasonLabel(wo.reason)) + '</li>'
+    + '<li><b>Recommended by:</b> ' + escapeHtml(wo.recommended_by||'') + '</li>'
+    + '<li><b>Approved by:</b> ' + escapeHtml(edName||'') + '</li>'
+    + '</ul>'
+    + '<p>The recommendation is attached as a PDF. Please post the write-off entry in the finance ledger.</p>';
+  return window.sendNotification({ to: finEmail, subject: subject, bodyHtml: bodyHtml,
+    attachments: pdfBase64 ? [{ name:'write-off-recommendation.pdf', contentType:'application/pdf', contentBytes:pdfBase64 }] : [] });
+}
+
+// Render the write-off panel on the TIC Rent & Arrears tab (called by
+// _ticRenderArrears). Loads the current recommendation for the account and shows
+// the status + the Recommend / Approve / Decline actions by role.
+function _writeOffRenderPanel(mount, name, tenantId, balance){
+  if(!mount) return;
+  /** @type {any} */ (window)._woCtx = { mount:mount, name:name, tenantId:tenantId, balance:balance };
+  mount.innerHTML = '<div class="tic-section"><div class="tic-section-h">Write-Off</div><div class="tic-pending-inline">Loading write-off status…</div></div>';
+  sbLoadWriteOffsForName(name).then(function(rows){
+    rows = rows || [];
+    var wo = rows[0];
+    var active = (wo && wo.status !== 'declined') ? wo : null;
+    var canRec = (typeof ROLE!=='undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole));
+    var isEd = _woIsEd();
+    var h = '<div class="tic-section"><div class="tic-section-h">Write-Off</div>';
+    if(!active){
+      h += (wo && wo.status==='declined')
+        ? '<div class="tic-pending-inline" style="margin-bottom:10px;">Last recommendation was <b>declined</b>' + (wo.decline_reason ? ' — ' + escapeHtml(wo.decline_reason) : '') + '.</div>'
+        : '<div class="tic-pending-inline" style="margin-bottom:10px;">No active write-off recommendation on this account.</div>';
+      h += canRec
+        ? '<button type="button" class="btn btn-ghost btn-sm" data-wo-rec>📝 Recommend Write-Off</button>'
+        : '<div class="tic-empty">Management can recommend a write-off here.</div>';
+    } else {
+      h += '<div class="tic-grid-3" style="margin-bottom:12px;">'
+        + '<div class="tic-field"><div class="tic-field-lbl">Status</div><div class="tic-field-val">' + _woStatusBadge(active.status) + '</div></div>'
+        + _woField('Recommended write-off', _woMoney(active.recommended_amount))
+        + _woField('Reason', _writeOffReasonLabel(active.reason))
+        + _woField('Recommended by', active.recommended_by)
+        + _woField('Recommended on', _woFmtDate(active.recommended_at))
+        + _woField('Approved by', active.ed_approved_by)
+        + '</div>'
+        + '<div class="tic-section-h" style="border:none;padding:0;margin:0 0 6px;font-size:10px;">Justification</div>'
+        + '<div class="callout" style="margin-bottom:12px;">' + (escapeHtml(active.justification||'') || '—') + '</div>';
+      if(active.status==='pending_ed'){
+        h += isEd
+          ? '<div class="flex-gap8 flex-wrap"><button type="button" class="btn btn-primary btn-sm" data-wo-approve>✓ Approve &amp; Send to Finance</button><button type="button" class="btn btn-danger-ghost btn-sm" data-wo-decline>Decline</button></div>'
+          : '<div class="tic-pending-inline">Waiting for Executive Director approval.</div>';
+      } else if(active.status==='sent_to_finance'){
+        h += '<div class="tic-pending-inline">✉️ Approved and sent to finance on ' + _woFmtDate(active.sent_to_finance_at) + '. Finance posts the write-off entry.</div>';
+      }
+    }
+    h += '</div>';
+    mount.innerHTML = h;
+    var recBtn = mount.querySelector('[data-wo-rec]'); if(recBtn) recBtn.addEventListener('click', function(){ openWriteOffModal(name, tenantId, balance); });
+    var apBtn = mount.querySelector('[data-wo-approve]'); if(apBtn && active) apBtn.addEventListener('click', function(){ writeOffApproveSend(active.id); });
+    var dcBtn = mount.querySelector('[data-wo-decline]'); if(dcBtn && active) dcBtn.addEventListener('click', function(){ writeOffDecline(active.id); });
+  }).catch(function(){ mount.innerHTML = '<div class="tic-section"><div class="tic-section-h">Write-Off</div><div class="tic-empty">Could not load write-off status.</div></div>'; });
+}
+window._writeOffRenderPanel = _writeOffRenderPanel;
+function _ticRefreshWriteOff(){ var c = /** @type {any} */ (window)._woCtx; if(c && c.mount) _writeOffRenderPanel(c.mount, c.name, c.tenantId, c.balance); }
+window._ticRefreshWriteOff = _ticRefreshWriteOff;
+
 // After a commercial (business/department) application is assigned to a
 // building, type the trigger-created tenant row: business/department kind,
 // contact person, rent, and the application link. Mirrors the commercial

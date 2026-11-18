@@ -916,6 +916,34 @@
       } catch(e) { console.warn('[TIC] arrears panel failed:', e); }
     }
     _ticSyncArrearsBalanceTile();
+    // Write-off recommendation workflow (shared-data.js). Recommends writing off
+    // an uncollectable arrears account -> ED approves -> emailed to finance.
+    if (typeof window._writeOffRenderPanel === 'function') {
+      try {
+        var _woMount = document.createElement('div');
+        _woMount.id = 'tic_writeoff_mount';
+        panel.appendChild(_woMount);
+        var _woName = (_ticState.tenant && _ticState.tenant[TIC_C.full_name])
+                   || (_ticState.unit && _ticState.unit.assignedName) || '';
+        var _woTid = (_ticState.tenant && _ticState.tenant.id) || null;
+        var _woRender = function(bal){ window._writeOffRenderPanel(_woMount, _woName, _woTid, Number(bal) || 0); };
+        // Seed the recommended amount with the live arrears balance when resolvable.
+        var _woBal = 0;
+        try {
+          if (_woName && typeof window.arrearsTenantByName === 'function' && typeof window.arrearsStateForTenant === 'function') {
+            var _woDo = function(){
+              try {
+                var tt = window.arrearsTenantByName(_woName);
+                var st = tt && tt.id ? window.arrearsStateForTenant(tt.id) : null;
+                _woRender(st ? (Number(st.balance) || 0) : 0);
+              } catch(e){ _woRender(0); }
+            };
+            if (typeof window.arrearsLoad === 'function') window.arrearsLoad().then(_woDo).catch(function(){ _woRender(0); });
+            else _woDo();
+          } else { _woRender(_woBal); }
+        } catch(e){ _woRender(0); }
+      } catch(e) { console.warn('[TIC] write-off panel failed:', e); }
+    }
   }
 
   // Overlay the live arrears-engine balance into the Rent & Arrears tab's
