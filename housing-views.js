@@ -323,6 +323,23 @@ function renderInventoryView(){
   var showRenoCol = (ROLE.isManagement(window.currentRole));
   var th = document.getElementById('inv_reno_score_th');
   if(th) th.style.display = showRenoCol ? '' : 'none';
+  // Unit codes (Phase 1): back-fill any unit missing a code, once per session,
+  // for management. Best-effort; re-renders when done so the new codes appear.
+  if (!window._unitCodeBackfillDone && typeof backfillUnitCodes === 'function'
+      && typeof ROLE !== 'undefined' && ROLE.isManagement(window.currentRole)) {
+    var _anyMissing = (typeof housingUnits !== 'undefined' && housingUnits || [])
+      .some(function(u){ return u && !u.archived && !u.unitCode; });
+    window._unitCodeBackfillDone = true;
+    if (_anyMissing) {
+      if (typeof showToast === 'function') showToast('Assigning unit codes…', {type:'info'});
+      backfillUnitCodes().then(function(n){
+        if (n) {
+          if (typeof showToast === 'function') showToast('Assigned unit codes to ' + n + ' unit(s).', {type:'info'});
+          renderInventoryView();
+        }
+      });
+    }
+  }
   // Render the Vacant Lots panel (separate from the buildings table).
   if(typeof _renderLotsList === 'function') _renderLotsList();
   // The buildings table excludes lot records (record_type:'lot').
@@ -430,6 +447,7 @@ function renderInventoryView(){
     var uid = u.id.replace(/'/g,"\\'");
     return '<tr style="border-bottom:1px solid var(--border);transition:background .12s;" onmouseover="this.style.background=\'var(--yellow-light)\'" onmouseout="this.style.background=\'\'">'
       +'<td style="padding:9px 14px;font-size:13px;font-weight:600;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" onclick="openUnitEditModal(\''+uid+'\')">'+'<span style="text-decoration:underline;text-decoration-color:var(--border);text-underline-offset:2px;">'+addr+'</span>'
+      +(u.unitCode?' <span style="font-family:ui-monospace,monospace;font-size:10px;font-weight:700;color:var(--muted);background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 5px;">'+escapeHtml(u.unitCode)+'</span>':'')
       +(u.isElders?' <span style="font-size:9px;background:var(--warn-amber-bg);color:var(--warn-amber);border:1px solid var(--warn-amber-border);padding:1px 5px;border-radius:6px;">ELDERS UNIT</span>':'')
       +' '+_assignmentTypeBadge(u)
       +(_lotBadge(u)?(' '+_lotBadge(u)):'')
@@ -501,6 +519,7 @@ function renderInventoryView(){
     }
     return _cardTile({
       title: addr,
+      sub: u.unitCode || '',
       avatar: u.num || _cardInitials(u.street),
       avatarAlt: !!(i % 2),
       pill: {text: ss.label, bg: ss.bg, color: ss.c},
