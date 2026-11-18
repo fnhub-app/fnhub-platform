@@ -351,7 +351,7 @@ function renderInventoryView(){
 
   var vacantCount = units.filter(function(u){return u.status==='vacant' && !u.archived;}).length;
   var el = document.getElementById('inv_count'); if(el) el.textContent = units.filter(function(u){return !u.archived;}).length;
-  var ve = document.getElementById('inv_vacant_count'); if(ve) ve.textContent = vacantCount+' vacant';
+  var ve = document.getElementById('inv_vacant_count'); if(ve) ve.textContent = String(vacantCount);
 
   var _invMode = _viewMode('inventory');
   var toggleEl = document.getElementById('inv_view_toggle');
