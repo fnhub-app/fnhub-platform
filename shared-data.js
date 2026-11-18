@@ -1002,6 +1002,230 @@ async function backfillUnitCodes(){
 }
 window.backfillUnitCodes = backfillUnitCodes;
 
+// ── Unit key inventory (Phase 2, key-inventory scope) ───────────────────────
+// One row per physical key in housing_unit_keys, keyed to the unit (+ its
+// unit_code). Office roles create / issue / return; management retires. The
+// full chain of custody is the housing_audit_log (key_added / key_issued /
+// key_returned / key_lost / key_found / key_retired). REST with the staff token.
+var _KEY_TYPES = [
+  { k:'house',      label:'House' },
+  { k:'mailbox',    label:'Mailbox' },
+  { k:'garage',     label:'Garage' },
+  { k:'mechanical', label:'Mechanical' },
+  { k:'other',      label:'Other' }
+];
+function _keyTypeLabel(k){ for(var i=0;i<_KEY_TYPES.length;i++){ if(_KEY_TYPES[i].k===k) return _KEY_TYPES[i].label; } return k || 'Key'; }
+function _keyHeaders(extra){ return Object.assign({}, (window.HOUSING_HEADERS||{}), { 'Content-Type':'application/json' }, extra||{}); }
+function _keysIsMgmt(){ return !!(typeof ROLE!=='undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole)); }
+function _keyNation(){ try { return (window.NATION_CONFIG && window.NATION_CONFIG.id) || ''; } catch(e){ return ''; } }
+function _keyFmtDate(iso){ if(!iso) return '—'; try { return new Date(iso).toLocaleDateString('en-CA'); } catch(e){ return String(iso).slice(0,10); } }
+function _keyToast(msg, type){ if(typeof showToast==='function') showToast(msg, { type: type||'info' }); }
+function _keyAudit(unitId, action, detail){ try { if(typeof auditEntry==='function') auditEntry('UNIT:'+unitId, action, detail, window.currentRole||''); } catch(e){} }
+
+function sbLoadUnitKeys(unitId){
+  if(!unitId) return Promise.resolve([]);
+  var q = SUPABASE_URL + '/rest/v1/housing_unit_keys?select=*&archived=eq.false&unit_id=eq.' + encodeURIComponent(unitId) + '&order=created_at.asc';
+  return fetch(q, { headers:_keyHeaders() }).then(function(r){ return r.ok ? r.json() : []; }).catch(function(){ return []; });
+}
+function sbCreateUnitKey(data){
+  var body = Object.assign({ nation_id:_keyNation(), status:'on_hand' }, data);
+  return fetch(SUPABASE_URL + '/rest/v1/housing_unit_keys', { method:'POST', headers:_keyHeaders({ 'Prefer':'return=representation' }), body: JSON.stringify(body) })
+    .then(function(r){ if(!r.ok) throw new Error('create failed ('+r.status+')'); return r.json(); });
+}
+function sbUpdateUnitKey(id, patch){
+  patch = Object.assign({ updated_at:new Date().toISOString() }, patch);
+  return fetch(SUPABASE_URL + '/rest/v1/housing_unit_keys?id=eq.' + encodeURIComponent(id), { method:'PATCH', headers:_keyHeaders({ 'Prefer':'return=representation' }), body: JSON.stringify(patch) })
+    .then(function(r){ if(!r.ok) throw new Error('update failed ('+r.status+')'); return r.json(); });
+}
+
+function _keyStatusBadge(status){
+  var c = status==='issued' ? 'var(--info-blue)' : status==='lost' ? 'var(--danger)' : status==='retired' ? 'var(--muted)' : 'var(--success)';
+  var lbl = status==='on_hand' ? 'On hand' : status==='issued' ? 'Issued' : status==='lost' ? 'Lost' : status==='retired' ? 'Retired' : (status||'');
+  return '<span style="font-size:11px;font-weight:800;color:'+c+';">'+lbl+'</span>';
+}
+function _keyRowActions(k){
+  var b = function(act,label){ return '<button type="button" class="btn btn-ghost btn-sm" data-key-act="'+act+'" data-key-id="'+k.id+'" style="margin-left:4px;">'+label+'</button>'; };
+  var out = '';
+  if(k.status==='on_hand'){ out += b('issue','Issue'); out += b('lost','Mark lost'); }
+  else if(k.status==='issued'){ out += b('return','Return'); out += b('lost','Mark lost'); }
+  else if(k.status==='lost'){ out += b('found','Mark found'); }
+  out += b('edit','Edit');
+  if(_keysIsMgmt() && k.status!=='retired') out += b('retire','Retire');
+  return out;
+}
+
+// Render the key inventory for a unit into mount. opts.readOnly hides every
+// mutating control (field employees). Used by the Edit Unit modal's Keys tab.
+function _keysRenderPanel(mount, unit, opts){
+  if(!mount) return;
+  opts = opts || {};
+  var readOnly = !!opts.readOnly;
+  var unitId = unit && unit.id;
+  window._keysCtx = { mount:mount, unit:unit, readOnly:readOnly };
+  mount.innerHTML = '<div class="tic-pending-inline">Loading keys…</div>';
+  sbLoadUnitKeys(unitId).then(function(keys){
+    keys = keys || [];
+    window._unitKeysCache = window._unitKeysCache || {};
+    window._unitKeysCache[unitId] = keys;
+    var active = keys.filter(function(k){ return k.status!=='retired'; });
+    var onHand = active.filter(function(k){ return k.status==='on_hand'; }).length;
+    var issued = active.filter(function(k){ return k.status==='issued'; }).length;
+    var lost   = active.filter(function(k){ return k.status==='lost'; }).length;
+    var h = '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;">'
+      + '<div style="font-weight:800;font-size:15px;">'+active.length+' key'+(active.length===1?'':'s')+'</div>'
+      + '<span style="color:var(--success);font-weight:700;font-size:12px;">'+onHand+' on hand</span>'
+      + '<span style="color:var(--info-blue);font-weight:700;font-size:12px;">'+issued+' issued</span>'
+      + (lost ? '<span style="color:var(--danger);font-weight:700;font-size:12px;">'+lost+' lost</span>' : '')
+      + (readOnly ? '' : '<button type="button" data-key-add class="btn btn-ghost btn-sm" style="margin-left:auto;">+ Add key</button>')
+      + '</div>';
+    if(!keys.length){
+      h += '<div class="tic-empty">No keys recorded for this unit'+(readOnly?'.':' yet.')+'</div>';
+    } else {
+      h += '<div class="std-table-card"><table class="std-table"><thead><tr><th>Key</th><th>Status</th><th>Holder</th><th>Updated</th>'+(readOnly?'':'<th></th>')+'</tr></thead><tbody>';
+      keys.forEach(function(k){
+        var when = k.status==='issued' ? k.issued_at : (k.returned_at || k.updated_at || k.created_at);
+        h += '<tr>'
+          + '<td><b>'+escapeHtml(_keyTypeLabel(k.key_type))+'</b>'+(k.label?' <span style="color:var(--muted);">— '+escapeHtml(k.label)+'</span>':'')+'</td>'
+          + '<td>'+_keyStatusBadge(k.status)+'</td>'
+          + '<td>'+(k.holder_name?(escapeHtml(k.holder_name)+(k.holder_kind?' <span style="color:var(--muted);font-size:11px;">('+escapeHtml(k.holder_kind)+')</span>':'')):'<span class="tic-empty">—</span>')+'</td>'
+          + '<td style="color:var(--muted);font-size:12px;">'+_keyFmtDate(when)+'</td>'
+          + (readOnly?'':'<td style="white-space:nowrap;text-align:right;">'+_keyRowActions(k)+'</td>')
+          + '</tr>';
+      });
+      h += '</tbody></table></div>';
+    }
+    mount.innerHTML = h;
+    if(!readOnly) _keysWire(mount, unitId);
+  }).catch(function(){ mount.innerHTML = '<div class="tic-empty">Could not load keys.</div>'; });
+}
+window._keysRenderPanel = _keysRenderPanel;
+function _keysRefresh(){ var c = window._keysCtx; if(c && c.mount) _keysRenderPanel(c.mount, c.unit, { readOnly:c.readOnly }); }
+window._keysRefresh = _keysRefresh;
+
+function _keysWire(mount, unitId){
+  var addBtn = mount.querySelector('[data-key-add]');
+  if(addBtn) addBtn.addEventListener('click', function(){ _keyOpenAddModal(unitId); });
+  mount.querySelectorAll('[data-key-act]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var act = btn.getAttribute('data-key-act'), id = btn.getAttribute('data-key-id');
+      var key = ((window._unitKeysCache||{})[unitId]||[]).find(function(x){ return String(x.id)===String(id); });
+      if(!key) return;
+      if(act==='issue')       _keyIssue(key);
+      else if(act==='return') _keyReturn(key);
+      else if(act==='lost')   _keyMarkLost(key);
+      else if(act==='found')  _keyMarkFound(key);
+      else if(act==='retire') _keyRetire(key);
+      else if(act==='edit')   _keyOpenAddModal(unitId, key);
+    });
+  });
+}
+
+function _keyModal(title, bodyHtml, onSave, saveLabel){
+  var ov = document.createElement('div');
+  ov.className = 'modal-overlay modal-overlay-centered modal-z-1100 is-open';
+  ov.innerHTML = '<div class="modal-body" style="max-width:460px;width:100%;background:var(--surface);border-radius:14px;overflow:hidden;box-shadow:var(--shadow);padding:0;">'
+    + '<div class="modal-hdr"><div><h2>'+title+'</h2></div><button class="modal-close" data-k-cancel>&times;</button></div>'
+    + '<div class="modal-body-stack" style="padding:18px 20px;display:flex;flex-direction:column;gap:13px;">'+bodyHtml+'</div>'
+    + '<div class="modal-footer"><button class="btn btn-ghost" data-k-cancel>Cancel</button><button class="btn btn-primary" data-k-save>'+(saveLabel||'Save')+'</button></div>'
+    + '</div>';
+  document.body.appendChild(ov);
+  function close(){ if(ov.parentNode) ov.parentNode.removeChild(ov); }
+  var cs = ov.querySelectorAll('[data-k-cancel]'); for(var i=0;i<cs.length;i++) cs[i].addEventListener('click', close);
+  ov.querySelector('[data-k-save]').addEventListener('click', function(){ onSave(ov, close); });
+  return ov;
+}
+var _KEY_FIELD_CSS = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);';
+var _KEY_LBL_CSS = 'display:block;font-size:12px;font-weight:600;margin-bottom:5px;';
+
+function _keyOpenAddModal(unitId, key){
+  var isEdit = !!key;
+  var typeOpts = _KEY_TYPES.map(function(t){ return '<option value="'+t.k+'"'+((isEdit && key.key_type===t.k)?' selected':'')+'>'+t.label+'</option>'; }).join('');
+  var body = ''
+    + '<div><label style="'+_KEY_LBL_CSS+'">Key type</label><select id="key_type" style="'+_KEY_FIELD_CSS+'">'+typeOpts+'</select></div>'
+    + '<div><label style="'+_KEY_LBL_CSS+'">Label (optional)</label><input id="key_label" type="text" value="'+(isEdit?escapeHtml(key.label||''):'')+'" placeholder="e.g. front door" style="'+_KEY_FIELD_CSS+'"/></div>'
+    + (isEdit ? '' : '<div><label style="'+_KEY_LBL_CSS+'">How many copies?</label><input id="key_qty" type="number" min="1" value="1" style="'+_KEY_FIELD_CSS+'"/></div>')
+    + '<div><label style="'+_KEY_LBL_CSS+'">Notes (optional)</label><textarea id="key_notes" rows="2" style="'+_KEY_FIELD_CSS+'resize:vertical;">'+(isEdit?escapeHtml(key.notes||''):'')+'</textarea></div>';
+  _keyModal(isEdit?'Edit key':'Add key(s)', body, function(ov, close){
+    var typeV  = (_woEl('key_type')||{}).value || 'other';
+    var labelV = String((_woEl('key_label')||{}).value||'').trim();
+    var notesV = String((_woEl('key_notes')||{}).value||'').trim();
+    if(isEdit){
+      sbUpdateUnitKey(key.id, { key_type:typeV, label:labelV||null, notes:notesV||null }).then(function(){
+        _keyAudit(unitId, 'key_updated', 'Edited '+_keyTypeLabel(typeV)+' key'+(labelV?' ('+labelV+')':''));
+        close(); _keysRefresh();
+      }).catch(function(e){ _keyToast('Could not save: '+e.message, 'error'); });
+      return;
+    }
+    var qty = Math.max(1, parseInt((_woEl('key_qty')||{}).value, 10) || 1);
+    var unit = (window._keysCtx && window._keysCtx.unit) || {};
+    var code = unit.unitCode || null;
+    var made = 0, chain = Promise.resolve();
+    for(var i=0;i<qty;i++){
+      chain = chain.then(function(){
+        return sbCreateUnitKey({ unit_id:unitId, unit_code:code, key_type:typeV, label:labelV||null, notes:notesV||null, created_by:(window.HOUSING_SESSION&&HOUSING_SESSION.email)||'' }).then(function(){ made++; });
+      });
+    }
+    chain.then(function(){
+      _keyAudit(unitId, 'key_added', 'Added '+made+' '+_keyTypeLabel(typeV)+' key(s)'+(labelV?' ('+labelV+')':''));
+      close(); _keysRefresh();
+    }).catch(function(e){ _keyToast('Could not add: '+e.message, 'error'); });
+  }, isEdit?'Save':'Add');
+}
+
+function _keyIssue(key){
+  var unit = (window._keysCtx && window._keysCtx.unit) || {};
+  var prefill = unit.assignedName || '';
+  var body = ''
+    + '<div><label style="'+_KEY_LBL_CSS+'">Issued to <span style="color:var(--danger);">*</span></label><input id="key_holder" type="text" value="'+escapeHtml(prefill)+'" placeholder="Name" style="'+_KEY_FIELD_CSS+'"/></div>'
+    + '<div><label style="'+_KEY_LBL_CSS+'">Holder type</label><select id="key_holder_kind" style="'+_KEY_FIELD_CSS+'"><option value="tenant"'+(prefill?' selected':'')+'>Tenant</option><option value="staff">Staff</option><option value="contractor">Contractor</option></select></div>';
+  _keyModal('Issue key', body, function(ov, close){
+    var holder = String((_woEl('key_holder')||{}).value||'').trim();
+    var kind   = (_woEl('key_holder_kind')||{}).value || 'tenant';
+    if(!holder){ _keyToast('Enter who the key is issued to.', 'error'); return; }
+    sbUpdateUnitKey(key.id, { status:'issued', holder_name:holder, holder_kind:kind, issued_at:new Date().toISOString(), returned_at:null }).then(function(){
+      _keyAudit(key.unit_id, 'key_issued', _keyTypeLabel(key.key_type)+' key issued to '+holder+' ('+kind+')');
+      close(); _keysRefresh();
+    }).catch(function(e){ _keyToast('Could not issue: '+e.message, 'error'); });
+  }, 'Issue key');
+}
+function _keyReturn(key){
+  if(typeof showConfirm!=='function'){ return; }
+  showConfirm({ title:'Return key?', message:'Mark this '+_keyTypeLabel(key.key_type)+' key as returned (back on hand)?', confirmText:'Return', cancelText:'Cancel' }).then(function(ok){
+    if(!ok) return;
+    sbUpdateUnitKey(key.id, { status:'on_hand', holder_name:null, holder_kind:null, returned_at:new Date().toISOString() }).then(function(){
+      _keyAudit(key.unit_id, 'key_returned', _keyTypeLabel(key.key_type)+' key returned'+(key.holder_name?(' by '+key.holder_name):''));
+      _keysRefresh();
+    }).catch(function(e){ _keyToast('Could not update: '+e.message, 'error'); });
+  });
+}
+function _keyMarkLost(key){
+  if(typeof showConfirm!=='function'){ return; }
+  showConfirm({ title:'Mark key lost?', message:'Flag this '+_keyTypeLabel(key.key_type)+' key as lost'+(key.holder_name?(' (last held by '+key.holder_name+')'):'')+'?', confirmText:'Mark lost', cancelText:'Cancel', danger:true }).then(function(ok){
+    if(!ok) return;
+    sbUpdateUnitKey(key.id, { status:'lost' }).then(function(){
+      _keyAudit(key.unit_id, 'key_lost', _keyTypeLabel(key.key_type)+' key marked lost'+(key.holder_name?(' (last held by '+key.holder_name+')'):''));
+      _keysRefresh();
+    }).catch(function(e){ _keyToast('Could not update: '+e.message, 'error'); });
+  });
+}
+function _keyMarkFound(key){
+  sbUpdateUnitKey(key.id, { status:'on_hand', holder_name:null, holder_kind:null }).then(function(){
+    _keyAudit(key.unit_id, 'key_found', _keyTypeLabel(key.key_type)+' key found (back on hand)');
+    _keysRefresh();
+  }).catch(function(e){ _keyToast('Could not update: '+e.message, 'error'); });
+}
+function _keyRetire(key){
+  if(!_keysIsMgmt()){ _keyToast('Only management can retire a key.', 'error'); return; }
+  if(typeof showConfirm!=='function'){ return; }
+  showConfirm({ title:'Retire key?', message:'Retire this '+_keyTypeLabel(key.key_type)+' key? It is removed from the active inventory but kept in the record.', confirmText:'Retire', cancelText:'Cancel' }).then(function(ok){
+    if(!ok) return;
+    sbUpdateUnitKey(key.id, { status:'retired' }).then(function(){
+      _keyAudit(key.unit_id, 'key_retired', _keyTypeLabel(key.key_type)+' key retired');
+      _keysRefresh();
+    }).catch(function(e){ _keyToast('Could not update: '+e.message, 'error'); });
+  });
+}
+
 // ── sbPatchUnit ───────────────────────────────────────────────────────────────
 // Targeted column PATCH on housing_units (vs sbSaveUnit's full-row upsert).
 // partial   — snake_case column updates sent to PostgREST.

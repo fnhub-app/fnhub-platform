@@ -61,6 +61,15 @@ interface Window {
   CLFN_CONFIG_LOADED: boolean;
   CLFN_DEBUG: boolean;
 
+  // --- Unit key inventory (shared-data.js, Phase 2) ---
+  _keysCtx: any;                                  // shared-data.js (current keys panel render context)
+  _unitKeysCache: Record<string, any[]>;          // shared-data.js (per-unit loaded keys)
+  _keysRenderPanel: (...args: any[]) => any;      // shared-data.js (render a unit's key inventory)
+  _keysRefresh: (...args: any[]) => any;          // shared-data.js (re-render the keys panel)
+  _unitCodeBackfillDone: boolean;                 // housing-views.js (one-shot unit-code backfill guard)
+  nextUnitCode: (...args: any[]) => any;          // shared-data.js (unit-code generator)
+  backfillUnitCodes: (...args: any[]) => any;     // shared-data.js (assign codes to code-less units)
+
   // --- Misc shared-layer helpers referenced across the checked set ---
   _stashLoginReturn: (...args: any[]) => any;   // shared-auth.js (deep-link return)
   _removeScoringGateBar: (...args: any[]) => any; // housing-app.js scoring gate bar
