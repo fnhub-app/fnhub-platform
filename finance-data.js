@@ -113,7 +113,7 @@ function _emptyStore(){
   return {
     tenants:[], rentLedger:[], loanList:[], loanPayments:[],
     hydroLedger:[], gasLedger:[], journalEntries:[],
-    arrangements:[], arrPayments:[], collections:[], auditLog:[]
+    arrangements:[], arrPayments:[], collections:[], writeOffs:[], auditLog:[]
   };
 }
 
@@ -570,6 +570,54 @@ function _journalFromRow(r){
 // orderBy is the column used for initial-load sorting; must exist in the
 // actual schema (see f2_finance_schema.sql). Adding a new table = one line
 // here plus the two mapper functions above.
+// Write-off recommendations (finance_writeoffs). Created / approved from the
+// housing side via REST (shared-data.js); the finance data layer loads them so
+// they are mapped into the module alongside collections. camelCase <-> snake.
+function _writeOffToRow(w){
+  return {
+    id: w.id, nation_id: _NATION(),
+    tenant_id: w._rawTenantId || w.tenantId || null,
+    tenant_name: w.tenantName || null,
+    balance_at_rec: Number(w.balanceAtRec || 0),
+    recommended_amount: Number(w.recommendedAmount || 0),
+    reason: w.reason || null,
+    justification: w.justification || null,
+    status: w.status || 'pending_ed',
+    recommended_by: w.recommendedBy || _ACTOR(),
+    recommended_at: w.recommendedAt || null,
+    ed_approved_by: w.edApprovedBy || null,
+    ed_approved_at: w.edApprovedAt || null,
+    declined_by: w.declinedBy || null,
+    declined_at: w.declinedAt || null,
+    decline_reason: w.declineReason || null,
+    sent_to_finance_at: w.sentToFinanceAt || null,
+    archived: !!w.archived,
+    created_by: w.createdBy || _ACTOR()
+  };
+}
+function _writeOffFromRow(r){
+  return {
+    id: r.id,
+    tenantId: r.tenant_id, _rawTenantId: r.tenant_id,
+    tenantName: r.tenant_name || '',
+    balanceAtRec: Number(r.balance_at_rec || 0),
+    recommendedAmount: Number(r.recommended_amount || 0),
+    reason: r.reason || '',
+    justification: r.justification || '',
+    status: r.status || 'pending_ed',
+    recommendedBy: r.recommended_by || '',
+    recommendedAt: r.recommended_at || '',
+    edApprovedBy: r.ed_approved_by || '',
+    edApprovedAt: r.ed_approved_at || '',
+    declinedBy: r.declined_by || '',
+    declinedAt: r.declined_at || '',
+    declineReason: r.decline_reason || '',
+    sentToFinanceAt: r.sent_to_finance_at || '',
+    archived: !!r.archived,
+    createdBy: r.created_by || ''
+  };
+}
+
 var _FIN_TABLES = [
   { key:'tenants',        table:'tenants',                orderBy:'created_at.desc', toRow:_tenantToRow,       fromRow:_tenantFromRow       },
   { key:'rentLedger',     table:'finance_rent_ledger',    orderBy:'entry_date.desc', toRow:_rentLedgerToRow,   fromRow:_rentLedgerFromRow   },
@@ -578,6 +626,7 @@ var _FIN_TABLES = [
   { key:'arrangements',   table:'finance_arrangements',   orderBy:'created_at.desc', toRow:_arrangementToRow,  fromRow:_arrangementFromRow  },
   { key:'arrPayments',    table:'finance_arr_payments',   orderBy:'payment_date.desc', toRow:_arrPaymentToRow,   fromRow:_arrPaymentFromRow   },
   { key:'collections',    table:'finance_collections',    orderBy:'opened_date.desc', toRow:_collectionToRow,   fromRow:_collectionFromRow   },
+  { key:'writeOffs',      table:'finance_writeoffs',      orderBy:'recommended_at.desc', toRow:_writeOffToRow,  fromRow:_writeOffFromRow     },
   { key:'journalEntries', table:'finance_journal',        orderBy:'entry_date.desc', toRow:_journalToRow,      fromRow:_journalFromRow      },
   // (hydroLedger/gasLedger table entries removed — the utility layer was dead
   //  code with zero UI: no save path, no render, two wasted fetches per boot.
