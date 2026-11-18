@@ -505,15 +505,14 @@
         if(!st) return;
         var bal = Math.round((Number(st.balance) || 0) * 100) / 100;
         el.classList.remove('tic-arrears-bad','tic-arrears-good');
-        // TIC DISPLAY CONVENTION (per nation request, display-only): this
-        // nation's ledger stores money OWED as a NEGATIVE balance, so on the
-        // TIC a negative balance shows the magnitude tagged "DR" (debit/owed)
-        // in red, and a positive balance shows "CR" (credit) in green. This is
-        // presentation only -- the arrears status/eviction/good-standing logic
-        // is unchanged (it still treats a positive balance as owed), so the
-        // status chip may read opposite to this number.
-        if (bal < 0)      { el.textContent = _ticFmtMoney(Math.abs(bal)) + ' DR'; el.classList.add('tic-arrears-bad'); }
-        else if (bal > 0) { el.textContent = _ticFmtMoney(bal) + ' CR';          el.classList.add('tic-arrears-good'); }
+        // Sign convention matches the arrears engine (arrears.js), where the
+        // balance is a charges-minus-payments running total: a POSITIVE balance
+        // is money OWED, so show the magnitude tagged "DR" (debit/owed) in red;
+        // a NEGATIVE balance is a credit, shown "CR" in green; zero is a neutral
+        // $0. This now agrees with the lower arrears panel and the good-standing
+        // / eviction logic (all of which treat a positive balance as owed).
+        if (bal > 0)      { el.textContent = _ticFmtMoney(bal) + ' DR';           el.classList.add('tic-arrears-bad');  }
+        else if (bal < 0) { el.textContent = _ticFmtMoney(Math.abs(bal)) + ' CR'; el.classList.add('tic-arrears-good'); }
         else              { el.textContent = _ticFmtMoney(0);                     el.classList.add('tic-arrears-good'); }
       } catch(e){ /* best-effort */ }
     };
