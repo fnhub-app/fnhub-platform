@@ -295,8 +295,8 @@
 
   // Create a repayment arrangement (finance_arrangements row, status
   // 'pending-ed' — the ED approves here or in Finance). Minimum payment =
-  // rent + pct% of rent from the policy rules; going below requires the ED
-  // tier and a documented reason (Policy 12.2 flexibility clause).
+  // pct% of rent from the policy rules (default 50% = rent / 2); going below
+  // requires the ED tier and a documented reason (Policy 12.2 flexibility clause).
   window.arrearsCreateArrangement = async function (tenantId, opts) {
     if (!_can('manageArrears')) { showToast('You are not authorized to create repayment arrangements.', { type: 'error' }); return null; }
     opts = opts || {};
@@ -307,11 +307,11 @@
     if (isNaN(payment) || payment <= 0) { showToast('A payment amount is required.', { type: 'error' }); return null; }
     var rent = Number(opts.monthlyRent) || 0;
     var pct = (typeof policyParam === 'function') ? policyParam('repayment_extra_pct', 'pct', 50) : 50;
-    var minPay = Math.round((rent + rent * pct / 100) * 100) / 100;
+    var minPay = Math.round((rent * pct / 100) * 100) / 100;
     if (rent > 0 && payment < minPay && _ruleOn('repayment_extra_pct')) {
       var isEd = (typeof ROLE !== 'undefined' && window.currentRole === 'ed') || window.currentRole === 'super_user';
       if (!isEd || !(opts.reason || '').trim()) {
-        showToast('Below the policy minimum ($' + minPay.toFixed(2) + ' = rent + ' + pct + '%). An ED-approved documented reason is required to go lower.', { type: 'error' });
+        showToast('Below the policy minimum ($' + minPay.toFixed(2) + ' = ' + pct + '% of rent). An ED-approved documented reason is required to go lower.', { type: 'error' });
         return null;
       }
     }
@@ -472,7 +472,7 @@
     var canApprove = _can('approveArrangement');
     var canEvict = _can('authorizeEviction');
     var pct = (typeof policyParam === 'function') ? policyParam('repayment_extra_pct', 'pct', 50) : 50;
-    var minPay = Math.round((monthlyRent + monthlyRent * pct / 100) * 100) / 100;
+    var minPay = Math.round((monthlyRent * pct / 100) * 100) / 100;
     var chip = function (txt, tone) {
       var c = tone === 'bad' ? 'var(--danger);background:var(--danger-bg)'
             : tone === 'warn' ? 'var(--warn-amber-text);background:var(--warn-amber-bg)'
@@ -494,7 +494,7 @@
         + ' · next review ' + _esc(st.nextReviewDue || '—') + (st.reviewOverdue ? ' <strong style="color:var(--warn-amber-text);">(overdue)</strong>' : '')
         + '</div>');
     } else if (st.balance > 0) {
-      rows.push('<div style="font-size:12px;color:var(--muted);margin-top:4px;">No repayment arrangement on file. Policy minimum: rent + ' + pct + '% = <strong>' + _money(minPay) + '/month</strong>.</div>');
+      rows.push('<div style="font-size:12px;color:var(--muted);margin-top:4px;">No repayment arrangement on file. Policy minimum: ' + pct + '% of rent = <strong>' + _money(minPay) + '/month</strong>.</div>');
     }
     if (_joint.length) rows.push('<div style="font-size:11px;color:var(--warn-amber-text);margin-top:3px;"><strong>⚠ Possible joint account:</strong> '
       + _joint.map(function (x) { return '&ldquo;' + _esc(x.tenant.full_name) + '&rdquo; owes ' + _money(x.balance); }).join(' · ')
@@ -542,9 +542,9 @@
   // Inline UI actions (prompt-driven; every write is audited).
   window._arrUiNewArrangement = function (tid, rent) {
     var pct = (typeof policyParam === 'function') ? policyParam('repayment_extra_pct', 'pct', 50) : 50;
-    var minPay = Math.round((rent + rent * pct / 100) * 100) / 100;
+    var minPay = Math.round((rent * pct / 100) * 100) / 100;
     var p = (typeof showPrompt === 'function')
-      ? showPrompt({ title: 'Repayment arrangement', message: 'Monthly payment amount. Policy minimum is rent + ' + pct + '% = $' + minPay.toFixed(2) + ' (going lower needs the ED tier + a reason).', placeholder: String(minPay), confirmText: 'Next' })
+      ? showPrompt({ title: 'Repayment arrangement', message: 'Monthly payment amount. Policy minimum is ' + pct + '% of rent = $' + minPay.toFixed(2) + ' (going lower needs the ED tier + a reason).', placeholder: String(minPay), confirmText: 'Next' })
       : Promise.resolve(window.prompt('Monthly payment amount (min $' + minPay.toFixed(2) + '):', String(minPay)));
     p.then(function (amt) {
       if (amt == null || String(amt).trim() === '') return;
