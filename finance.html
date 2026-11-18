@@ -77,102 +77,79 @@
 <!-- HOME -->
 <div class="page on" id="page-home">
 
-  <!-- Page hero — matches the app-wide .page-hero (replaces the old
-       Welcome-back greeting). #home_date is kept and populated by renderHome. -->
-  <div class="page-hero">
-    <div class="page-hero-ic">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M4 21V10l8-5 8 5v11M9 21v-6h6v6"/></svg>
-    </div>
-    <div class="page-hero-tx">
-      <div class="page-hero-eyebrow">Rent &middot; Loans &middot; Collections</div>
-      <h1>Finance</h1>
-      <p>Rent ledger, loans, arrangements, collections &amp; GL &middot; <span id="home_date"></span></p>
-    </div>
-    <div class="page-hero-actions">
-      <button type="button" class="btn btn-ghost" onclick="openAddTenant()">&#128100; Add Tenant</button>
-      <button type="button" class="btn btn-primary" onclick="openModal('modalRentPayment')">&#128179; Record Payment</button>
-    </div>
+  <!-- Greeting — mirrors the home landing (#landingView in housing.html).
+       renderHome() (finance-nav.js) populates #home_date + #home_user_name. -->
+  <div class="home-greeting">
+    <div class="home-greeting-bar"></div>
+    <div id="home_date" class="home-greeting-date"></div>
+    <h1 class="home-welcome">Welcome back, <span id="home_user_name" class="home-name-accent"></span></h1>
+    <p class="home-subtitle">Finance &mdash; rent ledger, loans, arrangements &amp; collections.</p>
   </div>
 
-  <!-- KPI strip -->
-  <div class="kpi-strip" id="dashStats"></div>
+  <!-- Slim global search — mirrors the home landing's .hub-search, pinned at the
+       top. Wired to the finance search (finHomeSearch); with no filter tabs it
+       defaults to "all". -->
+  <div class="hub-search">
+    <svg class="hub-search-ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+    <input type="text" id="fin_search_input" class="hub-search-input"
+      placeholder="Search by name, unit, or account&hellip;"
+      oninput="finHomeSearch(this.value)"
+      onblur="setTimeout(function(){var r=document.getElementById('fin_search_results');if(r)r.classList.remove('open');},220)"
+      autocomplete="off"/>
+    <div class="lookup-results" id="fin_search_results"></div>
+  </div>
 
-  <!-- Quick row: Finance Search + Quick Actions -->
-  <div class="quick-row">
+  <!-- Finance tile hub — mirrors the home landing's .hub tile grid. -->
+  <div class="hub" id="fin_hub">
 
-    <!-- Finance Search -->
-    <div class="lookup-panel">
-      <h3>Finance Search</h3>
-      <div class="lookup-sub">Search tenants, rent ledger, loans, and arrangements.</div>
-
-      <div class="lookup-tabs" id="fin_lookup_tabs">
-        <button class="lookup-tab active" data-fin-tab="all" onclick="finTabSwitch('all')">All</button>
-        <button class="lookup-tab" data-fin-tab="tenants" onclick="finTabSwitch('tenants')">Tenants</button>
-        <button class="lookup-tab" data-fin-tab="ledger" onclick="finTabSwitch('ledger')">Rent</button>
-        <button class="lookup-tab" data-fin-tab="loans" onclick="finTabSwitch('loans')">Loans</button>
+    <div class="hub-sec">
+      <div class="hub-sec-h"><span class="hub-sec-t">Records &amp; Accounts</span><span class="hub-sec-rule"></span></div>
+      <div class="hub-tiles">
+        <button type="button" class="hub-tile" onclick="openModal('modalRentPayment')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+          <span class="hub-tile-nm">Record Payment</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="openAddTenant()">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="hub-tile-nm">Add Tenant</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="openModal('modalBatchInvoice');renderBatchList()">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+          <span class="hub-tile-nm">Batch Invoice</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="showPage('arrangements')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+          <span class="hub-tile-nm">Arrangements</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="showPage('loans')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <span class="hub-tile-nm">Loans</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="jeResetModal();openModal('modalJournalEntry')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+          <span class="hub-tile-nm">Journal Entry</span>
+        </button>
       </div>
-
-      <div class="lookup-search">
-        <svg class="lookup-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-        <input type="text" id="fin_search_input"
-          placeholder="Search by name, unit, or account..."
-          oninput="finHomeSearch(this.value)"
-          onblur="setTimeout(function(){var r=document.getElementById('fin_search_results');if(r)r.classList.remove('open');},220)"
-          autocomplete="off"/>
-        <div class="lookup-results" id="fin_search_results"></div>
-      </div>
-
     </div>
 
-    <!-- Quick Actions -->
-    <div class="quick-actions">
-      <h3>Quick actions</h3>
-      <button class="qa-btn" onclick="openModal('modalRentPayment')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg>
-        Record Payment
-        <span class="qa-meta">Rent or fee</span>
-      </button>
-      <button class="qa-btn" onclick="openAddTenant()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-        Add Tenant
-        <span class="qa-meta">New account</span>
-      </button>
-      <button class="qa-btn" onclick="openModal('modalBatchInvoice');renderBatchList()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-        Batch Invoice
-        <span class="qa-meta">Bulk generate</span>
-      </button>
-      <button class="qa-btn" onclick="showPage('arrangements')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
-        Arrangements
-        <span class="qa-meta">Payment plans</span>
-      </button>
-      <button class="qa-btn" onclick="showPage('loans')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-        Loans
-        <span class="qa-meta">Loan accounts</span>
-      </button>
-      <button class="qa-btn" onclick="jeResetModal();openModal('modalJournalEntry')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
-        Journal Entry
-        <span class="qa-meta">GL posting</span>
-      </button>
-      <button class="qa-btn" onclick="showPage('reports');setTimeout(function(){showReportTab(null,'rpt-reconcile');},120)">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-        Reconciliation
-        <span class="qa-meta">Finance reports</span>
-      </button>
-      <button class="qa-btn" onclick="showRunStatementsModal()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>
-        Running Statements
-        <span class="qa-meta">Batch print tenants</span>
-      </button>
-      <button class="qa-btn" onclick="showBatchAccountingModal()">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="6" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/></svg>
-        Batch Accounting
-        <span class="qa-meta">Dry run / live post</span>
-      </button>
+    <div class="hub-sec">
+      <div class="hub-sec-h"><span class="hub-sec-t">Reports &amp; Batch Tools</span><span class="hub-sec-rule"></span></div>
+      <div class="hub-tiles">
+        <button type="button" class="hub-tile" onclick="showPage('reports');setTimeout(function(){showReportTab(null,'rpt-reconcile');},120)">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></span>
+          <span class="hub-tile-nm">Reconciliation</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="showRunStatementsModal()">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg></span>
+          <span class="hub-tile-nm">Running Statements</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="showBatchAccountingModal()">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/><line x1="6" y1="8" x2="18" y2="8"/><line x1="6" y1="12" x2="14" y2="12"/></svg></span>
+          <span class="hub-tile-nm">Batch Accounting</span>
+        </button>
+      </div>
     </div>
+
   </div>
 
   <!-- Finance Worklist (collapsible) -->
