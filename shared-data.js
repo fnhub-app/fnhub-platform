@@ -4828,6 +4828,18 @@ function arrearsAssignmentGate(app, unit, role, reinvoke, opts){
           role);
       }
     } catch(e){}
+    // FYI to the ED (informational only, no approval) — notifications.js reads
+    // the recipient roles from Settings → Notifications (default: ED).
+    try {
+      var _notifyFyi = /** @type {any} */ (window).notifyArrearsAssignmentNote;
+      if(typeof _notifyFyi === 'function'){
+        var _docBy = (window.HOUSING_SESSION && (HOUSING_SESSION.name || HOUSING_SESSION.email)) || role || 'staff';
+        _notifyFyi({
+          applicantName: nm, unitLabel: uLbl, arrearsDetail: (st.reason||''),
+          note: (tok.notes || '(none)'), documentedBy: _docBy, appId: appId
+        });
+      }
+    } catch(e){ try { console.warn('[arrears] FYI notify failed', e); } catch(_e){} }
     return true;
   }
 

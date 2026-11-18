@@ -91,6 +91,27 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'arrears_assignment_fyi',
+    label:                 'Arrears Assignment Documented (FYI to ED)',
+    description:           'FYI to the ED when staff assign a unit to an applicant in arrears with no approved repayment arrangement (Policy 8.5/12.5), carrying the documented arrears-conversation note. Informational only — no approval is requested.',
+    defaultRecipientRoles: ['ed'],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['applicantName','unitLabel','arrearsDetail','documentedBy','note','nationShort','appLink'],
+    defaults: {
+      subject:  '{nationShort} Housing — FYI: Unit assigned with arrears documented ({applicantName})',
+      bodyHtml: '<p><strong>For your information.</strong> A unit has been assigned to an applicant who is in arrears with no approved repayment arrangement on file (Policy 8.5 / 12.5). The assigning staff member documented the arrears conversation with the applicant.</p>'
+              + '<p>Applicant: <strong>{applicantName}</strong><br/>'
+              +    'Unit: <strong>{unitLabel}</strong><br/>'
+              +    'Documented by: <strong>{documentedBy}</strong></p>'
+              + '<p>{arrearsDetail}</p>'
+              + '<p style="margin:14px 0 4px;font-weight:700;">Conversation note</p>'
+              + '<blockquote style="margin:0;padding:8px 12px;border-left:3px solid;white-space:pre-wrap;">{note}</blockquote>'
+              + '<p style="font-size:12px;margin:14px 0 0;">This is an informational notice only &mdash; no action is required.</p>'
+              + '<p style="margin:18px 0 4px;"><a href="{appLink}" style="{brandBtnStyle}">Open {nationShort} Housing &rarr;</a></p>'
+    }
+  },
+  {
     key:                   'sow_created',
     label:                 'Maintenance Request Created',
     description:           'Sent on the first save of a new maintenance request (not on subsequent edits).',
@@ -956,6 +977,46 @@ async function notifyApplicationSubmitted(app, opts) {
     };
   }, eventKey);
 }
+
+// FYI to the ED when staff assign a unit to an applicant in arrears with no
+// approved repayment arrangement (Policy 8.5/12.5). Fired from
+// arrearsAssignmentGate (shared-data.js) once the assigning staff member
+// documents the arrears conversation. Informational only -- no approval is
+// requested. All free-text (applicant name, note, who documented it) is escaped
+// before it enters the HTML template. ctx:
+//   { applicantName, unitLabel, arrearsDetail, note, documentedBy, appId }
+async function notifyArrearsAssignmentNote(ctx) {
+  ctx = ctx || {};
+  var eventKey = 'arrears_assignment_fyi';
+  var cfg = _emailEventConfig(eventKey);
+  if (!cfg) return;
+  var roles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+  if (!roles.length) return;
+  var recipients = await _resolveActiveStaffForRoles(roles);
+  if (!recipients.length) { console.warn('[notify] no recipient for ' + eventKey); return; }
+  var rendered = _renderEmailTemplate(eventKey, {
+    applicantName: _ntfEsc(ctx.applicantName || 'Applicant'),
+    unitLabel:     _ntfEsc(ctx.unitLabel || '—'),
+    arrearsDetail: _ntfEsc(ctx.arrearsDetail || ''),
+    documentedBy:  _ntfEsc(ctx.documentedBy || '—'),
+    note:          _ntfEsc(ctx.note || '(none)'),
+    nationShort:   _emailNationShort(),
+    appLink:       _emailAppLink()
+  });
+  if (!rendered) return;
+  await _sendSerially(recipients, function(rcp){
+    return {
+      to:          rcp.email,
+      to_name:     rcp.name || '',
+      subject:     rendered.subject,
+      bodyHtml:    rendered.bodyHtml,
+      event:       eventKey,
+      entity_type: 'application',
+      entity_id:   ctx.appId || '—'
+    };
+  }, eventKey);
+}
+if (typeof window !== 'undefined') window.notifyArrearsAssignmentNote = notifyArrearsAssignmentNote;
 
 // Send a list of payloads serially (one Graph call at a time) so the
 // app stays under Microsoft Graph's MailboxConcurrency throttle (~4
