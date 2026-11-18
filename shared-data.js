@@ -4289,11 +4289,34 @@ function openApplicationSubmissionReview(id){
   var e = function(t){ return String(t==null?'':t).replace(/[&<>"']/g, function(c){ return ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[c]; }); };
   var p = s.payload || {};
   var when = s.submitted_at ? new Date(s.submitted_at).toLocaleString() : (s.created_at ? new Date(s.created_at).toLocaleString() : '');
-  var row = function(l, v){ return v ? '<div style="font-size:13px;margin:3px 0;"><span style="color:var(--muted);">' + e(l) + ':</span> ' + e(v) + '</div>' : ''; };
+  // 2026 redesign — light identity hero + facts grid + section lists. All colour
+  // is token-based so the color guard stays clean.
+  var SERIF = "'DM Serif Display',Georgia,serif";
+  var fullName = [p.fn, p.ln].filter(Boolean).join(' ');
+  var initials = (((p.fn||'')[0]||'') + ((p.ln||'')[0]||'')).toUpperCase() || '?';
+  // Section header: uppercase label + bottom rule, optional count on the right.
+  var secHdr = function(title, count){
+    return '<div style="font-size:11px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--muted);margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'
+      + '<span>' + e(title) + '</span>' + (count != null ? '<span style="color:var(--accent-ink);">' + count + '</span>' : '') + '</div>';
+  };
+  // One facts-grid cell. Core cells always render (em-dash when blank) so the
+  // 2-col grid never leaves a half-empty row; `wide` spans both columns.
+  var cell = function(l, v, wide){
+    return '<div style="background:var(--surface);padding:9px 13px;min-width:0;' + (wide ? 'grid-column:1/-1;' : '') + '">'
+      + '<div style="font-size:10px;font-weight:800;letter-spacing:.4px;text-transform:uppercase;color:var(--muted);margin-bottom:2px;">' + e(l) + '</div>'
+      + '<div style="font-size:13.5px;font-weight:600;color:var(--text);overflow-wrap:anywhere;">' + (v ? e(v) : '&mdash;') + '</div></div>';
+  };
+  var factWide = function(l, v){ return v ? cell(l, v, true) : ''; };
+  // List section: fmt(it) returns [mainText, subText] (main bold, sub muted).
   var listBlock = function(title, arr, fmt){
     if(!arr || !arr.length) return '';
-    return '<div style="margin-top:10px;"><div class="tic-field-lbl">' + e(title) + ' (' + arr.length + ')</div>'
-      + arr.map(function(it){ return '<div style="font-size:12px;color:var(--text);padding:4px 0;border-bottom:1px solid var(--border);">' + e(fmt(it)) + '</div>'; }).join('') + '</div>';
+    var rows = arr.map(function(it, i){
+      var parts = fmt(it); var last = i === arr.length - 1;
+      return '<div style="font-size:13px;padding:7px 0;' + (last ? '' : 'border-bottom:1px solid var(--border);') + '">'
+        + '<b style="font-weight:600;">' + e(parts[0] || '') + '</b>'
+        + (parts[1] ? ' <span style="color:var(--muted);">' + e(parts[1]) + '</span>' : '') + '</div>';
+    }).join('');
+    return '<div style="margin-top:20px;">' + secHdr(title, arr.length) + rows + '</div>';
   };
   var addr = [p.street, p.city, p.province, p.postal].filter(Boolean).join(', ');
   var flags = [p.homeless ? 'Homeless / no fixed address' : '', p.haveHouse ? 'Has house on reserve' : ''].filter(Boolean).join(' · ');
@@ -4360,25 +4383,38 @@ function openApplicationSubmissionReview(id){
   var m = document.createElement('div');
   m.id = 'app_sub_modal';
   m.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.72);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px;';
+  var factsGrid =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);border-radius:12px;overflow:hidden;margin-bottom:4px;">'
+    + cell('Date of birth', p.dob) + cell('Band / membership #', p.band)
+    + cell('Marital', p.marital) + cell('Reserve status', p.reserve)
+    + cell('Phone', p.phone) + cell('Email', p.email)
+    + factWide('Address', addr) + factWide('Needed by', p.occDate)
+    + factWide('Flags', flags) + factWide('Co-applicant', co ? (co + (p.coApp.dob ? ' (' + p.coApp.dob + ')' : '')) : '')
+    + '</div>';
+
   m.innerHTML =
-      '<div style="background:var(--surface);border-radius:12px;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:0 8px 40px rgba(0,0,0,.35);">'
-    + '<div class="modal-hdr"><div><div class="lbl-yellow">&#128196; ' + e(_APPSUB_TYPE_LABEL[s.submission_type] || 'Application') + '</div>'
-    +   '<div class="txt-sm-meta">' + e(([p.fn, p.ln].filter(Boolean).join(' ')) || 'Applicant') + (when ? ' &middot; ' + e(when) : '') + '</div></div>'
-    +   '<button type="button" onclick="var x=document.getElementById(\'app_sub_modal\');if(x)x.remove();" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);">&times;</button></div>'
-    + '<div style="overflow-y:auto;padding:18px 22px;flex:1;">'
-    +   row('Name', [p.fn, p.ln].filter(Boolean).join(' '))
-    +   row('Date of birth', p.dob) + row('Band / membership #', p.band) + row('Marital', p.marital) + row('Reserve status', p.reserve)
-    +   row('Phone', p.phone) + row('Email', p.email) + row('Address', addr) + row('Needed by', p.occDate)
-    +   (flags ? row('Flags', flags) : '')
-    +   (co ? row('Co-applicant', co + (p.coApp.dob ? ' (' + e(p.coApp.dob) + ')' : '')) : '')
-    +   listBlock('Household members', p.habitants, function(h){ return [h.fn, h.ln].filter(Boolean).join(' ') + (h.relationship ? ' — ' + h.relationship : '') + (h.dob ? ' · ' + h.dob : ''); })
-    +   listBlock('Income', p.incomes, function(i){ return [i.person, i.incomeType, i.employer, (i.primaryAmt ? '$' + i.primaryAmt + '/mo' : '')].filter(Boolean).join(' · '); })
-    +   listBlock('References', p.references, function(r2){ return [r2.fn, r2.ln].filter(Boolean).join(' ') + (r2.phone ? ' · ' + r2.phone : '') + (r2.relationship ? ' · ' + r2.relationship : ''); })
-    +   listBlock('Pets', p.pets, function(pt){ return [pt.name, pt.type, pt.size].filter(Boolean).join(' · '); })
-    +   ((p.sig && p.sig.typed) ? '<div style="margin-top:10px;">' + row('Signed', p.sig.typed + (p.sig.date ? ' · ' + e(p.sig.date) : '')) + '</div>' : '')
+      '<div style="background:var(--surface);border-radius:16px;width:100%;max-width:600px;max-height:92vh;display:flex;flex-direction:column;box-shadow:var(--shadow);overflow:hidden;">'
+    // Light identity hero (accent rail + initials avatar + eyebrow + serif name).
+    + '<div style="position:relative;display:flex;align-items:center;gap:13px;padding:18px 20px;border-bottom:1px solid var(--border);">'
+    +   '<div style="position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--yellow);"></div>'
+    +   '<div style="width:46px;height:46px;border-radius:12px;background:var(--dark);color:var(--surface);display:grid;place-items:center;font-family:' + SERIF + ';font-size:17px;flex-shrink:0;">' + e(initials) + '</div>'
+    +   '<div style="flex:1;min-width:0;">'
+    +     '<div style="font-size:10.5px;font-weight:800;letter-spacing:.7px;text-transform:uppercase;color:var(--accent-ink);">&#128196; ' + e(_APPSUB_TYPE_LABEL[s.submission_type] || 'Application') + '</div>'
+    +     '<div style="font-family:' + SERIF + ';font-weight:400;font-size:22px;line-height:1.12;margin:2px 0 0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + e(fullName || 'Applicant') + '</div>'
+    +     '<div style="font-size:12px;color:var(--muted);margin-top:2px;">' + (when ? 'Submitted ' + e(when) : '') + ((p.reserve && when) ? ' &middot; ' : '') + (p.reserve ? e(p.reserve) : '') + '</div>'
+    +   '</div>'
+    +   '<button type="button" onclick="var x=document.getElementById(\'app_sub_modal\');if(x)x.remove();" style="background:none;border:none;font-size:22px;cursor:pointer;color:var(--muted);align-self:flex-start;line-height:1;">&times;</button>'
+    + '</div>'
+    + '<div style="overflow-y:auto;padding:18px 20px;flex:1;">'
+    +   factsGrid
+    +   listBlock('Household members', p.habitants, function(h){ return [[h.fn, h.ln].filter(Boolean).join(' '), [(h.relationship ? '— ' + h.relationship : ''), (h.dob ? '· ' + h.dob : '')].filter(Boolean).join(' ')]; })
+    +   listBlock('Income', p.incomes, function(i){ return [i.person || '(unnamed)', [i.incomeType, i.employer, (i.primaryAmt ? '$' + i.primaryAmt + '/mo' : '')].filter(Boolean).join(' · ')]; })
+    +   listBlock('References', p.references, function(r2){ return [[r2.fn, r2.ln].filter(Boolean).join(' '), [r2.phone, r2.relationship].filter(Boolean).join(' · ')]; })
+    +   listBlock('Pets', p.pets, function(pt){ return [pt.name || '(unnamed)', [pt.type, pt.size].filter(Boolean).join(' · ')]; })
+    +   ((p.sig && p.sig.typed) ? '<div style="margin-top:16px;font-size:12.5px;color:var(--muted);">Signed: <b style="color:var(--text);font-weight:600;">' + e(p.sig.typed) + '</b>' + (p.sig.date ? ' &middot; ' + e(p.sig.date) : '') + '</div>' : '')
     +   (p.applicantComments
-          ? '<div class="tic-field-lbl" style="margin-top:12px;">Applicant comments</div>'
-            + '<div style="font-size:13px;white-space:pre-wrap;border:1px solid var(--border);border-left:3px solid var(--warn-amber-text);border-radius:6px;padding:8px 10px;">' + e(p.applicantComments) + '</div>'
+          ? '<div style="margin-top:18px;">' + secHdr('Applicant comments')
+            + '<div style="font-size:13px;line-height:1.55;white-space:pre-wrap;background:var(--bg);border:1px solid var(--border);border-left:3px solid var(--yellow);border-radius:10px;padding:11px 13px;">' + e(p.applicantComments) + '</div></div>'
           : '')
     +   _appSubArrearsWarn(p, e)
     +   docsHtml
@@ -4394,9 +4430,9 @@ function openApplicationSubmissionReview(id){
             + 'On approval, email ' + e(p.email) + ': application approved &amp; added to the wait list (states this is not an offer of housing)</label>'
           : '')
     + '</div>'
-    + '<div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;flex-shrink:0;">'
+    + '<div style="padding:13px 20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;flex-shrink:0;align-items:center;">'
     +   '<div style="display:flex;gap:8px;">'
-    +     '<button type="button" onclick="_appSubReject(\'' + e(s.id) + '\')" class="btn btn-ghost" style="color:var(--danger);border-color:var(--danger);">Reject</button>'
+    +     '<button type="button" onclick="_appSubReject(\'' + e(s.id) + '\')" class="btn btn-danger-ghost">Reject</button>'
     +     '<button type="button" onclick="_appSubRequestChanges(\'' + e(s.id) + '\')" class="btn btn-ghost">Request changes</button>'
     +   '</div>'
     +   '<button type="button" id="app_sub_primary_btn" onclick="_appSubApproveSmart(\'' + e(s.id) + '\')" class="btn btn-primary">&#10003; Approve &amp; create application</button>'
