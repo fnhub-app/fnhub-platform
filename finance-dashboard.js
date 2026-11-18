@@ -302,7 +302,7 @@ function showKpiDrilldown(type) {
       return { t:t, rent:v.rent||0, arr:v.arrangement||0, loan:loanBal, total:Math.max(0,v.rent||0)+Math.max(0,v.arrangement||0)+loanBal };
     }).filter(function(r){ return r.total > 0; }).sort(function(a,b){ return b.total - a.total; });
 
-    html = '<table class="tbl"><thead><tr>'
+    html = '<table class="std-table"><thead><tr>'
       + '<th>Tenant</th><th>Unit</th><th>Type</th>'
       + '<th class="std-cell-right">Rent</th><th class="std-cell-right">Arrangement</th>'
       + '<th class="std-cell-right">Loans</th><th class="std-cell-right">Total</th>'
@@ -330,7 +330,7 @@ function showKpiDrilldown(type) {
       return { t:t, rent:rent, lastPmt:lastPmt };
     }).filter(function(r){ return r.rent > 0; }).sort(function(a,b){ return b.rent - a.rent; });
 
-    html = '<table class="tbl"><thead><tr>'
+    html = '<table class="std-table"><thead><tr>'
       + '<th>Tenant</th><th>Unit</th><th>Type</th>'
       + '<th class="std-cell-right">Rent Owing</th><th>Last Payment</th>'
       + '</tr></thead><tbody>'
@@ -354,7 +354,7 @@ function showKpiDrilldown(type) {
       return (v.rent||0)+(v.loan||0)+(v.arrangement||0) <= 0 && t.active!==false && st!=='former' && st!=='deceased';
     }).slice().sort(function(a,b){ return tenantName(a).localeCompare(tenantName(b)); });
 
-    html = '<table class="tbl"><thead><tr>'
+    html = '<table class="std-table"><thead><tr>'
       + '<th>Tenant</th><th>Unit</th><th>Type</th><th>Balance</th>'
       + '</tr></thead><tbody>'
       + (clearItems.length ? clearItems.map(function(t){
@@ -380,7 +380,7 @@ function showKpiDrilldown(type) {
     '<div class="modal" style="max-width:820px;width:96%;">'
     + '<div class="modal-hdr"><div><h2>'+title+'</h2></div>'
     + '<button class="modal-close" onclick="closeModal(\'modalKpiDrilldown\')">&#x2715;</button></div>'
-    + '<div class="modal-body" style="padding:0;"><div class="tbl-wrap">'+html+'</div></div>'
+    + '<div class="modal-body" style="padding:0;"><div class="std-table-card">'+html+'</div></div>'
     + '</div>';
   document.body.appendChild(mo);
   mo.style.display = '';

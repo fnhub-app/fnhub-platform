@@ -114,7 +114,7 @@ function _renderNoRentList(tenants, isAll) {
   return '<div style="margin-bottom:12px;border:1px solid var(--warn-amber-border);border-radius:10px;overflow:hidden;">'+
     '<div style="background:var(--warn-amber-bg);padding:10px 14px;font-size:12px;">' + label + '</div>'+
     '<div style="max-height:220px;overflow-y:auto;">'+
-      '<table class="tbl" style="margin:0;">'+
+      '<table class="std-table" style="margin:0;">'+
         '<thead><tr><th>Tenant</th><th>Address / Unit</th><th></th></tr></thead>'+
         '<tbody>' + rows + '</tbody>'+
       '</table>'+
@@ -312,7 +312,7 @@ function runBatchAccounting(dryRun) {
       html += '<div class="ibox" style="color:var(--success);">&#10003; All accounting entries for this period are already posted — nothing to do.</div>';
     } else if (pending.length) {
       html += '<div style="border:1px solid var(--border);border-radius:10px;overflow:hidden;">'+
-        '<table class="tbl">'+
+        '<table class="std-table">'+
           '<thead><tr>'+
             '<th>Tenant</th><th>Unit</th><th>Type</th><th>Period</th>'+
             '<th style="text-align:right;">Amount</th><th>Action</th>'+

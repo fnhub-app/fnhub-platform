@@ -195,53 +195,65 @@
     </div>
   </div>
 
-  <div class="action-panel" style="margin-top:4px;">
+  <div class="hub" style="margin-top:4px;">
 
-    <div class="action-section-label">Payments</div>
-    <button class="action-btn-card primary" onclick="openModal('modalRentPayment')">
-      <span class="action-icon">&#127968;</span>
-      <span class="action-label">Record Payment</span>
-      <span class="action-sub">Rent, arrangement &amp; loan</span>
-    </button>
+    <div class="hub-sec">
+      <div class="hub-sec-h"><span class="hub-sec-t">Payments</span><span class="hub-sec-rule"></span></div>
+      <div class="hub-tiles">
+        <button type="button" class="hub-tile" onclick="openModal('modalRentPayment')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="5" width="20" height="14" rx="2"/><line x1="2" y1="10" x2="22" y2="10"/></svg></span>
+          <span class="hub-tile-nm">Record Payment</span>
+          <span class="hub-tile-sub">Rent, arrangement &amp; loan</span>
+        </button>
+      </div>
+    </div>
 
-    <div class="action-section-label">Create Records</div>
-    <button class="action-btn-card" onclick="openModal('modalNewInvoice')">
-      <span class="action-icon">&#128196;</span>
-      <span class="action-label">New Invoice</span>
-      <span class="action-sub">Generate monthly rent invoice</span>
-    </button>
-    <button class="action-btn-card" onclick="openModal('modalNewArrangement')">
-      <span class="action-icon">&#9997;</span>
-      <span class="action-label">New Arrangement</span>
-      <span class="action-sub">Propose a repayment plan</span>
-    </button>
-    <button class="action-btn-card" onclick="openModal('modalNewLoan')">
-      <span class="action-icon">&#128176;</span>
-      <span class="action-label">New Loan</span>
-      <span class="action-sub">Renovation or rent-to-own</span>
-    </button>
-    <button class="action-btn-card" onclick="jeResetModal();openModal('modalJournalEntry')">
-      <span class="action-icon">&#128211;</span>
-      <span class="action-label">Journal Entry</span>
-      <span class="action-sub">Manual debit or credit</span>
-    </button>
-    <button class="action-btn-card" onclick="openModal('modalOpeningBalance')">
-      <span class="action-icon">&#128200;</span>
-      <span class="action-label">Set Opening Balance</span>
-      <span class="action-sub">Carry-forward balance for a tenant</span>
-    </button>
+    <div class="hub-sec">
+      <div class="hub-sec-h"><span class="hub-sec-t">Create Records</span><span class="hub-sec-rule"></span></div>
+      <div class="hub-tiles">
+        <button type="button" class="hub-tile" onclick="openModal('modalNewInvoice')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></span>
+          <span class="hub-tile-nm">New Invoice</span>
+          <span class="hub-tile-sub">Generate monthly rent invoice</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="openModal('modalNewArrangement')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg></span>
+          <span class="hub-tile-nm">New Arrangement</span>
+          <span class="hub-tile-sub">Propose a repayment plan</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="openModal('modalNewLoan')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg></span>
+          <span class="hub-tile-nm">New Loan</span>
+          <span class="hub-tile-sub">Renovation or rent-to-own</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="jeResetModal();openModal('modalJournalEntry')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></span>
+          <span class="hub-tile-nm">Journal Entry</span>
+          <span class="hub-tile-sub">Manual debit or credit</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="openModal('modalOpeningBalance')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></span>
+          <span class="hub-tile-nm">Set Opening Balance</span>
+          <span class="hub-tile-sub">Carry-forward balance for a tenant</span>
+        </button>
+      </div>
+    </div>
 
-    <div class="action-section-label">Operations</div>
-    <button class="action-btn-card danger" onclick="openModal('modalFlagCollections')">
-      <span class="action-icon">&#128680;</span>
-      <span class="action-label" style="color:var(--danger);">Flag Collections</span>
-      <span class="action-sub">Refer account for collections</span>
-    </button>
-    <button class="action-btn-card" onclick="openAddTenant()">
-      <span class="action-icon">&#128100;</span>
-      <span class="action-label">Add Tenant</span>
-      <span class="action-sub">Create a new tenant record</span>
-    </button>
+    <div class="hub-sec">
+      <div class="hub-sec-h"><span class="hub-sec-t">Operations</span><span class="hub-sec-rule"></span></div>
+      <div class="hub-tiles">
+        <button type="button" class="hub-tile" onclick="openModal('modalFlagCollections')">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg></span>
+          <span class="hub-tile-nm">Flag Collections</span>
+          <span class="hub-tile-sub">Refer account for collections</span>
+        </button>
+        <button type="button" class="hub-tile" onclick="openAddTenant()">
+          <span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></span>
+          <span class="hub-tile-nm">Add Tenant</span>
+          <span class="hub-tile-sub">Create a new tenant record</span>
+        </button>
+      </div>
+    </div>
 
   </div>
 
@@ -993,25 +1005,30 @@
       Back to Home
     </button>
   </div>
-  <div class="page-hdr">
-    <div><h1>Audit Log</h1><p>Full before/after record of every change</p></div>
-    <div class="page-hdr-actions">
+  <div class="page-hero">
+    <div class="page-hero-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg></div>
+    <div class="page-hero-tx">
+      <div class="page-hero-eyebrow">Finance</div>
+      <h1>Audit Log</h1>
+      <p>Full before/after record of every change.</p>
+    </div>
+    <div class="page-hero-actions">
       <button class="btn btn-ghost btn-sm" onclick="exportAudit()">&#128196; Export CSV</button>
     </div>
   </div>
-  <div class="filter-bar">
-    <label style="font-size:11px;font-weight:700;color:var(--muted);">User</label>
-    <select id="audit-filter-user" onchange="renderAuditLog()"><option value="all">All Users</option></select>
-    <label style="font-size:11px;font-weight:700;color:var(--muted);">Action</label>
-    <select id="audit-filter-action" onchange="renderAuditLog()">
+  <div class="std-filter-row">
+    <span class="std-filter-label">User</span>
+    <select class="std-filter-control" id="audit-filter-user" onchange="renderAuditLog()"><option value="all">All Users</option></select>
+    <span class="std-filter-label">Action</span>
+    <select class="std-filter-control narrow" id="audit-filter-action" onchange="renderAuditLog()">
       <option value="all">All Actions</option>
       <option value="create">Create</option>
       <option value="update">Update</option>
       <option value="delete">Delete</option>
       <option value="void_entry">Void</option>
     </select>
-    <label style="font-size:11px;font-weight:700;color:var(--muted);">Search</label>
-    <input type="text" id="audit-filter-search" placeholder="Tenant, description..." oninput="renderAuditLog()" style="min-width:180px;"/>
+    <span class="std-filter-label">Search</span>
+    <input type="text" class="std-filter-control" id="audit-filter-search" placeholder="Tenant, description&hellip;" oninput="renderAuditLog()"/>
   </div>
   <div id="auditLogContent"></div>
 </div>
@@ -1025,13 +1042,15 @@
       Back to Home
     </button>
   </div>
-  <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px;flex-wrap:wrap;">
-    <button id="stmt-back-btn" class="btn btn-ghost btn-sm" onclick="stmtGoBack()" style="padding:6px 12px;">&#8592; Back</button>
-    <div style="flex:1;min-width:0;">
-      <div id="stmt-tenant-name" style="font-size:20px;font-weight:700;"></div>
-      <div id="stmt-tenant-sub" style="font-size:12px;color:var(--muted);"></div>
+  <div class="page-hero">
+    <div class="page-hero-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg></div>
+    <div class="page-hero-tx">
+      <div class="page-hero-eyebrow">Finance &middot; Statement</div>
+      <h1 id="stmt-tenant-name"></h1>
+      <p id="stmt-tenant-sub"></p>
     </div>
-    <div style="display:flex;gap:6px;flex-wrap:wrap;">
+    <div class="page-hero-actions">
+      <button id="stmt-back-btn" class="btn btn-ghost btn-sm" onclick="stmtGoBack()">&#8592; Back</button>
       <button class="btn btn-primary btn-sm" onclick="finStatementDownload()">⬇️ Download PDF</button>
       <button class="btn btn-ghost btn-sm" onclick="finStatementEmail()">✉️ Email Tenant</button>
       <button class="btn btn-ghost btn-sm" onclick="printTenantStatement()">🖨️ Print</button>
@@ -1056,9 +1075,9 @@
   </div>
 
   <!-- Entries table -->
-  <div class="card" style="padding:0;overflow:hidden;">
-    <div class="tbl-wrap">
-      <table class="tbl" id="stmt-table">
+  <div class="std-table-card">
+    <div style="overflow-x:auto;">
+      <table class="std-table" id="stmt-table">
         <thead>
           <tr>
             <th>Date</th>
@@ -2418,7 +2437,7 @@
   </div>
 </div>
 
-<div id="app-toast" style="position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);background:#111;color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;z-index:99999;opacity:0;transition:all .25s ease;pointer-events:none;max-width:calc(100vw - 40px);text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></div>
+<div id="app-toast" style="position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-20px);background:var(--dark);color:#fff;padding:12px 20px;border-radius:8px;font-size:14px;font-weight:500;z-index:99999;opacity:0;transition:all .25s ease;pointer-events:none;max-width:calc(100vw - 40px);text-align:center;box-shadow:0 4px 16px rgba(0,0,0,0.15);"></div>
 <script src="ai-assistant.js"></script>
 </body>
 </html>

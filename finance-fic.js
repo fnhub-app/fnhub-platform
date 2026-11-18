@@ -214,7 +214,7 @@
       return;
     }
 
-    panel.innerHTML = '<div class="tbl-wrap"><table class="tbl">'
+    panel.innerHTML = '<div class="std-table-card"><table class="std-table">'
       + '<thead><tr><th>Date</th><th>Ledger</th><th>Description</th>'
       + '<th class="std-cell-right">Charge</th><th class="std-cell-right">Payment</th>'
       + '<th>Status</th></tr></thead><tbody>'
@@ -331,7 +331,7 @@
       return;
     }
 
-    panel.innerHTML = '<div class="tbl-wrap"><table class="tbl">'
+    panel.innerHTML = '<div class="std-table-card"><table class="std-table">'
       + '<thead><tr><th>Date</th><th>Description</th>'
       + '<th class="std-cell-right">Amount</th><th>Reference</th><th>Status</th></tr></thead><tbody>'
       + charges.map(function (r) {

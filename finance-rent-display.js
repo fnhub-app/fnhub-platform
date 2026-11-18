@@ -363,7 +363,7 @@ function renderArrangementsPage(){
         '<div style="height:8px;background:var(--border);border-radius:6px;margin-bottom:6px;overflow:hidden;"><div style="width:'+pct.toFixed(1)+'%;height:100%;background:var(--yellow);border-radius:6px;transition:width .5s;"></div></div>'+
         '<div style="font-size:11px;color:var(--muted);margin-bottom:16px;">'+pct.toFixed(1)+'% repaid &mdash; '+fmt(totalPaid)+' of '+fmt(arr.totalOwing)+'</div>'+
         (arr.notes?'<div class="ibox yellow" style="margin-bottom:14px;">'+arr.notes+'</div>':'')+
-        (payRows?'<div class="ctitle">Payment History</div><div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Type</th><th>Ref #</th><th>Notes</th></tr></thead><tbody>'+payRows+'</tbody></table></div>':'<p style="color:var(--muted);font-size:13px;">No payments recorded yet.</p>')+
+        (payRows?'<div class="ctitle">Payment History</div><div class="std-table-card"><table class="std-table"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Type</th><th>Ref #</th><th>Notes</th></tr></thead><tbody>'+payRows+'</tbody></table></div>':'<p style="color:var(--muted);font-size:13px;">No payments recorded yet.</p>')+
       '</div>';
     }).join('');
   }
@@ -606,7 +606,7 @@ function renderLoanDetail(ln, d, t){
       '<td style="color:var(--muted);font-size:12px;">'+(p.notes||'\u2014')+'</td>'+
       '<td>'+(isReversed
         ? '<span class="pill pill-gray" style="font-size:10px;">Reversed</span>'
-        : '<button class="btn btn-ghost btn-sm" style="font-size:11px;color:var(--danger);" onclick="reverseLoanPayment(\''+p.id+'\',\''+ln.id+'\')">&#8635; Reverse</button>')+
+        : '<button class="btn btn-danger-ghost btn-sm" style="font-size:11px;" onclick="reverseLoanPayment(\''+p.id+'\',\''+ln.id+'\')">&#8635; Reverse</button>')+
       '</td>'+
     '</tr>';
   }).join('');
@@ -696,7 +696,7 @@ function renderLoanDetail(ln, d, t){
     '<div class="card">'+
       '<div class="ctitle">Payment History</div>'+
       (allPayments.length
-        ? '<div class="tbl-wrap"><table class="tbl"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Notes</th><th></th></tr></thead><tbody>'+payRows+'</tbody></table></div>'
+        ? '<div class="std-table-card"><table class="std-table"><thead><tr><th>Date</th><th>Amount</th><th>Method</th><th>Notes</th><th></th></tr></thead><tbody>'+payRows+'</tbody></table></div>'
         : '<p style="color:var(--muted);font-size:13px;padding:8px 0;">No payments recorded yet.</p>')+
     '</div>';
 }
