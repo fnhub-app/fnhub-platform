@@ -96,9 +96,9 @@ window.showAlert = function(opts) {
     ov.className = 'modal-overlay modal-overlay-centered modal-z-1100 is-open';
     ov.innerHTML =
       '<div class="modal-body modal-body-sm">' +
-        '<div class="modal-hdr">' +
-          '<div class="modal-hdr-title">' + (opts.title || 'Notice') + '</div>' +
-          '<button type="button" class="btn-close-dark-30" data-al-close>&times;</button>' +
+        '<div class="dlg-hdr">' +
+          '<div class="dlg-hdr-title">' + (opts.title || 'Notice') + '</div>' +
+          '<button type="button" class="dlg-x" data-al-close>&times;</button>' +
         '</div>' +
         '<div class="modal-body-stack">' +
           '<p class="txt-help m-0">' + (opts.message || '') + '</p>' +
@@ -657,9 +657,9 @@ window.showConfirm = function(opts) {
       : '';
     ov.innerHTML =
       '<div class="modal-body modal-body-sm">' +
-        '<div class="modal-hdr">' +
-          '<div class="modal-hdr-title">' + (opts.title || 'Confirm') + '</div>' +
-          '<button type="button" class="btn-close-dark-30" data-cn-cancel>&times;</button>' +
+        '<div class="dlg-hdr">' +
+          '<div class="dlg-hdr-title">' + (opts.title || 'Confirm') + '</div>' +
+          '<button type="button" class="dlg-x" data-cn-cancel>&times;</button>' +
         '</div>' +
         '<div class="modal-body-stack">' +
           '<p class="txt-help m-0">' + (opts.message || 'Are you sure?') + '</p>' +
@@ -737,9 +737,9 @@ window.showPrompt = function(opts) {
       : '<input id="' + fieldId + '" type="text" placeholder="' + (opts.placeholder || '') + '" value="' + (opts.value || '') + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>';
     ov.innerHTML =
       '<div class="modal-body modal-body-sm">' +
-        '<div class="modal-hdr">' +
-          '<div class="modal-hdr-title">' + (opts.title || 'Enter a value') + '</div>' +
-          '<button type="button" class="btn-close-dark-30" data-cn-cancel>&times;</button>' +
+        '<div class="dlg-hdr">' +
+          '<div class="dlg-hdr-title">' + (opts.title || 'Enter a value') + '</div>' +
+          '<button type="button" class="dlg-x" data-cn-cancel>&times;</button>' +
         '</div>' +
         '<div class="modal-body-stack">' +
           (opts.message ? '<p class="txt-help m-0" style="margin-bottom:8px;">' + opts.message + '</p>' : '') +

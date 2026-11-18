@@ -1450,6 +1450,17 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
                      color: var(--txt-on-dark); width: 30px; height: 30px;
                      border-radius: 7px; cursor: pointer; font-size: 16px; }
 
+/* Light dialog header (2026 design) for showAlert / showConfirm / showPrompt —
+   accent rail + serif title on a light surface, replacing the dark .modal-hdr
+   on these centred dialogs. .modal-hdr itself is unchanged (still used by the
+   CIC and other card modals). The card (.modal-body, overflow:hidden) clips the
+   header + rail to its rounded top corners. */
+.dlg-hdr         { position: relative; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 17px 20px 13px; border-bottom: 1px solid var(--border); }
+.dlg-hdr::before { content: ''; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; background: var(--yellow); }
+.dlg-hdr-title   { font-family: var(--serif); font-size: 19px; line-height: 1.2; letter-spacing: -.2px; color: var(--text); }
+.dlg-x           { background: none; border: none; font-size: 22px; line-height: 1; cursor: pointer; color: var(--muted); flex-shrink: 0; padding: 0 2px; }
+.dlg-x:hover     { color: var(--text); }
+
 /* 24px circular avatars — used as role/status badges next to text labels.
    Yellow = ED / primary action, Blue = HM / informational. */
 .avatar-circle-24-yellow {
