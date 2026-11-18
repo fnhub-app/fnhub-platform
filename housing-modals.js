@@ -442,6 +442,32 @@ function openUnitEditModal(unitId){
   unitEditStatusChange();
   _ueCurrentUnitId = unitId;
   renderEditUnitPhotoPreview(unitId);
+  // Keys tab (Phase 2) — injected once per modal so all three #unitEditModal
+  // copies (inventory/tenants/match) get it without duplicating markup.
+  // _ueSwitchTab works purely by class toggle + ue_panel_<name> id lookup.
+  (function(){
+    var _m = document.getElementById('unitEditModal'); if(!_m) return;
+    var _tabs = _m.querySelector('.tic-tabs');
+    if(_tabs && !_tabs.querySelector('[data-ue-tab="keys"]')){
+      var _btn = document.createElement('button');
+      _btn.type = 'button'; _btn.className = 'tic-tab'; _btn.setAttribute('data-ue-tab','keys');
+      _btn.setAttribute('data-ue-keep',''); _btn.setAttribute('role','tab'); _btn.textContent = 'Keys';
+      _btn.onclick = function(){ _ueSwitchTab('keys'); };
+      var _sowTab = _tabs.querySelector('[data-ue-tab="sow"]');
+      if(_sowTab && _sowTab.nextSibling) _tabs.insertBefore(_btn, _sowTab.nextSibling); else _tabs.appendChild(_btn);
+    }
+    var _ovPanel = document.getElementById('ue_panel_overview');
+    var _wrap = _ovPanel && _ovPanel.parentNode;
+    if(_wrap && !document.getElementById('ue_panel_keys')){
+      var _p = document.createElement('div'); _p.id = 'ue_panel_keys'; _p.className = 'tic-panel';
+      _p.innerHTML = '<div class="tic-section"><div class="tic-section-h">Key Inventory</div><div id="ue_keys_mount"></div></div>';
+      _wrap.appendChild(_p);
+    }
+  })();
+  if(typeof _keysRenderPanel === 'function'){
+    var _ueKeysMount = document.getElementById('ue_keys_mount');
+    if(_ueKeysMount) _keysRenderPanel(_ueKeysMount, u, { readOnly: (window.currentRole === 'field_employee') });
+  }
   _ueSwitchTab('overview');
   var _uem=document.getElementById('unitEditModal'); if(_uem){_uem.style.removeProperty('display');_uem.style.setProperty('display','flex','important');}
   try { if(_uem && typeof cardFooter === 'function') cardFooter(_uem.querySelector('.tic-footer')); } catch(_e){}
