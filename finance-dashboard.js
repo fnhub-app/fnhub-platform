@@ -276,11 +276,12 @@ function renderDashboard(){
   colCount=d.collections.filter(function(c){return c.status==='approved';}).length;
   var grand=tR+tL+tA;
   var statsEl = document.getElementById('dashStats');
+  // Landing summary stats — Total Owing + Rent Arrears only (the home-style
+  // tile hub carries the actions; Accounts Clear / Collections live on their
+  // own pages). clearCount/colCount are still computed for any other callers.
   if (statsEl) statsEl.innerHTML=
-    kpiCard('Total Owing',    fmt(grand),                       'All ledgers — click to view', grand>0?'danger':'', "showKpiDrilldown('total')")+
-    kpiCard('Rent Arrears',   fmt(tR),                          'Click to view by tenant',     tR>0?'danger':'',   "showKpiDrilldown('rent')")+
-    kpiCard('Accounts Clear', clearCount,                       'of '+visTenants.length+' tenants', 'success',      "showKpiDrilldown('clear')")+
-    kpiCard('Collections',    colCount+' file'+(colCount!==1?'s':''), 'Active',                colCount>0?'danger':'', "showPage('collections')");
+    kpiCard('Total Owing',  fmt(grand), 'All ledgers — click to view', grand>0?'danger':'', "showKpiDrilldown('total')")+
+    kpiCard('Rent Arrears', fmt(tR),    'Click to view by tenant',     tR>0?'danger':'',   "showKpiDrilldown('rent')");
 }
 
 function showKpiDrilldown(type) {
