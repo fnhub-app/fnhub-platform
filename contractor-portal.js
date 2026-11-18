@@ -448,8 +448,10 @@
       '<button type="button" class="cp-back" data-cp-back>&larr; Back to work orders</button>'
       + '<h1>' + esc(w.address || w.sow_unit_id || '') + '</h1>'
       + '<p class="cp-sub">#' + esc(w.sow_project_number || '') + ' &middot; ' + esc(statusLabel) + '</p>'
+      + field('Unit code', d.unitCode)
       + field('Tenant', d.tenantName)
       + field('Tenant phone', d.tenantPhone)
+      + field('Key pickup', d.keyPickup)
       + field('Target start', d.targetStart)
       + field('Target completion', d.targetCompletion)
       + field('Condition', d.condition)

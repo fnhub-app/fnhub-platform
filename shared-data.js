@@ -1096,6 +1096,18 @@ function _keysRenderPanel(mount, unit, opts){
       });
       h += '</tbody></table></div>';
     }
+    // Key pickup instructions — ride the unit's data jsonb and surface on the
+    // contractor's work order / portal (Phase 4). Office-editable.
+    var _kp = escapeHtml((unit && unit.keyPickup) || '');
+    h += '<div class="tic-section" style="margin-top:18px;"><div class="tic-section-h">Key Pickup Instructions</div>';
+    if(readOnly){
+      h += (unit && unit.keyPickup) ? '<div class="callout">'+_kp+'</div>' : '<div class="tic-empty">None set.</div>';
+    } else {
+      h += '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Shown to the assigned contractor on their work order (e.g. "Collect keys from the housing office").</div>'
+        + '<textarea id="ue_key_pickup" rows="2" style="'+_KEY_FIELD_CSS+'resize:vertical;">'+_kp+'</textarea>'
+        + '<div style="margin-top:8px;"><button type="button" data-key-pickup-save class="btn btn-ghost btn-sm">Save instructions</button></div>';
+    }
+    h += '</div>';
     mount.innerHTML = h;
     var _pb = mount.querySelector('[data-key-print]');
     if(_pb) _pb.addEventListener('click', function(){ _keyPrintTags(unitId); });
@@ -1109,6 +1121,24 @@ window._keysRefresh = _keysRefresh;
 function _keysWire(mount, unitId){
   var addBtn = mount.querySelector('[data-key-add]');
   if(addBtn) addBtn.addEventListener('click', function(){ _keyOpenAddModal(unitId); });
+  var kpBtn = mount.querySelector('[data-key-pickup-save]');
+  if(kpBtn) kpBtn.addEventListener('click', function(){
+    var unit = (window._keysCtx && window._keysCtx.unit); if(!unit) return;
+    unit.keyPickup = String((_woEl('ue_key_pickup')||{}).value||'').trim() || null;
+    sbSaveUnit(unit).then(function(){
+      _keyAudit(unit.id, 'key_pickup_set', 'Key pickup instructions updated');
+      // Push to any active contractor work orders now, so the pickup note reaches
+      // the portal without waiting for the next SOW save.
+      try {
+        if(typeof getUnitSowList === 'function' && typeof sbSyncContractorWorkOrder === 'function'){
+          getUnitSowList(unit.id).forEach(function(s){
+            if(s && s.assignedTeam === 'contractor' && s.contractorId && !s.cancelled) sbSyncContractorWorkOrder(s, unit);
+          });
+        }
+      } catch(e){}
+      _keyToast('Key pickup instructions saved.', 'info');
+    }).catch(function(e){ _keyToast('Could not save: '+e.message, 'error'); });
+  });
   mount.querySelectorAll('[data-key-act]').forEach(function(btn){
     btn.addEventListener('click', function(){
       var act = btn.getAttribute('data-key-act'), id = btn.getAttribute('data-key-id');
@@ -2944,6 +2974,11 @@ function _cwoDetailFromSow(sow, unit){
     .map(function(f){ return { name: f.name || 'Document', path: f.path }; });
   var nc = window.NATION_CONFIG || {};
   return {
+    // Unit code (Phase 4): lets the contractor confirm the unit by code, not just
+    // the address. keyPickup = staff-entered instructions for collecting keys
+    // (set on the unit's Keys tab); rides the unit's data jsonb. NO address-on-key.
+    unitCode:         (unit && unit.unitCode) || '',
+    keyPickup:        (unit && unit.keyPickup) || '',
     tenantName:       sow.tenantName || (unit && unit.assignedName) || '',
     tenantPhone:      '',   // resolved async by the sync (and lazily in the preview)
     scopeItems:       items,
@@ -3403,8 +3438,10 @@ function _ctPortalPreviewOpen(i){
   _ctPortalPreviewShell(
     '<button type="button" onclick="_ctPortalPreviewRenderList()" class="btn btn-ghost btn-sm" style="margin-bottom:12px;">← Back to work orders</button>'
     + '<div style="font-size:18px;font-weight:700;color:var(--text);">' + esc(r.address) + '</div>'
+    + (d.unitCode ? '<div style="margin:4px 0 2px;"><span style="font-family:ui-monospace,monospace;font-size:12px;font-weight:800;color:var(--accent-ink);background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:2px 8px;">Unit ' + esc(d.unitCode) + '</span></div>' : '')
     + '<div style="color:var(--muted);font-size:12px;margin-bottom:12px;">#' + esc(r.project_number) + ' · ' + esc(statusLabel) + '</div>'
     + tenantBlock
+    + field('Key pickup', d.keyPickup)
     + field('Target start', d.targetStart)
     + field('Target completion', d.targetCompletion)
     + field('Progress (contractor-reported)', (typeof d.progressPercent === 'number' ? d.progressPercent : 0) + '%')

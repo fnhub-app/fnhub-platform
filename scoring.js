@@ -633,6 +633,7 @@ function renderNationPanel(){
     email_intake: 'Email Intake (Forward-to-File)',
     sms_notifications: 'Text / SMS Notifications',
     contractor_portal: 'Contractor Portal',
+    key_inventory: 'Key Inventory (Unit Keys & Tags)',
     support:      'Help & Support (Report an Issue)',
     custom_module: 'Custom Module (starter template)'
   };

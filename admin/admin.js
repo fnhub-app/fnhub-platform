@@ -25,6 +25,7 @@
     ['inspections','Inspections'], ['ai_assistant','AI Assistant'],
     ['projects','Capital Projects'], ['email_intake','Email Intake'],
     ['sms_notifications','SMS / Text Notifications'], ['contractor_portal','Contractor Portal'],
+    ['key_inventory','Key Inventory'],
     ['custom_module','Custom Module (starter)']
   ];
   // Default ENABLED state per optional module, mirroring CLFN_MODULES._enabled
@@ -36,6 +37,7 @@
     finance:true, match:true, contractors:true, renovations:true, rfq:true,
     mapping:true, inspections:true, ai_assistant:true, projects:true,
     email_intake:true, sms_notifications:true, contractor_portal:false,
+    key_inventory:false,
     custom_module:false
   };
 
