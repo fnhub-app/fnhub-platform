@@ -818,25 +818,13 @@
     }
     html += '</div>';
 
-    var u_for_rent = _ticState.unit || {};
-    var displayRent = (l[TIC_C.monthly_rent] != null)
-                    ? l[TIC_C.monthly_rent]
-                    : (u_for_rent.monthlyRent != null ? u_for_rent.monthlyRent : (u_for_rent.monthly_rent != null ? u_for_rent.monthly_rent : null));
+    // Rent Arrangement glance tiles + the Policy s.12 arrears/repayment panel
+    // moved to the dedicated "Rent & Arrears" tab (_ticRenderArrears); the
+    // Overview keeps just the application linkage.
     html += '<div class="tic-section">'
          +    '<div class="tic-section-h">Application Linkage</div>'
          +    '<div class="tic-rows">'
          +      renderGroup(function(f){ return f.group === 'meta'; })
-         +    '</div>'
-         + '</div>'
-         + '<div class="tic-section">'
-         +    '<div class="tic-section-h">Rent Arrangement</div>'
-         +    '<div class="tic-grid-3">'
-         +      _ticField('Monthly Rent',           _ticFmtMoney(displayRent))
-         +      _ticField('Arrears Balance',        _ticFmtMoney(l[TIC_C.arrears_balance]))
-         +      _ticField('Arrangement Status',     l[TIC_C.arrangement_status])
-         +      _ticField('Arrangement Payment',    _ticFmtMoney(l[TIC_C.arrangement_payment]))
-         +      _ticField('Arrangement Start',      _ticFmtDate(l[TIC_C.arrangement_start]))
-         +      _ticField('Clear-By Date',          _ticFmtDate(l[TIC_C.arrangement_clear]))
          +    '</div>'
          + '</div>'
         ;
@@ -886,23 +874,76 @@
       + '</div>';
 
     if(mapOn) _ticInitMap(u);
+    // (Arrears & repayment panel now lives on the Rent & Arrears tab.)
+  }
 
-    // Arrears & repayment (Policy s.12 machine, arrears.js) — reads the
-    // FINANCE ledger/arrangements; renders below the overview columns.
+  // ── Rent & Arrears tab ──────────────────────────────────────────────────────
+  // The Rent Arrangement glance tiles + the Policy s.12 arrears/repayment panel
+  // (arrears.js), moved off the Overview. The Arrears Balance tile is overlaid
+  // with the LIVE arrears-engine balance so it reads the same figure (and DR/CR
+  // colour) as the top ARREARS KPI tile.
+  function _ticRenderArrears(){
+    var panel = _ticEl('tic_panel_arrears');
+    if(!panel) return;
+    var l = _ticState.ledger || {};
+    var u = _ticState.unit   || {};
+    var displayRent = (l[TIC_C.monthly_rent] != null)
+                    ? l[TIC_C.monthly_rent]
+                    : (u.monthlyRent != null ? u.monthlyRent : (u.monthly_rent != null ? u.monthly_rent : null));
+    panel.innerHTML =
+      '<div class="tic-section">'
+      +  '<div class="tic-section-h">Rent Arrangement</div>'
+      +  '<div class="tic-grid-3">'
+      +    _ticField('Monthly Rent',        _ticFmtMoney(displayRent))
+      +    '<div class="tic-field"><div class="tic-field-lbl">Arrears Balance</div>'
+      +      '<div class="tic-field-val tic-empty" id="tic_arr_balance">&#8212;</div></div>'
+      +    _ticField('Arrangement Status',  l[TIC_C.arrangement_status])
+      +    _ticField('Arrangement Payment', _ticFmtMoney(l[TIC_C.arrangement_payment]))
+      +    _ticField('Arrangement Start',   _ticFmtDate(l[TIC_C.arrangement_start]))
+      +    _ticField('Clear-By Date',       _ticFmtDate(l[TIC_C.arrangement_clear]))
+      +  '</div>'
+      + '</div>';
+    // Policy s.12 arrears / repayment machine (arrears.js).
     if (typeof arrearsRenderTicPanel === 'function') {
       try {
-        var _arMain = _ticEl('tic_panel_overview').querySelector('.tic-overview-main');
-        if (_arMain) {
-          var _arMount = document.createElement('div');
-          _arMount.id = 'tic_arrears_mount';
-          _arMain.appendChild(_arMount);
-          var _arName = (_ticState.tenant && _ticState.tenant[TIC_C.full_name])
-                     || (_ticState.unit && _ticState.unit.assignedName) || '';
-          var _arRent = (_ticState.unit && (_ticState.unit.monthlyRent != null ? _ticState.unit.monthlyRent : _ticState.unit.monthly_rent)) || 0;
-          arrearsRenderTicPanel(_arMount, _arName, Number(_arRent) || 0);
-        }
+        var _arMount = document.createElement('div');
+        _arMount.id = 'tic_arrears_mount';
+        panel.appendChild(_arMount);
+        var _arName = (_ticState.tenant && _ticState.tenant[TIC_C.full_name])
+                   || (_ticState.unit && _ticState.unit.assignedName) || '';
+        var _arRent = (u.monthlyRent != null ? u.monthlyRent : u.monthly_rent) || 0;
+        arrearsRenderTicPanel(_arMount, _arName, Number(_arRent) || 0);
       } catch(e) { console.warn('[TIC] arrears panel failed:', e); }
     }
+    _ticSyncArrearsBalanceTile();
+  }
+
+  // Overlay the live arrears-engine balance into the Rent & Arrears tab's
+  // Arrears Balance tile, using the SAME sign/format as the top KPI
+  // (_ticSyncArrearsKpi): positive = owed -> "DR" red, negative = credit ->
+  // "CR" green, zero -> $0.
+  function _ticSyncArrearsBalanceTile(){
+    var el = _ticEl('tic_arr_balance');
+    if(!el) return;
+    if(typeof window.arrearsTenantByName !== 'function' || typeof window.arrearsStateForTenant !== 'function') return;
+    var t = _ticState.tenant || {}, u = _ticState.unit || {}, a = _ticState.application || {};
+    var nm = t[TIC_C.full_name] || u.assignedName || [a.fn, a.ln].filter(Boolean).join(' ');
+    if(!nm) return;
+    var apply = function(){
+      try {
+        var tt = window.arrearsTenantByName(nm);
+        if(!tt || !tt.id) return;
+        var st = window.arrearsStateForTenant(tt.id);
+        if(!st) return;
+        var bal = Math.round((Number(st.balance) || 0) * 100) / 100;
+        el.classList.remove('tic-empty');
+        if (bal > 0)      { el.textContent = _ticFmtMoney(bal) + ' DR';           el.style.color = 'var(--danger)';  }
+        else if (bal < 0) { el.textContent = _ticFmtMoney(Math.abs(bal)) + ' CR'; el.style.color = 'var(--success)'; }
+        else              { el.textContent = _ticFmtMoney(0);                     el.style.color = '';               }
+      } catch(e){ /* best-effort */ }
+    };
+    if(typeof window.arrearsLoad === 'function') window.arrearsLoad().then(apply).catch(function(){});
+    else apply();
   }
 
   var _ticUtilDocLib    = null;
@@ -2564,6 +2605,7 @@
     if(p) p.classList.add('tic-active');
     if(name === 'documents')  _ticRenderDocuments();
     if(name === 'utilities')  _ticRenderUtilities();
+    if(name === 'arrears')    _ticRenderArrears();
   }
 
   // ── Save handlers ─────────────────────────────────────────────────────────
