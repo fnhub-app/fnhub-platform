@@ -10260,7 +10260,10 @@ function _ensureAddContractorModal() {
   wrap.innerHTML = _buildAddContractorModalHTML();
   // The builder returns a single root <div id="addContractorModal">.
   var node = wrap.firstChild;
-  if (node) document.body.appendChild(node);
+  if (node) {
+    document.body.appendChild(node);
+    try { var _ctFoot = document.querySelector('#addContractorModal .tic-footer'); if (_ctFoot && typeof cardFooter === 'function') cardFooter(_ctFoot); } catch (_e) {}
+  }
 }
 
 // Inline toggle helper for the Terms-of-Reference collapser. Pulled out of

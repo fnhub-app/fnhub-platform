@@ -2572,3 +2572,64 @@ body.tic-modal-open       { overflow: hidden; }
 @media (max-width: 900px) {
   .ld-chart-grid { grid-template-columns: 1fr; }
 }
+
+/* ===========================================================================
+ * Card footer standard — Actions sheet + full-width primary
+ * (shared-ui.js cardFooter() transform; applied to .tic-footer / .modal-footer)
+ * Appended last so it beats the earlier mobile ".tic-footer .btn" grid rule;
+ * a few flex/width props use !important to override that same-specificity rule.
+ * =========================================================================== */
+.tic-footer.cf-applied,
+.modal-footer.cf-applied   { display: block; }
+.cf-applied .cf-src        { display: none !important; }
+
+.cf-bar                    { display: flex; flex-direction: column; gap: 9px; }
+.cf-applied .cf-actions    { width: 100% !important; flex: 0 0 auto !important;
+                             display: inline-flex; align-items: center; justify-content: center; gap: 8px; }
+.cf-actions .cf-chev       { font-size: 11px; color: var(--muted); }
+.cf-primary-row            { display: flex; gap: 9px; align-items: stretch; }
+/* width:auto defeats the mobile ".modal-footer .btn{width:100%}" rule so the
+   two buttons share one row instead of each taking the full width. */
+.cf-applied .cf-primary-row .btn              { width: auto !important; }
+.cf-applied .cf-primary-row .btn-primary      { flex: 1 1 auto !important; }
+.cf-applied .cf-primary-row > .btn:not(.btn-primary) { flex: 0 0 auto !important; }
+
+/* bottom sheet */
+.cf-sheet-ovl              { position: fixed; inset: 0; z-index: 100000; display: flex;
+                             align-items: flex-end; justify-content: center;
+                             background: rgba(20, 19, 17, .42); opacity: 0; pointer-events: none;
+                             transition: opacity .18s ease; }
+.cf-sheet-ovl.open         { opacity: 1; pointer-events: auto; }
+.cf-sheet                  { width: 100%; max-width: 520px; background: var(--surface); color: var(--text);
+                             border-top-left-radius: 20px; border-top-right-radius: 20px;
+                             box-shadow: 0 -12px 40px rgba(0, 0, 0, .28);
+                             padding: 0 16px calc(16px + env(safe-area-inset-bottom, 0px));
+                             max-height: 86vh; overflow-y: auto;
+                             transform: translateY(20px); transition: transform .2s ease; }
+.cf-sheet-ovl.open .cf-sheet { transform: none; }
+.cf-grab                   { width: 40px; height: 4px; border-radius: 999px; background: var(--border); margin: 10px auto 2px; }
+.cf-sheet-h                { font-family: var(--serif, 'DM Serif Display', Georgia, serif); font-weight: 400;
+                             font-size: 19px; color: var(--text); margin: 6px 2px 2px; }
+.cf-grp                    { font-size: 10px; font-weight: 800; letter-spacing: .6px; text-transform: uppercase;
+                             color: var(--muted); padding-bottom: 6px; border-bottom: 1px solid var(--yellow);
+                             margin: 16px 2px 4px; }
+.cf-item                   { display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+                             font-family: inherit; font-size: 14px; font-weight: 600; color: var(--text);
+                             background: none; border: none; border-radius: 11px; padding: 13px 10px; cursor: pointer; }
+.cf-item:hover             { background: var(--bg); }
+.cf-item:disabled          { opacity: .45; cursor: default; }
+.cf-item.cf-danger         { color: var(--danger); }
+.cf-item.cf-ok             { color: var(--success); }
+.cf-empty                  { color: var(--muted); font-size: 13px; padding: 20px 4px; }
+.cf-done                   { width: 100%; margin-top: 14px; background: var(--bg); border: 1px solid var(--border);
+                             color: var(--text); border-radius: 12px; padding: 13px; font-weight: 700;
+                             font-family: inherit; font-size: 14px; cursor: pointer; }
+.cf-done:hover             { border-color: var(--muted); }
+body.cf-sheet-lock         { overflow: hidden; }
+
+/* Roomy screens: Actions sits inline, the primary row floats to the right. */
+@media (min-width: 640px) {
+  .cf-bar                  { flex-direction: row; align-items: center; }
+  .cf-applied .cf-actions  { width: auto !important; }
+  .cf-primary-row          { margin-left: auto; }
+}

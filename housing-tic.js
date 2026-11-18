@@ -3268,6 +3268,8 @@
       savedEl.style.cssText = 'font-size:11px;font-weight:600;color:var(--muted);white-space:nowrap;align-self:center;';
       footer.insertBefore(savedEl, footer.firstChild);
     }
+    // Standard footer: collapse secondary actions into the Actions sheet.
+    try { if (footer && typeof cardFooter === 'function') cardFooter(footer); } catch (_e) {}
 
     // Scroll-collapse: shrink the info strip to icon-only once the tab body
     // scrolls, freeing space on tablet/mobile (shared-ui.js).

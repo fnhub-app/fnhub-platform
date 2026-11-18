@@ -611,6 +611,8 @@ function _ensureSowModal() {
   }
   modal.innerHTML = _buildSowModalHTML();
   window._sowModalMounted = true;
+  // Collapse the crowded footer into the standard Actions-sheet + primary layout.
+  try { var _sowFoot = modal.querySelector('.tic-footer'); if (_sowFoot && typeof cardFooter === 'function') cardFooter(_sowFoot); } catch (_e) {}
   // "✦ Draft with AI" on the maintenance-request notes box.
   if (typeof window.aiAttachNoteButton === 'function') {
     window.aiAttachNoteButton('sow_notes', function(){
