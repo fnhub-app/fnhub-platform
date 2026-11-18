@@ -1915,8 +1915,21 @@ body.is-sow-only .modal-overlay { visibility: visible; }
    column; on phones the whole action group drops to its own line. */
 #ticModal .tic-hero > .flex-gap8 { flex-wrap: wrap; justify-content: flex-end; align-items: center; }
 @media (max-width: 700px) {
-  #ticModal .tic-hero { flex-wrap: wrap; }
-  #ticModal .tic-hero > .flex-gap8 { margin-left: auto; }
+  /* Compact hero on phones: the old layout put a 64px avatar beside a serif
+     name that then wrapped to two lines, with "Generate Forms" wrapping onto
+     its own tall row — together eating most of the first screen. Shrink the
+     avatar, keep the name on one line, pin the close top-right, and make
+     Generate Forms a compact full-width row. */
+  #ticModal .tic-hero        { flex-wrap: wrap; align-items: flex-start; gap: 11px; padding: 13px 16px; position: relative; }
+  #ticModal .tic-avatar      { width: 44px; height: 44px; font-size: 16px; }
+  #ticModal .tic-hero-main   { padding-right: 36px; }      /* clear the pinned close */
+  #ticModal .tic-name        { font-size: 20px; line-height: 1.12; }
+  #ticModal .tic-hero-sub    { margin-top: 2px; }
+  #ticModal .tic-hero-badges { margin-top: 6px; gap: 5px; }
+  #ticModal .tic-hero .tic-close-btn { position: absolute; top: 12px; right: 14px; width: 30px; height: 30px; }
+  #ticModal .tic-hero > .flex-gap8 { width: 100%; margin: 0; flex-wrap: nowrap; }
+  #ticModal .tic-hero > .flex-gap8 > #tic_forms_mount { flex: 1; min-width: 0; }
+  #ticModal .tic-hero > .flex-gap8 > #tic_forms_mount .btn { width: 100%; justify-content: center; padding: 8px 12px; font-size: 13px; }
 }
 /* Contractor Info Card (CIC) hero: same treatment as the Edit Unit modal — a
    long company name must not get squeezed by the top-right doc-gen buttons
