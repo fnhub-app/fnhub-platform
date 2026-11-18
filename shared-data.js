@@ -1071,12 +1071,14 @@ function _keysRenderPanel(mount, unit, opts){
     var onHand = active.filter(function(k){ return k.status==='on_hand'; }).length;
     var issued = active.filter(function(k){ return k.status==='issued'; }).length;
     var lost   = active.filter(function(k){ return k.status==='lost'; }).length;
+    var _addBtn   = readOnly ? '' : '<button type="button" data-key-add class="btn btn-ghost btn-sm">+ Add key</button>';
+    var _printBtn = keys.length ? '<button type="button" data-key-print class="btn btn-ghost btn-sm">🖨️ Print tags</button>' : '';
     var h = '<div style="display:flex;flex-wrap:wrap;gap:16px;align-items:center;margin-bottom:12px;">'
       + '<div style="font-weight:800;font-size:15px;">'+active.length+' key'+(active.length===1?'':'s')+'</div>'
       + '<span style="color:var(--success);font-weight:700;font-size:12px;">'+onHand+' on hand</span>'
       + '<span style="color:var(--info-blue);font-weight:700;font-size:12px;">'+issued+' issued</span>'
       + (lost ? '<span style="color:var(--danger);font-weight:700;font-size:12px;">'+lost+' lost</span>' : '')
-      + (readOnly ? '' : '<button type="button" data-key-add class="btn btn-ghost btn-sm" style="margin-left:auto;">+ Add key</button>')
+      + ((_addBtn||_printBtn) ? '<div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap;">'+_printBtn+_addBtn+'</div>' : '')
       + '</div>';
     if(!keys.length){
       h += '<div class="tic-empty">No keys recorded for this unit'+(readOnly?'.':' yet.')+'</div>';
@@ -1095,6 +1097,8 @@ function _keysRenderPanel(mount, unit, opts){
       h += '</tbody></table></div>';
     }
     mount.innerHTML = h;
+    var _pb = mount.querySelector('[data-key-print]');
+    if(_pb) _pb.addEventListener('click', function(){ _keyPrintTags(unitId); });
     if(!readOnly) _keysWire(mount, unitId);
   }).catch(function(){ mount.innerHTML = '<div class="tic-empty">Could not load keys.</div>'; });
 }
@@ -1224,6 +1228,62 @@ function _keyRetire(key){
       _keysRefresh();
     }).catch(function(e){ _keyToast('Could not update: '+e.message, 'error'); });
   });
+}
+
+// Print a sheet of key tags for a unit: the UNIT CODE in large type, the key
+// type/label, and an optional QR deep-linking to the unit in the app -- NO
+// address on the tag (so a lost key never reveals the property). Reuses the
+// qrcodejs lib loaded by the Maintenance QR feature (_qrLoadLib). Degrades to
+// code-only tags if the QR lib can't load. Theme accent via _themeAccentHex();
+// all other colours are CSS named colours so the color guard stays green.
+async function _keyPrintTags(unitId){
+  var unit = (window._keysCtx && window._keysCtx.unit) || {};
+  var keys = ((window._unitKeysCache||{})[unitId]||[]).filter(function(k){ return k.status!=='retired'; });
+  if(!keys.length){ _keyToast('No keys to print.', 'info'); return; }
+  var code   = unit.unitCode || unit.id || '';
+  var nation = (window.NATION_CONFIG && (NATION_CONFIG.short || NATION_CONFIG.display_name)) || 'Housing';
+  var base   = (typeof window.nationPortalBase === 'function') ? window.nationPortalBase() : location.origin;
+  var url    = base + '/inventory.html?unit=' + encodeURIComponent(unitId);
+  var qrSrc  = '';
+  try {
+    if(typeof window._qrLoadLib === 'function'){
+      await window._qrLoadLib();
+      var host = document.createElement('div');
+      host.style.cssText = 'position:absolute;left:-9999px;top:-9999px;';
+      document.body.appendChild(host);
+      new window.QRCode(host, { text:url, width:170, height:170, correctLevel: window.QRCode.CorrectLevel.M });
+      var el = /** @type {any} */ (host.querySelector('img') || host.querySelector('canvas'));
+      if(el && el.tagName === 'IMG' && !el.complete){
+        await new Promise(function(res){ el.onload = res; el.onerror = res; setTimeout(res, 600); });
+      }
+      try { qrSrc = el ? (el.tagName === 'IMG' ? el.src : el.toDataURL('image/png')) : ''; } catch(e){}
+      if(host.parentNode) host.parentNode.removeChild(host);
+    }
+  } catch(e){ qrSrc = ''; }
+  var accent = (typeof window._themeAccentHex === 'function') ? window._themeAccentHex() : 'black';
+  var w = window.open('', '_blank', 'width=780,height=920');
+  if(!w){ _keyToast('Allow pop-ups to print key tags.', 'error'); return; }
+  var tagHtml = keys.map(function(k){
+    var typ = _keyTypeLabel(k.key_type) + (k.label ? (' — ' + k.label) : '');
+    return '<div class="tag"><div class="bar"></div>'
+      + '<div class="code">' + escapeHtml(code) + '</div>'
+      + '<div class="typ">' + escapeHtml(typ) + '</div>'
+      + (qrSrc ? '<img class="qr" src="' + qrSrc + '"/>' : '')
+      + '<div class="nation">' + escapeHtml(nation) + '</div></div>';
+  }).join('');
+  w.document.write('<html><head><title>Key Tags — ' + escapeHtml(code) + '</title><style>'
+    + '@page{margin:12mm;}'
+    + 'body{font-family:-apple-system,Segoe UI,Arial,sans-serif;margin:0;color:black;background:white;}'
+    + '.sheet{display:flex;flex-wrap:wrap;gap:8mm;padding:6mm;}'
+    + '.tag{width:60mm;border:1.5px solid black;border-radius:4mm;overflow:hidden;text-align:center;page-break-inside:avoid;}'
+    + '.bar{height:4mm;background:' + accent + ';}'
+    + '.code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:29px;font-weight:800;letter-spacing:1px;margin:6mm 2mm 2mm;word-break:break-all;}'
+    + '.typ{font-size:13px;color:dimgray;margin:0 2mm 4mm;}'
+    + '.qr{width:32mm;height:32mm;}'
+    + '.nation{font-size:10px;color:gray;letter-spacing:.6px;text-transform:uppercase;margin:3mm 0 5mm;}'
+    + '</style></head><body><div class="sheet">' + tagHtml + '</div></body></html>');
+  w.document.close();
+  setTimeout(function(){ try { w.focus(); w.print(); } catch(e){} }, 450);
 }
 
 // ── sbPatchUnit ───────────────────────────────────────────────────────────────
