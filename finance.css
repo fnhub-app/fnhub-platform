@@ -66,7 +66,12 @@
 .voucher-row          { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 13px; }
 .voucher-total        { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-size: 15px; font-weight: 700; padding-top: 10px; border-top: 1.5px solid var(--border); margin-top: 4px; }
 
-/* Home tiles removed — landing page now uses .kpi-strip + .quick-row pattern (shared.css) */
+/* Home tiles removed — landing page now uses .home-greeting + .hub-search +
+   .hub tiles (mirrors the home page). The two summary stats above the tiles use
+   a 2-up .kpi-strip; the compound class (0,2,0) beats the single-class
+   .kpi-strip grid rules, same pattern as .kpi-strip-pf in shared.css. */
+.kpi-strip.kpi-strip-fin2 { grid-template-columns: repeat(2, 1fr); }
+@media (max-width: 640px) { .kpi-strip.kpi-strip-fin2 { grid-template-columns: 1fr; } }
 
 /* Action panel */
 .action-panel, .action-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 10px; margin-top: 8px; }
