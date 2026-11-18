@@ -4794,14 +4794,14 @@ window.appArrearsWarning = appArrearsWarning;
 // with forAssignment and returns:
 //   true  -> cleared; the caller may proceed with the assignment
 //   false -> stop this pass (a message or an ED-override prompt was shown)
-// The Policy 8.5 / 12.5 good-standing (arrears) block is the ONE block an
-// Executive Director (overrideArrears authority) may override: the ED is shown
-// a confirm; on approval a one-shot token is set and `reinvoke` re-runs the
-// caller, which then passes (the override is audited when consumed). Any other
-// block (archived / deceased / not-approved / wrong building type) is never
-// overridable here. opts.onBlock(msg) customizes how a plain block message is
-// shown (default: persistent error toast); opts.unitLabel overrides the unit
-// text used in the audit line.
+// The Policy 8.5 / 12.5 good-standing (arrears) block is SOFT: instead of
+// hard-blocking, the assigning staff are prompted to DOCUMENT the arrears
+// conversation (a required note). On submit a one-shot token carrying that note
+// is set and `reinvoke` re-runs the caller, which then passes (the note is
+// audited when the token is consumed). Any other block (archived / deceased /
+// not-approved / wrong building type) is never bypassable here. opts.onBlock(msg)
+// customizes how a plain (non-arrears) block message is shown (default:
+// persistent error toast); opts.unitLabel overrides the unit text in the audit.
 function arrearsAssignmentGate(app, unit, role, reinvoke, opts){
   opts = opts || {};
   var showBlock = (typeof opts.onBlock === 'function')
@@ -4813,35 +4813,50 @@ function arrearsAssignmentGate(app, unit, role, reinvoke, opts){
   if(st.code !== 'arrears'){ showBlock('⚠ ' + st.reason); return false; }
 
   var appId = (app && app.id) || '';
-  // Consume a previously-granted ED override for this application.
+  var nm = (((app && app.fn) || '') + ' ' + ((app && app.ln) || '')).trim();
+  var uLbl = opts.unitLabel || (unit ? ((unit.num||'') + ' ' + (unit.street||'')).trim() : '');
+
+  // Consume a captured arrears note for this application → proceed, and record
+  // the documented conversation in the audit log (the authoritative trail).
   var tok = window._arrearsOverrideOk;
   if(tok && tok.appId === appId){
     window._arrearsOverrideOk = null;
     try {
       if(typeof auditEntry === 'function'){
-        var nm = ((app.fn||'') + ' ' + (app.ln||'')).trim();
-        var uLbl = opts.unitLabel || (unit ? ((unit.num||'') + ' ' + (unit.street||'')).trim() : '');
-        auditEntry(app.id, 'assignment_arrears_override',
-          'ED override of Policy 8.5/12.5 good-standing block — assigned ' + nm + (uLbl ? ' to ' + uLbl : '') + ' (' + (st.reason||'') + ')',
+        auditEntry(app.id, 'assignment_arrears_note',
+          'Assigned with arrears documented (Policy 8.5/12.5 — no approved repayment arrangement): ' + nm + (uLbl ? ' to ' + uLbl : '') + '. ' + (st.reason||'') + ' | Conversation note: ' + (tok.notes || '(none)'),
           role);
       }
     } catch(e){}
     return true;
   }
 
-  var canOverride = (typeof APPROVAL_AUTHORITY !== 'undefined') && APPROVAL_AUTHORITY.can('overrideArrears', role);
-  if(!canOverride){
-    showBlock('⚠ ' + st.reason + ' Only the Executive Director can override this.');
-    return false;
-  }
-
-  var msg = st.reason + '  As Executive Director you may override this and assign anyway (Policy 8.5 / 12.5). The override is recorded in the audit log.';
-  if(typeof showConfirm === 'function'){
-    showConfirm({ title: 'Override arrears good-standing block?', message: msg, confirmText: 'Override & assign', cancelText: 'Cancel' })
-      .then(function(ok){ if(!ok) return; window._arrearsOverrideOk = { appId: appId, by: role, at: new Date().toISOString() }; if(typeof reinvoke === 'function') reinvoke(); });
-  } else if(window.confirm(msg)){
-    window._arrearsOverrideOk = { appId: appId, by: role, at: new Date().toISOString() };
-    if(typeof reinvoke === 'function') reinvoke();
+  // Softened Policy 8.5 / 12.5 gate: arrears with no approved repayment
+  // arrangement no longer HARD-blocks the assignment. Instead the assigning
+  // staff must DOCUMENT the arrears conversation with the applicant; the note is
+  // captured in the audit log. (A formal repayment arrangement is still the
+  // preferred path — this records that the conversation happened.)
+  var promptMsg = st.reason + '  There is no approved repayment arrangement on file. '
+    + 'To assign anyway, document the arrears conversation with the applicant — what was discussed, and any commitment to pay or to set up an arrangement.';
+  if(typeof showPrompt === 'function'){
+    showPrompt({
+      title: 'Document the arrears conversation',
+      message: promptMsg,
+      placeholder: 'e.g. Spoke with applicant on <date>; agreed to …',
+      confirmText: 'Save note & assign',
+      cancelText: 'Cancel',
+      multiline: true,
+      required: true
+    }).then(function(notes){
+      notes = (notes == null ? '' : String(notes)).trim();
+      if(!notes) return;   // cancelled or left blank — the assignment does not proceed
+      window._arrearsOverrideOk = { appId: appId, by: role, at: new Date().toISOString(), notes: notes };
+      if(typeof reinvoke === 'function') reinvoke();
+    });
+  } else {
+    var _n = (typeof window.prompt === 'function') ? window.prompt(promptMsg) : '';
+    _n = (_n == null ? '' : String(_n)).trim();
+    if(_n){ window._arrearsOverrideOk = { appId: appId, by: role, at: new Date().toISOString(), notes: _n }; if(typeof reinvoke === 'function') reinvoke(); }
   }
   return false;
 }
