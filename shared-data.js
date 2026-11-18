@@ -892,7 +892,10 @@ async function sbLoadUnits() {
         // whose next_inspection_due existed only as a column was never counted
         // overdue (dashboard KPI) and showed blank in the unit modal.
         lastInspectionDate: row.last_inspection_date || (row.data && row.data.lastInspectionDate) || null,
-        nextInspectionDue:  row.next_inspection_due  || (row.data && row.data.nextInspectionDue)  || null
+        nextInspectionDue:  row.next_inspection_due  || (row.data && row.data.nextInspectionDue)  || null,
+        // Unit Code (Phase 1 of the key-inventory scope): prefer the dedicated
+        // column; fall back to the jsonb for any unit saved before the column.
+        unitCode: row.unit_code || (row.data && row.data.unitCode) || null
       });
     });
   } catch(e) {
@@ -933,6 +936,9 @@ async function sbSaveUnit(u) {
   if (u.gas_meter_number    != null) row.gas_meter_number    = u.gas_meter_number    || null;
   if (u.lastInspectionDate  !== undefined) row.last_inspection_date = u.lastInspectionDate || null;
   if (u.nextInspectionDue   !== undefined) row.next_inspection_due  = u.nextInspectionDue  || null;
+  // Unit Code to its own column (conditional, so a merge-duplicates upsert that
+  // omits it never nulls an existing code).
+  if (u.unitCode            != null) row.unit_code = u.unitCode || null;
   try {
     var r = await fetch(SUPABASE_URL + '/rest/v1/housing_units', {
       method:  'POST',
@@ -946,6 +952,55 @@ async function sbSaveUnit(u) {
     return false;
   }
 }
+
+// ── Unit codes (Phase 1, key-inventory scope) ───────────────────────────────
+// A short, unique code per unit (e.g. "CLFN-014"): the nation's short name
+// (NATION_CONFIG.short, never a hardcoded literal) + a zero-padded sequence.
+// Mirrors nextProjectNumber's in-memory-scan approach. Codes are assigned on
+// unit creation and back-filled for existing units on first management load.
+function _unitCodePrefix(){
+  var s = (window.NATION_CONFIG && (NATION_CONFIG.short || NATION_CONFIG.display_name)) || 'U';
+  s = String(s).toUpperCase().replace(/[^A-Z0-9]/g, '');
+  return (s || 'U') + '-';
+}
+function nextUnitCode(){
+  var prefix = _unitCodePrefix();
+  var maxN = 0;
+  var units = (typeof housingUnits !== 'undefined' && housingUnits) ? housingUnits : [];
+  units.forEach(function(u){
+    var c = String((u && u.unitCode) || '');
+    if (c.indexOf(prefix) === 0) {
+      var n = parseInt(c.slice(prefix.length), 10);
+      if (!isNaN(n) && n > maxN) maxN = n;
+    }
+  });
+  var seq = String(maxN + 1);
+  while (seq.length < 3) seq = '0' + seq;   // min 3 digits: 001..999, then 1000+
+  return prefix + seq;
+}
+window.nextUnitCode = nextUnitCode;
+
+// One-time (per session) back-fill: assign codes to every active unit that has
+// none, in the list's existing street/num order. Management only, best-effort,
+// sequential so each new code sees the previous one. Returns the count assigned.
+async function backfillUnitCodes(){
+  if (!(typeof ROLE !== 'undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole))) return 0;
+  var units = (typeof housingUnits !== 'undefined' && housingUnits) ? housingUnits : [];
+  var missing = units.filter(function(u){ return u && !u.archived && !u.unitCode; });
+  if (!missing.length) return 0;
+  var n = 0;
+  for (var i = 0; i < missing.length; i++) {
+    var u = missing[i];
+    u.unitCode = nextUnitCode();          // in-memory first, so the next scan sees it
+    try { await sbSaveUnit(u); n++; }
+    catch(e){ try { console.warn('[unitcode] backfill save failed', e); } catch(_e){} }
+  }
+  if (n) {
+    try { if (typeof auditEntry === 'function') auditEntry('UNIT:backfill', 'unit_code_backfill', 'Assigned unit codes to ' + n + ' unit(s)', window.currentRole || ''); } catch(e){}
+  }
+  return n;
+}
+window.backfillUnitCodes = backfillUnitCodes;
 
 // ── sbPatchUnit ───────────────────────────────────────────────────────────────
 // Targeted column PATCH on housing_units (vs sbSaveUnit's full-row upsert).

@@ -414,6 +414,8 @@
     _ticEl('tic_hero_sub').textContent = subParts.join(' · ');
 
     var badges = [];
+    // Unit code chip (Phase 1): identifies the unit; printed on key tags.
+    if(u && u.unitCode) badges.push('<span class="std-pill" style="font-family:ui-monospace,monospace;font-weight:700;">' + _ticEsc(u.unitCode) + '</span>');
     var stream = t[TIC_C.housing_stream];
     if(stream) badges.push('<span class="std-pill std-pill-info">' + _ticEsc(stream) + '</span>');
     // Tenancy-status pill intentionally omitted from the hero — it duplicates

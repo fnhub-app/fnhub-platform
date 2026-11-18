@@ -423,7 +423,14 @@ function openUnitEditModal(unitId){
   var title=document.getElementById('ue_modal_title'); if(title) title.textContent=u.num+' '+u.street;
   // Hero subtitle + info strip (mirrors the TIC hero/strip layout)
   var heroSub = [_roomBedLabel(u), (u.bathrooms&&u.bathrooms!=='nan')?u.bathrooms+' bath':'', _fmtUnitType(u.type)||'', u.lotNumber?('Lot '+u.lotNumber):''].filter(Boolean).join(' · ');
-  setText('ue_hero_sub', heroSub);
+  // Prefix the subtitle with the unit-code chip (read-only display, Phase 1).
+  var _ueHeroEl = document.getElementById('ue_hero_sub');
+  if (_ueHeroEl) {
+    var _ueCodeChip = u.unitCode
+      ? '<span class="ue-code-chip" style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-weight:700;color:var(--accent-ink);background:var(--yellow-light,var(--bg));border:1px solid var(--border);border-radius:6px;padding:1px 7px;margin-right:8px;">' + escapeHtml(u.unitCode) + '</span>'
+      : '';
+    _ueHeroEl.innerHTML = _ueCodeChip + escapeHtml(heroSub);
+  }
   var _ueStatusLabels = { vacant:'Vacant', occupied:'Occupied', reserved:'Reserved', condemned:'Condemned' };
   setText('ue_strip_status',    _ueStatusLabels[u.status] || (u.status || '—'));
   setText('ue_strip_bedrooms',  (u.bedrooms != null && u.bedrooms !== '') ? String(u.bedrooms) : '—');
@@ -2158,7 +2165,9 @@ function saveNewUnit(){
     accessible: chk('au_accessible'),
     isElders: chk('au_isElders'),
     status: 'vacant',
-    assignedTo: null, assignedDate: null, assignedName: null
+    assignedTo: null, assignedDate: null, assignedName: null,
+    // Unit code (Phase 1): assigned at creation, nation-prefixed + sequential.
+    unitCode: (typeof nextUnitCode === 'function') ? nextUnitCode() : null
   };
 
   // Optional: build this unit on a vacant lot. Link the unit to the lot and
