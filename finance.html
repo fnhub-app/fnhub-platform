@@ -77,12 +77,21 @@
 <!-- HOME -->
 <div class="page on" id="page-home">
 
-  <!-- Greeting -->
-  <div class="home-greeting">
-    <div class="home-greeting-bar"></div>
-    <div id="home_date" class="home-greeting-date"></div>
-    <h1 class="home-welcome">Welcome back, <span id="home_user_name" class="home-name-accent"></span></h1>
-    <p class="home-subtitle">Here's what's happening today.</p>
+  <!-- Page hero — matches the app-wide .page-hero (replaces the old
+       Welcome-back greeting). #home_date is kept and populated by renderHome. -->
+  <div class="page-hero">
+    <div class="page-hero-ic">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 21h18M4 21V10l8-5 8 5v11M9 21v-6h6v6"/></svg>
+    </div>
+    <div class="page-hero-tx">
+      <div class="page-hero-eyebrow">Rent &middot; Loans &middot; Collections</div>
+      <h1>Finance</h1>
+      <p>Rent ledger, loans, arrangements, collections &amp; GL &middot; <span id="home_date"></span></p>
+    </div>
+    <div class="page-hero-actions">
+      <button type="button" class="btn btn-ghost" onclick="openAddTenant()">&#128100; Add Tenant</button>
+      <button type="button" class="btn btn-primary" onclick="openModal('modalRentPayment')">&#128179; Record Payment</button>
+    </div>
   </div>
 
   <!-- KPI strip -->
