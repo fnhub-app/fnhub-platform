@@ -1,18 +1,1 @@
-{
-  "finance-batch.js": 1,
-  "finance-dashboard.js": 2,
-  "finance-pdf-jspdf.js": 1,
-  "finance-pdf.js": 1,
-  "finance-rent-display.js": 1,
-  "finance-reports.js": 1,
-  "finance-tenant-profile.js": 1,
-  "housing-app.js": 3,
-  "housing-init.js": 1,
-  "housing-tic.js": 7,
-  "housing-views.js": 3,
-  "inspections-init.js": 1,
-  "labels.js": 1,
-  "notifications.js": 8,
-  "rfq.js": 1,
-  "shared-data.js": 2
-}
+{}

@@ -81,7 +81,7 @@ function renderRentLedger(){
   // Running balance is computed on UNFILTERED rows to stay accurate.
   // Then we apply filters for display only.
   var allRows = d.rentLedger.filter(function(r){return r.tenantId===tid;}).sort(function(a,b){return a.date.localeCompare(b.date);});
-  var balance=0, totalCharged=0, totalPaid=0;
+  var balance=0, totalCharged=0;
 
   // First pass — compute running balance and totals across all rows
   allRows.forEach(function(r){

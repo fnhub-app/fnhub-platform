@@ -1169,7 +1169,6 @@ function _buildRfqPayload() {
   var id   = document.getElementById('rfq_number').value.trim();
   var snap = _rfqScopeItems.filter(function(it){ return !it._hidden && (it.category || it.description); });
   function fv(elId) { var el = document.getElementById(elId); return el ? el.value.trim() : ''; }
-  function fn(elId) { return parseFloat(fv(elId)) || null; }
 
   var milestones       = _readMilestoneRows();
   var scopeDetailRows  = _readScopeDetailRows();

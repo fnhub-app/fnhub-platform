@@ -172,10 +172,7 @@ function runBatchAccounting(dryRun) {
   if (!resultsEl) return;
 
   // Determine the date range for the selected month
-  var year  = parseInt(month.slice(0,4),10);
-  var mon   = parseInt(month.slice(5,7),10);
   var monthStart = month + '-01';
-  var monthEndDate = new Date(year, mon, 0);
 
   var activeTenants = (d.tenants||[]).filter(function(t){
     if (t.mergedInto) return false;   // never bill a merged-away duplicate

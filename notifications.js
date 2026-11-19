@@ -1595,8 +1595,8 @@ function _makePdfDoc(opts) {
 async function _generateApplicationPdfBase64() {
   await _loadJsPdf();
   var ctx         = _makePdfDoc();
-  var pdf         = ctx.pdf, pageW = ctx.pageW, pageH = ctx.pageH;
-  var marginL     = ctx.marginL, marginR = ctx.marginR, marginT = ctx.marginT;
+  var pdf         = ctx.pdf, pageW = ctx.pageW;
+  var marginL     = ctx.marginL, marginR = ctx.marginR;
   var contentW    = ctx.contentW;
   var needSpace   = ctx.needSpace.bind(ctx);
   var sectionHeader = ctx.sectionHeader.bind(ctx);
@@ -1943,8 +1943,8 @@ async function _generateApplicationPdfBase64() {
 async function _generateSowPdfBase64() {
   await _loadJsPdf();
   var ctx         = _makePdfDoc();
-  var pdf         = ctx.pdf, pageW = ctx.pageW, pageH = ctx.pageH;
-  var marginL     = ctx.marginL, marginR = ctx.marginR, marginT = ctx.marginT;
+  var pdf         = ctx.pdf, pageW = ctx.pageW;
+  var marginL     = ctx.marginL, marginR = ctx.marginR;
   var contentW    = ctx.contentW;
   var needSpace   = ctx.needSpace.bind(ctx);
   var sectionHeader = ctx.sectionHeader.bind(ctx);
@@ -2282,7 +2282,7 @@ async function _generateRfqPdfBase64(rfq, unit) {
     headerSubtitle: rfq.id || '',
     logoDataUrl:    logoDataUrl || null
   });
-  var pdf = ctx.pdf, marginL = ctx.marginL, marginR = ctx.marginR, contentW = ctx.contentW;
+  var pdf = ctx.pdf, marginL = ctx.marginL, contentW = ctx.contentW;
   var sectionHeader = ctx.sectionHeader.bind(ctx);
   var row           = ctx.row.bind(ctx);
   var paragraph     = ctx.paragraph.bind(ctx);
@@ -2362,7 +2362,7 @@ async function _generateRfqPdfBase64(rfq, unit) {
     paragraph(_rfqDocStr('bidform_intro'), 8.5);
     gap(3);
 
-    var c1 = contentW * 0.50, c2 = contentW * 0.17, c3 = contentW * 0.17, c4 = contentW * 0.16;
+    var c1 = contentW * 0.50, c2 = contentW * 0.17, c3 = contentW * 0.17;
     var tX = marginL, hH = 7;
     ctx.needSpace(hH + 2);
 
@@ -2530,8 +2530,8 @@ async function _generateRfqPdfBase64(rfq, unit) {
 async function _generateWorkOrderPdfBase64() {
   await _loadJsPdf();
   var ctx         = _makePdfDoc();
-  var pdf         = ctx.pdf, pageW = ctx.pageW, pageH = ctx.pageH;
-  var marginL     = ctx.marginL, marginR = ctx.marginR, marginT = ctx.marginT;
+  var pdf         = ctx.pdf, pageW = ctx.pageW;
+  var marginL     = ctx.marginL, marginR = ctx.marginR;
   var contentW    = ctx.contentW;
   var needSpace   = ctx.needSpace.bind(ctx);
   var sectionHeader = ctx.sectionHeader.bind(ctx);

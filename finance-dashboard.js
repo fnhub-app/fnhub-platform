@@ -268,12 +268,11 @@ function renderDashboard(){
   var d=getData();
   var totals=calcAllTotals(d);
   var visTenants=(typeof finVisibleTenants==='function')?finVisibleTenants():d.tenants.filter(function(t){return !t.mergedInto;});
-  var tR=0,tL=0,tA=0,colCount=0,clearCount=0;
+  var tR=0,tL=0,tA=0;
   visTenants.forEach(function(t){
     var v=totals[t.id]||{};tR+=v.rent||0;tL+=v.loan||0;tA+=v.arrangement||0;
     if((v.rent||0)+(v.loan||0)+(v.arrangement||0)<=0) clearCount++;
   });
-  colCount=d.collections.filter(function(c){return c.status==='approved';}).length;
   var grand=tR+tL+tA;
   var statsEl = document.getElementById('dashStats');
   // Landing summary stats — Total Owing + Rent Arrears only (the home-style

@@ -3571,7 +3571,6 @@ function _ctRenderFlow(status, ct, prefix) {
     var done = i < currentIdx || (i===2 && status==='approved');
     var active = i === currentIdx && !declined && !returned;
     var bg = done?'var(--success)':active?'var(--yellow)':'var(--border)';
-    var col = done?'#fff':active?'#111':'var(--gray)';
     var note = i===1&&hmAt?hmAt:i===2&&edAt?edAt:'';
     return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;position:relative;">'
       +(i>0?'<div style="position:absolute;left:-50%;top:18px;width:100%;height:2px;background:'+(done?'var(--success)':'var(--border)')+'"></div>':'')
@@ -6421,7 +6420,6 @@ async function sendStaffPasswordReset(email, btn){
     // on the Supabase auth mailer, which this project doesn't configure, so
     // sends were failing with an unexplained "could not be sent".
     var token = (window.HOUSING_SESSION && HOUSING_SESSION.accessToken) || '';
-    var fnDown = false;
     try {
       var fr = await fetch(SUPABASE_URL + '/functions/v1/send-magic-link', {
         method:  'POST',
@@ -6433,8 +6431,10 @@ async function sendStaffPasswordReset(email, btn){
           brand: _magicLinkBrand()
         })
       });
-      if (fr.status === 404) { fnDown = true; }   // function not deployed yet — legacy fallback
-      else {
+      // A 404 means the Edge Function isn't deployed on this project -> fall
+      // through to the legacy /auth/v1/recover mailer below. Any other status
+      // is handled (and returned) here.
+      if (fr.status !== 404) {
         var fd = await fr.json().catch(function(){ return {}; });
         if (fr.ok && fd.ok) {
           showToast('Reset link sent to '+email, {type:'info'});
@@ -6444,7 +6444,7 @@ async function sendStaffPasswordReset(email, btn){
         showToast('Could not send reset — ' + (fd.error || ('HTTP ' + fr.status)) + (fd.detail ? ' (' + fd.detail + ')' : ''), {type:'error'});
         return;
       }
-    } catch(_fe){ fnDown = true; }   // function unreachable — legacy fallback
+    } catch(_fe){}
 
     // Legacy fallback: Supabase's own recover mailer. Surface the REAL reason
     // on failure (SMTP not configured, redirect URL not allowlisted, ...)
