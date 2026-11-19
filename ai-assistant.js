@@ -419,7 +419,15 @@ function _aiLoadChartJs(cb) {
   document.head.appendChild(s);
 }
 
-var _AI_CHART_PALETTE = ['#F8E41A','#3b82f6','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#ec4899','#84cc16','#f97316','#94a3b8','#14b8a6'];
+// Chart palette. The lead colour is the nation's themed accent, resolved at
+// RENDER time via _themeAccentHex() (Chart.js draws to canvas and can't read a
+// CSS var(), so the token form won't work here); the rest are fixed categorical
+// hues. Falls back to CLFN's registered yellow if the theme helper isn't loaded.
+var _AI_CHART_BASE = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#ec4899','#84cc16','#f97316','#94a3b8','#14b8a6'];
+function _aiChartPalette() {
+  var accent = (typeof window._themeAccentHex === 'function' && window._themeAccentHex()) || '#F8E41A';
+  return [accent].concat(_AI_CHART_BASE);
+}
 
 // ── Word cloud (notes/theme analytics) ───────────────────────────────────────
 // wordcloud2.js is lazy-loaded from cdnjs (already CSP-allowlisted). The AI
@@ -457,7 +465,7 @@ function _aiDrawWordCloud(canvas, spec, cb) {
     var list = _aiWordList(spec);
     if (!list.length) { if (cb) cb(false); return; }
     var maxW = list.reduce(function (m, p) { return Math.max(m, p[1]); }, 1);
-    var pal = _AI_CHART_PALETTE, ci = 0;
+    var pal = _aiChartPalette(), ci = 0;
     var minFont = 13, maxFont = Math.min(64, Math.max(28, canvas.width / 9));
     if (cb) {
       var done = false;
@@ -508,10 +516,11 @@ function _aiRenderChart(wrap, spec) {
     var isPie = spec.type === 'pie' || spec.type === 'doughnut';
     var labels = spec.labels || [];
     try {
+      var pal = _aiChartPalette();
       var datasets = (spec.datasets || []).map(function (d, i) {
         var color = isPie
-          ? labels.map(function (_l, k) { return _AI_CHART_PALETTE[k % _AI_CHART_PALETTE.length]; })
-          : _AI_CHART_PALETTE[i % _AI_CHART_PALETTE.length];
+          ? labels.map(function (_l, k) { return pal[k % pal.length]; })
+          : pal[i % pal.length];
         return Object.assign({
           backgroundColor: color,
           borderColor: isPie ? '#fff' : color,
@@ -560,8 +569,9 @@ function _aiChartToImage(spec, cb){
       var canvas = document.createElement('canvas'); canvas.width = 700; canvas.height = 350;
       var isPie = spec.type === 'pie' || spec.type === 'doughnut';
       var labels = spec.labels || [];
+      var pal = _aiChartPalette();
       var datasets = (spec.datasets || []).map(function (d, i) {
-        var color = isPie ? labels.map(function (_l, k) { return _AI_CHART_PALETTE[k % _AI_CHART_PALETTE.length]; }) : _AI_CHART_PALETTE[i % _AI_CHART_PALETTE.length];
+        var color = isPie ? labels.map(function (_l, k) { return pal[k % pal.length]; }) : pal[i % pal.length];
         return Object.assign({ backgroundColor: color, borderColor: isPie ? '#fff' : color, borderWidth: 1 }, d);
       });
       var chart = new window.Chart(canvas.getContext('2d'), {
