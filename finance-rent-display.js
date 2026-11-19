@@ -618,7 +618,7 @@ function renderLoanDetail(ln, d, t){
     : isPendingED
     ? '<div class="ibox yellow" style="margin-bottom:14px;"><div style="font-weight:700;margin-bottom:6px;">&#128338; Stage 2 \u2014 Pending ED Approval</div>' + (ln.hmNotes ? '<div style="font-size:12px;background:rgba(255,255,255,.5);padding:6px 10px;border-radius:6px;margin-bottom:8px;"><strong>HM:</strong> ' + ln.hmNotes + '</div>' : '') + '<div style="display:flex;gap:8px;flex-wrap:wrap;"><button class="btn btn-primary btn-sm" onclick="approveLoan(\'' + ln.id + '\')">&#10003; Approve</button><button class="btn btn-ghost btn-sm" style="color:var(--danger);" onclick="hmDeclineLoan(\'' + ln.id + '\')">&#10007; Decline</button><button class="btn btn-ghost btn-sm" onclick="previewLoanById(\'' + ln.id + '\')">&#128196; Agreement</button></div></div>'
     : isDeclined
-    ? '<div style="background:#fef2f2;border:1.5px solid var(--danger);border-radius:10px;padding:14px;margin-bottom:14px;"><strong style="color:var(--danger);">&#10007; Declined</strong><div style="font-size:12px;">' + (ln.declineReason||'') + '</div></div>'
+    ? '<div style="background:var(--danger-bg);border:1.5px solid var(--danger);border-radius:10px;padding:14px;margin-bottom:14px;"><strong style="color:var(--danger);">&#10007; Declined</strong><div style="font-size:12px;">' + (ln.declineReason||'') + '</div></div>'
     : '';
 
 
@@ -651,8 +651,8 @@ function renderLoanDetail(ln, d, t){
       // Stats
       '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:14px;">'+
         '<div style="background:var(--bg);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Principal</div><div style="font-family:\'DM Serif Display\',serif;font-size:17px;">'+fmt(ln.principal)+'</div></div>'+
-        '<div style="background:#f0fdf4;border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Paid</div><div style="font-family:\'DM Serif Display\',serif;font-size:17px;color:var(--success);">'+fmt(totalPaid)+'</div></div>'+
-        '<div style="background:'+(remaining>0?'#fef2f2':'#f0fdf4')+';border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Remaining</div><div style="font-family:\'DM Serif Display\',serif;font-size:17px;color:'+(remaining>0?'var(--danger)':'var(--success)')+';">'+fmt(remaining)+'</div></div>'+
+        '<div style="background:var(--success-bg);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Paid</div><div style="font-family:\'DM Serif Display\',serif;font-size:17px;color:var(--success);">'+fmt(totalPaid)+'</div></div>'+
+        '<div style="background:'+(remaining>0?'var(--danger-bg)':'var(--success-bg)')+';border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Remaining</div><div style="font-family:\'DM Serif Display\',serif;font-size:17px;color:'+(remaining>0?'var(--danger)':'var(--success)')+';">'+fmt(remaining)+'</div></div>'+
         '<div style="background:var(--bg);border-radius:8px;padding:10px 12px;text-align:center;"><div style="font-size:10px;color:var(--muted);text-transform:uppercase;margin-bottom:3px;">Monthly</div><div style="font-size:14px;font-weight:600;margin-top:4px;">'+fmt(ln.payment)+'</div></div>'+
       '</div>'+
 
