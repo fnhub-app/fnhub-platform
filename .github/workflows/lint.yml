@@ -1,0 +1,37 @@
+name: Lint (ESLint ratchet)
+
+# Fails a push/PR that ADDS new ESLint problems to the UI JavaScript. A ratchet
+# against tools/lint-baseline.json -- the existing findings are baselined, only
+# NEW ones fail; decreases are fine (re-baseline after cleanup with
+# `node tools/check-lint.js --update`). Bug-focused rules only (eslint.config.mjs),
+# not style. Check-only: ships nothing and does not block the deploy workflows.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '*.js'
+      - 'eslint.config.mjs'
+      - 'tools/check-lint.js'
+      - 'tools/lint-baseline.json'
+      - '.github/workflows/lint.yml'
+  pull_request:
+    paths:
+      - '*.js'
+      - 'eslint.config.mjs'
+      - 'tools/check-lint.js'
+      - 'tools/lint-baseline.json'
+      - '.github/workflows/lint.yml'
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Install ESLint (pinned)
+        run: npm install -g eslint@9.15.0
+      - name: Check for new lint problems
+        run: node tools/check-lint.js
