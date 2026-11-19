@@ -6474,7 +6474,7 @@
     if(!_slpMap) return;
     var icon = L.divIcon({
       className: '',
-      html: '<div style="width:12px;height:12px;background:#111110;border:2px solid #F8E41A;'
+      html: '<div style="width:12px;height:12px;background:#111110;border:2px solid var(--yellow);'
           + 'border-radius:50% 50% 50% 0;transform:rotate(-45deg);box-shadow:0 2px 6px rgba(0,0,0,.4);"></div>',
       iconSize: [12,12], iconAnchor: [6,12]
     });
