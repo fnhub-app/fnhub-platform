@@ -4055,7 +4055,7 @@
   // it is not a fixed term. No-op unless a home value AND a rent are present.
   async function _ticRenderAmortSchedule(ctx){
     var fv  = function(id){ var e=document.getElementById(id); return e ? (e.value||'').trim() : ''; };
-    var num = function(id){ var v=parseFloat((fv(id)||'').replace(/[^0-9.\-]/g,'')); return isNaN(v)?0:v; };
+    var num = function(id){ var v=parseFloat((fv(id)||'').replace(/[^0-9.-]/g,'')); return isNaN(v)?0:v; };
     var pdf = ctx.pdf;
     // Instead of silently omitting the schedule when an input is missing, print
     // a visible "Schedule B" note explaining what to fill in — so staff can see

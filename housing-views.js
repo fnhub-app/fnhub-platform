@@ -2029,7 +2029,7 @@ function _kpiDrillPrint() {
     + '<h1>'+d.title+'</h1>'
     + '<p>'+nation+' &mdash; Generated '+dateStr+(d.rows?' &mdash; '+d.rows.length+' record'+(d.rows.length===1?'':'s'):'')+'</p>'
     + '<table><thead>'+thead+'</thead><tbody>'+tbody+'</tbody></table>'
-    + '<script>window.onload=function(){window.print();}<\/script>'
+    + '<script>window.onload=function(){window.print();}</script>'
     + '</body></html>';
   var w = window.open('', '_blank', 'width=960,height=700');
   if (w) { w.document.write(html); w.document.close(); }

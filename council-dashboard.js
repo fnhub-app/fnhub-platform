@@ -173,7 +173,7 @@
       items.forEach(function (it) {
         if (!it) return;
         var cat = (it.category || '').toString().trim() || 'Uncategorized';
-        var cost = parseFloat(String(it.cost != null ? it.cost : (it.amount || 0)).replace(/[^0-9.\-]/g, '')) || 0;
+        var cost = parseFloat(String(it.cost != null ? it.cost : (it.amount || 0)).replace(/[^0-9.-]/g, '')) || 0;
         if (cost > 0) byCategory[cat] = (byCategory[cat] || 0) + cost;
       });
     });

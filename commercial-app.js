@@ -332,7 +332,7 @@ function confirmAssignCommercial(){
 
   // 2) Once the unit save commits (trigger has created the tenant), type that
   //    tenant as business/department + contact + rent + link the application.
-  var _rent = parseFloat(String(app.rentAmount || '').replace(/[^0-9.\-]/g, ''));
+  var _rent = parseFloat(String(app.rentAmount || '').replace(/[^0-9.-]/g, ''));
   var _tFields = {
     tenant_type:    app.kind === 'department' ? 'department' : 'business',
     contact_person: app.contactPerson || null,

@@ -939,7 +939,7 @@ function _nationContactRow(label, valueHtml, isMultiline) {
 function _nationLinkify(s) {
   s = String(s||'').trim();
   if (!s) return '';
-  if (/^[a-z][a-z0-9+.\-]*:\/\//i.test(s)) return s;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(s)) return s;
   if (/^mailto:/i.test(s)) return s;
   return 'https://' + s.replace(/^\/+/, '');
 }
@@ -1976,7 +1976,7 @@ function _unitToVacantLot(u, role){
   }
   var lotNum = u.num || '', street = u.street || '';
   if(!street) return;
-  var newId = ('LOT-'+street.toUpperCase().replace(/\s+/g,'-')+'-'+lotNum).replace(/[^A-Z0-9\-]/g,'');
+  var newId = ('LOT-'+street.toUpperCase().replace(/\s+/g,'-')+'-'+lotNum).replace(/[^A-Z0-9-]/g,'');
   if(units.find(function(x){ return x.id===newId; })){ u.lotId = newId; return; }
   var newLot = {
     id:newId, street:street, num:lotNum, lotNumber:lotNum,

@@ -834,7 +834,7 @@ function _openSowPicker(unitId, activeList) {
     + '</div>'
     + '<div style="padding:14px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;">'
       + '<span style="font-size:11px;color:var(--muted);">' + sorted.length + ' active request' + (sorted.length !== 1 ? 's' : '')
-      +   (function(){ var t = sorted.reduce(function(acc,x){ return acc + (typeof x.amount === 'number' ? x.amount : (parseFloat(String(x.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0)); }, 0); return (t && sorted.length > 1) ? (' · ' + (typeof formatCurrency === 'function' ? formatCurrency(t) : ('$' + t)) + ' total') : ''; })()
+      +   (function(){ var t = sorted.reduce(function(acc,x){ return acc + (typeof x.amount === 'number' ? x.amount : (parseFloat(String(x.totalCost||'').replace(/[^0-9.-]/g,'')) || 0)); }, 0); return (t && sorted.length > 1) ? (' · ' + (typeof formatCurrency === 'function' ? formatCurrency(t) : ('$' + t)) + ' total') : ''; })()
       + '</span>'
       + '<button id="sowPickerNew" class="btn btn-ghost">+ New Request</button>'
     + '</div>'
@@ -2089,7 +2089,7 @@ function sowApproveInline() {
   // Does this request still need ED final approval? Only if its cost is over the
   // HM budget limit. Under the limit, HM approval is final (no ED step).
   var _apTotalEl = document.getElementById('sow_total_cost');
-  var _apCost = _apTotalEl ? (parseFloat(String(_apTotalEl.value).replace(/[^0-9.\-]/g, '')) || 0) : 0;
+  var _apCost = _apTotalEl ? (parseFloat(String(_apTotalEl.value).replace(/[^0-9.-]/g, '')) || 0) : 0;
   if (!_apCost && _sowUnitId && window._sowEditingProjectNumber && typeof getSowByProjectNumber === 'function') {
     var _apSow = getSowByProjectNumber(_sowUnitId, window._sowEditingProjectNumber);
     if (_apSow && typeof _apSow.amount === 'number') _apCost = _apSow.amount;
@@ -2780,7 +2780,7 @@ async function sowSaveClicked() {
   // Cost + threshold decisions. RFQ vs Work Order is the RFQ threshold; the
   // approval chain (over/under) uses the ED budget limit.
   var _costEl = document.getElementById('sow_total_cost');
-  var cost  = parseFloat(String((_costEl && _costEl.value) || '').replace(/[^0-9.\-]/g, '')) || 0;
+  var cost  = parseFloat(String((_costEl && _costEl.value) || '').replace(/[^0-9.-]/g, '')) || 0;
   var over  = (typeof _sowMeetsRfqThreshold === 'function') && _sowMeetsRfqThreshold({ amount: cost });
   var rfqOn = (typeof moduleOn !== 'function') || moduleOn('rfq');
   var needsEd = (typeof sowRequiresEdApproval === 'function') && sowRequiresEdApproval({ amount: cost });
@@ -3061,7 +3061,7 @@ function saveSOW(opts){
     data.created_at = data.date || new Date().toISOString().slice(0,10);
   }
   // Normalize the amount to a number for table display / sorting.
-  var totalNum = parseFloat(String(data.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0;
+  var totalNum = parseFloat(String(data.totalCost||'').replace(/[^0-9.-]/g,'')) || 0;
   data.amount = totalNum;
 
   // PO draw-down / payments — copy the working state onto the record and
@@ -3551,7 +3551,7 @@ function _sowPayMoney(n){
   n = Number(n) || 0;
   return (typeof formatCurrency === 'function') ? formatCurrency(n) : ('$' + n.toLocaleString('en-CA', {minimumFractionDigits:2}));
 }
-function _sowPayNum(v){ return parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,'')) || 0; }
+function _sowPayNum(v){ return parseFloat(String(v==null?'':v).replace(/[^0-9.-]/g,'')) || 0; }
 
 // Find an AWARDED RFQ linked to this SOW (unit + project number) so the PO can
 // prefill from its awarded contract value + contract number.
@@ -4037,7 +4037,7 @@ function _sowContractEditable(){
   if(typeof ROLE !== 'undefined' && ROLE.isManagement) return !!ROLE.isManagement(role);
   return true;
 }
-function _sowConNum(v){ return (typeof _sowPayNum === 'function') ? _sowPayNum(v) : (parseFloat(String(v==null?'':v).replace(/[^0-9.\-]/g,''))||0); }
+function _sowConNum(v){ return (typeof _sowPayNum === 'function') ? _sowPayNum(v) : (parseFloat(String(v==null?'':v).replace(/[^0-9.-]/g,''))||0); }
 function _sowConMoney(n){
   var x = _sowConNum(n);
   return '$' + x.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');

@@ -336,7 +336,7 @@ function _prjPoNumbersLabel(p) {
   if (nums.length) return nums.join(', ');
   return (_prjData(p).poNumber || '').trim() || '—';
 }
-function _prjPoNum(v) { return parseFloat(String(v == null ? '' : v).replace(/[^0-9.\-]/g, '')) || 0; }
+function _prjPoNum(v) { return parseFloat(String(v == null ? '' : v).replace(/[^0-9.-]/g, '')) || 0; }
 function _prjPoPaid(po) {
   return (po && po.draws || []).reduce(function(s, dr){ return s + (dr.paid ? _prjPoNum(dr.amount) : 0); }, 0);
 }
@@ -3547,7 +3547,7 @@ async function _prjConfirmCreateUnits() {
     var p = picks[i];
     // Same id recipe as saveNewUnit (housing-modals.js): STREET-NUM slug,
     // collision-checked in memory, with a suffix fallback for batch clashes.
-    var baseId = (street.toUpperCase().replace(/\s+/g, '-') + '-' + p.num).replace(/[^A-Z0-9\-]/g, '');
+    var baseId = (street.toUpperCase().replace(/\s+/g, '-') + '-' + p.num).replace(/[^A-Z0-9-]/g, '');
     var newId = baseId, suffix = 'B'.charCodeAt(0);
     while (units.find(function(u){ return u.id === newId; })) {
       if (suffix > 'F'.charCodeAt(0)) { newId = null; break; }
