@@ -259,7 +259,7 @@ function _buildSowModalHTML() {
                 '</select>' +
                 '<div id="sow_source_hint" class="txt-muted-xs" style="margin-top:3px;"></div>' +
               '</div>' +
-              '<div class="f" id="sow_source_contact_wrap" style="display:none;"><label>Referring Contact <span style="font-size:10px;font-weight:400;color:var(--muted);">(name / organization — for the acknowledgment letter)</span></label><input id="sow_source_contact" type="text" placeholder="e.g. Dr. J. Smith, CLFN Medical Centre"/></div>' +
+              '<div class="f" id="sow_source_contact_wrap" style="display:none;"><label>Referring Contact <span style="font-size:10px;font-weight:400;color:var(--muted);">(name / organization — for the acknowledgment letter)</span></label><input id="sow_source_contact" type="text" placeholder="e.g. Dr. J. Smith, Medical Centre"/></div>' +
               '<div class="f"><label>PO Number <span style="font-size:10px;font-weight:400;color:var(--muted);">(from accounting)</span></label><input id="sow_po_number" type="text" placeholder="e.g. PO-2026-0042"/></div>' +
               '<div class="f sow-ct-row"><label>Assigned To</label>' +
                 '<input id="sow_contractor" type="text" placeholder="Search — your Housing Dept or a contractor…" autocomplete="off"' +

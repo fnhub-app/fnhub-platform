@@ -1,0 +1,33 @@
+name: Nation-literals guard
+
+# Fails a push/PR that ADDS a hardcoded nation-identity literal (CLFN / "Constance
+# Lake" / clfn.on.ca / housing@clfn) to UI JavaScript. This is a multi-tenant
+# product that may be sold to other First Nations, so nation identity must come
+# from NATION_CONFIG / a data-nation hook, never a literal (the CLAUDE.md HARD RULE).
+# A ratchet against tools/nation-literals-baseline.json -- decreases are fine
+# (re-baseline after cleanup with `node tools/check-nation-literals.js --update`).
+# Runs only when UI JS changes; does not block the deploy workflows.
+
+on:
+  push:
+    branches: [ main ]
+    paths:
+      - '*.js'
+      - 'tools/check-nation-literals.js'
+      - 'tools/nation-literals-baseline.json'
+      - '.github/workflows/nation-literals-guard.yml'
+  pull_request:
+    paths:
+      - '*.js'
+      - 'tools/**'
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - name: Check for new hardcoded nation literals
+        run: node tools/check-nation-literals.js
