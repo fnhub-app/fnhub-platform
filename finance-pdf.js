@@ -272,8 +272,8 @@ function _previewLoanAgreementInner(loan) {
   var todayStr  = today();
 
   // Calculate accrued interest for gap between advance date and first payment date
-  var accrualDays = 0;
-  var accrualInterest = 0;
+  accrualDays = 0;
+  accrualInterest = 0;
   if (advanceDate && firstPayDate && advanceDate !== firstPayDate && rate > 0) {
     // Use explicit part parsing \u2014 Safari rejects ISO strings in new Date()
     var advP = advanceDate.split('-');
@@ -314,8 +314,8 @@ function _previewLoanAgreementInner(loan) {
   }
 
   // Build HTML sections
-  var interestStr  = rateType === 'none' ? '0% \u2014 Interest-Free' : (rate.toFixed(2) + '% per annum (' + rateType + ')');
-  var aprStr       = rateType === 'none' ? '0% (Interest-Free)' : (rate.toFixed(2) + '%');
+  interestStr  = rateType === 'none' ? '0% \u2014 Interest-Free' : (rate.toFixed(2) + '% per annum (' + rateType + ')');
+  aprStr       = rateType === 'none' ? '0% (Interest-Free)' : (rate.toFixed(2) + '%');
   var borrowerName = tenantName(t);
 
   var html = '<div style="font-family:Georgia,serif;font-size:13px;line-height:1.7;color:#111;">';

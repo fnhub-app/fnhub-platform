@@ -148,18 +148,18 @@ function renderTenantProfile(tid) {
   // Header row \u2014 avatar, name, badges
   var hdr = s1.appendChild(document.createElement('div'));
   hdr.style.cssText = 'display:flex;align-items:center;gap:14px;margin-bottom:12px;';
-  var av = hdr.appendChild(document.createElement('div'));
+  av = hdr.appendChild(document.createElement('div'));
   av.style.cssText = 'width:52px;height:52px;border-radius:50%;background:var(--dark);display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--yellow);flex-shrink:0;font-weight:600;';
   av.textContent = initials;
   var nameBlock = hdr.appendChild(document.createElement('div'));
   nameBlock.style.cssText = 'flex:1;min-width:0;';
-  var nameRow = nameBlock.appendChild(document.createElement('div'));
+  nameRow = nameBlock.appendChild(document.createElement('div'));
   nameRow.style.cssText = 'display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:2px;';
-  var nameEl = nameRow.appendChild(document.createElement('span'));
+  nameEl = nameRow.appendChild(document.createElement('span'));
   nameEl.style.cssText = 'font-size:20px;font-weight:700;';
   nameEl.textContent = tenantName(t);
   // Active/Inactive pill
-  var activeBadge = nameRow.appendChild(document.createElement('span'));
+  activeBadge = nameRow.appendChild(document.createElement('span'));
   activeBadge.className = isActive ? 'pill pill-green' : 'pill pill-gray';
   activeBadge.style.cssText = 'font-size:10px;cursor:default;';
   activeBadge.textContent = isActive ? '\u25CF Active' : '\u25CB Inactive';
@@ -189,7 +189,7 @@ function renderTenantProfile(tid) {
     hcBadge.textContent = '&#127968; Flag H&CC';
     hcBadge.onclick = function(){ toggleHomeCare(tid); };
   }
-  var subEl = nameBlock.appendChild(document.createElement('div'));
+  subEl = nameBlock.appendChild(document.createElement('div'));
   subEl.style.cssText = 'font-size:12px;color:var(--muted);';
   subEl.textContent = (t.unit || 'No unit assigned') + '  \u00B7  ' + (typeLabels[t.type]||t.type||'Unspecified');
 
@@ -461,7 +461,7 @@ function showTicDetail(tid, key, balGrid, clickedCell) {
   panel._currentKey = key;
   panel.style.display = 'block';
   // Hide contact section when detail panel is active
-  var contactCard = document.getElementById('tic-contact-' + tid);
+  contactCard = document.getElementById('tic-contact-' + tid);
   if (contactCard) contactCard.style.display = 'none';
 
   var html = '';

@@ -6259,11 +6259,11 @@ function _parseHtmlToBlocks(html) {
       if (tag === 'H1') {
         var t = textOf(node); if (t) blocks.push({ type: 'h1', text: t });
       } else if (tag === 'H2') {
-        var t = textOf(node); if (t) blocks.push({ type: 'h2', text: t });
+        t = textOf(node); if (t) blocks.push({ type: 'h2', text: t });
       } else if (tag === 'H3' || tag === 'H4') {
-        var t = textOf(node); if (t) blocks.push({ type: 'h3', text: t });
+        t = textOf(node); if (t) blocks.push({ type: 'h3', text: t });
       } else if (tag === 'P' || tag === 'DIV') {
-        var t = textOf(node); if (t) blocks.push({ type: 'p', text: t });
+        t = textOf(node); if (t) blocks.push({ type: 'p', text: t });
       } else if (tag === 'OL') {
         var counter = 1;
         node.querySelectorAll('li').forEach(function(li) {
@@ -6316,7 +6316,7 @@ function _renderBlocksToPdf(ctx, blocks) {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(12);
       pdf.setTextColor(30);
-      var lines = pdf.splitTextToSize(block.text, contentW);
+      lines = pdf.splitTextToSize(block.text, contentW);
       pdf.text(lines, marginL, ctx.y + 4);
       ctx.y += lines.length * 5.5 + 4;
 
@@ -6326,7 +6326,7 @@ function _renderBlocksToPdf(ctx, blocks) {
       pdf.setFont('helvetica', 'bold');
       pdf.setFontSize(10);
       pdf.setTextColor(50);
-      var lines = pdf.splitTextToSize(block.text, contentW);
+      lines = pdf.splitTextToSize(block.text, contentW);
       pdf.text(lines, marginL, ctx.y + 3.5);
       ctx.y += lines.length * 4.5 + 3.5;
 
@@ -6367,13 +6367,13 @@ function _renderBlocksToPdf(ctx, blocks) {
       ctx.y += h;
 
     } else if (block.type === 'li-ul') {
-      var indent = 5, bulletW = 5;
-      var textW  = contentW - indent - bulletW;
+      indent = 5, bulletW = 5;
+      textW  = contentW - indent - bulletW;
       pdf.setFont('helvetica', 'normal');
       pdf.setFontSize(9);
       pdf.setTextColor(40);
-      var textLines = pdf.splitTextToSize(block.text, textW);
-      var h = textLines.length * 4.5 + 1;
+      textLines = pdf.splitTextToSize(block.text, textW);
+      h = textLines.length * 4.5 + 1;
       ctx.needSpace(h);
       pdf.text('•', marginL + indent, ctx.y + 3.5);
       pdf.text(textLines, marginL + indent + bulletW, ctx.y + 3.5);
