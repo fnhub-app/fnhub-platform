@@ -828,7 +828,6 @@ function prefillTransferFromTenant() {
   // When a tenant selects "Transfer Request", pre-populate their info
   // from their existing assigned application
   var apps = (typeof applications !== 'undefined') ? applications : [];
-  var units = (typeof housingUnits !== 'undefined') ? housingUnits : [];
 
   // Find an existing assigned application matching the current form data
   // Try to match by first/last name already in the form
@@ -1279,7 +1278,7 @@ async function rescoreAndSave() {
     var _changedN = await rescoreAllApplications();
     showToast('✓ Rescored ' + applications.length + ' applications — ' + (_changedN || 0) + ' score' + (_changedN === 1 ? '' : 's') + ' changed and saved', {type:'info'});
     // Reload data from Supabase to get fresh breakdowns, then refresh scorecard
-    if(true) {
+    {
       sbLoadApplications().then(function(fresh) {
         if(fresh) {
           applications = fresh;

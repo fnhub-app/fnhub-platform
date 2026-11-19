@@ -81,11 +81,9 @@
     var d = getData();
     var totals = (typeof calcAllTotals === 'function') ? calcAllTotals(d) : {};
     var v = totals[tid] || {};
-    var nc = window.NATION_CONFIG || {};
     var today = new Date();
     var monthYM = today.toISOString().slice(0, 7);
     var monthLabel = today.toLocaleDateString('en-CA', { month: 'long', year: 'numeric' });
-    var generatedOn = today.toLocaleDateString('en-CA', { year: 'numeric', month: 'long', day: 'numeric' });
 
     var rentOwing = Math.max(0, v.rent || 0);
     var arrOwing = Math.max(0, v.arrangement || 0);
@@ -214,7 +212,6 @@
   // Build from the currently-open voucher (currentVoucherData). Returns { doc, tenant }.
   function buildVoucher(txn) {
     if (!txn) return null;
-    var d = getData();
     var t = (typeof getTenant === 'function') ? getTenant(txn.tenantId) : null;
     var isPayment = (txn.payment || 0) > 0;
     var amount = isPayment ? (txn.payment || 0) : (txn.charge || 0);

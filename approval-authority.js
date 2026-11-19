@@ -330,7 +330,6 @@ var APPROVAL_AUTHORITY = (function() {
      */
     loadOverrides: function(saved) {
       if (!saved || typeof saved !== 'object') return;
-      var self = this;
       Object.keys(saved).forEach(function(k) {
         if (DEFAULTS[k] !== undefined) {
           _live[k] = saved[k];

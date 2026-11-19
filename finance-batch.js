@@ -176,7 +176,6 @@ function runBatchAccounting(dryRun) {
   var mon   = parseInt(month.slice(5,7),10);
   var monthStart = month + '-01';
   var monthEndDate = new Date(year, mon, 0);
-  var monthEnd = year+'-'+String(mon).padStart(2,'0')+'-'+String(monthEndDate.getDate()).padStart(2,'0');
 
   var activeTenants = (d.tenants||[]).filter(function(t){
     if (t.mergedInto) return false;   // never bill a merged-away duplicate

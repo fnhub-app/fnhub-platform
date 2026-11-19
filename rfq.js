@@ -1161,7 +1161,6 @@ function selectAllMatchingContractors() {
 function updateRecipientBadge() {
   var n   = Object.keys(_rfqSelectedCts).length;
   var el  = document.getElementById('rfqRecipientBadge');
-  var btn = document.getElementById('rfqTabBtn_recipients');
   if (el) { el.textContent = n; el.style.display = n ? '' : 'none'; }
 }
 
@@ -1824,7 +1823,6 @@ function renderSubcontractorRows() {
     el.innerHTML = '<div style="font-size:11px;color:var(--muted);padding:8px 0;font-style:italic;">No subcontractors — click "+ Add Subcontractor" or leave empty if the contractor is self-performing.</div>';
     return;
   }
-  var today = new Date().toISOString().slice(0,10);
   el.innerHTML = '<div style="overflow-x:auto;"><table class="std-table" style="width:100%;table-layout:fixed;">'
     + '<thead><tr><th style="width:34%;">Subcontractor</th><th style="width:44%;">Scope of Work</th><th style="width:14%;">Compliance</th><th style="width:8%;"></th></tr></thead><tbody>'
     + _rfqSubcontractorRows.map(function(r, i) {
@@ -2397,7 +2395,6 @@ function _rfqToggleAttach(path, checked) {
 function _rfqContractMissing() {
   var missing = [];
   var fv  = function(id){ var el=document.getElementById(id); return el ? (el.value||'').trim() : ''; };
-  var sig = function(id){ return (typeof getSigDataURL==='function') ? getSigDataURL(id) : ''; };
   var rfqId = _rfqCurrentId || fv('rfq_number');
   var rfq   = (window._rfqCache || {})[rfqId] || {};
   if (!(fv('rfq_awarded_to') || rfq.awarded_contractor_id)) missing.push('Awarded contractor (select on the Contracting tab)');

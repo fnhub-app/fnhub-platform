@@ -2613,7 +2613,7 @@ window.DocLibrary = (function(){
     var ts = Date.now();
     var safeName = file.name.replace(/[^a-zA-Z0-9._-]/g, '_');
     var path = pathPrefix + '/' + ts + '_' + safeName;
-    var result = await sbUploadFile(path, file);
+    await sbUploadFile(path, file);
     await sbSaveFileMeta(entityType, String(entityId), path, file.name, file.size, file.type);
     return { path: path, name: file.name, size: file.size, type: file.type,
              addedAt: new Date().toISOString().slice(0,10), addedBy: window.currentRole || 'staff' };

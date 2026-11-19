@@ -574,6 +574,7 @@ function _aiChartToImage(spec, cb){
 }
 function _aiPdfClean(s){
   return String(s == null ? '' : s)
+    // eslint-disable-next-line no-misleading-character-class -- intentionally strips emoji code points + the variation selector (U+FE0F) individually
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{FE0F}]/gu, '')
     .replace(/\*\*/g, '').replace(/`/g, '').replace(/•/g, '').trim();
 }

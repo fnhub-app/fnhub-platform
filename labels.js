@@ -233,7 +233,6 @@
   }
 
   function _unitsCard() {
-    var vis = visibleUnits();
     var mm = moduleMm();
     var gateColor = mm.mm >= 0.6 ? 'var(--success)' : (mm.mm >= 0.45 ? 'var(--warn-amber-text)' : 'var(--danger)');
     var gateMsg = !mm.mods ? 'QR base URL too long for a small label — shorten it.'

@@ -2713,7 +2713,6 @@ function _cicNoteHtml(n){
 function cicRenderNotes(contractorId){
   var mount = document.getElementById('cic_notes_mount');
   if(!mount) return;
-  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
   window._cicNotesCtId = contractorId || null;
   // A brand-new contractor has no id yet — notes are keyed by contractor id,
   // so prompt the user to save first (mirrors how unit notes need a saved unit).
@@ -5987,7 +5986,6 @@ function _updateRbaAllocSummary(totalCost, eligiblePools, budgetData) {
   document.querySelectorAll('#rba_alloc_rows input[type="number"]').forEach(function(inp){
     totalAlloc += parseFloat(inp.value)||0;
   });
-  var diff = totalAlloc - totalCost;
   var overBudget = false;
 
   // Check per-pool over-budget
@@ -7219,7 +7217,6 @@ function populateSettings(){
     var s = window._appSettings || {};
     limitEl.value = s.hmBudgetLimit || 25000;
   }
-  var settings = window._appSettings || {};
   // Load user table from Supabase
   renderHousingUserTable();
   // Show and render the scoring model section
@@ -9979,7 +9976,6 @@ function renderWorklist() {
 
   // Contractors
   if (ctItems.length) {
-    var ctLabel = { pending_review:'Awaiting HM Verification', hm_recommended:'Awaiting Final Approval' };
     var ctStatusLabel = { pending_review:'Awaiting HM Verification', hm_recommended:'HM Verified — Awaiting Approval' };
     var ctBtnText     = { pending_review:'Verify →', hm_recommended:'Approve →' };
     var ctRows = ctItems.map(function(c) {
@@ -11392,7 +11388,7 @@ function wlOpenApp(el) {
     if(typeof window.openEditModal === 'function') window.openEditModal(id);
   } else {
     // All other statuses — open read-only scorecard
-    if(true) showScorecard(app);
+    showScorecard(app);
   }
 }
 // (removed dead worklist helpers wlAssignApp / wlOpenApplicantCell /

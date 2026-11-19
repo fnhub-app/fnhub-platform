@@ -41,7 +41,6 @@ function getAllTransactions() {
 }
 
 function renderTransactions() {
-  var d = getData();
   var filterTenant = (document.getElementById('txn-filter-tenant')||{}).value||'all';
   var filterLedger = (document.getElementById('txn-filter-ledger')||{}).value||'all';
   var filterType = (document.getElementById('txn-filter-type')||{}).value||'all';

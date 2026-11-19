@@ -1,7 +1,6 @@
 function previewArrangementAgreement(arr) {
   try {
     // Accept arrangement object or read from form
-    var fromForm = !arr;
     var tid      = arr ? arr.tenantId   : (document.getElementById('na-tenant')||{}).value||'';
     var t        = getTenant(tid);
     var total    = arr ? arr.totalOwing  : (parseFloat((document.getElementById('na-total')||{}).value)||0);
@@ -182,7 +181,6 @@ function previewLoanAgreement(loan) {
 function _previewLoanAgreementInner(loan) {
   // Can be called with a loan object (from loan detail view)
   // or without (reads from the new loan modal form fields)
-  var fromForm = !loan;
 
   var tid      = loan ? loan.tenantId  : document.getElementById('ln-tenant').value;
   var t        = getTenant(tid);
@@ -210,7 +208,6 @@ function _previewLoanAgreementInner(loan) {
   var payment       = calcPaymentAmt(principal, rate, term, freq);
   var periods       = termToPeriods(term, freq);
   var totalRepay    = Math.round(payment * periods * 100) / 100;
-  var totalInterest = Math.max(0, Math.round((totalRepay - principal) * 100) / 100);
   var termLabel     = fmtTermLabel(term);
 
   // \u2500\u2500 True Cost of Borrowing \u2014 includes ALL interest charges \u2500\u2500\u2500\u2500\u2500\u2500
@@ -240,7 +237,6 @@ function _previewLoanAgreementInner(loan) {
   var trueInterest  = Math.max(0, Math.round((trueTotalRepay + trueAccrualInterest - truePrincipal) * 100) / 100);
 
   // APR \u2014 true APR including accrual period
-  var trueAPR = rate; // same nominal rate; accrual is just a period extension
   var aprStr  = rateType === 'none'
     ? '0% (Interest-Free)'
     : rate.toFixed(2) + '%';

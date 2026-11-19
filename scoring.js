@@ -142,7 +142,6 @@ function renderV2ScoringEditor() {
 
   function pts(val, cat, key) {
     var col = val > 0 ? 'var(--success)' : val < 0 ? 'var(--danger)' : 'var(--gray)';
-    var sign = val > 0 ? '+' : '';
     return '<input type="number" value="' + val + '" step="1" min="-30" max="30" data-cat="' + cat + '" data-key="' + key + '" '
       + 'style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;'
       + 'color:' + col + ';text-align:center;font-family:DM Sans,sans-serif;background:var(--surface);" '
@@ -1021,7 +1020,6 @@ function saveNationSettings() {
 
 function setPts(elId,score){
   const el=document.getElementById(elId);if(!el)return;
-  const abs=Math.abs(score);
   el.textContent=score>0?'+'+score+' pts':score<0?score+' pts':'0 pts';
   el.style.background=score>0?'var(--success-bg)':score<0?'var(--danger-bg)':'var(--yellow-light)';
   el.style.color=score>0?'var(--success)':score<0?'var(--danger)':'#7a6000';
@@ -1803,7 +1801,6 @@ function renderRubricTableV2(breakdown, targetEl) {
   var edAdj  = breakdown.edAdjustment || 0;
 
   function sectionHeader(label, total, maxPts) {
-    var pct = maxPts > 0 ? Math.round((total / maxPts) * 100) : 0;
     return '<div style="padding:10px 18px;background:var(--dark2);border-bottom:2px solid var(--yellow);display:flex;align-items:center;justify-content:space-between;">'
       + '<div style="font-size:11px;font-weight:700;letter-spacing:.8px;text-transform:uppercase;color:var(--muted);">' + label + '</div>'
       + '<div style="font-size:13px;font-weight:700;color:var(--yellow);">' + total + ' <span style="font-size:10px;color:var(--muted);">/ ' + maxPts + ' pts</span></div>'
@@ -1816,7 +1813,6 @@ function renderRubricTableV2(breakdown, targetEl) {
     var col  = pos ? 'var(--success)' : neg ? 'var(--danger)' : 'var(--gray)';
     var bg   = pos ? 'rgba(21,128,61,0.15)' : neg ? 'rgba(185,28,28,0.15)' : 'var(--bg)';
     var sign = pts > 0 ? '+' : '';
-    var pct  = maxPts > 0 ? Math.round(Math.abs(pts) / maxPts * 100) : 0;
     return '<div style="padding:12px 18px;border-bottom:1px solid var(--border);">'
       + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;">'
       +   '<div>'
@@ -1848,7 +1844,6 @@ function renderRubricTableV2(breakdown, targetEl) {
   var incLabels     = { stable:'Stable income', irregular:'Irregular income', none:'No income' };
   var arrLabels     = { none:'No arrears', cleared:'Arrears cleared', repayment:'Active repayment plan', no_repayment:'Arrears, no repayment plan' };
 
-  var urgentKey = (window._lastScoreResult && window._lastScoreResult.breakdown) ? '' : '';
   var html = '';
 
   // Section A
@@ -1945,6 +1940,7 @@ function archiveApplication(appId) {
   var app  = applications[idx];
   var linkedUnitId = app.assignedUnit || app.assignedUnitId || null;
   if(linkedUnitId) {
+    // Placeholder: reserved for linked-unit handling on archive (no-op today).
   }
   app.archived   = true;
   app.archivedAt = new Date().toISOString().split('T')[0];
@@ -2114,7 +2110,7 @@ window._openScoreById=function(id){
   var app=null;
   for(var i=0;i<applications.length;i++){if(applications[i].id===id){app=applications[i];break;}}
   if(!app)return;
-  if(true) showScorecard(app);
+  showScorecard(app);
 };
 
 // ── Tier/score helpers ──
