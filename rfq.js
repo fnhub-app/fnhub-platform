@@ -1081,7 +1081,7 @@ async function _rfqAttachBidFile(id, inputEl) {
   if (!file) return;
   if (typeof window.sbUploadFile !== 'function') { showToast('File upload is not available on this page', {type:'error'}); return; }
   var rfqId = _rfqCurrentId || (document.getElementById('rfq_number') || {}).value || 'draft';
-  var safe  = String(file.name).replace(/[^\w.\-]+/g, '_');
+  var safe  = String(file.name).replace(/[^\w.-]+/g, '_');
   var path  = 'rfq/' + rfqId + '/bids/' + id + '_' + safe;
   showToast('Uploading ' + file.name + '…', {type:'info'});
   try {

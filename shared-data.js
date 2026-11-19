@@ -3708,7 +3708,7 @@ function sowRequiresEdApproval(sow) {
   if (!sow) return false;
   var cost = (typeof sow.amount === 'number')
     ? sow.amount
-    : parseFloat(String(sow.totalCost || '').replace(/[^0-9.\-]/g, '')) || 0;
+    : parseFloat(String(sow.totalCost || '').replace(/[^0-9.-]/g, '')) || 0;
   return cost > _getHmLimit();
 }
 window.sowRequiresEdApproval = sowRequiresEdApproval;
@@ -4838,7 +4838,7 @@ function _appSubCarryDocs(appId, docs){
   if(!appId || !docs || !docs.length) return;
   docs.forEach(function(d, idx){
     if(!d || !d.path || typeof sbCopyFile !== 'function') return;
-    var nm = (d.name || 'document').replace(/[^\w.\-]+/g, '_');
+    var nm = (d.name || 'document').replace(/[^\w.-]+/g, '_');
     var dest = 'applications/' + appId + '/' + (new Date().getTime()) + '_' + idx + '_' + nm;
     sbCopyFile(d.path, dest).then(function(){
       if(typeof sbSaveFileMeta === 'function') sbSaveFileMeta('application', appId, dest, d.name || nm, d.size || 0, d.type || 'application/octet-stream');
@@ -5324,7 +5324,7 @@ function openWriteOffModal(name, tenantId, balance){
   var submit = ov.querySelector('[data-wo-submit]');
   if(submit) submit.addEventListener('click', function(){
     var reason = (_woEl('wo_reason')||{}).value || '';
-    var amt = parseFloat(String((_woEl('wo_amount')||{}).value||'').replace(/[^0-9.\-]/g,'')) || 0;
+    var amt = parseFloat(String((_woEl('wo_amount')||{}).value||'').replace(/[^0-9.-]/g,'')) || 0;
     var just = String((_woEl('wo_just')||{}).value||'').trim();
     if(!reason || !just){ if(typeof showToast==='function') showToast('Reason and justification are required.', {type:'error'}); return; }
     var payload = {
@@ -5497,7 +5497,7 @@ function sbTypeCommercialTenantForAssignment(app, unit){
     if(!app || (app.appType || app.app_type) !== 'commercial' || !unit) return;
     var org = app.orgName || app.fn || '';
     if(!org) return;
-    var rent = parseFloat(String(app.rentAmount || '').replace(/[^0-9.\-]/g, ''));
+    var rent = parseFloat(String(app.rentAmount || '').replace(/[^0-9.-]/g, ''));
     var fields = {
       tenant_type:     app.kind === 'department' ? 'department' : 'business',
       contact_person:  app.contactPerson || null,
@@ -7673,7 +7673,7 @@ function _ctBuildStatsMap() {
       var e = map[s.contractorId] || (map[s.contractorId] = { jobCount: 0, totalValue: 0 });
       e.jobCount++;
       e.totalValue += (typeof s.amount === 'number' && !isNaN(s.amount)) ? s.amount
-        : parseFloat(String(s.totalCost || '').replace(/[^0-9.\-]/g, '')) || 0;
+        : parseFloat(String(s.totalCost || '').replace(/[^0-9.-]/g, '')) || 0;
     });
   });
   return map;
@@ -9002,7 +9002,7 @@ function _wlCollectSows(ctx) {
         // party, or a status past 'new' — so a real request captured without
         // itemized lines still reaches the approval queue instead of silently
         // never appearing (it used to be dropped on item-count alone).
-        var _wlCost = parseFloat(String((sow.totalCost != null ? sow.totalCost : (sow.amount != null ? sow.amount : sow.cost)) || '').replace(/[^0-9.\-]/g, '')) || 0;
+        var _wlCost = parseFloat(String((sow.totalCost != null ? sow.totalCost : (sow.amount != null ? sow.amount : sow.cost)) || '').replace(/[^0-9.-]/g, '')) || 0;
         var _wlHasSubstance = (sow.items && sow.items.length)
           || _wlCost > 0
           || (sow.description && String(sow.description).trim())
@@ -9032,7 +9032,7 @@ function _wlCollectSows(ctx) {
         var u = (ctx.unitById || {})[uid];
         var addr = u ? ((u.num||'') + ' ' + (u.street||'')).trim() : uid;
         sowItems.push({ uid: uid, pn: sow.project_number || '', addr: addr, status: status,
-          amount:     (typeof sow.amount === 'number' ? sow.amount : (parseFloat(String(sow.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0)),
+          amount:     (typeof sow.amount === 'number' ? sow.amount : (parseFloat(String(sow.totalCost||'').replace(/[^0-9.-]/g,'')) || 0)),
           contractor: (sow.assignedTeam === 'in_house' ? (sow.assignedToName || 'In-house crew') : (sow.contractor || '')),
           itemCount:  (sow.items && sow.items.length) || 0 });
       });
@@ -9058,7 +9058,7 @@ function _wlUnitSowSummary(uid) {
   list.forEach(function(sw) {
     if (!sw || sw.archived || sw.cancelled || sw.approval_status === 'completed') return;
     count++;
-    total += (typeof sw.amount === 'number' ? sw.amount : (parseFloat(String(sw.totalCost||'').replace(/[^0-9.\-]/g,'')) || 0));
+    total += (typeof sw.amount === 'number' ? sw.amount : (parseFloat(String(sw.totalCost||'').replace(/[^0-9.-]/g,'')) || 0));
   });
   return { count: count, total: total };
 }
@@ -11422,7 +11422,7 @@ function _migrateLegacySow(rawData){
   if(legacy.amount == null){
     // Try common fields where the amount might live.
     var amt = legacy.estimated_total || legacy.total_cost || legacy.budget || 0;
-    legacy.amount = typeof amt === 'number' ? amt : (parseFloat(String(amt).replace(/[^0-9.\-]/g,''))||0);
+    legacy.amount = typeof amt === 'number' ? amt : (parseFloat(String(amt).replace(/[^0-9.-]/g,''))||0);
   }
   return { sows: [legacy] };
 }

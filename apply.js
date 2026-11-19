@@ -1030,7 +1030,7 @@
   }
   async function _wizUploadFile(file, cat) {
     var uid = _applyUid(), sid = _wiz.id;
-    var safe = (file.name || 'file').replace(/[^\w.\-]+/g, '_').slice(0, 80);
+    var safe = (file.name || 'file').replace(/[^\w.-]+/g, '_').slice(0, 80);
     var path = 'application-intake/' + uid + '/' + sid + '/' + (new Date().getTime()) + '_' + safe;
     var r = await fetch(SBASE + '/storage/v1/object/' + BUCKET + '/' + path, {
       method: 'POST', headers: { 'apikey': ANON, 'Authorization': 'Bearer ' + getAT(), 'x-upsert': 'true' }, body: file

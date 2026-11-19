@@ -599,7 +599,7 @@ window.fmtCurrency = function(input){
 // formatting that the DB shouldn't store.
 window.parseCurrency = function(str){
   if (str == null) return 0;
-  return parseFloat(String(str).replace(/[^0-9.\-]/g, '')) || 0;
+  return parseFloat(String(str).replace(/[^0-9.-]/g, '')) || 0;
 };
 
 // ═══════════════════════════════════════════════════════════════════════

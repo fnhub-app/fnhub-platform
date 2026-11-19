@@ -2180,7 +2180,7 @@ function saveNewUnit(){
   var street = get('au_street');
   if(!num || !street){ showToast('Unit number and street are required', {type:'error'}); return; }
 
-  var newId = (street.toUpperCase().replace(/\s+/g,'-') + '-' + num).replace(/[^A-Z0-9\-]/g,'');
+  var newId = (street.toUpperCase().replace(/\s+/g,'-') + '-' + num).replace(/[^A-Z0-9-]/g,'');
   var units = (typeof housingUnits !== 'undefined' && housingUnits.length) ? housingUnits : [];
   if(units.find(function(u){ return u.id === newId; })){ showToast('A unit at that address already exists', {type:'info'}); return; }
 
@@ -2460,7 +2460,7 @@ function saveNewLot(){
   var get = function(id){ var el=document.getElementById(id); return el?el.value.trim():''; };
   var lotNum = get('al_lotnum'), street = get('al_street');
   if(!lotNum || !street){ showToast('Lot number and street are required', {type:'error'}); return; }
-  var newId = ('LOT-' + street.toUpperCase().replace(/\s+/g,'-') + '-' + lotNum).replace(/[^A-Z0-9\-]/g,'');
+  var newId = ('LOT-' + street.toUpperCase().replace(/\s+/g,'-') + '-' + lotNum).replace(/[^A-Z0-9-]/g,'');
   var units = (typeof housingUnits !== 'undefined' && housingUnits.length) ? housingUnits : [];
   if(units.find(function(u){ return u.id === newId; })){ showToast('A lot at that address already exists', {type:'info'}); return; }
   var newLot = {

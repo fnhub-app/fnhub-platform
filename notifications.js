@@ -1962,7 +1962,7 @@ async function _generateSowPdfBase64() {
   function fmtCur(v) {
     if (v == null || v === '') return '';
     if (typeof formatCurrency === 'function') {
-      var n = parseFloat(String(v).replace(/[^0-9.\-]/g,'')) || 0;
+      var n = parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0;
       return formatCurrency(n);
     }
     return String(v);
@@ -2546,7 +2546,7 @@ async function _generateWorkOrderPdfBase64() {
   function fmtCur(v) {
     if (v == null || v === '') return '';
     if (typeof formatCurrency === 'function') {
-      var n = parseFloat(String(v).replace(/[^0-9.\-]/g,'')) || 0;
+      var n = parseFloat(String(v).replace(/[^0-9.-]/g,'')) || 0;
       return formatCurrency(n);
     }
     return String(v);
