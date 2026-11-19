@@ -1876,7 +1876,7 @@ function showHousingKpiDrilldown(type) {
                       pred:function(u){ return (u.status||'').toLowerCase()==='condemned'; } }
     }[type];
     title = _unitCfg.title;
-    var rows = units.filter(function(u){ return u && !u.archived && _unitCfg.pred(u); })
+    rows = units.filter(function(u){ return u && !u.archived && _unitCfg.pred(u); })
       .slice().sort(function(a,b){ return ((a.street||'')+(a.num||'')).localeCompare((b.street||'')+(b.num||'')); });
     exportHeaders = ['Address','Bedrooms','Type','Classification','Accessible','Elders Unit'];
     exportColWidths = [28,10,16,20,12,12];
@@ -1919,7 +1919,7 @@ function showHousingKpiDrilldown(type) {
     // New Applications drilldown excludes housed (linked) apps, matching the KPI.
     var _housedIdx2 = (typeof buildHousedIndex === 'function') ? buildHousedIndex(units) : {};
     var _isHoused2 = function(a){ return (typeof appIsHoused === 'function') ? appIsHoused(a, _housedIdx2) : (a.status === 'assigned' || !!a.assignedUnit || !!_housedIdx2[a.id]); };
-    var rows = apps.filter(function(a){
+    rows = apps.filter(function(a){
       if (!a || a.archived) return false;
       // Deceased apps live only in their own group; every other group excludes them.
       if (type === 'deceased_apps') return !!a.deceased;

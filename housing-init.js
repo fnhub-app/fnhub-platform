@@ -1021,7 +1021,7 @@ function amSelectUnit(unitId) {
     } else {
       // Below tied band — user can't override, ED approval required
       if(ow) ow.style.display = 'none';
-      var cb = document.getElementById('am_confirm_btn');
+      cb = document.getElementById('am_confirm_btn');
       if(cb){ cb.textContent='⛔ ED Approval Required'; cb.disabled=true; cb.style.opacity='1'; cb.style.cursor='not-allowed'; cb.style.background='var(--danger-bg)'; cb.style.color='var(--danger)'; }
     }
   } else if(canOverride) {
@@ -1059,7 +1059,7 @@ function amSelectUnit(unitId) {
 
   // Confirm button for override-authority users (assign-tied button already set in branch above)
   if(canOverride) {
-    var cb = document.getElementById('am_confirm_btn');
+    cb = document.getElementById('am_confirm_btn');
     if(cb){
       cb.textContent = isEdOverride ? '✓ Override & Assign' : '✓ Confirm Selection';
       cb.disabled = false; cb.style.opacity = '1'; cb.style.cursor = 'pointer';

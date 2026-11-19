@@ -3617,7 +3617,7 @@
       _ticOpenInitialsPopout(nextIdx);
     } else {
       // Done — close pop-out and return to main modal
-      var pop = document.getElementById('ls_initials_popout');
+      pop = document.getElementById('ls_initials_popout');
       if (pop) pop.remove();
     }
   }
@@ -4654,7 +4654,7 @@
             var b64    = sigData.split(',')[1];
             var raw    = atob(b64);
             var pngArr = new Uint8Array(raw.length);
-            for (var bi = 0; bi < raw.length; bi++) pngArr[bi] = raw.charCodeAt(bi);
+            for (bi = 0; bi < raw.length; bi++) pngArr[bi] = raw.charCodeAt(bi);
             var pngImg = await pdfDoc.embedPng(pngArr);
             pages[pageIdx].drawImage(pngImg, { x: rect.x, y: rect.y, width: rect.width, height: rect.height });
             try { targetField.setText(''); } catch(e2) {}
@@ -4673,14 +4673,14 @@
       try { pdfDoc.catalog.delete(PDFLib.PDFName.of('AcroForm')); } catch(e) {}
 
       var tenantName  = tokens.tenantName || 'Tenant';
-      var filename    = (nationShort())+'_Occupancy_Agreement_' + tenantName.replace(/\s+/g,'_') + '.pdf';
+      filename    = (nationShort())+'_Occupancy_Agreement_' + tenantName.replace(/\s+/g,'_') + '.pdf';
       var filledBytes = await pdfDoc.save();
-      var blob = new Blob([filledBytes], { type: 'application/pdf' });
+      blob = new Blob([filledBytes], { type: 'application/pdf' });
 
       // SAVE FIRST, then download (iPad Safari suspends JS on the download).
-      var _res = await _ticFilePdf(blob, filename);
+      _res = await _ticFilePdf(blob, filename);
       _ticDownloadBlob(blob, filename);
-      var mo = document.getElementById('tic_lease_modal');
+      mo = document.getElementById('tic_lease_modal');
       if (mo) mo.remove();
       _ticFileResultToast(_res, 'Occupancy Agreement');
 

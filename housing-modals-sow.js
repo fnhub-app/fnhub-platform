@@ -1653,7 +1653,7 @@ async function _sowPromptWorkOrderEmail(){
         checkboxes: boxes
       });
       if(!r2 || !r2.ok) return;
-      var picked = (r2.items) || {};
+      picked = (r2.items) || {};
       var chosenEmails = Object.keys(emailById).filter(function(k){ return picked[k]; }).map(function(k){ return emailById[k]; });
       var chosenSms = Object.keys(smsById).filter(function(k){ return picked[k]; }).map(function(k){ return smsById[k]; });
       if(!chosenEmails.length && !chosenSms.length){ if(typeof showToast === 'function') showToast('Nothing selected — nothing sent.', {type:'info'}); return; }

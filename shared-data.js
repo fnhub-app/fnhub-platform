@@ -7136,7 +7136,7 @@ function openAddContractorModal(editIdx){
       // Reveal the inline approval surface (banner + pills + notes).
       // The Approval Flow diagram and Forms & SOWs cards are gone from
       // the modal — those concerns moved to internal-only views.
-      var cas = document.getElementById('cic_approval_surface');
+      cas = document.getElementById('cic_approval_surface');
       if (cas) cas.style.display = '';
       if(typeof _ctSetCicStatusBanner === 'function') _ctSetCicStatusBanner(ct);
       if(typeof _ctRenderActions === 'function')      _ctRenderActions(ct, 'cic');
@@ -7146,7 +7146,7 @@ function openAddContractorModal(editIdx){
       var he=document.getElementById('ct_email_btn'); if(he && ct.email){ he.classList.remove('hidden'); he.style.display=''; }
     }
   } else {
-    var title = document.getElementById('ct_modal_title');
+    title = document.getElementById('ct_modal_title');
     if(title) title.textContent = 'New Contractor';
     // Save button label is owned by _updateCicSaveButtonState (currently
     // "💾 Save Draft" until all tabs are visited, then "📤 Submit Contractor").
@@ -8137,7 +8137,7 @@ function renderCtFilePreview(bucket){
       }
       if(rec.data){
         try {
-          var w = window.open();
+          w = window.open();
           if(w){
             if((rec.type||'').indexOf('pdf') !== -1){
               w.location.href = rec.data;
