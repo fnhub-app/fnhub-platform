@@ -1087,7 +1087,6 @@ function confirmAssignment() {
   if(!_amAppId){ showToast('No application selected', {type:'error'}); return; }
 
   var role = window.currentRole||'staff';
-  var isTopRec = _amAllScored.length>0 && _amAllScored[0].unit.id===unitId;
 
   // Tie detection (same as amSelectUnit)
   var topScore2 = _amAllScored.length > 0 ? _amAllScored[0].score : 0;

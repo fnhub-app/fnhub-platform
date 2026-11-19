@@ -390,7 +390,7 @@
       var jsPDF = window.jspdf.jsPDF;
       var doc = new jsPDF({ unit: 'mm', format: 'letter' });
       var hf = headerFooter(doc, 'Batch Invoice Worksheet');
-      var pageW = hf.pageW, M = hf.M, aRGB = hf.aRGB;
+      var M = hf.M, aRGB = hf.aRGB;
       doc.setFont('helvetica', 'normal'); doc.setFontSize(10); doc.setTextColor(90, 90, 90);
       doc.text('Tenants to be invoiced for ' + monthLabel + '  (' + pending.length + ')', M, 34);
       var total = pending.reduce(function (s, t) { return s + (t.rent || 0); }, 0);

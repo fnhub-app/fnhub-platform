@@ -215,13 +215,7 @@ function openInspectionModal(id) {
   window._inspSeed = null;
   var src = insp || seed;
 
-  var units = window.housingUnits || [];
   var today = new Date().toISOString().split('T')[0];
-
-  // Build unit data for searchable combobox
-  var unitList = units.filter(function(u){ return !u.archived; }).map(function(u){
-    return { id: u.id, addr: (u.num ? u.num + ' ' + u.street : u.id) };
-  }).sort(function(a,b){ return a.addr.localeCompare(b.addr); });
 
   var typeOpts = INSP_TYPES.map(function(t){
     return '<option value="' + t + '"' + (src && src.type === t ? ' selected' : '') + '>' + t + '</option>';

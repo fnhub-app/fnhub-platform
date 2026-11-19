@@ -31,12 +31,6 @@
     applications: 'housing_applications'
   };
   // Per-tenant emergency-contact column names on the tenants table.
-  var TIC_EC = {
-    name:         'emergency_contact_name',
-    relationship: 'emergency_contact_relationship',
-    phone:        'emergency_contact_phone',
-    address:      'emergency_contact_address'
-  };
 
   var TIC_VULN_OPTIONS = [
     'Elder in Household',
@@ -147,14 +141,6 @@
       return d.toISOString().slice(0,10);
     } catch(e){ return String(s); }
   }
-  function _ticFmtDT(s){
-    if(!s) return '—';
-    try {
-      var d = new Date(s);
-      if(isNaN(d.getTime())) return String(s);
-      return d.toISOString().replace('T',' ').slice(0,16) + ' UTC';
-    } catch(e){ return String(s); }
-  }
   // Age-from-DOB: delegate to the canonical policyAgeYears (policy-rules.js,
   // loaded on every page housing-tic.js loads on) so the min-age policy gate
   // and the TIC never disagree; local formula kept only as a fallback.
@@ -230,7 +216,6 @@
     });
   }
   function _ticIsArray(v){ return Array.isArray(v); }
-  function _ticIsMissing(v){ return v && v._ticMissing === true; }
   function _ticIsError(v){   return v && v._ticError === true; }
 
   // ── Resolve tenant + unit ─────────────────────────────────────────────────
@@ -462,6 +447,7 @@
   // (_ticState.applicationNotes) — both carry `created_at`. Returns a badge HTML
   // string; null only if the state isn't ready. Stale threshold = 90 days.
   var _TIC_NOTE_STALE_DAYS = 90;
+  // eslint-disable-next-line no-unused-vars -- kept for potential reinstatement (see note above)
   function _ticLastNoteInfo(){
     var rows = [].concat(
       _ticIsArray(_ticState.notes) ? _ticState.notes : [],
@@ -726,13 +712,6 @@
          + '</div>';
   }
 
-  function _ticIncomeRows(){
-    var a = _ticState.application;
-    if(!a || !_ticIsArray(a.incomes)) return [];
-    return a.incomes.filter(function(r){
-      return r && (r.incomeType || r.employer || r.primaryAmt != null);
-    });
-  }
   function _ticRenderOverview(){
 
     function renderGroup(filter){
@@ -4036,16 +4015,6 @@
     if (typeof formatCurrency === 'function') return formatCurrency(v);
     return '$' + (Number(v)||0).toLocaleString('en-CA', { minimumFractionDigits:2, maximumFractionDigits:2 });
   }
-  function _ticEnsureAutoTable(){
-    return new Promise(function(resolve){
-      try { if (window.jspdf && window.jspdf.jsPDF && typeof (new window.jspdf.jsPDF()).autoTable === 'function') { resolve(true); return; } } catch(e){}
-      var s = document.createElement('script');
-      s.src = 'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js';
-      s.onload  = function(){ resolve(true); };
-      s.onerror = function(){ resolve(false); };
-      document.head.appendChild(s);
-    });
-  }
   // Build a monthly amortization schedule where the MONTHLY PAYMENT EQUALS THE
   // RENT (the rent the tenant pays is applied to the home purchase). The payoff
   // period is derived from the financed amount, interest rate, and that rent —
@@ -5973,7 +5942,7 @@
     var sigLandlord = sigVal('rl_sig_landlord'), sigTenant = sigVal('rl_sig_tenant'), sigTenant2 = sigVal('rl_sig_tenant2');
     var landlordName = fv('rl_landlord_name'), landlordDate = fv('rl_landlord_date');
     var tenantPrint  = fv('rl_tenant_print') || tenantName, tenantDate = fv('rl_tenant_date');
-    var tenant2Print = fv('rl_tenant2_print'), tenant2Date = fv('rl_tenant2_date');
+    var tenant2Print = fv('rl_tenant2_print');
 
     var nc         = window.NATION_CONFIG || {};
     var nationName = (typeof nationDisplay === 'function') ? nationDisplay() : (nc.display_name || '');

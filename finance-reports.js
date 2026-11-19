@@ -609,22 +609,6 @@ function renderJournal() {
     // Multi-line grouped entry
     var totalDR = 0, totalCR = 0;
     group.forEach(function(r){ totalDR += (r.charge||r.debit||0); totalCR += (r.payment||r.credit||0); });
-    var groupRef = first.ref || '';
-    var groupId  = first.id  || '';
-    var isPending = (first.status === 'pending-ed' || first.status === 'pending');
-    // ED tier: super_user inherits everything granted to ed.
-    var _edTier = function(r){ return r === 'ed' || r === 'super_user'; };
-    var isED = (typeof _currentRole !== 'undefined' && _edTier(_currentRole))
-            || (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && _edTier(HOUSING_SESSION.role));
-    var _r = groupRef.replace(/"/g,'&quot;'), _i = groupId.replace(/"/g,'&quot;');
-    var actionCell = isPending && isED
-      ? '<td class="je-action-cell">'
-        + '<button class="btn btn-xs btn-primary" onclick="approveJournalEntry(&quot;'+_r+'&quot;,&quot;'+_i+'&quot;)">Approve</button> '
-        + '<button class="btn btn-xs btn-ghost" onclick="openEditJournalModal(&quot;'+_r+'&quot;,&quot;'+_i+'&quot;)">Edit</button> '
-        + '<button class="btn btn-xs btn-ghost" style="color:var(--danger);border-color:var(--danger);" onclick="showConfirm(\'Decline\',\'Decline this entry?\',function(){declineJournalEntry(&quot;'+_r+'&quot;,&quot;'+_i+'&quot;);})">Decline</button> '
-        + '<button class="btn btn-xs btn-ghost" style="color:var(--muted);" onclick="voidJournalEntry(&quot;'+_r+'&quot;,&quot;'+_i+'&quot;)">Void</button>'
-        + '</td>'
-      : '<td></td>';
     var header = '<tr class="je-group-header-row">'+
       '<td>'+first.date+'</td>'+
       '<td class="std-cell-primary">'+(t?tenantNameHtml(t):'<span class="std-cell-dash">—</span>')+'</td>'+

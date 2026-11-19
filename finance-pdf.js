@@ -206,8 +206,6 @@ function _previewLoanAgreementInner(loan) {
   if (!t) { t = {first:'[Tenant', last:'Name]', unit:'[Unit]', type:'community'}; }
 
   var payment       = calcPaymentAmt(principal, rate, term, freq);
-  var periods       = termToPeriods(term, freq);
-  var totalRepay    = Math.round(payment * periods * 100) / 100;
   var termLabel     = fmtTermLabel(term);
 
   // \u2500\u2500 True Cost of Borrowing \u2014 includes ALL interest charges \u2500\u2500\u2500\u2500\u2500\u2500

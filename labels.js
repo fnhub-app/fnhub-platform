@@ -26,6 +26,7 @@
   // ---- small helpers --------------------------------------------------------
   function esc(s) { return (typeof _qresc === 'function') ? _qresc(s) : String(s == null ? '' : s); }
   function portalBase() { return (typeof nationPortalBase === 'function') ? nationPortalBase() : location.origin; }
+  // eslint-disable-next-line no-unused-vars -- retained helper (name reused elsewhere)
   function nationName() { return (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.short)) || 'Housing'; }
   function nationLogo() {
     return (window._appSettings && _appSettings.theme && _appSettings.theme.logo)

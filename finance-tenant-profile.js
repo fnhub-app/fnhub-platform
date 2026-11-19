@@ -465,7 +465,7 @@ function showTicDetail(tid, key, balGrid, clickedCell) {
   if (contactCard) contactCard.style.display = 'none';
 
   var html = '';
-  var title = '', icon = '', entries = [];
+  var entries = [];
 
   if (key === 'rent') {
     title = '\uD83C\uDFE0 Rent Account';

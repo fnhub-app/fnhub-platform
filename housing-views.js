@@ -672,6 +672,7 @@ function renderMatchView(){
   // against real inventory identically — see that function's comment for
   // the bedroom-fit/accessibility/Elders rules.
   var _eldersMin = (window._appSettings && window._appSettings.eldersAgeMin) || 65;
+  // eslint-disable-next-line no-unused-vars -- live Match recommender, referenced across files
   function bestUnit(app){
     return (typeof matchBestUnit === 'function') ? matchBestUnit(app) : null;
   }
@@ -820,8 +821,6 @@ function renderMatchView(){
     var isTransfer = (app.appType === 'transfer_request') || !!curAddr;  // current tenant moving
     var tCol = tierColor[app.tier] || '#6b7280';
     var tier = (app.tier||'Low Priority').replace(' Priority','');
-    var needsBeds = 1;
-    if(app.habitants) needsBeds = Math.max(1, 1+(app.coApp?1:0)+app.habitants.length);
     var needsAccess = app.accessibility && app.accessibility!=='None' && app.accessibility!=='0' && app.accessibility!==0;
 
     var matchPct = best ? Math.round(Math.max(0,best.score)/24*100) : 0;
@@ -1788,12 +1787,6 @@ function showHousingKpiDrilldown(type) {
   // Status wording: shared 'kpi' variant of formatAppStatusLabel
   // (shared-data.js) — raw-status fallback for unmapped statuses (e.g. draft).
   function STATUS_LBL(a){ return formatAppStatusLabel(a.status, {variant:'kpi'}) || a.status || ''; }
-  var URGENT_LABELS = {
-    'homeless':'Homeless','domestic_violence':'Domestic Violence','fire_disaster':'Fire / Disaster',
-    'temporary_shelter':'Temporary Shelter',
-    'homeless_eviction':'Homeless / Eviction','eviction_risk':'Eviction Risk','separation':'Separation',
-    'none':'','':''
-  };
   function tierPill(tier) {
     var colors = {'Critical Priority':'var(--danger)','High Priority':'var(--warn-amber-text)','Medium Priority':'var(--info-blue)'};
     var c = colors[tier] || 'var(--muted)';

@@ -1469,7 +1469,6 @@ function popReview(){
   if(!rc) return;
   function fld(id){ var e=document.getElementById(id); return (e&&e.value&&e.value.trim())?e.value.trim():'—'; }
   function chk(id){ var e=document.getElementById(id); return e?e.checked:false; }
-  function sel(id){ var e=document.getElementById(id); return (e&&e.options&&e.selectedIndex>=0&&e.options[e.selectedIndex].text!=='— Select —')?e.options[e.selectedIndex].text:'—'; }
 
   var fn=fld('fn'), ln=fld('ln');
   var name = (fn!=='—'||ln!=='—') ? (fn+' '+ln).replace('— ','').replace(' —','').trim() : '—';
@@ -1952,7 +1951,6 @@ function printApplicationPreview() {
       +'</div>';
   }
   function yn(v) { return v ? 'Yes' : 'No'; }
-  function dollar(id) { var e=document.getElementById(id); return (e&&e.value) ? formatCurrency(parseCurrency(e.value)) : '—'; }
   function dollarQ(sel) { var e=document.querySelector(sel); return (e&&e.value) ? formatCurrency(parseCurrency(e.value)) : '—'; }
 
   // ── Income rows ──
@@ -2038,22 +2036,6 @@ function printApplicationPreview() {
   }
 
   // ── Internal sig block (pen on paper) ──
-  function internalSig(label) {
-    return '<div class="print-sec">'
-      +'<div style="font-size:8.5px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;'
-      +     'color:#7a5c00;margin-bottom:5px;padding-bottom:3px;border-bottom:1px solid #e8d87a;">'+label+'</div>'
-      +'<div class="sig-lbl">Name &amp; Title</div>'
-      +'<div style="border-bottom:1px solid var(--dark-border);height:16px;margin-bottom:8px;"></div>'
-      +'<div class="sig-lbl">Signature</div>'
-      +'<div style="border-bottom:1px solid var(--dark-border);height:52px;margin-bottom:8px;"></div>'
-      +'<div style="display:grid;grid-template-columns:1fr 90px;gap:10px;">'
-      +  '<div><div class="sig-lbl">Date</div>'
-      +       '<div class="sig-line"></div></div>'
-      +  '<div><div class="sig-lbl">Decision</div>'
-      +       '<div class="sig-line"></div></div>'
-      +'</div>'
-      +'</div>';
-  }
 
   // ── Sig columns: always show all 3, grey out co-app if none ──
   var sigCols = hasCoApp ? '1fr 1fr 1fr' : '1fr 1fr';
