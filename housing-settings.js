@@ -1471,7 +1471,7 @@ var AUDIT_ABBR = {
   'application_portal_submitted':'📨 Portal Sub', 'tenant_mr_submitted':'🔧 QR Report',
   'application_updated':'📝 App Upd', 'application_opened':'📂 Opened',
   // Contractor approval flow writes bare status actions (scoped by a CT: ref)
-  'hm_recommended':'🧰 Ctr Rec', 'approved':'🧰 Ctr Appr', 'returned':'🧰 Ctr Ret', 'declined':'🧰 Ctr Decl',
+  'hm_recommended':'🧰 Ctr Rec', 'approved':'🧰 Ctr Appr', 'returned':'🧰 Ctr Ret',
   // Auto / system approvals
   'application_auto_approved':'⚡ App Auto', 'file_update_auto_approved':'⚡ FU Auto',
   'contractor_auto_approved':'⚡ Ctr Auto', 'sow_auto_approved':'⚡ MR Auto',
@@ -1499,12 +1499,11 @@ var AUDIT_ABBR = {
   'sow_archived':'📦 MR Arch', 'sow_unarchived':'📤 MR Unarch', 'sow_completed':'✅ MR Done', 'sow_reopened':'🔄 MR Reopen',
   'sow_tenant_signed':'✍️ MR Tenant', 'sow_staff_signed':'✍️ MR Staff', 'sow_accountability':'⚠️ MR Flag',
   // App / status / files
-  'application_opened':'📂 Opened', 'draft_saved':'💾 Draft', 'status_change':'🔄 Status', 'status':'🔄 Status',
+  'draft_saved':'💾 Draft', 'status_change':'🔄 Status', 'status':'🔄 Status',
   'declined':'✕ Declined', 'archived':'📦 Arch', 'unarchived':'📤 Unarch', 'archived_duplicate':'📦 Arch Dup',
-  'tenants_merged':'🔗 Ten Merge', 'tenant_vacated':'📤 Vacated',
+  'tenants_merged':'🔗 Ten Merge',
   // Settings misc
   'required_fields_updated':'📋 Req Flds', 'required_fields_reset':'📋 Req Rst', 'theme_reset':'🎨 Theme Rst',
-  'settings_saved':'⚙️ Settings',
   // Platform support login
   'support_session_started':'🛟 Support In', 'support_login_toggle':'🛟 Support Tgl'
 };
