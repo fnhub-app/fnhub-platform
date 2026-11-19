@@ -141,7 +141,6 @@ function _udpUnitNoteHtml(n){
 function udpRenderUnitNotes(unitId){
   var mount = document.getElementById('ue_notes_mount');
   if(!mount) return;
-  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
   window._ueNotesUnitId = unitId;
   // Thread first (newest at the bottom), then the composer underneath.
   mount.innerHTML =
@@ -1481,7 +1480,6 @@ async function scLoadDocs(app) {
     mount.innerHTML = '<div style="padding:16px;text-align:center;color:var(--muted);font-size:12px;">Document library unavailable.</div>';
     return;
   }
-  var canDelete = (ROLE.isManagement(window.currentRole));
 
   window._scDocsLib = window.DocLibrary.create(mount, {
     entityType:    'application',
@@ -2358,7 +2356,6 @@ window._ueClearEmrOverride = _ueClearEmrOverride;
 // authority as setting the rent amount.
 function _ueRehabOverrideHtml(fu){
   if(!_canEditUnitRent() || !window._editingUnitId) return '';
-  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(x){ return String(x == null ? '' : x); };
   // The rehab factor is CONFIGURED in Settings (schedule.rehabFactor,
   // 0.60-0.70) and auto-applied — one confirmed tap flags the unit.
   var schedFactor = (typeof getRentAgeSchedule === 'function') ? getRentAgeSchedule().rehabFactor : 0.65;

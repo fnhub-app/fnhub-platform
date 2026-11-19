@@ -3444,7 +3444,6 @@ window._prjUnlinkExisting = _prjUnlinkExisting;
 
 function _prjUnlinkLot(lotId) {
   if (!_prjCanManage()) return;
-  var d = window._prjDraft;
   var lot = (window._prjLots || []).find(function(l){ return l.id === lotId; });
   if (!lot || !lot.unit_id) return;
   var u = (window.housingUnits || []).find(function(x){ return x.id === lot.unit_id; });

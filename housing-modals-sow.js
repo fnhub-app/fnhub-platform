@@ -1004,7 +1004,7 @@ function openSowModal(unitId, projectNumber) {
 
   // Init signature pads
   setTimeout(function(){
-    if(true) {
+    {
       _initSigPad('sow_sig_canvas_tenant');
       _initSigPad('sow_sig_canvas_staff');
     }
@@ -2732,7 +2732,7 @@ function udpOpenSowDocument(unitId, projectNumber){
   closeUnitEditModal({handoff:true});
   openSowModal(unitId, projectNumber);
   // Give the modal a tick to populate before printing.
-  setTimeout(function(){ if(true) printSOW(); }, 250);
+  setTimeout(function(){ printSOW(); }, 250);
 }
 
 function udpPrintWorkOrder(unitId, projectNumber){
@@ -2742,7 +2742,7 @@ function udpPrintWorkOrder(unitId, projectNumber){
   if(!sow){ showToast('Request not found', {type:'error'}); return; }
   closeUnitEditModal({handoff:true});
   openSowModal(unitId, projectNumber);
-  setTimeout(function(){ if(true) printWorkOrder(); }, 250);
+  setTimeout(function(){ printWorkOrder(); }, 250);
 }
 
 
@@ -3194,7 +3194,7 @@ function saveSOW(opts){
       'Accountability flags set: ' + flags.join(', '), role);
   }
   // Refresh the inline audit panel if visible
-  if(true) renderSowAuditLog(_sowUnitId);
+  renderSowAuditLog(_sowUnitId);
 
   var ind=document.getElementById('sow_saved_indicator');
   if(ind) ind.textContent='✓ Saved '+new Date().toLocaleTimeString();

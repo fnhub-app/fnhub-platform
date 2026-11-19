@@ -1113,7 +1113,6 @@ function saveApplicationRecord(opts){
     var person=row.querySelector('[data-role="person"]');
     var type=row.querySelector('[data-role="incType"]');
     var empName=row.querySelector('[data-role="empName"]');
-    var incAmt=row.querySelector('[data-role="incPeriod"]');
     // grab primary income amount — first currency input inside amount_grp
     var amtGrp=row.querySelector('[data-grp="amount_grp"]');
     var amt=amtGrp?amtGrp.querySelector('input[type="text"]'):null;
@@ -1927,14 +1926,6 @@ function printApplicationPreview() {
   var sigApp   = getSigDataURL('sig_canvas_app');
   var sigCo    = getSigDataURL('sig_canvas_co');
   var sigStaff = getSigDataURL('sig_canvas_staff');
-  var sigHM    = getSigDataURL('sig_canvas_hm');
-  var sigED    = getSigDataURL('sig_canvas_ed');
-  var hmName   = fld('sig_hm_name');
-  var hmDate   = fld('sig_hm_date') !== '—' ? fld('sig_hm_date') : today;
-  var hmDec    = fld('sig_hm_decision');
-  var edSigName= fld('sig_ed_name');
-  var edDate   = fld('sig_ed_date') !== '—' ? fld('sig_ed_date') : today;
-  var edDec    = fld('sig_ed_decision');
   var sigName  = fld('sig_name') !== '—' ? fld('sig_name') : name;
   var sigDate  = fld('sig_date') !== '—' ? fld('sig_date') : today;
   var coFn     = fld('co_fn'), coLn = fld('co_ln');

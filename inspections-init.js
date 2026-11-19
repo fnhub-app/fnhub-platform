@@ -222,7 +222,6 @@ function openInspectionModal(id) {
   var unitList = units.filter(function(u){ return !u.archived; }).map(function(u){
     return { id: u.id, addr: (u.num ? u.num + ' ' + u.street : u.id) };
   }).sort(function(a,b){ return a.addr.localeCompare(b.addr); });
-  var preAddr = insp ? (insp.unit_address || insp.unit_id || '') : '';
 
   var typeOpts = INSP_TYPES.map(function(t){
     return '<option value="' + t + '"' + (src && src.type === t ? ' selected' : '') + '>' + t + '</option>';
@@ -408,7 +407,6 @@ function closeInspectionModal() {
 
 // ── Checklist interaction ────────────────────────────────────────────────────
 function _inspSetRating(btn, rating) {
-  var key  = btn.getAttribute('data-key');
   var wrap = btn.closest('.insp-cl-rating');
   if (!wrap) return;
   wrap.querySelectorAll('button').forEach(function(b){ b.className = ''; });

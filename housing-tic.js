@@ -100,7 +100,6 @@
     lease_end_date:     'lease_end_date'
   };
 
-  var TIC_SCORE_CAP = 100;
   var TIC_PHONE_RE  = /^[0-9 ()\-+]+$/;
   var TIC_EMAIL_RE  = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
   var TIC_UUID_RE   = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -735,7 +734,6 @@
     });
   }
   function _ticRenderOverview(){
-    var l = _ticState.ledger  || {};
 
     function renderGroup(filter){
       return TIC_OVERVIEW_FIELDS.filter(filter).map(_ticOverviewRowHtml).join('');
@@ -3800,7 +3798,6 @@
     var emergRef = (app.references || [])[0] || {};
     var emerg = ((emergRef.fn||'') + ' ' + (emergRef.ln||'')).trim();
     if (emergRef.phone) emerg += (emerg ? ' ' : '') + emergRef.phone;
-    var habitants = (app.habitants || []).filter(function(h){ return h && (h.fn || h.ln); });
     // Applicant details — prefer the application, fall back to the tenant record
     // so existing tenants (whose application may not be loaded) still prefill.
     var _has = function(v){ return v != null && v !== ''; };
@@ -4151,7 +4148,6 @@
     pdf.text(iLines, ctx.marginL, ctx.y + 3); ctx.y += iLines.length * 4 + 5; pdf.setTextColor(0);
 
     // Cost-to-the-community summary block (the headline figures).
-    var termLbl = paidOff ? (Math.floor(n/12) + ' yr ' + (n%12) + ' mo — value fully recovered') : '25 years (300 payments)';
     var rows2 = [
       ['Home value (start of term)',              _ticMoney(value)],
       ['Rent collected over the term',            _ticMoney(totalRent) + '  (' + n + ' payments)'],

@@ -17,7 +17,6 @@ function saveRentPayment() {
   var unalloc = Math.round((total - allocated)*100)/100;
   if (unalloc > 0.005) rentAmt = Math.round((rentAmt + unalloc)*100)/100; // credit remainder to rent
 
-  var d = getData();
   var t = getTenant(tid);
   var tName = t ? tenantName(t) : tid;
   var voucherAllocs = [];

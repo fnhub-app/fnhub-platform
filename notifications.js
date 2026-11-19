@@ -6250,7 +6250,7 @@ function _parseHtmlToBlocks(html) {
     if (!root) return blocks;
 
     function textOf(node) {
-      return (node.textContent || '').replace(/ /g, ' ').replace(/\s+/g, ' ').trim();
+      return (node.textContent || '').replace(/\u00A0/g, ' ').replace(/\s+/g, ' ').trim();
     }
 
     function processNode(node) {

@@ -1088,7 +1088,6 @@ function confirmAssignment() {
 
   var role = window.currentRole||'staff';
   var isTopRec = _amAllScored.length>0 && _amAllScored[0].unit.id===unitId;
-  var isOverride = !isTopRec && _amAllScored.length>0;
 
   // Tie detection (same as amSelectUnit)
   var topScore2 = _amAllScored.length > 0 ? _amAllScored[0].score : 0;
@@ -1363,7 +1362,6 @@ function showAddHousingStaff() {
   var pend = window._pendingLookupUser || {};
   var prefEmail = pend.email || '';
   var isExt0 = !!pend.external && isED;   // external adds are ED-only
-  var modal = document.getElementById('globalModal') || document.getElementById('approvalModal');
   // Use the existing showToast + a custom modal approach
   // Build inline modal
   var overlay = document.createElement('div');
@@ -1753,7 +1751,7 @@ async function submitAddHousingStaff() {
     }
 
     // Refresh user table if visible
-    if(true) renderHousingUserTable();
+    renderHousingUserTable();
     if(btn) btn.style.display='none';
 
   } catch(e) {
@@ -2041,10 +2039,10 @@ function initHousingPage() {
   var view = params.get('view') || defaultView;
   if(view==='home')             { if(typeof showLanding==='function') showLanding(); else if(typeof showEmployeeHome==='function') showEmployeeHome(); }
   else if(view==='newapp')      { if(typeof newApp==='function') newApp(); }
-  else if(view==='worklist')    { if(true) showWorklist(); }
-  else if(view==='inventory')   { if(true) showInventory(); }
-  else if(view==='match')       { if(true) showMatch(); }
-  else if(view==='tenants')     { if(true) showTenants(); }
+  else if(view==='worklist')    { showWorklist(); }
+  else if(view==='inventory')   { showInventory(); }
+  else if(view==='match')       { showMatch(); }
+  else if(view==='tenants')     { showTenants(); }
   else if(view==='settings')    { if(typeof showSettings==='function') showSettings(); }
   else if(view==='leadership')  { if(typeof showLeadershipDashboard==='function') showLeadershipDashboard(); }
   // Data Health deep links (Operations nav on sub-pages lands here): show the
@@ -2059,7 +2057,7 @@ function initHousingPage() {
       _dhTries++; setTimeout(_dhWait, 400);
     })();
   }
-  else if(view==='contractors') { if(true) showContractors(); }
+  else if(view==='contractors') { showContractors(); }
   else if(view==='reno-questionnaire'){
     // Create-menu "Renovation Questionnaire" from a sub-page lands here: show the
     // landing page, then open the questionnaire once its module script is ready.

@@ -1152,9 +1152,6 @@ function renderTenantsView(){
       ? '<td><div class="std-id"><div class="std-row-avatar">'+escapeHtml((function(){var w=_tname.trim().split(/\s+/);return (w.length>=2?w[0].charAt(0)+w[w.length-1].charAt(0):_tname.slice(0,2)).toUpperCase();})())+'</div><div class="std-id-main">'+escapeHtml(_tname)+'</div></div></td>'
       : '<td><span style="color:var(--muted);font-style:italic;">No tenant assigned</span></td>';
     var date=u.assignedDate||'—';
-    var fileCount=0; // loaded async when panel opens
-    var statusBg=u.status==='reserved'?'#faf5ff':'var(--info-blue-bg)';
-    var statusC=u.status==='reserved'?'#7c3aed':'#1d4ed8';
     var renoCell='';
     var _showRenoScore=(ROLE.isManagement(window.currentRole));
     if(_showRenoScore && hasSowOrReno(u.id)){
