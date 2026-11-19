@@ -39,7 +39,7 @@
     '  padding:0 12px;gap:2px;flex-shrink:0;overflow-x:auto;}',
     '.fic-tab{padding:10px 16px;border:none;background:none;font-size:13px;font-weight:600;',
     '  color:var(--muted);cursor:pointer;border-bottom:2.5px solid transparent;',
-    '  margin-bottom:-1px;font-family:DM Sans,sans-serif;white-space:nowrap;}',
+    '  margin-bottom:-1px;font-family:var(--sans);white-space:nowrap;}',
     '.fic-tab.active{color:var(--yellow);border-bottom-color:var(--yellow);}',
     '.fic-tab:hover:not(.active){color:var(--text);}',
     '.fic-body{flex:1;overflow-y:auto;padding:20px 24px;}',

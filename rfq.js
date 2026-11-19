@@ -210,7 +210,7 @@ function _rfqViewToggleHtml() {
     var on = cur === v;
     return '<button type="button" onclick="_rfqSetView(\'' + v + '\')" style="display:flex;align-items:center;gap:5px;padding:5px 12px;'
       + 'border:1px solid ' + (on ? 'var(--yellow)' : 'var(--border)') + ';background:' + (on ? 'var(--yellow)' : 'var(--surface)') + ';'
-      + 'color:' + (on ? 'var(--dark)' : 'var(--muted)') + ';font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;'
+      + 'color:' + (on ? 'var(--dark)' : 'var(--muted)') + ';font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;'
       + 'border-radius:' + (v === 'list' ? '7px 0 0 7px' : '0 7px 7px 0') + ';' + (v === 'cards' ? 'margin-left:-1px;' : '') + '">' + icon + ' ' + label + '</button>';
   }
   return '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><div style="display:flex;">' + b('list', 'List', '&#9776;') + b('cards', 'Cards', '&#9638;') + '</div></div>';
@@ -227,7 +227,7 @@ function _rfqCardTile(o) {
   }).join('');
   var actions = (o.actions || []).map(function (a) {
     return '<button type="button" onclick="' + a.onclick + '" style="flex:1;background:' + (a.ghost ? 'none' : 'var(--yellow)') + ';color:' + (a.ghost ? 'var(--muted)' : 'var(--dark)') + ';'
-      + 'border:' + (a.ghost ? '1px solid var(--border)' : 'none') + ';border-radius:7px;padding:8px 10px;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + a.text + '</button>';
+      + 'border:' + (a.ghost ? '1px solid var(--border)' : 'none') + ';border-radius:7px;padding:8px 10px;font-size:12px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap;">' + a.text + '</button>';
   }).join('');
   return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:13px 14px;display:flex;flex-direction:column;">'
     + '<div ' + (o.open ? 'onclick="' + o.open + '"' : '') + ' style="cursor:' + (o.open ? 'pointer' : 'default') + ';">'

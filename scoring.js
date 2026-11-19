@@ -144,7 +144,7 @@ function renderV2ScoringEditor() {
     var col = val > 0 ? 'var(--success)' : val < 0 ? 'var(--danger)' : 'var(--gray)';
     return '<input type="number" value="' + val + '" step="1" min="-30" max="30" data-cat="' + cat + '" data-key="' + key + '" '
       + 'style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;'
-      + 'color:' + col + ';text-align:center;font-family:DM Sans,sans-serif;background:var(--surface);" '
+      + 'color:' + col + ';text-align:center;font-family:var(--sans);background:var(--surface);" '
       + 'onchange="updateV2ScoreOption(this)" oninput="this.style.color=+this.value>0?\x27var(--success)\x27:+this.value<0?\x27var(--danger)\x27:\x27var(--gray)\x27"/>';
   }
 
@@ -153,7 +153,7 @@ function renderV2ScoringEditor() {
     var col = val > 0 ? 'var(--success)' : val < 0 ? 'var(--danger)' : 'var(--gray)';
     return '<input type="number" value="' + val + '" step="1" min="0" max="30" data-cat="' + cat + '" data-key="' + key + '" '
       + 'style="width:60px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;'
-      + 'color:' + col + ';text-align:center;font-family:DM Sans,sans-serif;background:var(--surface);" '
+      + 'color:' + col + ';text-align:center;font-family:var(--sans);background:var(--surface);" '
       + 'onchange="updateV2ScoreOption(this)" oninput="this.style.color=+this.value>0?\x27var(--success)\x27:\x27var(--gray)\x27"/>';
   }
 
@@ -270,7 +270,7 @@ function renderV2ScoringEditor() {
       + '<div style="display:flex;align-items:center;gap:6px;">'
       +   '<span class="js-lbl-sm">Score &ge;</span>'
       +   '<input type="number" value="' + val + '" min="0" max="100" step="1" data-tier="' + key + '" '
-      +   'style="width:64px;padding:4px 8px;border:1.5px solid ' + col + ';border-radius:6px;font-size:15px;font-weight:700;color:' + col + ';text-align:center;font-family:DM Sans,sans-serif;background:var(--surface);" '
+      +   'style="width:64px;padding:4px 8px;border:1.5px solid ' + col + ';border-radius:6px;font-size:15px;font-weight:700;color:' + col + ';text-align:center;font-family:var(--sans);background:var(--surface);" '
       +   'onchange="updateV2Tier(this)"/>'
       +   '<span class="js-lbl-sm">pts</span>'
       + '</div>'
@@ -392,7 +392,7 @@ function renderMatchPriorityEditor() {
   var m = liveMatchPriorityModel;
   function bonusInput(key, label, hint) {
     var inputHtml = '<input type="number" value="' + (m[key] != null ? m[key] : 0) + '" step="100" min="0" data-priority-key="' + key + '" '
-      + 'style="width:70px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;text-align:center;font-family:DM Sans,sans-serif;background:var(--surface);" '
+      + 'style="width:70px;padding:4px 6px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;text-align:center;font-family:var(--sans);background:var(--surface);" '
       + 'onchange="updateMatchPriorityOption(this)"/>';
     return '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:8px 10px;border-radius:7px;margin-bottom:3px;background:var(--bg);">'
       + '<div style="flex:1;"><span class="js-txt-bold2" style="font-weight:400;">' + label + '</span>'
@@ -533,7 +533,7 @@ function renderNationPanel(){
       + '<div style="font-size:11px;color:var(--muted);margin-top:12px;font-style:italic;">Nation identity, contact info, and logo are managed by the Executive Director.</div>';
   } else {
     // Editable form — display name, short name, logo upload, save.
-    var inputStyle = 'width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;';
+    var inputStyle = 'width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;';
     var lblStyle   = 'display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;';
     var idleMin    = parseInt(cfg.idle_timeout_minutes, 10) || 15;
 
@@ -555,7 +555,7 @@ function renderNationPanel(){
       +     '<div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;">'
       +       '<div style="grid-column:1/-1;">'
       +         '<label style="'+lblStyle+'">Mailing Address</label>'
-      +         '<textarea id="nation_input_address" rows="3" style="'+inputStyle+'resize:vertical;font-family:DM Sans,sans-serif;" placeholder="PO Box 100&#10;Your Community, ON&#10;A1A 1A1">'+escapeHtml(cfg.mailing_address||'')+'</textarea>'
+      +         '<textarea id="nation_input_address" rows="3" style="'+inputStyle+'resize:vertical;font-family:var(--sans);" placeholder="PO Box 100&#10;Your Community, ON&#10;A1A 1A1">'+escapeHtml(cfg.mailing_address||'')+'</textarea>'
       +         '<div class="js-lbl-sm" style="margin-top:4px;">Free-form. Line breaks are preserved on display; collapsed to one line in print footers.</div>'
       +       '</div>'
       +       '<div>'
@@ -919,7 +919,7 @@ function _onModuleToggle(modName, nowOn) {
 // can be hoisted by the JS engine and referenced from the inline HTML
 // template above without depending on render-order quirks.
 function _nationSocialField(key, label, placeholder, value) {
-  var inputStyle = 'width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;';
+  var inputStyle = 'width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;';
   var lblStyle   = 'display:block;font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.7px;margin-bottom:5px;';
   return '<div>'
     +   '<label style="'+lblStyle+'">'+label+'</label>'
@@ -1191,7 +1191,7 @@ function renderNosTable() {
   tbody.innerHTML = Object.keys(bedLabels).map(function(beds) {
     var maxPeople = (nos[beds] !== undefined) ? nos[beds] : defaults[beds];
     var label = bedLabels[beds];
-    var inputStyle = 'width:72px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;color:var(--text);text-align:center;font-family:DM Sans,sans-serif;background:var(--surface);' + (isED ? '' : 'opacity:0.55;cursor:not-allowed;');
+    var inputStyle = 'width:72px;padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;font-weight:700;color:var(--text);text-align:center;font-family:var(--sans);background:var(--surface);' + (isED ? '' : 'opacity:0.55;cursor:not-allowed;');
     return '<tr class="row-divider">'
       + '<td style="padding:10px 12px;font-size:13px;color:var(--text);">' + label + '</td>'
       + '<td style="padding:10px 12px;text-align:center;">'
@@ -2409,7 +2409,7 @@ function _renderNationPositionsBlock(){
   }
 
   // Editable — input per role, placeholder shows the system default.
-  var inputStyle = 'width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;background:var(--surface);color:var(--text);';
+  var inputStyle = 'width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);box-sizing:border-box;background:var(--surface);color:var(--text);';
 
   var rowsHtml = _POSITION_ROLE_KEYS.map(function(k){
     var sysDef     = _systemDefault(k);

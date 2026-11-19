@@ -109,7 +109,7 @@ function _viewToggleHtml(key, setFnName) {
     var on = cur === v;
     return '<button type="button" onclick="' + setFnName + '(\'' + v + '\')" style="display:flex;align-items:center;gap:5px;padding:5px 12px;'
       + 'border:1px solid ' + (on ? 'var(--yellow)' : 'var(--border)') + ';background:' + (on ? 'var(--yellow)' : 'var(--surface)') + ';'
-      + 'color:' + (on ? 'var(--dark)' : 'var(--muted)') + ';font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;'
+      + 'color:' + (on ? 'var(--dark)' : 'var(--muted)') + ';font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;'
       + 'border-radius:' + (v === 'list' ? '7px 0 0 7px' : '0 7px 7px 0') + ';' + (v === 'cards' ? 'margin-left:-1px;' : '') + '">' + icon + ' ' + label + '</button>';
   }
   return '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><div style="display:flex;">' + b('list', 'List', '&#9776;') + b('cards', 'Cards', '&#9638;') + '</div></div>';
@@ -859,7 +859,7 @@ function renderMatchView(){
     var assignCell = isAssigned
       ? '<div style="font-size:11px;font-weight:700;color:var(--success);">✓ '+(app.assignedAddress||'Assigned')+'</div>'
       : (canAssign
-          ? '<button data-assign-app="'+app.id+'" data-assign-unit="'+(best?best.unit.id:'')+'" style="background:var(--yellow);border:none;color:var(--dark);padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:DM Sans,sans-serif;white-space:nowrap;">Assign →</button>'
+          ? '<button data-assign-app="'+app.id+'" data-assign-unit="'+(best?best.unit.id:'')+'" style="background:var(--yellow);border:none;color:var(--dark);padding:6px 14px;border-radius:7px;cursor:pointer;font-size:12px;font-weight:700;font-family:var(--sans);white-space:nowrap;">Assign →</button>'
           : '<span class="js-lbl-sm">Awaiting approval</span>');
 
     return '<tr style="border-bottom:1px solid var(--border);transition:background .12s;">'
@@ -3180,7 +3180,7 @@ async function renderRecentActivity(role) {
       var click = 'if(typeof _wlSetView===\'function\'){_wlSetView(\''+v+'\');}else{try{localStorage.setItem(\'clfn_worklist_view\',\''+v+'\');}catch(e){}if(typeof renderRecentActivity===\'function\')renderRecentActivity(\''+role+'\');}';
       return '<button type="button" onclick="'+click+'" style="display:flex;align-items:center;gap:5px;padding:5px 12px;'
         + 'border:1px solid '+(on?'var(--yellow)':'var(--border)')+';background:'+(on?'var(--yellow)':'var(--surface)')+';'
-        + 'color:'+(on?'var(--dark)':'var(--muted)')+';font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;'
+        + 'color:'+(on?'var(--dark)':'var(--muted)')+';font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;'
         + 'border-radius:'+(v==='list'?'7px 0 0 7px':'0 7px 7px 0')+';'+(v==='cards'?'margin-left:-1px;':'')+'">'+icon+' '+label+'</button>';
     }
     return '<div style="display:flex;justify-content:flex-end;margin-bottom:8px;"><div style="display:flex;">'

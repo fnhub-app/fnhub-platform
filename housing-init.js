@@ -717,7 +717,7 @@ function _buildAssignModalHTML() {
         '<div id="am_override_wrap">' +
           '<div class="f">' +
             '<label><span id="am_notes_label" style="font-weight:700;">Selection Notes</span> <span id="am_notes_req_star" style="color:var(--danger);display:none;">*</span></label>' +
-            '<textarea id="am_override_notes" rows="2" placeholder="Notes…" style="width:100%;box-sizing:border-box;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);resize:vertical;"></textarea>' +
+            '<textarea id="am_override_notes" rows="2" placeholder="Notes…" style="width:100%;box-sizing:border-box;padding:8px 12px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;"></textarea>' +
           '</div>' +
         '</div>' +
 
@@ -1395,9 +1395,9 @@ function showAddHousingStaff() {
     + '<div style="padding:22px;display:flex;flex-direction:column;gap:12px;">'
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
     + '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Full Name</label>'
-    + '<input id="hs-name" placeholder="e.g. Edith Moore" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;"></div>'
+    + '<input id="hs-name" placeholder="e.g. Edith Moore" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;"></div>'
     + '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Work Email</label>'
-    + '<input id="hs-email" type="email" placeholder="' + (nationEmailDomain() ? ('edith.moore@' + nationEmailDomain()) : 'name@example.com') + '" value="'+escapeHtml(prefEmail)+'" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;">'
+    + '<input id="hs-email" type="email" placeholder="' + (nationEmailDomain() ? ('edith.moore@' + nationEmailDomain()) : 'name@example.com') + '" value="'+escapeHtml(prefEmail)+'" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;">'
     + '<div id="hs-email-hint" style="display:none;font-size:11px;color:var(--danger);margin-top:3px;">&#9888; Must be a @' + nationEmailDomain() + ' address</div></div>'
     + '</div>'
     + (isED ? '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">'
@@ -1405,9 +1405,9 @@ function showAddHousingStaff() {
         + '<span><strong>External consultant</strong> &mdash; allow ' + (nationEmailDomain() ? ('a non-@'+nationEmailDomain()) : 'an external') + ' email. The account is <strong>passwordless</strong> (admin-issued magic link only), gets a random password, and starts with restricted access. ED only.</span></label>' : '')
     + '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">'
     + '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Department</label>'
-    + '<select id="hs-dept" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;">'+deptOptions+'</select></div>'
+    + '<select id="hs-dept" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;">'+deptOptions+'</select></div>'
     + '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Role</label>'
-    + '<select id="hs-role" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;">'+roleOptions+'</select></div>'
+    + '<select id="hs-role" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;">'+roleOptions+'</select></div>'
     + '</div>'
     // Cell phone for text notifications (sms_notifications module only, mirrors
     // the staff-edit form). Saved to staff.sms_number (E.164); SMS only sends to
@@ -1415,7 +1415,7 @@ function showAddHousingStaff() {
     // consent box until a valid mobile is entered.
     + ((window.moduleOn && window.moduleOn('sms_notifications')) ? (
         '<div><label style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;display:block;margin-bottom:4px;">Cell Phone <span style="font-weight:400;text-transform:none;letter-spacing:0;">&mdash; for text notifications; saved as +1&hellip;</span></label>'
-        + '<input id="hs-sms" type="tel" placeholder="+1 807 555 1234" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;box-sizing:border-box;">'
+        + '<input id="hs-sms" type="tel" placeholder="+1 807 555 1234" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);box-sizing:border-box;">'
         + '<div id="hs-sms-hint" style="font-size:11px;margin-top:4px;min-height:14px;"></div></div>'
         + '<label style="display:flex;align-items:flex-start;gap:8px;font-size:12px;cursor:pointer;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 14px;">'
         + '<input type="checkbox" id="hs-sms-optin" style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:2px 0 0;">'

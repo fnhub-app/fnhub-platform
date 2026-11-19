@@ -1168,7 +1168,7 @@ function _keyModal(title, bodyHtml, onSave, saveLabel){
   ov.querySelector('[data-k-save]').addEventListener('click', function(){ onSave(ov, close); });
   return ov;
 }
-var _KEY_FIELD_CSS = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);';
+var _KEY_FIELD_CSS = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);';
 var _KEY_LBL_CSS = 'display:block;font-size:12px;font-weight:600;margin-bottom:5px;';
 
 function _keyOpenAddModal(unitId, key){
@@ -4330,8 +4330,8 @@ function _wlEnsureLightbox(){
   + '.wl-lb-btn:hover{background:var(--yellow);color:var(--dark);}'
   + '#wl-lb-prev{left:16px;top:calc(50% - 24px);}#wl-lb-next{right:16px;top:calc(50% - 24px);}'
   + '#wl-lb-close{top:16px;right:16px;width:40px;height:40px;font-size:20px;}'
-  + '#wl-lb-counter{position:absolute;top:18px;left:18px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:999px;padding:5px 13px;font-size:13px;font-weight:700;font-family:DM Sans,sans-serif;}'
-  + '#wl-lb-caption{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);max-width:88vw;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:12px;font-family:DM Sans,sans-serif;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}';
+  + '#wl-lb-counter{position:absolute;top:18px;left:18px;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:999px;padding:5px 13px;font-size:13px;font-weight:700;font-family:var(--sans);}'
+  + '#wl-lb-caption{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);max-width:88vw;background:var(--surface);color:var(--text);border:1px solid var(--border);border-radius:8px;padding:6px 14px;font-size:12px;font-family:var(--sans);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}';
   document.head.appendChild(st);
   var ov = document.createElement('div'); ov.id = 'wl-lightbox';
   ov.innerHTML =
@@ -4477,7 +4477,7 @@ function openTenantMrReview(id){
     +   photosHtml
     +   (s.contact_name || s.contact_phone || s.contact_email ? '<div class="tic-field-lbl">Contact</div><div style="font-size:13px;margin-bottom:14px;">' + e([s.contact_name, s.contact_phone, s.contact_email].filter(Boolean).join(' · ')) + '</div>' : '')
     +   '<div class="tic-field-lbl">Review note (optional)</div>'
-    +   '<textarea id="tenant_mr_note" rows="2" placeholder="Shown to the MEMBER on their portal, and on the audit trail — write it for the tenant to read" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>'
+    +   '<textarea id="tenant_mr_note" rows="2" placeholder="Shown to the MEMBER on their portal, and on the audit trail — write it for the tenant to read" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>'
     + '</div>'
     + '<div style="padding:14px 22px;border-top:1px solid var(--border);display:flex;justify-content:space-between;gap:10px;flex-shrink:0;">'
     +   '<button type="button" onclick="_tenantMrReject(\'' + e(s.id) + '\')" class="btn btn-ghost" style="color:var(--danger);border-color:var(--danger);">Reject</button>'
@@ -4742,7 +4742,7 @@ function openApplicationSubmissionReview(id){
     + (cands.length
         ? '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Possible match' + (cands.length>1?'es':'') + ': ' + candChips + '</div>'
         : '<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">Blank = create a new application. Enter an APP id to merge these changes into it.</div>')
-    + '<input id="app_sub_link_id" type="text" placeholder="APP-000123" value="' + e(preselect) + '" oninput="_appSubSyncPrimary()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;">';
+    + '<input id="app_sub_link_id" type="text" placeholder="APP-000123" value="' + e(preselect) + '" oninput="_appSubSyncPrimary()" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;">';
 
   var docs = (p._docs && p._docs.length) ? p._docs : [];
   var docsHtml = docs.length
@@ -4794,7 +4794,7 @@ function openApplicationSubmissionReview(id){
     +   docsHtml
     +   linkSection
     +   '<div class="tic-field-lbl" style="margin-top:14px;">Review note (shown to the applicant if you request changes)</div>'
-    +   '<textarea id="app_sub_note" rows="2" placeholder="Optional note for the applicant / record" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>'
+    +   '<textarea id="app_sub_note" rows="2" placeholder="Optional note for the applicant / record" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>'
     // Approval email checkbox — only when the applicant has an email and this
     // isn't a file update (a file update joins no wait list). The email's
     // wording is deliberate: approval = added to the WAIT LIST, not a house.
@@ -5302,7 +5302,7 @@ function openWriteOffModal(name, tenantId, balance){
   if(!(typeof ROLE!=='undefined' && ROLE.isManagement && ROLE.isManagement(window.currentRole))){ if(typeof showToast==='function') showToast('Only management can recommend a write-off.', {type:'error'}); return; }
   var bal = Number(balance||0);
   var reasons = _WRITEOFF_REASONS.map(function(r){ return '<option value="'+r.k+'">'+r.label+'</option>'; }).join('');
-  var fieldCss = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);';
+  var fieldCss = 'width:100%;box-sizing:border-box;padding:9px 11px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);';
   var ov = document.createElement('div');
   ov.className = 'modal-overlay modal-overlay-centered modal-z-1100 is-open';
   ov.innerHTML =
@@ -6290,9 +6290,9 @@ function ctRenderPeople(people) {
       ? '<button type="button" onclick="inviteContractorPersonFromRow('+i+')" class="btn btn-ghost btn-sm" style="white-space:nowrap;" title="Text this contact a Contractor Portal sign-up link">📱 Invite</button>'
       : '';
     return '<div style="display:grid;grid-template-columns:1fr 1fr 1fr'+(_ctCanInvite?' auto':'')+' auto;gap:8px;align-items:center;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:6px;">'
-      +'<input type="text"  class="ct-person-name"  data-pi="'+i+'" value="'+escapeHtml(p.name||'')+'"  placeholder="Full name"  style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
-      +'<input type="tel"   class="ct-person-phone" data-pi="'+i+'" value="'+escapeHtml(p.phone?formatPhone(p.phone):'')+'" placeholder="(705)-000-0000" oninput="fmtPhone(this)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
-      +'<input type="email" class="ct-person-email" data-pi="'+i+'" value="'+escapeHtml(p.email||'')+'" placeholder="Email"      style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
+      +'<input type="text"  class="ct-person-name"  data-pi="'+i+'" value="'+escapeHtml(p.name||'')+'"  placeholder="Full name"  style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>'
+      +'<input type="tel"   class="ct-person-phone" data-pi="'+i+'" value="'+escapeHtml(p.phone?formatPhone(p.phone):'')+'" placeholder="(705)-000-0000" oninput="fmtPhone(this)" style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>'
+      +'<input type="email" class="ct-person-email" data-pi="'+i+'" value="'+escapeHtml(p.email||'')+'" placeholder="Email"      style="padding:6px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>'
       + _inviteBtn
       +'<button type="button" onclick="ctRemovePerson('+i+')" style="background:none;border:none;color:var(--danger);cursor:pointer;font-size:16px;padding:2px 6px;line-height:1;" title="Remove">✕</button>'
       +'</div>';
@@ -8746,7 +8746,7 @@ function renderRenosView(){
         +'<td class="pad-10">'+scoreBadge(u.id)+'</td>'
         +'<td style="padding:10px 14px;text-align:right;white-space:nowrap;">'
           +'<div style="display:flex;gap:5px;justify-content:flex-end;">'
-          +'<button type="button" data-sow-rpid="'+u.id+'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:DM Sans,sans-serif;white-space:nowrap;color:var(--muted);">🔨 Request</button>'
+          +'<button type="button" data-sow-rpid="'+u.id+'" style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 10px;cursor:pointer;font-size:11px;font-weight:600;font-family:var(--sans);white-space:nowrap;color:var(--muted);">🔨 Request</button>'
           +'<button type="button" class="btn btn-primary btn-sm" data-rp-rpid="'+u.id+'">📊 Progress</button>'
           +'</div>'
         +'</td></tr>';
@@ -9508,7 +9508,7 @@ function renderWorklist() {
       + '</a>'
       + '<a href="' + esc((btn && btn.href) || href) + '"' + refOnclick + ' '
       + 'style="flex-shrink:0;background:var(--yellow);color:var(--dark);border-radius:6px;'
-      + 'padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;'
+      + 'padding:5px 12px;font-size:11px;font-weight:700;font-family:var(--sans);'
       + 'text-decoration:none;white-space:nowrap;display:inline-block;">'
       + esc((btn && btn.text) || 'Open') + '</a>'
       + '</div>';
@@ -9529,7 +9529,7 @@ function renderWorklist() {
       var on = _view === v;
       return '<button type="button" onclick="_wlSetView(\'' + v + '\')" style="display:flex;align-items:center;gap:5px;padding:5px 12px;'
         + 'border:1px solid ' + (on ? 'var(--yellow)' : 'var(--border)') + ';background:' + (on ? 'var(--yellow)' : 'var(--surface)') + ';'
-        + 'color:' + (on ? 'var(--dark)' : 'var(--muted)') + ';font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;'
+        + 'color:' + (on ? 'var(--dark)' : 'var(--muted)') + ';font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;'
         + 'border-radius:' + (v === 'list' ? '7px 0 0 7px' : '0 7px 7px 0') + ';' + (v === 'cards' ? 'margin-left:-1px;' : '') + '">' + icon + ' ' + label + '</button>';
     }
     return '<div style="display:flex;justify-content:flex-end;margin-bottom:10px;"><div style="display:flex;">'
@@ -9550,7 +9550,7 @@ function renderWorklist() {
     var badges = (o.badges||[]).join(' ');
     var actions = (o.actions||[]).map(function(a){
       return '<button type="button" onclick="' + a.onclick + '" style="flex:1;background:' + (a.ghost ? 'none' : 'var(--yellow)') + ';color:' + (a.ghost ? 'var(--muted)' : 'var(--dark)') + ';'
-        + 'border:' + (a.ghost ? '1px solid var(--border)' : 'none') + ';border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + esc(a.text) + '</button>';
+        + 'border:' + (a.ghost ? '1px solid var(--border)' : 'none') + ';border-radius:6px;padding:7px 10px;font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap;">' + esc(a.text) + '</button>';
     }).join('');
     return '<div style="border:1px solid var(--border);border-radius:10px;background:var(--surface);padding:11px 12px;display:flex;flex-direction:column;">'
       + '<div ' + (o.open ? 'onclick="' + o.open + '"' : '') + ' style="cursor:' + (o.open ? 'pointer' : 'default') + ';">'
@@ -9580,8 +9580,8 @@ function renderWorklist() {
       + '<a ' + openAction + ' style="display:flex;align-items:center;gap:10px;flex:1;min-width:0;text-decoration:none;color:inherit;">'
       + info
       + '</a>'
-      + '<a ' + openAction + ' style="flex-shrink:0;background:var(--yellow);color:var(--dark);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer;display:inline-block;">Continue &#8594;</a>'
-      + '<button onclick="' + archiveOnclick + '" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:600;font-family:DM Sans,sans-serif;color:var(--muted);cursor:pointer;white-space:nowrap;" title="Archive">&#128228; Archive</button>'
+      + '<a ' + openAction + ' style="flex-shrink:0;background:var(--yellow);color:var(--dark);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:700;font-family:var(--sans);text-decoration:none;white-space:nowrap;cursor:pointer;display:inline-block;">Continue &#8594;</a>'
+      + '<button onclick="' + archiveOnclick + '" style="flex-shrink:0;background:none;border:1px solid var(--border);border-radius:6px;padding:5px 11px;font-size:11px;font-weight:600;font-family:var(--sans);color:var(--muted);cursor:pointer;white-space:nowrap;" title="Archive">&#128228; Archive</button>'
       + '</div>';
   }
 
@@ -9652,7 +9652,7 @@ function renderWorklist() {
       var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
       var col = b.primary ? 'var(--dark)' : 'var(--text)';
       var bd = b.primary ? 'none' : '1px solid var(--border)';
-      return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
+      return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
     }
     // Collapse a contractor's PHOTO uploads for the SAME property + work order
     // into one "film strip" row, so a batch of site photos doesn't flood the
@@ -9737,7 +9737,7 @@ function renderWorklist() {
         var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
         var col = b.primary ? 'var(--dark)' : 'var(--text)';
         var bd = b.primary ? 'none' : '1px solid var(--border)';
-        return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
+        return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
       }
       var info = '<span style="font-size:14px;flex-shrink:0;">' + (_csKindIcon[s.kind] || '📷') + '</span>'
                + '<span style="flex:1;font-size:12px;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(who) + '</span>'
@@ -9768,7 +9768,7 @@ function renderWorklist() {
       var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
       var col = b.primary ? 'var(--dark)' : 'var(--text)';
       var bd = b.primary ? 'none' : '1px solid var(--border)';
-      return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
+      return '<button type="button" onclick="' + b.fn + '" style="flex-shrink:0;background:' + bg + ';color:' + col + ';border:' + bd + ';border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:var(--sans);cursor:pointer;white-space:nowrap;">' + b.t + '</button>';
     }
     ctPplItems.slice().sort(function(a,b){ return String(b.created_at||'').localeCompare(String(a.created_at||'')); }).forEach(function(p){
       var idJs = esc(p.id).replace(/'/g, "\\'");
@@ -10090,7 +10090,7 @@ function renderWorklist() {
           +   '<span style="flex:0 0 30%;font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">' + esc(it.name) + '</span>'
           +   '<span style="flex:1;font-size:12px;color:var(--muted);">' + esc(it.label) + '</span>'
           + '</a>'
-          + '<a onclick="' + _arrOpen(it) + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;text-decoration:none;white-space:nowrap;cursor:pointer;display:inline-block;">Open &#8594;</a>'
+          + '<a onclick="' + _arrOpen(it) + '" style="flex-shrink:0;background:var(--yellow);color:var(--dark);border-radius:6px;padding:5px 12px;font-size:11px;font-weight:700;font-family:var(--sans);text-decoration:none;white-space:nowrap;cursor:pointer;display:inline-block;">Open &#8594;</a>'
           + '</div>';
       }).join('');
       var arrCards = arrItems.map(function(it){
@@ -10670,7 +10670,7 @@ async function scReassignDoc(doc) {
     +   '<button onclick="document.getElementById(\'reassignPickerModal\').remove()" style="background:none;border:none;font-size:20px;cursor:pointer;color:var(--muted);">&times;</button>'
     + '</div>'
     + '<div style="padding:12px 20px;border-bottom:1px solid var(--border);flex-shrink:0;">'
-    +   '<input id="reassignSearch" type="text" placeholder="Search applicant name or ID…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>'
+    +   '<input id="reassignSearch" type="text" placeholder="Search applicant name or ID…" style="width:100%;padding:8px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>'
     + '</div>'
     + '<div id="reassignList" style="overflow-y:auto;flex:1;"></div>'
     + '</div>';
@@ -10691,7 +10691,7 @@ async function scReassignDoc(doc) {
     }
     listEl.innerHTML = filtered.map(function(a) {
       var aName = ((a.fn || '') + ' ' + (a.ln || '')).trim() || '—';
-      return '<button style="display:block;width:100%;text-align:left;padding:10px 20px;border:none;border-bottom:1px solid var(--border);background:none;cursor:pointer;font-family:DM Sans,sans-serif;" '
+      return '<button style="display:block;width:100%;text-align:left;padding:10px 20px;border:none;border-bottom:1px solid var(--border);background:none;cursor:pointer;font-family:var(--sans);" '
            + 'onmouseover="this.style.background=\'var(--bg)\'" onmouseout="this.style.background=\'none\'" '
            + 'onclick="_scDoReassign(' + escapeHtml(JSON.stringify(doc)) + ',\'' + escapeHtml(a.id) + '\',\'' + escapeHtml(aName) + '\')">'
            +   '<div style="font-size:13px;font-weight:600;color:var(--text);">' + escapeHtml(aName) + '</div>'
