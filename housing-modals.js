@@ -287,7 +287,7 @@ function udpRenderMatchesTable(unitId){
   }).join('');
 
   mount.innerHTML = banner + head
-    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-family:DM Sans,sans-serif;">'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-family:var(--sans);">'
     + '<thead><tr style="border-bottom:2px solid var(--border);">'
     + '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Applicant</th>'
     + '<th style="padding:8px 10px;text-align:left;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);">Score</th>'
@@ -1158,7 +1158,7 @@ function ueTenantSearch(q) {
       + (query.length > 1 ? ' matching "<strong>' + q + '</strong>"' : '')
       + '</div>'
       + '<div style="padding:10px 14px;border-top:1px solid var(--border);">'
-      + '<button type="button" onmousedown="dd_showNotFound()" style="background:none;border:none;font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer;font-family:DM Sans,sans-serif;padding:0;">📝 Start a new application instead →</button>'
+      + '<button type="button" onmousedown="dd_showNotFound()" style="background:none;border:none;font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer;font-family:var(--sans);padding:0;">📝 Start a new application instead →</button>'
       + '</div>';
     dd.style.display = 'block';
     return;
@@ -1261,7 +1261,7 @@ function ueTenantSelect(appId, name, status) {
     + '</div>'
     + '<div class="flex-g8">'
     + '<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:10px;background:' + statusBg + ';color:' + statusColor + ';">' + statusLabel + '</span>'
-    + '<button type="button" onclick="ueClearTenantSelection()" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">✕</button>'
+    + '<button type="button" onclick="ueClearTenantSelection()" style="background:none;border:1px solid var(--border);border-radius:5px;padding:3px 8px;font-size:11px;color:var(--muted);cursor:pointer;font-family:var(--sans);">✕</button>'
     + '</div>'
     + '</div>'
     + warn;
@@ -1295,7 +1295,7 @@ function _showMoveOutDialog(tenantName) {
           '<p class="txt-help m-0">Record move-out date for <strong>' + (tenantName || 'this tenant') + '</strong> before removing them. A history entry will be saved.</p>' +
           '<div style="margin-top:12px;">' +
             '<label style="font-size:11.5px;font-weight:600;color:var(--muted);display:block;margin-bottom:4px;">Move-Out Date</label>' +
-            '<input type="date" id="_ue_moveout_input" value="' + today + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>' +
+            '<input type="date" id="_ue_moveout_input" value="' + today + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>' +
           '</div>' +
         '</div>' +
         '<div class="modal-footer">' +
@@ -1846,7 +1846,7 @@ function udpRenderMap(u) {
   var locBtn = canSetLoc
     ? '<button onclick="udpOpenLocationPicker(\'' + String(u.id).replace(/'/g, "\\'") + '\')" '
         + 'style="background:var(--yellow);border:1.5px solid var(--yellow);border-radius:7px;padding:5px 14px;'
-        + 'font-size:11px;font-weight:700;color:#111110;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;">'
+        + 'font-size:11px;font-weight:700;color:#111110;cursor:pointer;font-family:var(--sans);white-space:nowrap;">'
         + (lat && lng ? '&#128205; Edit Location' : '&#128205; Set Location')
         + '</button>'
     : '';
@@ -2652,7 +2652,7 @@ function renoSearchFilter(q) {
         +'<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:8px;background:'+ss.bg+';color:'+ss.c+';">'+ss.label+'</span>'
         +'<button onclick="event.stopPropagation();closeRenoSearch();openSowModal(\''+uid+'\')" '
           +'title="Open Maintenance Request" '
-          +'style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;font-family:DM Sans,sans-serif;color:var(--muted);white-space:nowrap;" '
+          +'style="background:none;border:1px solid var(--border);border-radius:6px;padding:4px 8px;cursor:pointer;font-size:11px;font-weight:700;font-family:var(--sans);color:var(--muted);white-space:nowrap;" '
           +'onmouseover="this.style.borderColor=\'var(--yellow)\';this.style.color=\'var(--text)\'" '
           +'onmouseout="this.style.borderColor=\'var(--border)\';this.style.color=\'var(--muted)\'">'
           +'🔨 Request'
@@ -2827,7 +2827,7 @@ function atSearchApps(q){
   if(!matches.length){
     dd.innerHTML='<div style="padding:10px 14px;font-size:12px;color:var(--muted);">No approved applications found'+(q.trim().length>1?' for <strong>'+escapeHtml(q)+'</strong>':'')+'</div>'
       +'<div style="padding:8px 14px;border-top:1px solid var(--border);background:var(--bg);">'
-      +'<button type="button" onmousedown="closeAddTenantModal();newApp();" style="background:none;border:none;font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer;font-family:DM Sans,sans-serif;padding:0;">📝 Start a new application instead →</button>'
+      +'<button type="button" onmousedown="closeAddTenantModal();newApp();" style="background:none;border:none;font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer;font-family:var(--sans);padding:0;">📝 Start a new application instead →</button>'
       +'</div>';
     dd.style.display='block';
     return;
@@ -2853,7 +2853,7 @@ function atSearchApps(q){
       +'</div>';
   }).join('')
   +'<div style="padding:8px 14px;border-top:1px solid var(--border);background:var(--bg);">'
-  +'<button type="button" onmousedown="closeAddTenantModal();newApp();" style="background:none;border:none;font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer;font-family:DM Sans,sans-serif;padding:0;">📝 Not found? Start a new application →</button>'
+  +'<button type="button" onmousedown="closeAddTenantModal();newApp();" style="background:none;border:none;font-size:12px;font-weight:600;color:var(--yellow);cursor:pointer;font-family:var(--sans);padding:0;">📝 Not found? Start a new application →</button>'
   +'</div>';
 }
 

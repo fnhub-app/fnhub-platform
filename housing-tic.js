@@ -3520,7 +3520,7 @@
       +       '<canvas id="po_init_' + idx + '" width="400" height="70" style="width:100%;height:70px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
       +       '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 10px;border-top:1px solid var(--border);">'
       +         '<span class="txt-xs-muted">Sign with finger or mouse</span>'
-      +         '<button type="button" onclick="clearSig(\'po_init_' + idx + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+      +         '<button type="button" onclick="clearSig(\'po_init_' + idx + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
       +       '</div>'
       +     '</div>'
       +     '<div id="po_init_' + idx + '_panel_type" class="sec-hidden">'
@@ -3529,7 +3529,7 @@
       +     '</div>'
       +     '<div id="po_init_' + idx + '_panel_wet" class="sec-hidden">'
       +       '<div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form and collect initials on paper, or use an e-signature service. Note the reference below.</div>'
-      +       '<input type="text" id="po_init_' + idx + '_wet_ref" placeholder="Reference # (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>'
+      +       '<input type="text" id="po_init_' + idx + '_wet_ref" placeholder="Reference # (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>'
       +     '</div>'
       +   '</div>'
       + '</div>'
@@ -3811,7 +3811,7 @@
     if (existing) existing.remove();
 
     function inp(id, val, ph, type) {
-      return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
+      return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
     }
     function fld(label, inputHtml) {
       return '<div class="tic-field"><label class="tic-field-lbl">' + label + '</label>' + inputHtml + '</div>';
@@ -3832,12 +3832,12 @@
         + '<div id="' + id + '_panel_canvas" class="bg-paper"><canvas id="' + id + '" width="400" height="70" style="width:100%;height:70px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
         + '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 10px;border-top:1px solid var(--border);">'
         + '<span class="txt-xs-muted">Sign with finger or mouse</span>'
-        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
         + '</div></div>'
         + '<div id="' + id + '_panel_type" class="sec-hidden"><input type="text" id="' + id + '_typed" placeholder="Type initials (e.g. JD)" style="width:100%;border:none;border-bottom:2px solid var(--dark);background:transparent;font-size:20px;font-family:Georgia,serif;font-style:italic;color:var(--text);outline:none;padding:4px 0;box-sizing:border-box;"/>'
         + '<div style="font-size:10px;color:var(--muted);margin-top:6px;">Typing your initials constitutes a legal electronic acknowledgement</div></div>'
         + '<div id="' + id + '_panel_wet" class="sec-hidden"><div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form, collect initials on paper, and note the reference below.</div>'
-        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
+        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
         + '</div></div>';
     }
     function sigPad(id, label) {
@@ -3850,12 +3850,12 @@
         + '<div id="' + id + '_panel_canvas" class="bg-paper"><canvas id="' + id + '" width="600" height="90" style="width:100%;height:90px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
         + '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;border-top:1px solid var(--border);">'
         + '<span class="txt-xs-muted">Sign with finger or mouse</span>'
-        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
         + '</div></div>'
         + '<div id="' + id + '_panel_type" class="sec-hidden"><input type="text" id="' + id + '_typed" placeholder="Type full legal name" style="width:100%;border:none;border-bottom:2px solid var(--dark);background:transparent;font-size:18px;font-family:Georgia,serif;font-style:italic;color:var(--text);outline:none;padding:4px 0;box-sizing:border-box;"/>'
         + '<div style="font-size:10px;color:var(--muted);margin-top:6px;">Typing your name constitutes a legal electronic signature</div></div>'
         + '<div id="' + id + '_panel_wet" class="sec-hidden"><div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form and collect a wet signature, or use an e-signature service and attach the signed copy to this tenant\'s file.</div>'
-        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
+        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
         + '</div></div>';
     }
 
@@ -4675,7 +4675,7 @@
     if (existing) existing.remove();
 
     function inp(id, val, ph) {
-      return '<input id="' + id + '" type="text" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
+      return '<input id="' + id + '" type="text" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
     }
     function fld(label, inputHtml) {
       return '<div class="tic-field"><label class="tic-field-lbl">' + label + '</label>' + inputHtml + '</div>';
@@ -4720,7 +4720,7 @@
       + '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;"><input type="checkbox" id="ho_chk_billing" checked style="margin-top:3px;accent-color:var(--yellow);width:15px;height:15px;"/> <span><strong>Billing Information</strong> — billing period details, current and last read dates, days per period, current charges (up to 24 months, excluding payment info)</span></label>'
       + '<div style="display:flex;align-items:center;gap:8px;">'
       +   '<label style="display:flex;align-items:center;gap:6px;cursor:pointer;white-space:nowrap;"><input type="checkbox" id="ho_chk_other" style="accent-color:var(--yellow);width:15px;height:15px;"/> <strong>Other (specify):</strong></label>'
-      +   '<input type="text" id="ho_other_text" placeholder="Specify other information…" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>'
+      +   '<input type="text" id="ho_other_text" placeholder="Specify other information…" style="flex:1;padding:5px 8px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>'
       + '</div>'
       + '</div>'
 
@@ -4736,7 +4736,7 @@
       +     '<canvas id="tic_hydro_sig" width="700" height="110" style="width:100%;height:110px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
       +     '<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 10px;border-top:1px solid var(--border);">'
       +       '<span class="txt-xs-muted">Sign with finger or mouse</span>'
-      +       '<button type="button" onclick="clearSig(\'tic_hydro_sig\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+      +       '<button type="button" onclick="clearSig(\'tic_hydro_sig\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
       +     '</div>'
       +   '</div>'
       +   '<div id="tic_hydro_sig_panel_type" class="sec-hidden">'
@@ -4746,13 +4746,13 @@
       +   '<div id="tic_hydro_sig_panel_wet" class="sec-hidden">'
       +     '<div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px;">Print or email for signature</div>'
       +     '<div style="font-size:11px;color:var(--muted);line-height:1.6;margin-bottom:10px;">Print this form and collect a wet signature, or use an e-signature service and attach the signed copy to this tenant\'s file.</div>'
-      +     '<input type="text" id="tic_hydro_sig_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>'
+      +     '<input type="text" id="tic_hydro_sig_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>'
       +   '</div>'
       + '</div>'
 
       // Date
       + '<div class="tic-field"><label class="tic-field-lbl">Date of Authorization</label>'
-      + '<input id="ho_date" type="date" value="' + today + '" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/></div>'
+      + '<input id="ho_date" type="date" value="' + today + '" style="padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);"/></div>'
       + '</div>'
 
       // Footer
@@ -5148,7 +5148,7 @@
     if (existing) existing.remove();
 
     function inp(id, val, ph, type) {
-      return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
+      return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
     }
     function fld(label, inputHtml) {
       return '<div class="tic-field"><label class="tic-field-lbl">' + label + '</label>' + inputHtml + '</div>';
@@ -5183,7 +5183,7 @@
       +   fld('48-Hour Period Ends', inp('insp_expiry', _inspExpiryFromServed(today), 'Auto-filled from served date'))
       + '</div>'
       + fld('Purpose / Reason for Inspection <span style="color:var(--danger);">*</span>',
-          '<textarea id="insp_purpose" rows="2" placeholder="e.g. Annual condition inspection; follow-up on reported maintenance" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>')
+          '<textarea id="insp_purpose" rows="2" placeholder="e.g. Annual condition inspection; follow-up on reported maintenance" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>')
       + '<div class="tic-grid-2" style="margin:12px 0 16px;">'
       +   fld('Conducted By (Housing Manager) <span style="color:var(--danger);">*</span>', inp('insp_hm', hmName, 'Housing Manager name'))
       +   fld('Housing Phone',  inp('insp_phone', hPhone, 'Housing Department phone'))
@@ -5195,7 +5195,7 @@
       +   fld('Notice Delivered By',  inp('insp_delivered_by', '', 'Staff name'))
       +   fld('Date &amp; Time Delivered', inp('insp_delivered_at', '', 'e.g. 2026-07-17 2:15 PM'))
       +   fld('Method of Delivery',
-            '<select id="insp_method" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;">'
+            '<select id="insp_method" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;">'
           +   '<option value="">&mdash; Select &mdash;</option>'
           +   '<option>hand-delivered</option><option>posted on door</option><option>mail</option><option>email</option>'
           + '</select>')
@@ -5505,10 +5505,10 @@
     if (existing) existing.remove();
 
     function inp(id, val, ph, type) {
-      return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
+      return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>';
     }
     function ta(id, ph, rows) {
-      return '<textarea id="' + id + '" rows="' + (rows||2) + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>';
+      return '<textarea id="' + id + '" rows="' + (rows||2) + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;resize:vertical;"></textarea>';
     }
     function fld(label, inputHtml) {
       return '<div class="tic-field"><label class="tic-field-lbl">' + label + '</label>' + inputHtml + '</div>';
@@ -5583,7 +5583,7 @@
       +   fld('Notice Served By',       inp('evx_served_by', '', 'Staff name'))
       +   fld('Date &amp; Time Served', inp('evx_service_dt', '', 'e.g. 2026-07-17 2:15 PM'))
       +   fld('Method of Service',
-            '<select id="evx_service_method" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;">'
+            '<select id="evx_service_method" style="width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;">'
           +   '<option value="">&mdash; Select &mdash;</option>'
           +   '<option>hand-delivered</option><option>posted on door</option><option>registered mail</option><option>email</option>'
           + '</select>')
@@ -5812,7 +5812,7 @@
 
     var ex = document.getElementById('tic_rlease_modal'); if (ex) ex.remove();
 
-    function inp(id, val, ph, type){ return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/>'; }
+    function inp(id, val, ph, type){ return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _ticEsc(val||'') + '" placeholder="' + _ticEsc(ph||'') + '" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/>'; }
     function fld(label, html){ return '<div class="tic-field"><label class="tic-field-lbl">' + label + '</label>' + html + '</div>'; }
     function secH(title){ return '<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.7px;color:var(--yellow);margin:16px 0 10px;padding-bottom:5px;border-bottom:1px solid var(--border);">' + title + '</div>'; }
     function initPad(id, label){
@@ -5824,12 +5824,12 @@
         + '<div id="' + id + '_panel_canvas" class="bg-paper"><canvas id="' + id + '" width="400" height="70" style="width:100%;height:70px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
         + '<div style="display:flex;align-items:center;justify-content:space-between;padding:3px 10px;border-top:1px solid var(--border);">'
         + '<span class="txt-xs-muted">Initial with finger or mouse</span>'
-        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
         + '</div></div>'
         + '<div id="' + id + '_panel_type" class="sec-hidden"><input type="text" id="' + id + '_typed" placeholder="Type initials (e.g. JD)" style="width:100%;border:none;border-bottom:2px solid var(--dark);background:transparent;font-size:20px;font-family:Georgia,serif;font-style:italic;color:var(--text);outline:none;padding:4px 0;box-sizing:border-box;"/>'
         + '<div style="font-size:10px;color:var(--muted);margin-top:6px;">Typing your initials constitutes a legal electronic acknowledgement</div></div>'
         + '<div id="' + id + '_panel_wet" class="sec-hidden"><div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form and collect initials on paper.</div>'
-        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
+        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
         + '</div>';
     }
     function sigPad(id, label){
@@ -5842,12 +5842,12 @@
         + '<div id="' + id + '_panel_canvas" class="bg-paper"><canvas id="' + id + '" width="600" height="90" style="width:100%;height:90px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
         + '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;border-top:1px solid var(--border);">'
         + '<span class="txt-xs-muted">Sign with finger or mouse</span>'
-        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+        + '<button type="button" onclick="clearSig(\'' + id + '\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
         + '</div></div>'
         + '<div id="' + id + '_panel_type" class="sec-hidden"><input type="text" id="' + id + '_typed" placeholder="Type full legal name" style="width:100%;border:none;border-bottom:2px solid var(--dark);background:transparent;font-size:18px;font-family:Georgia,serif;font-style:italic;color:var(--text);outline:none;padding:4px 0;box-sizing:border-box;"/>'
         + '<div style="font-size:10px;color:var(--muted);margin-top:6px;">Typing your name constitutes a legal electronic signature</div></div>'
         + '<div id="' + id + '_panel_wet" class="sec-hidden"><div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form and collect a wet signature, or attach a signed copy to this tenant\'s file.</div>'
-        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
+        + '<input type="text" id="' + id + '_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
         + '</div></div>';
     }
 

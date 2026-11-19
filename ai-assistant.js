@@ -98,7 +98,7 @@ function _ensureAIPanel() {
     + '</div>'
     + '<div id="ai_chat_messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;"></div>'
     + '<div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;">'
-    +   '<textarea id="ai_chat_input" rows="1" placeholder="Ask anything about applications, units, or policy..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:DM Sans,sans-serif;resize:none;outline:none;line-height:1.4;max-height:80px;overflow-y:auto;" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,80)+\'px\'"></textarea>'
+    +   '<textarea id="ai_chat_input" rows="1" placeholder="Ask anything about applications, units, or policy..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:var(--sans);resize:none;outline:none;line-height:1.4;max-height:80px;overflow-y:auto;" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,80)+\'px\'"></textarea>'
     +   '<button id="ai_chat_send" onclick="aiSendMessage()" class="btn btn-primary" style="flex-shrink:0;align-self:flex-end;">Send</button>'
     + '</div>';
   document.body.appendChild(wrap);
@@ -398,7 +398,7 @@ function _appendAIMessage(role, text, id) {
     var pdfBtn = document.createElement('button');
     pdfBtn.type = 'button';
     pdfBtn.textContent = '⬇ Export PDF';
-    pdfBtn.style.cssText = 'align-self:flex-start;margin-top:6px;background:none;border:1px solid #555;color:#aaa;border-radius:6px;font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;font-family:DM Sans,sans-serif;';
+    pdfBtn.style.cssText = 'align-self:flex-start;margin-top:6px;background:none;border:1px solid #555;color:#aaa;border-radius:6px;font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;font-family:var(--sans);';
     pdfBtn.addEventListener('click', function(){ _aiExportReplyPdf(text); });
     wrap.appendChild(pdfBtn);
   }

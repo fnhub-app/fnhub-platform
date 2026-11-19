@@ -733,8 +733,8 @@ window.showPrompt = function(opts) {
     var btnClass = opts.danger ? 'btn btn-danger' : 'btn btn-primary';
     var fieldId = 'showPrompt_' + Date.now();
     var field = opts.multiline
-      ? '<textarea id="' + fieldId + '" rows="3" placeholder="' + (opts.placeholder || '') + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);resize:vertical;">' + (opts.value || '') + '</textarea>'
-      : '<input id="' + fieldId + '" type="text" placeholder="' + (opts.placeholder || '') + '" value="' + (opts.value || '') + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>';
+      ? '<textarea id="' + fieldId + '" rows="3" placeholder="' + (opts.placeholder || '') + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;">' + (opts.value || '') + '</textarea>'
+      : '<input id="' + fieldId + '" type="text" placeholder="' + (opts.placeholder || '') + '" value="' + (opts.value || '') + '" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>';
     ov.innerHTML =
       '<div class="modal-body modal-body-sm">' +
         '<div class="dlg-hdr">' +

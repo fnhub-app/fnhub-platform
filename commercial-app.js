@@ -69,11 +69,11 @@ function _caField(label, inner, req){
 }
 function _caInput(id, val, ph, type){
   return '<input id="' + id + '" type="' + (type||'text') + '" value="' + _caEsc(val||'') + '" placeholder="' + _caEsc(ph||'') + '"'
-       + ' style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);"/>';
+       + ' style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);"/>';
 }
 function _caTextarea(id, val, ph){
   return '<textarea id="' + id + '" rows="2" placeholder="' + _caEsc(ph||'') + '"'
-       + ' style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);resize:vertical;">' + _caEsc(val||'') + '</textarea>';
+       + ' style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;">' + _caEsc(val||'') + '</textarea>';
 }
 
 function _caRenderBody(app){
@@ -100,11 +100,11 @@ function _caRenderBody(app){
     +   _caField('Contact Person', _caInput('ca_contact', app.contactPerson, 'Primary contact'), true)
     +   _caField('Contact Phone', _caInput('ca_phone', app.contactPhone, 'Phone', 'tel'))
     +   _caField('Contact Email', _caInput('ca_email', app.contactEmail, 'Email', 'email'))
-    +   _caField('Space Type', '<select id="ca_space" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);">' + spaceOpts + '</select>')
+    +   _caField('Space Type', '<select id="ca_space" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);">' + spaceOpts + '</select>')
     +   _caField('Approx. Size Needed', _caInput('ca_size', app.sizeNeeded, 'e.g. 1,200 sq ft or 3 rooms'))
     +   _caField('Monthly Rent / Fee ($)', _caInput('ca_rent', app.rentAmount, '0.00', 'number'))
     +   _caField('Department Number', _caInput('ca_dept', app.deptNumber, 'Cost centre / dept no.'))
-    +   _caField('Preferred Building', '<select id="ca_unit" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);">' + unitOpts + '</select>')
+    +   _caField('Preferred Building', '<select id="ca_unit" style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);">' + unitOpts + '</select>')
     +   _caField('Desired Start', _caInput('ca_start', app.desiredStart, '', 'date'), true)
     +   _caField('Desired End (optional)', _caInput('ca_end', app.desiredEnd, 'Leave blank if ongoing', 'date'))
     + '</div>'
@@ -298,7 +298,7 @@ function openCommercialAssign(){
     return '<option value="' + _caEsc(u.id) + '">' + _caEsc(addr) + ' (' + _caEsc(_caTypeLabel(u.type)) + ' · ' + _caEsc(u.status || 'vacant') + ')</option>';
   }).join('');
   var today = new Date().toISOString().slice(0,10);
-  var selStyle = 'width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);';
+  var selStyle = 'width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);';
 
   document.getElementById('ca_title').textContent = 'Assign ' + (app.orgName || 'Applicant') + ' to a Building';
   document.getElementById('ca_body').innerHTML =

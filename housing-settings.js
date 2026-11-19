@@ -63,7 +63,7 @@ function renderApprovalAuthorityPanel() {
         +   '<div style="display:flex;align-items:center;gap:6px;">'
         +     '<span style="font-size:15px;font-weight:700;color:var(--text);">$</span>'
         +     '<input id="aa_hm_budget_limit" type="number" min="0" step="1000" value="' + _curLimit + '" onchange="aaSaveBudgetLimit(this)"'
-        +       ' style="width:140px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;font-weight:700;color:var(--text);font-family:DM Sans,sans-serif;background:var(--surface);text-align:right;"/>'
+        +       ' style="width:140px;padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:14px;font-weight:700;color:var(--text);font-family:var(--sans);background:var(--surface);text-align:right;"/>'
         +   '</div>'
         +   '<div style="font-size:12px;color:var(--muted);flex:1;min-width:240px;line-height:1.5;">Maintenance requests and unit renovation budgets <strong>at or under</strong> this amount are approved by the Housing Manager (final). <strong>Over</strong> it, they require Executive Director final approval. Saved immediately.</div>'
         + '</div>'
@@ -111,7 +111,7 @@ function renderApprovalAuthorityPanel() {
       if(isThreshold) {
         html += '<div><input type="number" data-aa-key="' + key + '" value="' + cur + '" min="0" step="1000"'
           + ' style="width:130px;padding:6px 10px;border:1.5px solid var(--border);border-radius:7px;'
-          + 'font-size:13px;font-weight:700;color:var(--text);font-family:DM Sans,sans-serif;'
+          + 'font-size:13px;font-weight:700;color:var(--text);font-family:var(--sans);'
           + 'background:var(--surface);text-align:right;"'
           + ' oninput="APPROVAL_AUTHORITY.update(\'' + key + '\', parseFloat(this.value)||0)"/></div>';
       } else {
@@ -122,7 +122,7 @@ function renderApprovalAuthorityPanel() {
         if (toggleable) {
           html += '<button onclick="aaToggleApproval(\'' + key + '\')" title="Turn this approval step on or off"'
             + ' style="padding:5px 12px;border-radius:20px;font-size:11px;font-weight:800;cursor:pointer;'
-            + 'font-family:DM Sans,sans-serif;white-space:nowrap;margin-right:6px;'
+            + 'font-family:var(--sans);white-space:nowrap;margin-right:6px;'
             + 'background:' + (reqd ? 'var(--success-bg)' : 'var(--warn-amber-bg)') + ';'
             + 'color:'      + (reqd ? 'var(--success)' : 'var(--warn-amber-text)') + ';'
             + 'border:1.5px solid ' + (reqd ? '#86efac' : '#fdba74') + ';">'
@@ -136,7 +136,7 @@ function renderApprovalAuthorityPanel() {
             var active = Array.isArray(cur) && cur.indexOf(rVal) !== -1;
             html += '<button data-aa-key="' + key + '" data-aa-role="' + rVal + '" onclick="aaToggleRole(this)"'
               + ' style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;cursor:pointer;'
-              + 'font-family:DM Sans,sans-serif;transition:all .12s;white-space:nowrap;'
+              + 'font-family:var(--sans);transition:all .12s;white-space:nowrap;'
               + 'background:' + (active ? 'var(--yellow)' : 'var(--surface)') + ';'
               + 'color:'       + (active ? '#111'          : 'var(--muted)')   + ';'
               + 'border:1.5px solid ' + (active ? 'var(--yellow)' : 'var(--border)') + ';">'
@@ -151,7 +151,7 @@ function renderApprovalAuthorityPanel() {
       // Reset column
       html += '<button onclick="aaResetAction(\'' + key + '\')" title="Reset to default"'
         + ' style="background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;'
-        + 'padding:3px 10px;font-size:11px;cursor:pointer;font-family:DM Sans,sans-serif;white-space:nowrap;">'
+        + 'padding:3px 10px;font-size:11px;cursor:pointer;font-family:var(--sans);white-space:nowrap;">'
         + '↺ Default</button>';
 
       html += '</div>'; // grid row
@@ -338,7 +338,7 @@ function renderMfaPolicyPanel() {
   var rows = MFA_POLICY_ROLES.map(function (r) {
     return '<div style="display:grid;grid-template-columns:220px 1fr;align-items:center;gap:16px;padding:9px 0;border-bottom:1px solid var(--border);">'
       + '<div class="js-txt-bold">' + roleLabel(r) + '</div>'
-      + '<div><select data-mfa-role="' + r + '" onchange="saveMfaPolicyRole(this)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--surface);font-family:DM Sans,sans-serif;min-width:260px;">'
+      + '<div><select data-mfa-role="' + r + '" onchange="saveMfaPolicyRole(this)" style="padding:7px 10px;border:1.5px solid var(--border);border-radius:7px;font-size:13px;color:var(--text);background:var(--surface);font-family:var(--sans);min-width:260px;">'
       + opts(pol[r]) + '</select></div>'
       + '</div>';
   }).join('');
@@ -553,7 +553,7 @@ function renderSupportFaqPanel() {
     +   '<div class="txt-sm-meta" style="margin:0 0 18px 32px;">Staff can always reach Help from the avatar menu; this adds a quick floating shortcut. Members and contractors on the portals always see it.</div>'
     +   '<div class="lbl-yellow" style="margin-bottom:6px;">&#128269; Support FAQ (Help Assistant)</div>'
     +   '<div class="txt-sm-meta" style="margin-bottom:8px;">Answers the Help Assistant uses for your nation. Add common questions and answers in plain text &mdash; the assistant prefers these over its built-in knowledge.</div>'
-    +   '<textarea id="support_faq_text" rows="10" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);resize:vertical;" placeholder="Q: How do I reset my password?&#10;A: On the sign-in screen, tap Forgot password and follow the email link.&#10;&#10;Q: Who do I call for an emergency repair?&#10;A: Call the housing office at (your number).">' + escapeHtml(faq) + '</textarea>'
+    +   '<textarea id="support_faq_text" rows="10" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;" placeholder="Q: How do I reset my password?&#10;A: On the sign-in screen, tap Forgot password and follow the email link.&#10;&#10;Q: Who do I call for an emergency repair?&#10;A: Call the housing office at (your number).">' + escapeHtml(faq) + '</textarea>'
     +   '<div style="margin-top:10px;display:flex;justify-content:flex-end;">'
     +     '<button type="button" onclick="saveSupportFaq()" class="btn btn-primary">Save FAQ</button>'
     +   '</div>'

@@ -2577,16 +2577,16 @@ function udpRenderSowTable(unitId){
     // "Show archived" toggle is on — handled inside sowStatusBadge's
     // 'unit_table' variant.
     var editBtn = locked
-      ? '<button onclick="udpEditSow(\''+esc(unitId)+'\',\''+pn+'\')" title="View request (read-only)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:DM Sans,sans-serif;margin-right:4px;">View</button>'
-      : '<button onclick="udpEditSow(\''+esc(unitId)+'\',\''+pn+'\')" title="Edit request" style="background:none;border:1px solid var(--border);color:var(--text);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:DM Sans,sans-serif;margin-right:4px;">Edit</button>';
+      ? '<button onclick="udpEditSow(\''+esc(unitId)+'\',\''+pn+'\')" title="View request (read-only)" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:var(--sans);margin-right:4px;">View</button>'
+      : '<button onclick="udpEditSow(\''+esc(unitId)+'\',\''+pn+'\')" title="Edit request" style="background:none;border:1px solid var(--border);color:var(--text);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:var(--sans);margin-right:4px;">Edit</button>';
     // Archive / Unarchive — HM/ED only. Archive on active SOWs, Unarchive
     // (restore) on archived ones. Both feed udpArchiveSow / udpUnarchiveSow
     // which confirm + persist + may revert the unit's status.
     var archiveBtn = '';
     if(_canArchive){
       archiveBtn = isArchived
-        ? '<button onclick="udpUnarchiveSow(\''+esc(unitId)+'\',\''+pn+'\')" title="Restore archived request" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:DM Sans,sans-serif;margin-right:4px;">Restore</button>'
-        : '<button onclick="udpArchiveSow(\''+esc(unitId)+'\',\''+pn+'\')" title="Archive this request" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:DM Sans,sans-serif;margin-right:4px;">🗄 Archive</button>';
+        ? '<button onclick="udpUnarchiveSow(\''+esc(unitId)+'\',\''+pn+'\')" title="Restore archived request" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:var(--sans);margin-right:4px;">Restore</button>'
+        : '<button onclick="udpArchiveSow(\''+esc(unitId)+'\',\''+pn+'\')" title="Archive this request" style="background:none;border:1px solid var(--border);color:var(--muted);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:600;font-family:var(--sans);margin-right:4px;">🗄 Archive</button>';
     }
     return '<tr style="border-top:1px solid var(--border);'+(isArchived?'opacity:.6;':'')+'">'
       +'<td style="padding:8px 10px;font-size:11px;color:var(--muted);white-space:nowrap;">'+date+'</td>'
@@ -2597,9 +2597,9 @@ function udpRenderSowTable(unitId){
       +'<td style="padding:6px 8px;white-space:nowrap;text-align:right;">'
         +editBtn
         +archiveBtn
-        +'<button onclick="udpPrintWorkOrder(\''+esc(unitId)+'\',\''+pn+'\')" title="Print work order" style="background:var(--yellow);border:none;color:var(--dark);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;font-family:DM Sans,sans-serif;">Work Order</button>'
+        +'<button onclick="udpPrintWorkOrder(\''+esc(unitId)+'\',\''+pn+'\')" title="Print work order" style="background:var(--yellow);border:none;color:var(--dark);padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;font-family:var(--sans);">Work Order</button>'
         +((typeof moduleOn !== 'function' || moduleOn('rfq')) && _sowRfqStillOpen(sow) && typeof _sowMeetsRfqThreshold === 'function' && _sowMeetsRfqThreshold(sow)
-          ? '<a href="rfq.html?unit='+esc(unitId)+'&sow='+esc(pn)+'" style="margin-left:4px;background:#1d4ed8;border:none;color:#fff;padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;font-family:DM Sans,sans-serif;text-decoration:none;display:inline-block;">RFQ</a>'
+          ? '<a href="rfq.html?unit='+esc(unitId)+'&sow='+esc(pn)+'" style="margin-left:4px;background:#1d4ed8;border:none;color:#fff;padding:4px 9px;border-radius:5px;cursor:pointer;font-size:10px;font-weight:700;font-family:var(--sans);text-decoration:none;display:inline-block;">RFQ</a>'
           : '')
       +'</td>'
       +'</tr>';
@@ -2616,7 +2616,7 @@ function udpRenderSowTable(unitId){
       +'</label></div>';
   }
   wrap.innerHTML = archivedToggle
-    +'<div class="overflow-x"><table style="width:100%;border-collapse:collapse;font-family:DM Sans,sans-serif;">'
+    +'<div class="overflow-x"><table style="width:100%;border-collapse:collapse;font-family:var(--sans);">'
     +'<thead><tr style="background:var(--bg);"><th style="padding:7px 10px;font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);text-align:left;">Date</th>'
     +'<th style="padding:7px 10px;font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);text-align:left;">Status</th>'
     +'<th style="padding:7px 10px;font-size:9px;font-weight:700;letter-spacing:.6px;text-transform:uppercase;color:var(--muted);text-align:left;">Amount</th>'
@@ -4346,12 +4346,12 @@ function _sowRenderContracting(){
       + '<div id="'+id+'_panel_canvas" class="bg-paper"><canvas id="'+id+'" width="600" height="90" style="width:100%;height:90px;display:block;touch-action:none;cursor:crosshair;"></canvas>'
       + '<div style="display:flex;align-items:center;justify-content:space-between;padding:4px 10px;border-top:1px solid var(--border);">'
       + '<span class="txt-xs-muted">Sign with finger or mouse</span>'
-      + '<button type="button" onclick="clearSig(\''+id+'\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:DM Sans,sans-serif;">Clear</button>'
+      + '<button type="button" onclick="clearSig(\''+id+'\')" style="background:none;border:1px solid var(--border);border-radius:5px;padding:2px 8px;font-size:10px;color:var(--muted);cursor:pointer;font-family:var(--sans);">Clear</button>'
       + '</div></div>'
       + '<div id="'+id+'_panel_type" class="sec-hidden"><input type="text" id="'+id+'_typed" placeholder="Type full legal name" style="width:100%;border:none;border-bottom:2px solid var(--dark);background:transparent;font-size:18px;font-family:Georgia,serif;font-style:italic;color:var(--text);outline:none;padding:4px 0;box-sizing:border-box;"/>'
       + '<div style="font-size:10px;color:var(--muted);margin-top:6px;">Typing your name constitutes a legal electronic signature</div></div>'
       + '<div id="'+id+'_panel_wet" class="sec-hidden"><div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px;">Print this form and collect a wet signature, or use an e-signature service and attach the signed copy.</div>'
-      + '<input type="text" id="'+id+'_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:DM Sans,sans-serif;background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
+      + '<input type="text" id="'+id+'_wet_ref" placeholder="Reference # or e-sign envelope ID (optional)" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:5px;font-size:12px;font-family:var(--sans);background:var(--surface);color:var(--text);box-sizing:border-box;"/></div>'
       + '</div></div>';
   }
   h += sec('Signatures',
