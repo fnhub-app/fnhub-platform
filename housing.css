@@ -2607,6 +2607,15 @@ body.tic-modal-open       { overflow: hidden; }
 .cf-applied .cf-primary-row .btn-primary      { flex: 1 1 auto !important; }
 .cf-applied .cf-primary-row > .btn:not(.btn-primary) { flex: 0 0 auto !important; }
 
+/* The Edit-Unit Archive/Restore button is injected into #ue_archive_btn_wrap
+   AFTER cardFooter() collapses the footer, so it lands as a loose child above
+   the Actions bar (and the older mobile .tic-footer .btn rule still governs it).
+   Match it to the Actions button -- full width, same left edge -- so the
+   collapsed footer reads as a clean left-aligned stack. */
+.cf-applied #ue_archive_btn_wrap      { width: 100%; }
+.cf-applied #ue_archive_btn_wrap .btn { width: 100% !important; display: inline-flex;
+                                        align-items: center; justify-content: center; gap: 8px; }
+
 /* bottom sheet */
 .cf-sheet-ovl              { position: fixed; inset: 0; z-index: 100000; display: flex;
                              align-items: flex-end; justify-content: center;
@@ -2644,5 +2653,7 @@ body.cf-sheet-lock         { overflow: hidden; }
 @media (min-width: 640px) {
   .cf-bar                  { flex-direction: row; align-items: center; }
   .cf-applied .cf-actions  { width: auto !important; }
+  .cf-applied #ue_archive_btn_wrap      { width: auto; }
+  .cf-applied #ue_archive_btn_wrap .btn { width: auto !important; }
   .cf-primary-row          { margin-left: auto; }
 }
