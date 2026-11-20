@@ -618,6 +618,8 @@ input:disabled, select:disabled, textarea:disabled {
   background: var(--bg); color: var(--muted); cursor: not-allowed;
 }
 .field-error { border-color: var(--danger) !important; }
+/* A phone <input> whose number fails validation (window.fmtPhone). */
+.phone-invalid { border-color: var(--danger) !important; box-shadow: 0 0 0 2px var(--danger-bg); }
 
 /* Date inputs, app-wide — iOS Safari renders an empty input[type=date] as a
    totally blank box (no calendar icon, no mm/dd/yyyy placeholder like the
