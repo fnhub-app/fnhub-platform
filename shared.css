@@ -1154,6 +1154,16 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .doclib-filter-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; white-space: nowrap; }
 .doclib-filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
 
+/* DocLibrary photo film strip — scrollable row of image thumbnails, click to
+   open the shared lightbox. Token-driven so it themes per nation. */
+.doclib-film { padding: 12px 16px 4px; border-bottom: 1px solid var(--border); }
+.doclib-film-label { font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .6px; margin-bottom: 8px; }
+.doclib-film-track { display: flex; gap: 10px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; -webkit-overflow-scrolling: touch; }
+.doclib-film-frame { flex: 0 0 auto; width: 92px; padding: 0; border: 1px solid var(--border); border-radius: 8px; background: var(--bg); cursor: pointer; overflow: hidden; scroll-snap-align: start; box-shadow: var(--shadow); text-align: left; }
+.doclib-film-frame:hover { border-color: var(--yellow); }
+.doclib-film-frame img { width: 92px; height: 92px; object-fit: cover; display: block; background: var(--bg); }
+.doclib-film-name { display: block; font-size: 10px; color: var(--muted); padding: 3px 6px; max-width: 92px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
 /* DocLibrary table section — flush to card edges */
 .doclib .std-table td:first-child { padding-left: 16px; }
 .doclib .std-table td:last-child  { padding-right: 16px; }
