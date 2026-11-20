@@ -601,6 +601,73 @@ function saveSupportFaq() {
 }
 window.saveSupportFaq = saveSupportFaq;
 
+// ── AI quick-start prompt chips ──────────────────────────────────────────────
+// The suggestion pills shown above the AI chat input before the first message
+// (ai-assistant.js _aiRenderSuggestions). Editable by the ED; saved to
+// housing_settings key 'ai_suggestions' as an array of strings. Empty = use the
+// built-in defaults.
+var _AI_SUGGESTION_DEFAULTS = [
+  'What needs my attention today?',
+  'How do I complete a maintenance request?',
+  'Which units are currently vacant?'
+];
+function renderAiSuggestionsPanel() {
+  var el = document.getElementById('ai_suggestions_panel_body');
+  if (!el) return;
+  if (!_aiFeatIsEd()) { el.innerHTML = ''; return; }
+  if (typeof moduleOn === 'function' && !moduleOn('ai_assistant')) { el.innerHTML = ''; return; }
+  var saved = (window._appSettings && window._appSettings.ai_suggestions);
+  var list = (Array.isArray(saved) && saved.length) ? saved : _AI_SUGGESTION_DEFAULTS;
+  el.innerHTML =
+    '<div class="card card-flush-gold" style="margin-top:20px;">'
+    + '<div class="modal-hdr"><div>'
+    +   '<div class="lbl-yellow">&#10022; AI Quick-Start Prompts</div>'
+    +   '<div class="txt-sm-meta">The suggestion pills shown above the AI chat box before the first message. One prompt per line. ED only.</div>'
+    + '</div></div>'
+    + '<div class="sec-pad">'
+    +   '<textarea id="ai_suggestions_text" rows="6" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;" placeholder="What needs my attention today?&#10;How do I complete a maintenance request?&#10;Which units are currently vacant?">' + escapeHtml(list.join('\n')) + '</textarea>'
+    +   '<div class="txt-sm-meta" style="margin-top:6px;">Up to 6 are shown. Leave the box empty (and Save) to use the built-in defaults.</div>'
+    +   '<div style="margin-top:10px;display:flex;justify-content:flex-end;gap:8px;">'
+    +     '<button type="button" onclick="resetAiSuggestions()" class="btn btn-ghost">Reset to defaults</button>'
+    +     '<button type="button" onclick="saveAiSuggestions()" class="btn btn-primary">Save Prompts</button>'
+    +   '</div>'
+    + '</div></div>';
+}
+window.renderAiSuggestionsPanel = renderAiSuggestionsPanel;
+
+function saveAiSuggestions() {
+  if (!_aiFeatIsEd()) { showToast('Only the Executive Director can edit the AI prompts.', { type: 'error' }); renderAiSuggestionsPanel(); return; }
+  var ta = document.getElementById('ai_suggestions_text');
+  var raw = (ta && ta.value) || '';
+  var list = raw.split('\n').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 6);
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.ai_suggestions = list;
+  if (typeof saveSettingWithDraftFallback === 'function') {
+    saveSettingWithDraftFallback('ai_suggestions', list).then(function (ok) {
+      if (ok) {
+        showToast('✓ AI quick-start prompts saved', { type: 'info' });
+        if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'ai_suggestions_updated', 'AI quick-start prompts updated (' + list.length + ')', (window._realRole || window.currentRole) || 'ed');
+      } else {
+        showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+      }
+    });
+  }
+}
+window.saveAiSuggestions = saveAiSuggestions;
+
+function resetAiSuggestions() {
+  if (!_aiFeatIsEd()) { showToast('Only the Executive Director can edit the AI prompts.', { type: 'error' }); return; }
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.ai_suggestions = [];
+  if (typeof saveSettingWithDraftFallback === 'function') {
+    saveSettingWithDraftFallback('ai_suggestions', []).then(function (ok) {
+      if (ok) { showToast('✓ Reset to default prompts', { type: 'info' }); renderAiSuggestionsPanel(); }
+      else showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+    });
+  }
+}
+window.resetAiSuggestions = resetAiSuggestions;
+
 // Map each section ID to its parent group, used by showSettingsSection to
 // keep the top-tier group buttons + sub-tab row in sync when a section is
 // opened programmatically.
@@ -774,7 +841,7 @@ function showSettingsSection(section) {
     t.classList.toggle('active', tabSec===section);
   });
   if(section==='sec_users'       && typeof renderHousingUserTable==='function') renderHousingUserTable();
-  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderAiFairUsePanel==='function') renderAiFairUsePanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
+  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderAiFairUsePanel==='function') renderAiFairUsePanel(); if(typeof renderAiSuggestionsPanel==='function') renderAiSuggestionsPanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
   if(section==='sec_app_scoring') {
     if(APPROVAL_AUTHORITY.can('editScoreModel', window.currentRole) && typeof renderV2ScoringEditor === 'function') {
       renderV2ScoringEditor();
