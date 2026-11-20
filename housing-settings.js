@@ -611,10 +611,17 @@ var _AI_SUGGESTION_DEFAULTS = [
   'How do I complete a maintenance request?',
   'Which units are currently vacant?'
 ];
+// Who may edit the AI quick-start prompts: ED/super_user plus the Housing
+// Manager. Normalized so legacy role strings (hm/manager) still match.
+function _aiSuggIsEditor() {
+  var r = (window._realRole || window.currentRole || '');
+  if (typeof CLFN_PERMS !== 'undefined' && CLFN_PERMS.normalizeRole) r = CLFN_PERMS.normalizeRole(r);
+  return r === 'ed' || r === 'super_user' || r === 'housing_manager';
+}
 function renderAiSuggestionsPanel() {
   var el = document.getElementById('ai_suggestions_panel_body');
   if (!el) return;
-  if (!_aiFeatIsEd()) { el.innerHTML = ''; return; }
+  if (!_aiSuggIsEditor()) { el.innerHTML = ''; return; }
   if (typeof moduleOn === 'function' && !moduleOn('ai_assistant')) { el.innerHTML = ''; return; }
   var saved = (window._appSettings && window._appSettings.ai_suggestions);
   var list = (Array.isArray(saved) && saved.length) ? saved : _AI_SUGGESTION_DEFAULTS;
@@ -622,7 +629,7 @@ function renderAiSuggestionsPanel() {
     '<div class="card card-flush-gold" style="margin-top:20px;">'
     + '<div class="modal-hdr"><div>'
     +   '<div class="lbl-yellow">&#10022; AI Quick-Start Prompts</div>'
-    +   '<div class="txt-sm-meta">The suggestion pills shown above the AI chat box before the first message. One prompt per line. ED only.</div>'
+    +   '<div class="txt-sm-meta">The suggestion pills shown above the AI chat box before the first message. One prompt per line. ED or Housing Manager.</div>'
     + '</div></div>'
     + '<div class="sec-pad">'
     +   '<textarea id="ai_suggestions_text" rows="6" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;" placeholder="What needs my attention today?&#10;How do I complete a maintenance request?&#10;Which units are currently vacant?">' + escapeHtml(list.join('\n')) + '</textarea>'
@@ -636,7 +643,7 @@ function renderAiSuggestionsPanel() {
 window.renderAiSuggestionsPanel = renderAiSuggestionsPanel;
 
 function saveAiSuggestions() {
-  if (!_aiFeatIsEd()) { showToast('Only the Executive Director can edit the AI prompts.', { type: 'error' }); renderAiSuggestionsPanel(); return; }
+  if (!_aiSuggIsEditor()) { showToast('Only the ED or Housing Manager can edit the AI prompts.', { type: 'error' }); renderAiSuggestionsPanel(); return; }
   var ta = document.getElementById('ai_suggestions_text');
   var raw = (ta && ta.value) || '';
   var list = raw.split('\n').map(function (s) { return s.trim(); }).filter(Boolean).slice(0, 6);
@@ -656,7 +663,7 @@ function saveAiSuggestions() {
 window.saveAiSuggestions = saveAiSuggestions;
 
 function resetAiSuggestions() {
-  if (!_aiFeatIsEd()) { showToast('Only the Executive Director can edit the AI prompts.', { type: 'error' }); return; }
+  if (!_aiSuggIsEditor()) { showToast('Only the ED or Housing Manager can edit the AI prompts.', { type: 'error' }); return; }
   if (!window._appSettings) window._appSettings = {};
   window._appSettings.ai_suggestions = [];
   if (typeof saveSettingWithDraftFallback === 'function') {
