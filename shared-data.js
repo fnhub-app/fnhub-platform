@@ -945,7 +945,20 @@ async function sbSaveUnit(u) {
       headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
       body:    JSON.stringify(row)
     });
-    if (!r.ok) { console.warn('[SB] save unit failed:', await r.text()); return false; }
+    if (!r.ok) {
+      var errBody = await r.text();
+      console.warn('[SB] save unit failed:', r.status, errBody);
+      // A 4xx is a HARD, non-retryable rejection (bad request / missing column /
+      // RLS 403) -- it will never succeed on a silent queue retry, so surface it
+      // to the user instead of failing quietly (this is how the missing meter
+      // columns presented). 5xx / network errors stay silent: degraded mode and
+      // the save queue retry those. The persistent message box dedupes identical
+      // repeats, so a stuck 4xx collapses to a single row rather than spamming.
+      if (r.status >= 400 && r.status < 500 && typeof showToast === 'function') {
+        showToast('Could not save unit (HTTP ' + r.status + ') - changes were not saved.', { type:'error' });
+      }
+      return false;
+    }
     return true;
   } catch(e) {
     console.warn('[SB] save unit error:', e);
