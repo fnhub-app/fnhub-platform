@@ -4417,6 +4417,19 @@ window._wlThumbClick = function(el){
   _wlRenderLbImage();
 };
 
+// Generic photo-lightbox opener so ANY surface (e.g. the DocLibrary film strip)
+// can page through a set of Storage photos with the same viewer. `paths` are
+// Storage paths (signed on demand via sbGetSignedUrl), `names` are captions,
+// `start` is the index to open on.
+window.openPhotoLightbox = function(paths, names, start){
+  if(!paths || !paths.length) return;
+  _wlEnsureLightbox();
+  var n = paths.length;
+  window._wlLb = { paths: paths.slice(), names: (names || []).slice(), i: Math.max(0, Math.min(start || 0, n - 1)) };
+  var ov = document.getElementById('wl-lightbox'); if(ov) ov.classList.add('on');
+  _wlRenderLbImage();
+};
+
 // Open the maintenance request (SOW) a submission is filed against, so staff can
 // see the full scope / Payments tab before approving an invoice. Opens the SOW
 // modal in place when it's loaded (housing.html landing page); otherwise deep-

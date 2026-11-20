@@ -356,6 +356,7 @@ declare var _wlLbShow: any;
 declare var _wlReelNudge: any;
 declare var _wlSetView: any;
 declare var _wlThumbClick: any;
+declare var openPhotoLightbox: any;
 declare var applications: any;
 declare var arrearsAllocationBlock: any;
 declare var arrearsJointMatches: any;

@@ -1963,6 +1963,38 @@ window.DocLibrary = (function(){
         }).join('');
       }
 
+      // Photo film strip — a horizontally scrollable row of the image files in
+      // the current (filtered) view; click a frame to page through them in the
+      // shared photo lightbox. Hidden unless there are at least 2 photos (a lone
+      // image already shows its row thumbnail). Suppress per library with
+      // opts.filmstrip === false.
+      var filmStripHTML = '';
+      state._filmList = null;
+      if (opts.filmstrip !== false && !state.loading) {
+        var imgFiles = filtered.filter(function(f){
+          var m = (f.type || '').toLowerCase();
+          return m.indexOf('image') === 0 || /\.(jpg|jpeg|png|gif|webp|heic|heif|bmp|svg)$/i.test(f.name);
+        });
+        if (imgFiles.length >= 2) {
+          state._filmList = {
+            paths: imgFiles.map(function(f){ return f.path; }),
+            names: imgFiles.map(function(f){ return f.name.replace(/^\d+_/, ''); })
+          };
+          var frames = imgFiles.map(function(f, i){
+            var disp = f.name.replace(/^\d+_/, '');
+            return '<button type="button" class="doclib-film-frame" data-dl-strip-idx="'+i+'" title="'+_escAttr(disp)+'">' +
+                '<img data-dl-thumb="'+_escAttr(f.path)+'" src="" alt="" style="display:none;">' +
+                '<span class="doclib-film-name">'+_escHtml(disp)+'</span>' +
+              '</button>';
+          }).join('');
+          filmStripHTML =
+            '<div class="doclib-film">' +
+              '<div class="doclib-film-label">🎞️ Photos · ' + imgFiles.length + '</div>' +
+              '<div class="doclib-film-track">' + frames + '</div>' +
+            '</div>';
+        }
+      }
+
       var tableHTML =
         '<div class="doclib-table-wrap">' +
           '<table class="std-table doclib-table">' +
@@ -1975,7 +2007,7 @@ window.DocLibrary = (function(){
           '</table>' +
         '</div>';
 
-      root.innerHTML = headerHTML + uploadHTML + filterHTML + tableHTML;
+      root.innerHTML = headerHTML + uploadHTML + filterHTML + filmStripHTML + tableHTML;
 
       _wireEvents();
     }
@@ -2093,6 +2125,21 @@ window.DocLibrary = (function(){
         };
         fi.onchange = function(){ _handleFiles(fi.files); fi.value = ''; };
       }
+      // Film-strip frame → open the shared photo lightbox at that image. Where
+      // the lightbox isn't loaded (e.g. a public portal page that has no
+      // shared-data.js), fall back to opening the signed URL in a new tab.
+      root.querySelectorAll('[data-dl-strip-idx]').forEach(function(btn){
+        btn.onclick = function(){
+          var idx  = parseInt(btn.getAttribute('data-dl-strip-idx'), 10) || 0;
+          var list = state._filmList;
+          if (!list || !list.paths.length) return;
+          if (typeof window.openPhotoLightbox === 'function') {
+            window.openPhotoLightbox(list.paths, list.names, idx);
+          } else {
+            _signUrl(opts, list.paths[idx]).then(function(u){ if (u) window.open(u, '_blank'); });
+          }
+        };
+      });
       // Image thumbnails — lazy-load signed URLs
       root.querySelectorAll('[data-dl-thumb]').forEach(function(img){
         var path = img.getAttribute('data-dl-thumb');
