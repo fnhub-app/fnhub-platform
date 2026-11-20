@@ -159,6 +159,7 @@ function openAIChat() {
   if (_aiHistory.length === 0) {
     _appendAIMessage('assistant', 'Hi! I can help you look up applications, check unit availability, or answer housing policy questions. What do you need?');
   }
+  _aiRenderSuggestions();
   setTimeout(function() {
     var inp = document.getElementById('ai_chat_input');
     if (inp) inp.focus();
@@ -175,6 +176,64 @@ function toggleAIChat() {
   _aiPanelOpen ? closeAIChat() : openAIChat();
 }
 
+// ── Quick-start suggestion chips ─────────────────────────────────────────────
+// Copilot-style prompt pills shown above the input before the first message, to
+// give staff a one-tap way in. Hidden once the conversation starts. Grounded in
+// what the assistant can actually answer (worklist / how-to / unit lookups).
+var _AI_SUGGESTIONS = [
+  'What needs my attention today?',
+  'How do I complete a maintenance request?',
+  'Which units are currently vacant?'
+];
+// Resolve the live prompt list: the ED-customizable Settings value
+// (_appSettings.ai_suggestions, saved by housing-settings.js) when present,
+// otherwise the built-in defaults. Falls back to defaults on pages where
+// _appSettings isn't hydrated.
+function _aiEscSuggestion(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+function _aiSuggestionList() {
+  var s = window._appSettings && window._appSettings.ai_suggestions;
+  if (Array.isArray(s)) {
+    var clean = s.map(function (x) { return String(x == null ? '' : x).trim(); }).filter(Boolean);
+    if (clean.length) return clean.slice(0, 6);
+  }
+  return _AI_SUGGESTIONS;
+}
+function _aiRenderSuggestions() {
+  var panel = document.getElementById('ai_chat_panel');
+  if (!panel) return;
+  var inputRow = document.getElementById('ai_chat_input');
+  inputRow = inputRow ? inputRow.parentNode : null;   // the footer row holding the textarea
+  if (!inputRow) return;
+  var box = document.getElementById('ai_chat_suggestions');
+  // Only a pre-conversation quick-start — once anything's been sent, stay hidden.
+  if (_aiHistory.length > 0) { if (box) box.style.display = 'none'; return; }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'ai_chat_suggestions';
+    box.style.cssText = 'display:flex;flex-direction:column;align-items:flex-end;gap:7px;padding:0 14px 10px;flex-shrink:0;';
+    inputRow.parentNode.insertBefore(box, inputRow);
+  }
+  box.style.display = 'flex';
+  box.innerHTML = _aiSuggestionList().map(function(s){
+    var e = _aiEscSuggestion(s);
+    return '<button type="button" onclick="_aiPickSuggestion(this.getAttribute(\'data-q\'))" data-q="' + e + '" '
+      + 'style="background:var(--surface);border:1px solid var(--border);border-radius:999px;padding:7px 14px;font-size:12.5px;'
+      + 'color:var(--text);font-family:var(--sans);cursor:pointer;box-shadow:var(--shadow);text-align:right;max-width:100%;'
+      + 'white-space:normal;line-height:1.3;">' + e + '</button>';
+  }).join('');
+}
+// Clicking a chip drops its text into the input and sends it, like Copilot.
+window._aiPickSuggestion = function(text){
+  var inp = document.getElementById('ai_chat_input');
+  if (inp) inp.value = text;
+  var box = document.getElementById('ai_chat_suggestions'); if (box) box.style.display = 'none';
+  aiSendMessage();
+};
+
 // ── Chat: send a message ─────────────────────────────────────────────────────
 function aiSendMessage() {
   var inp = document.getElementById('ai_chat_input');
@@ -182,6 +241,7 @@ function aiSendMessage() {
   var msg = inp.value.trim();
   if (!msg) return;
   inp.value = '';
+  var _sg = document.getElementById('ai_chat_suggestions'); if (_sg) _sg.style.display = 'none';
 
   _appendAIMessage('user', msg);
   _aiHistory.push({ role: 'user', content: msg });
