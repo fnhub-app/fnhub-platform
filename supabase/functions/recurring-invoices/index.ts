@@ -73,35 +73,18 @@ function advance(day: string, cadence: string, anchor: number | null): string {
 }
 
 // -- Dynamic pricing (schedule row has dynamic=true) --------------------------
-// Subscription band by the nation's REPORTED home count (nation_usage.units_count,
-// pushed up by report-nation-usage) + add-on lines for modules EXPLICITLY
-// licensed true on nations.modules_licensed. KEEP IN SYNC with admin/admin.js
-// SUB_BANDS + FEE_SCHEDULE (the pricing single source) -- published 2026-11-02.
-const SUB_BANDS = [
-  { max: 50,  annual: 4560,  monthly: 420  },
-  { max: 100, annual: 5520,  monthly: 505  },
-  { max: 150, annual: 6480,  monthly: 595  },
-  { max: 200, annual: 7440,  monthly: 680  },
-  { max: 250, annual: 8400,  monthly: 770  },
-  { max: 300, annual: 9360,  monthly: 860  },
-  { max: 400, annual: 11280, monthly: 1035 },
-  { max: 500, annual: 13200, monthly: 1210 },
-  { max: 600, annual: 15120, monthly: 1385 },
-]
+// Subscription is the FLAT per-home plan: a base platform fee plus a flat rate
+// per home on EVERY home (no bands), by the nation's REPORTED home count
+// (nation_usage.units_count, pushed up by report-nation-usage) + add-on lines for
+// modules EXPLICITLY licensed true on nations.modules_licensed. KEEP FLAT_PLAN IN
+// SYNC with admin/admin.js (the pricing single source) -- flat plan 2026-11-22.
+const FLAT_PLAN = { base: 4560, perHomeMo: 2, setupBase: 1500, setupPerHome: 15 }
 const ADDON_AI_MONTHLY  = 150   // AI Staff Assistant (per month, incl. 3,000,000 tokens)
 const ADDON_SMS_MONTHLY = 25    // Text-message notifications (per month, incl. 500 texts)
 const AI_OVER_PER_M     = 15    // AI tokens beyond the included 3M, per additional 1,000,000
 const AI_INCLUDED       = 3_000_000
-function bandFor(homes: number): { label: string; annual: number; monthly: number } | null {
-  for (let i = 0; i < SUB_BANDS.length; i++) {
-    if (homes <= SUB_BANDS[i].max) {
-      const lo = i === 0 ? 1 : SUB_BANDS[i - 1].max + 1
-      const label = i === 0 ? ('up to ' + SUB_BANDS[i].max + ' homes') : (lo + '-' + SUB_BANDS[i].max + ' homes')
-      return { label, annual: SUB_BANDS[i].annual, monthly: SUB_BANDS[i].monthly }
-    }
-  }
-  return null   // over 600 homes = custom quote; dynamic mode falls back to the stored line
-}
+function flatSubAnnual(homes: number): number { const n = Math.max(0, Number(homes) || 0); return FLAT_PLAN.base + n * FLAT_PLAN.perHomeMo * 12 }
+function flatSubMonthly(homes: number): number { return Math.round((flatSubAnnual(homes) / 12) * 1.10 / 5) * 5 }
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -148,20 +131,17 @@ serve(async (req) => {
         } catch (_e) { usage = null }
         const homes = usage && usage.units_count != null ? Number(usage.units_count) : null
         const asOf = usage && usage.reported_at ? String(usage.reported_at).slice(0, 10) : ''
-        const band = (homes != null && isFinite(homes)) ? bandFor(homes) : null
-        if (band) {
+        if (homes != null && isFinite(homes) && homes >= 0) {
           dyn.push({
-            description: 'Subscription - ' + band.label + ', ' + (monthly ? 'monthly' : 'annual')
-              + ' (' + homes + ' home' + (homes === 1 ? '' : 's') + ' on record' + (asOf ? ' as of ' + asOf : '') + ')',
-            qty: 1, unit_price: monthly ? band.monthly : band.annual,
+            description: 'Nation Pathways subscription - flat plan ('
+              + homes + ' home' + (homes === 1 ? '' : 's') + ' on record' + (asOf ? ' as of ' + asOf : '') + ', ' + (monthly ? 'monthly' : 'annual') + ')',
+            qty: 1, unit_price: monthly ? flatSubMonthly(homes) : flatSubAnnual(homes),
           })
         } else {
-          // No usage reported yet, or over 600 homes (custom quote): bill the
-          // stored line and say why, rather than guessing a band.
+          // No usage reported yet: bill the stored fallback line and say why,
+          // rather than guessing (the flat price needs a home count).
           dyn.push({
-            description: sch.description + (homes == null
-              ? ' (dynamic: home count not yet reported - open Settings -> Nation in the app)'
-              : ' (dynamic: ' + homes + ' homes exceeds the banded schedule - custom quote)'),
+            description: sch.description + ' (dynamic: home count not yet reported - open Settings -> Nation in the app)',
             qty: 1, unit_price: Math.round((Number(sch.unit_amount) || 0) * 100) / 100,
           })
         }
