@@ -50,54 +50,33 @@
   // exact-description match. There are NO discounts: the price is locked for the
   // signed term.
   //
-  // Subscription is banded by the nation's home count (9 bands up to 600 homes;
-  // over 600 = custom quote). SUB_BANDS is the SINGLE SOURCE of the bands; the
-  // annual + monthly subscription lines in FEE_SCHEDULE are generated from it,
-  // and feeBandFor(homes) / setupTierFor(homes) map a home count to its band /
-  // setup tier so no caller hardcodes the ranges. Monthly billing = (annual/12)
-  // x 1.10, rounded to the nearest $5 (the published monthly figures below match
-  // this and are stored explicitly as the authoritative published numbers).
-  var SUB_BANDS = [
-    { max: 50,  annual: 4560,  monthly: 420  },
-    { max: 100, annual: 5520,  monthly: 505  },
-    { max: 150, annual: 6480,  monthly: 595  },
-    { max: 200, annual: 7440,  monthly: 680  },
-    { max: 250, annual: 8400,  monthly: 770  },
-    { max: 300, annual: 9360,  monthly: 860  },
-    { max: 400, annual: 11280, monthly: 1035 },
-    { max: 500, annual: 13200, monthly: 1210 },
-    { max: 600, annual: 15120, monthly: 1385 }
-  ];
-  // "up to 50 homes" / "51-100 homes" / ... for band i.
-  function bandLabel(i){
-    var b = SUB_BANDS[i]; if (!b) return '';
-    var lo = (i === 0) ? 1 : (SUB_BANDS[i - 1].max + 1);
-    return (i === 0) ? ('up to ' + b.max + ' homes') : (lo + '-' + b.max + ' homes');
-  }
+  // Subscription is the FLAT per-home plan: a base platform fee plus a flat rate
+  // per home on EVERY home -- no bands. FLAT_PLAN is the SINGLE SOURCE; the
+  // Pricing calculator, the contract Schedule A ({{FEE_*}} tokens), the dynamic
+  // invoice line and the recurring-invoices edge function all price from it.
+  // Monthly billing = (annual / 12) x 1.10, rounded to the nearest $5. Setup is a
+  // one-time base fee plus a per-home rate. KEEP FLAT_PLAN IN SYNC with the same
+  // constant in supabase/functions/recurring-invoices/index.ts.
+  var FLAT_PLAN = { base: 4560, perHomeMo: 2, setupBase: 1500, setupPerHome: 15, aiMo: 150, smsMo: 25 };
+  function flatSubAnnual(homes){ var n = Math.max(0, Number(homes) || 0); return FLAT_PLAN.base + n * FLAT_PLAN.perHomeMo * 12; }
+  function flatSubMonthly(homes){ return Math.round((flatSubAnnual(homes) / 12) * 1.10 / 5) * 5; }
+  function flatSetup(homes){ var n = Math.max(0, Number(homes) || 0); return FLAT_PLAN.setupBase + n * FLAT_PLAN.setupPerHome; }
   var FEE_SCHEDULE = [];
-  // Subscription -- billed annually in advance (one line per band)
-  SUB_BANDS.forEach(function(b, i){
-    FEE_SCHEDULE.push({ g: 'Subscription — annual (billed annually in advance)', d: 'Subscription — ' + bandLabel(i) + ', annual', p: b.annual, q: 1 });
-  });
-  // Subscription -- billed monthly (annual/12 + 10%, rounded to nearest $5)
-  SUB_BANDS.forEach(function(b, i){
-    FEE_SCHEDULE.push({ g: 'Subscription — monthly (billed monthly; annual/12 +10%)', d: 'Subscription — ' + bandLabel(i) + ', monthly', p: b.monthly, q: 1 });
-  });
+  // Subscription + setup are home-count-driven (flat), billed via the dynamic path
+  // (reported home count -> flat price) or the flat quick-add on the invoice
+  // builder; the catalog carries an "enter amount" line for each so a manual
+  // invoice or a dynamic fallback can still select one.
   FEE_SCHEDULE.push(
-    // One-time setup (once per client; pay up front OR spread across year 1 at no
-    // extra cost). The d strings stay stable ('... Small/Mid-size/Large') so saved
-    // rows keep matching; the home ranges + training sessions are in Schedule B.
-    { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Small', p: 3500, q: 1 },
-    { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Mid-size', p: 6000, q: 1 },
-    { g: 'One-time setup (once per client; pay up front or spread over year 1)', d: 'One-time setup — Large', p: 9500, q: 1 },
+    { g: 'Subscription (flat plan: $4,560 base + $2/home/mo)', d: 'Subscription - Nation Pathways (flat plan, enter amount)', p: 0, q: 1, custom: true },
+    { g: 'One-time setup (base + per-home; pay up front or spread over year 1)', d: 'One-time setup - Nation Pathways (flat, enter amount)', p: 0, q: 1, custom: true },
     // Add-ons (flat, every plan size)
-    { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: 150, q: 1 },
-    { g: 'Add-on', d: 'Text-message notifications (per month, incl. 500 texts)', p: 25, q: 1 },
+    { g: 'Add-on', d: 'AI Staff Assistant (per month)', p: FLAT_PLAN.aiMo, q: 1 },
+    { g: 'Add-on', d: 'Text-message notifications (per month, incl. 500 texts)', p: FLAT_PLAN.smsMo, q: 1 },
     // Additional services (hourly; written authorization required)
     { g: 'Additional services (hourly, written authorization)', d: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)', p: 150, q: 1, hours: true },
     { g: 'Additional services (hourly, written authorization)', d: 'Travel time (per hour, max 8 hrs/travel day)', p: 75, q: 1, hours: true },
     // Custom / at cost (free-entry amount)
-    { g: 'Custom / at cost (enter amount)', d: 'Subscription — 600+ / Tribal Council (custom per quote)', p: 0, q: 1, custom: true },
+    { g: 'Custom / at cost (enter amount)', d: 'Subscription — Tribal Council / special (custom per quote)', p: 0, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'Text-message notifications — additional texts beyond 500 (per text)', p: 0.05, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'AI tokens beyond the included 3,000,000 (per additional 1,000,000)', p: 15, q: 1, custom: true },
     { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
@@ -124,37 +103,14 @@
     throw new Error('Fee schedule item missing: ' + desc);
   }
   function feeFmt(n){ n = Number(n) || 0; return '$' + (n % 1 ? n.toFixed(2) : String(n)).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
-  // Pick the subscription band for a home count. Returns {index,label,annual,
-  // monthly} or null for over 600 homes (custom quote). SINGLE helper so no
-  // caller re-derives the ranges.
-  function feeBandFor(homes){
-    var n = Number(homes);
-    if (!isFinite(n) || n < 1) return null;
-    for (var i = 0; i < SUB_BANDS.length; i++){
-      if (n <= SUB_BANDS[i].max) return { index: i, label: bandLabel(i), annual: SUB_BANDS[i].annual, monthly: SUB_BANDS[i].monthly };
-    }
-    return null;   // over 600 homes -> custom quote
-  }
-  // Setup tier for a home count: Small (<=100), Mid-size (<=300), Large (<=600).
-  function setupTierFor(homes){
-    var n = Number(homes) || 0;
-    if (n <= 100) return 'Small';
-    if (n <= 300) return 'Mid-size';
-    return 'Large';
-  }
-  // "$6,480/year ($540/mo) or $595/month billed monthly" for band i.
-  function feeBandText(i){
-    var b = SUB_BANDS[i];
-    return feeFmt(b.annual) + '/year (' + feeFmt(Math.round(b.annual / 12)) + '/mo) or ' + feeFmt(b.monthly) + '/month billed monthly';
-  }
+  // (Banded helpers removed with the flat-plan switch: subscription + setup are
+  // the flat per-home plan -- see FLAT_PLAN / flatSubAnnual / flatSubMonthly /
+  // flatSetup above.)
   // One-paragraph summary of the published pricing (reseller agreement s.6.1 default).
   function feeScheduleSummary(){
-    var bands = SUB_BANDS.map(function(b, i){ return bandLabel(i) + ' ' + feeFmt(b.annual) + '/yr (' + feeFmt(b.monthly) + '/mo billed monthly)'; }).join('; ');
-    return "Per the Owner's published fee schedule (CAD, plus applicable taxes). Subscription by home count: "
-      + bands + '; over 600 homes / Tribal Council by quote. '
-      + 'One-time setup: Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions, '
-      + 'Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions, '
-      + 'Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions; setup may be paid up front or spread across the first year\'s invoices at no extra cost. '
+    return "Per the Owner's published fee schedule (CAD, plus applicable taxes). Subscription is the flat per-home plan: a base platform fee of "
+      + feeFmt(FLAT_PLAN.base) + '/year plus ' + feeFmt(FLAT_PLAN.perHomeMo) + ' per home per month, on every home the nation manages (billed annually in advance; or that annual total / 12 + 10%, billed monthly); Tribal Council / special deployments by quote. '
+      + 'One-time setup: a base fee of ' + feeFmt(FLAT_PLAN.setupBase) + ' plus ' + feeFmt(FLAT_PLAN.setupPerHome) + ' per home, including onboarding and training; setup may be paid up front or spread across the first year\'s invoices at no extra cost. '
       + 'Add-ons: AI Staff Assistant ' + feeFmt(feePrice('AI Staff Assistant (per month)')) + '/month (every plan size; includes up to 3,000,000 AI tokens/month, then ' + feeFmt(feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)')) + ' per additional 1,000,000 where a higher limit is approved); text-message notifications ' + feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')) + '/month including 500 texts, then $0.05 per additional text. '
       + 'Additional services ' + feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')) + '/hour; travel time '
       + feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')) + '/hour; travel expenses at cost. '
@@ -1796,8 +1752,9 @@
   // ===== Pricing calculator (Dashboard -> Pricing) ===========================
   // A self-contained calculator for the flat per-home plan: a base platform fee
   // plus a flat rate per home on every home, with editable setup and add-ons.
-  // Purely local arithmetic (nothing saved). Wiring the flat plan into the
-  // contract Schedule A and invoices is a separate step; a note below says so.
+  // Purely local arithmetic (nothing saved). The same FLAT_PLAN now drives the
+  // contract Schedule A ({{FEE_*}} tokens), the dynamic invoice line and the
+  // recurring-invoices edge function -- this is a what-if calculator over it.
   window.renderPricing = function(){
     var root = document.getElementById('pricing-root');
     if (!root) return;
@@ -1819,13 +1776,13 @@
       +   '<h3 style="margin:0 0 4px;font-size:14px;">Flat per-home plan</h3>'
       +   '<p style="font-size:12px;color:var(--muted);margin:0 0 4px;">A base platform fee plus a flat rate per home, on every home. Every value is editable.</p>'
       +   prfield('Homes managed', 'pr-homes', '300', '1')
-      +   prfield('Base platform fee / year', 'pr-base', '4560', '10', '$')
-      +   prfield('Per home / month', 'pr-permo', '2', '0.25', '$')
+      +   prfield('Base platform fee / year', 'pr-base', String(FLAT_PLAN.base), '10', '$')
+      +   prfield('Per home / month', 'pr-permo', String(FLAT_PLAN.perHomeMo), '0.25', '$')
       +   '<hr style="border:none;border-top:1px solid var(--line);margin:14px 0 2px;">'
-      +   prfield('Setup — base fee', 'pr-setup-base', '1500', '100', '$')
-      +   prfield('Setup — per unit', 'pr-setup-per', '15', '1', '$')
-      +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:12px;"><input type="checkbox" id="pr-ai-on"> AI Staff Assistant / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-ai" value="150" min="0" step="5" style="' + INP + 'width:80px;"></label>'
-      +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:8px;"><input type="checkbox" id="pr-sms-on"> Text notifications / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-sms" value="25" min="0" step="5" style="' + INP + 'width:80px;"></label>'
+      +   prfield('Setup — base fee', 'pr-setup-base', String(FLAT_PLAN.setupBase), '100', '$')
+      +   prfield('Setup — per unit', 'pr-setup-per', String(FLAT_PLAN.setupPerHome), '1', '$')
+      +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:12px;"><input type="checkbox" id="pr-ai-on"> AI Staff Assistant / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-ai" value="' + FLAT_PLAN.aiMo + '" min="0" step="5" style="' + INP + 'width:80px;"></label>'
+      +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:8px;"><input type="checkbox" id="pr-sms-on"> Text notifications / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-sms" value="' + FLAT_PLAN.smsMo + '" min="0" step="5" style="' + INP + 'width:80px;"></label>'
       + '</form>'
       + '<div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;">'
       +   '<h3 style="margin:0 0 10px;font-size:14px;">This nation would pay</h3>'
@@ -1837,7 +1794,7 @@
       +   prout('All-in, ongoing / year', 'pr-out-allin', true)
       +   prout('One-time setup', 'pr-out-setup')
       +   prout('Year 1 (all-in + setup)', 'pr-out-y1', true)
-      +   '<p style="font-size:11px;color:var(--muted);margin:12px 0 0;line-height:1.5;">Calculator only. The subscription agreement (Schedule A) and invoices still use the current published bands until the flat plan is wired in — next step, pending the Proctor Solutions invoice logo.</p>'
+      +   '<p style="font-size:11px;color:var(--muted);margin:12px 0 0;line-height:1.5;">A what-if calculator. The same flat plan drives the subscription agreement (Schedule A), the dynamic per-invoice pricing and the recurring-invoices generator; editing the values here does not change what nations are billed.</p>'
       + '</div>'
       + '</div>';
     function num(id, d){ var el = root.querySelector('#' + id); var v = el ? parseFloat(el.value) : NaN; return isFinite(v) ? v : d; }
@@ -1845,11 +1802,11 @@
     function money(v){ return '$' + (Number(v) || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     function recompute(){
       var homes  = Math.max(0, num('pr-homes', 300));
-      var sub    = num('pr-base', 4560) + homes * num('pr-permo', 2) * 12;
-      var setup  = num('pr-setup-base', 1500) + homes * num('pr-setup-per', 15);  // base fee + per-unit x units
+      var sub    = num('pr-base', FLAT_PLAN.base) + homes * num('pr-permo', FLAT_PLAN.perHomeMo) * 12;
+      var setup  = num('pr-setup-base', FLAT_PLAN.setupBase) + homes * num('pr-setup-per', FLAT_PLAN.setupPerHome);  // base fee + per-unit x units
       var aiOn   = root.querySelector('#pr-ai-on').checked;
       var smsOn  = root.querySelector('#pr-sms-on').checked;
-      var addons = (aiOn ? num('pr-ai', 150) * 12 : 0) + (smsOn ? num('pr-sms', 25) * 12 : 0);
+      var addons = (aiOn ? num('pr-ai', FLAT_PLAN.aiMo) * 12 : 0) + (smsOn ? num('pr-sms', FLAT_PLAN.smsMo) * 12 : 0);
       var monthly = Math.round((sub / 12) * 1.1 / 5) * 5;  // the existing annual/12 +10%, rounded to $5
       var allIn  = sub + addons;
       set('pr-out-sub', money(sub) + '/yr');
@@ -2973,10 +2930,10 @@
     '@SIG|nation',
     '@SIG|provider',
     '##Schedule A - Order Form',
-    'Select one subscription band (by the Nation\'s current home count) and one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date. Prices are locked for the signed term; there are no discounts.',
-    '###Subscription bands (by home count)',
+    'Fill in the Nation\'s current home count and select one billing option. Prices are in Canadian dollars and match the Provider\'s published schedule as of the Effective Date. Prices are locked for the signed term; there are no discounts.',
+    '###Subscription (flat per-home plan)',
     '{{FEE_BANDS}}',
-    '-[ ] 600+ / Tribal Council - custom: annual per quote; monthly per quote; setup per quote.',
+    '-Tribal Council / special deployments may be individually quoted in place of the above.',
     '###Billing and options',
     'Billing option selected: [ ] Annual (invoiced annually in advance)     [ ] Monthly (billed monthly; annual/12 + 10% as shown above)',
     'Setup (one-time): {{FEE_SETUP}}. Setup may be paid up front or spread across the first year\'s invoices at no extra cost.',
@@ -3309,11 +3266,13 @@
     var tpl = AGREEMENT_TPL
       .replace(/\{\{PROVIDER_PARTY\}\}/g, owner ? partyRecital(o) : partyName(o))
       .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
-      .replace(/\{\{FEE_BANDS\}\}/g, function(){ return SUB_BANDS.map(function(b, i){
-        var lbl = bandLabel(i); lbl = lbl.charAt(0).toUpperCase() + lbl.slice(1);
-        return '-[ ] ' + lbl + ': ' + feeBandText(i) + '.';
-      }).join('\n'); })
-      .replace(/\{\{FEE_SETUP\}\}/g, function(){ return 'Small (up to 100 homes) ' + feeFmt(feePrice('One-time setup — Small')) + ' incl. 2 training sessions; Mid-size (101-300 homes) ' + feeFmt(feePrice('One-time setup — Mid-size')) + ' incl. 4 sessions; Large (301-600 homes) ' + feeFmt(feePrice('One-time setup — Large')) + ' incl. 6 sessions'; })
+      .replace(/\{\{FEE_BANDS\}\}/g, function(){ return [
+        '-Subscription is a base platform fee of ' + feeFmt(FLAT_PLAN.base) + ' per year, plus ' + feeFmt(FLAT_PLAN.perHomeMo) + ' per home per month on every home the Nation manages.',
+        "-Nation's current home count: ______ homes.",
+        '-Annual subscription = ' + feeFmt(FLAT_PLAN.base) + ' + (home count x ' + feeFmt(FLAT_PLAN.perHomeMo) + ' x 12 months) = $______ per year.',
+        '-Monthly billing option: that annual subscription / 12, plus 10%, billed monthly.'
+      ].join('\n'); })
+      .replace(/\{\{FEE_SETUP\}\}/g, function(){ return 'a base fee of ' + feeFmt(FLAT_PLAN.setupBase) + ' plus ' + feeFmt(FLAT_PLAN.setupPerHome) + ' per home (one-time), including onboarding and training -- for the Nation\'s current home count, ' + feeFmt(FLAT_PLAN.setupBase) + ' + (home count x ' + feeFmt(FLAT_PLAN.setupPerHome) + ') = $______'; })
       .replace(/\{\{FEE_AI\}\}/g, function(){ return feeFmt(feePrice('AI Staff Assistant (per month)')); })
       .replace(/\{\{FEE_AI_OVER\}\}/g, function(){ return feeFmt(feePrice('AI tokens beyond the included 3,000,000 (per additional 1,000,000)')); })
       .replace(/\{\{FEE_SMS\}\}/g, function(){ return feeFmt(feePrice('Text-message notifications (per month, incl. 500 texts)')); })
@@ -4324,7 +4283,7 @@
       +   '<div><label>Cadence</label><select id="cn-bill-cadence">' + cadOpts + '</select></div>'
       +   '<div><label>Next invoice date</label><input id="cn-bill-next" type="date" value="' + esc(b.next_run_date || '') + '"/></div>'
       + '</div>'
-      + '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:4px;cursor:pointer;font-weight:600;"><input type="checkbox" id="cn-bill-dynamic" style="width:auto;margin-top:3px;"' + (b.dynamic ? ' checked' : '') + ' data-act="bill-dyn-toggle" data-sub="' + esc(sub) + '"/> <span><b>Dynamic pricing</b> &mdash; each invoice prices itself from the app: the subscription band by the nation\'s <b>reported home count</b> (from Settings &rarr; Nation usage reporting) plus add-on lines for modules <b>explicitly licensed</b> (AI Staff Assistant, SMS). The line item + amount below become the fallback used only when no home count has been reported.</span></label>'
+      + '<label style="display:flex;align-items:flex-start;gap:8px;margin-top:4px;cursor:pointer;font-weight:600;"><input type="checkbox" id="cn-bill-dynamic" style="width:auto;margin-top:3px;"' + (b.dynamic ? ' checked' : '') + ' data-act="bill-dyn-toggle" data-sub="' + esc(sub) + '"/> <span><b>Dynamic pricing</b> &mdash; each invoice prices itself from the app: the <b>flat per-home subscription</b> ($4,560 base + $2/home/mo) from the nation\'s <b>reported home count</b> (Settings &rarr; Nation usage reporting) plus add-on lines for modules <b>explicitly licensed</b> (AI Staff Assistant, SMS). The line item + amount below become the fallback used only when no home count has been reported.</span></label>'
       + '<div id="cn-bill-dyn-preview" style="display:' + (b.dynamic ? 'block' : 'none') + ';background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin:8px 0 2px;font-size:12px;line-height:1.6;">Loading live preview&hellip;</div>'
       + '<label>Line item (fee schedule)' + (b.dynamic ? ' <span style="font-weight:400;color:var(--muted);">(fallback only while Dynamic is on)</span>' : '') + '</label>' + _billFeeSelectHtml(b.description)
       + '<div style="' + g2 + '">'
@@ -4365,23 +4324,21 @@
     if (b.dynamic) _billDynPreview(sub);
   }
   // ---- Dynamic billing lines (client side) -----------------------------------
-  // Mirrors recurring-invoices' dynamic branch, but prices from the in-panel
-  // single source (SUB_BANDS / feeBandFor / feePrice). Returns {lines, note}.
+  // Mirrors recurring-invoices' dynamic branch, pricing the subscription from the
+  // flat per-home plan (FLAT_PLAN) by the nation's reported home count. Returns {lines}.
   function _dynBillingLines(n, usage, cadence, fallback){
     var monthly = cadence !== 'annual';
     var mult = monthly ? 1 : 12;
     var lines = [];
     var homes = (usage && usage.units_count != null) ? Number(usage.units_count) : null;
     var asOf = (usage && usage.reported_at) ? String(usage.reported_at).slice(0, 10) : '';
-    var band = (homes != null && isFinite(homes)) ? feeBandFor(homes) : null;
-    if (band){
-      lines.push({ description: 'Subscription - ' + band.label + ', ' + (monthly ? 'monthly' : 'annual')
-        + ' (' + homes + ' home' + (homes === 1 ? '' : 's') + ' on record' + (asOf ? ' as of ' + asOf : '') + ')',
-        qty: 1, unit_price: monthly ? band.monthly : band.annual });
+    if (homes != null && isFinite(homes) && homes >= 0){
+      lines.push({ description: 'Nation Pathways subscription - flat plan ('
+        + homes + ' home' + (homes === 1 ? '' : 's') + ' on record' + (asOf ? ' as of ' + asOf : '') + ', ' + (monthly ? 'monthly' : 'annual') + ')',
+        qty: 1, unit_price: monthly ? flatSubMonthly(homes) : flatSubAnnual(homes) });
     } else {
-      lines.push({ description: (fallback && fallback.description || 'Subscription') + (homes == null
-        ? ' (dynamic: home count not yet reported - open Settings -> Nation in the app)'
-        : ' (dynamic: ' + homes + ' homes exceeds the banded schedule - custom quote)'),
+      lines.push({ description: (fallback && fallback.description || 'Nation Pathways subscription')
+        + ' (dynamic: home count not yet reported - open Settings -> Nation in the app)',
         qty: 1, unit_price: Math.round((Number(fallback && fallback.unit_amount) || 0) * 100) / 100 });
     }
     // Add-ons bill ONLY on explicit licensed=true (absent = default-licensed
@@ -4407,7 +4364,7 @@
         lines.push({ description: 'Text messages beyond the included 500 (' + smsN + ' sent on record' + (asOf ? ' as of ' + asOf : '') + ')', qty: smsN - 500, unit_price: 0.05 });
       }
     }
-    return { lines: lines, homes: homes, asOf: asOf, banded: !!band, lic: lic, smsN: smsN, aiTokens: aiTok };
+    return { lines: lines, homes: homes, asOf: asOf, lic: lic, smsN: smsN, aiTokens: aiTok };
   }
   function _dynLinesSubtotal(lines){
     return Math.round(lines.reduce(function(a, l){ return a + (Number(l.qty) || 0) * (Number(l.unit_price) || 0); }, 0) * 100) / 100;
