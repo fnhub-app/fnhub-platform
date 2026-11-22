@@ -1786,7 +1786,8 @@
       +   prfield('Base platform fee / year', 'pr-base', '4560', '10', '$')
       +   prfield('Per home / month', 'pr-permo', '2', '0.25', '$')
       +   '<hr style="border:none;border-top:1px solid var(--line);margin:14px 0 2px;">'
-      +   prfield('One-time setup', 'pr-setup', '6000', '100', '$')
+      +   prfield('Setup — base fee', 'pr-setup-base', '1500', '100', '$')
+      +   prfield('Setup — per unit', 'pr-setup-per', '15', '1', '$')
       +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:12px;"><input type="checkbox" id="pr-ai-on"> AI Staff Assistant / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-ai" value="150" min="0" step="5" style="' + INP + 'width:80px;"></label>'
       +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:8px;"><input type="checkbox" id="pr-sms-on"> Text notifications / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-sms" value="25" min="0" step="5" style="' + INP + 'width:80px;"></label>'
       + '</form>'
@@ -1800,7 +1801,7 @@
       +   prout('All-in, ongoing / year', 'pr-out-allin', true)
       +   prout('One-time setup', 'pr-out-setup')
       +   prout('Year 1 (all-in + setup)', 'pr-out-y1', true)
-      +   '<p style="font-size:11px;color:var(--muted);margin:12px 0 0;line-height:1.5;">Calculator only. The subscription agreement (Schedule A) and invoices still use the current published bands until the flat plan is wired in — that step is pending the base-fee sign-off and the Proctor Solutions invoice logo.</p>'
+      +   '<p style="font-size:11px;color:var(--muted);margin:12px 0 0;line-height:1.5;">Calculator only. The subscription agreement (Schedule A) and invoices still use the current published bands until the flat plan is wired in — next step, pending the Proctor Solutions invoice logo.</p>'
       + '</div>'
       + '</div>';
     function num(id, d){ var el = root.querySelector('#' + id); var v = el ? parseFloat(el.value) : NaN; return isFinite(v) ? v : d; }
@@ -1808,7 +1809,7 @@
     function recompute(){
       var homes  = Math.max(0, num('pr-homes', 300));
       var sub    = num('pr-base', 4560) + homes * num('pr-permo', 2) * 12;
-      var setup  = num('pr-setup', 6000);
+      var setup  = num('pr-setup-base', 1500) + homes * num('pr-setup-per', 15);  // base fee + per-unit x units
       var aiOn   = root.querySelector('#pr-ai-on').checked;
       var smsOn  = root.querySelector('#pr-sms-on').checked;
       var addons = (aiOn ? num('pr-ai', 150) * 12 : 0) + (smsOn ? num('pr-sms', 25) * 12 : 0);
