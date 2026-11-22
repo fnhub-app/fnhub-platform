@@ -4067,8 +4067,15 @@
         return '<button class="fin-chip' + (f === key ? ' on' : '') + '" type="button" data-act="inv-filter" data-status="' + key + '">' + b[1] + '<span class="c">' + cnt + '</span></button>';
       }).join('');
     }
-    // Table (filtered)
-    var shown = inv.filter(function(x){ return _invMatch(x, f); });
+    // Table (filtered). Sort open/actionable invoices (draft/sent/partial/overdue)
+    // to the top and settled/closed ones (paid/void/carried) to the bottom; within
+    // each group, newest issue date first -- so old, settled invoices sink lowest.
+    var shown = inv.filter(function(x){ return _invMatch(x, f); }).sort(function(a, b){
+      var ra = _invOwing(a) ? 0 : 1, rb = _invOwing(b) ? 0 : 1;
+      if (ra !== rb) return ra - rb;
+      var da = String(a.issue_date || ''), db = String(b.issue_date || '');
+      return da < db ? 1 : (da > db ? -1 : 0);
+    });
     if (!shown.length){ host.innerHTML = '<div class="empty">' + (inv.length ? 'No ' + (f === 'all' ? '' : f + ' ') + 'invoices.' : 'No invoices yet.') + '</div>'; return; }
     var rows = shown.map(function(x){
       var c = _invClass(x);
