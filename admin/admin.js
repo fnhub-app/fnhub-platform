@@ -2526,6 +2526,64 @@
   // platform ticket's `replies` jsonb (support_replies.sql). Sending reopens the
   // view so the new message appears in the thread. Platform-side only -- this
   // never touches the nation's own copy of the ticket.
+  // Human device line from a ticket's context. Uses the enriched fields the
+  // support widget now captures; falls back to parsing the raw user agent for
+  // tickets filed before that.
+  function psDevice(c){
+    c = c || {};
+    if (c.device_type || c.os || c.browser){
+      return [c.device_type, c.os, c.browser].filter(Boolean).join(' · ') || 'unknown';
+    }
+    var ua = c.user_agent || '';
+    if (!ua) return 'unknown';
+    var os = /Windows NT/.test(ua) ? 'Windows' : /iPhone|iPad|iPod/.test(ua) ? 'iOS'
+      : /Mac OS X/.test(ua) ? 'macOS' : /Android/.test(ua) ? 'Android'
+      : /Linux/.test(ua) ? 'Linux' : 'Unknown OS';
+    var br = /Edg\//.test(ua) ? 'Edge' : /OPR\//.test(ua) ? 'Opera'
+      : /Chrome\//.test(ua) ? 'Chrome' : /Firefox\//.test(ua) ? 'Firefox'
+      : /Safari/.test(ua) ? 'Safari' : 'Unknown browser';
+    var dt = /iPad|Tablet/i.test(ua) ? 'Tablet'
+      : /Mobi|iPhone|Android.*Mobile/i.test(ua) ? 'Mobile' : 'Desktop';
+    return dt + ' · ' + os + ' · ' + br;
+  }
+  // Copy-paste prompt for an AI assistant to triage this support ticket.
+  function psBuildAiPrompt(t){
+    var c = t.context || {};
+    var L = [];
+    L.push('You are a senior support engineer for Nation Pathways, a multi-tenant housing-management web app for First Nations (a vanilla-JS single-page app served on Cloudflare; a Supabase / PostgREST backend with one isolated database per nation). A user reported the issue below. Work out the single most likely cause and give concrete steps to confirm and fix it.');
+    L.push('');
+    L.push('## Ticket');
+    L.push('- Subject: ' + (t.subject || '(none)'));
+    L.push('- Reported by: ' + (t.reporter_name || 'unknown') + (t.reporter_email ? ' <' + t.reporter_email + '>' : '') + (t.reporter_role ? ' — role ' + t.reporter_role : ''));
+    L.push('- Nation: ' + (t.nation_name || t.subdomain || 'unknown'));
+    L.push('- Source: ' + (PS_SRC[t.source] || t.source || '') + (t.category ? ' · category ' + t.category : ''));
+    L.push('- Reported: ' + (t.nation_created_at || t.received_at || ''));
+    L.push('');
+    L.push('## What the user said');
+    L.push((t.body || '(no details provided)').trim());
+    var rr = Array.isArray(t.replies) ? t.replies : [];
+    if (rr.length){
+      L.push('');
+      L.push('## Support replies so far');
+      rr.forEach(function(r){ L.push('- ' + (r.by || 'support') + ': ' + (r.text || '')); });
+    }
+    L.push('');
+    L.push('## Environment');
+    L.push('- Page: ' + (c.page || 'n/a') + (c.url ? ' (' + c.url + ')' : ''));
+    L.push('- App version: ' + (c.app_version || 'unknown'));
+    L.push('- Device: ' + psDevice(c));
+    L.push('- Screen: ' + (c.screen || 'n/a') + ' · viewport ' + (c.viewport || 'n/a') + (c.dpr ? ' @' + c.dpr + 'x' : '') + (c.touch ? ' · touch' : ''));
+    if (c.language || c.timezone) L.push('- Locale: ' + [c.language, c.timezone].filter(Boolean).join(' · '));
+    if (c.user_agent) L.push('- User agent: ' + c.user_agent);
+    if (t.attachment_count) L.push('- Screenshots: ' + t.attachment_count + ' attached (viewable on the nation’s Support page).');
+    L.push('');
+    L.push('## Answer with');
+    L.push('1. The single most likely cause.');
+    L.push('2. 3–6 numbered steps to confirm and resolve it.');
+    L.push('3. A short, plain-language reply to send the reporter.');
+    L.push('4. Anything still needed to be sure.');
+    return L.join('\n');
+  }
   window.psView = async function(id){
     var t = (_psTickets || []).filter(function(x){ return String(x.id) === String(id); })[0];
     if (!t) return;
@@ -2550,6 +2608,15 @@
     var canReply = !!t.reporter_email;
     var bodyHtml = meta + threadBox
       + (canReply ? '' : '<div style="font-size:12px;color:var(--muted);margin-top:8px;">No email on file for this reporter &mdash; you can\'t reply from here.</div>');
+    // AI troubleshooting prompt: a copy-paste block (reporter, device, page,
+    // app version + the issue) to drop into any AI assistant for a diagnosis.
+    var aiPrompt = psBuildAiPrompt(t);
+    bodyHtml += '<details style="margin-top:12px;">'
+      + '<summary style="cursor:pointer;font-size:12px;font-weight:700;color:var(--ink);">&#10022; AI troubleshooting prompt</summary>'
+      + '<p style="font-size:11px;color:var(--muted);margin:6px 0;">Captures the device, page, app version and issue. Copy it into ChatGPT, Claude or any assistant for a diagnosis and steps.</p>'
+      + '<textarea readonly rows="9" style="width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;line-height:1.55;padding:8px 10px;border:1px solid var(--line);border-radius:8px;resize:vertical;background:var(--surface);color:var(--ink);">' + esc(aiPrompt) + '</textarea>'
+      + '<button class="btn sm ghost" type="button" data-act="copy-text" data-copy="' + esc(aiPrompt) + '" style="margin-top:6px;">Copy prompt</button>'
+      + '</details>';
     // Triage buttons live inside the ticket view now (the row only has Open).
     var st2 = t.platform_status || 'new';
     var triage = [];
