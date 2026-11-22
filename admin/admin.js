@@ -89,10 +89,19 @@
   // description and hours/amount. Travel time carries the policy cap (max 8 hrs
   // per travel day, NJC Travel Directive). These are NOT subscription lines, so
   // they never earn reseller commission (isRecurringLine excludes non-subscription).
+  // The hourly types all bill at the one contract consulting rate (same feeDesc,
+  // so feePrice stays the single source) -- they differ only in the work-type
+  // label that prints on the invoice line. "Fixed-price engagement" (kind:'fixed')
+  // bills a quoted lump sum entered in the Amount field (no hourly rate).
   var SVC_ITEMS = [
-    { key: 'consult',     kind: 'hourly',      label: 'Consulting / data cleanup / training / custom reports', feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
-    { key: 'travel_time', kind: 'travel_time', label: 'Travel time',                                            feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
-    { key: 'travel_exp',  kind: 'atcost',      label: 'Travel expenses (at cost, no markup)',                   feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' }
+    { key: 'consult',     kind: 'hourly',      label: 'Consulting / advisory',                      feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
+    { key: 'pm',          kind: 'hourly',      label: 'Project management',                         feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
+    { key: 'ecdev',       kind: 'hourly',      label: 'Economic development work',                  feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
+    { key: 'appwork',     kind: 'hourly',      label: 'Application / funding work',                 feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
+    { key: 'datatrain',   kind: 'hourly',      label: 'Data cleanup / training / custom reports',   feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
+    { key: 'travel_time', kind: 'travel_time', label: 'Travel time',                                feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
+    { key: 'travel_exp',  kind: 'atcost',      label: 'Travel expenses (at cost, no markup)',       feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' },
+    { key: 'fixed',       kind: 'fixed',       label: 'Fixed-price engagement',                     feeDesc: null }
   ];
 
   // Contract prices come from FEE_SCHEDULE (never retyped), so the subscription
@@ -152,7 +161,7 @@
   // <select> of professional-service types, each showing its contract rate.
   function _svcSelectHtml(){
     return '<select id="cn-svc-type">' + SVC_ITEMS.map(function(s, i){
-      var rate = s.kind === 'atcost' ? 'at cost' : _money(feePrice(s.feeDesc)) + '/hr';
+      var rate = s.kind === 'atcost' ? 'at cost' : (s.kind === 'fixed' ? 'fixed price' : _money(feePrice(s.feeDesc)) + '/hr');
       return '<option value="' + i + '">' + esc(s.label) + '  —  ' + rate + '</option>';
     }).join('') + '</select>';
   }
@@ -1641,8 +1650,19 @@
       +     '</div>'
       +     '<p class="sub" style="margin:0 0 8px;font-size:11px;">Pick a fee-schedule item and Add, or use &ldquo;+ Add line&rdquo; for a free-form line. For hourly items, enter the number of hours in <b>Qty</b> (0.25 precision); for custom / at-cost items, fill in the amount.</p>'
       +     '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:2px 0 10px;">'
+      +       '<div style="font-weight:700;font-size:12px;margin-bottom:2px;">Subscription &amp; setup &mdash; flat plan</div>'
+      +       '<p class="sub" style="margin:0 0 8px;font-size:11px;">Add the subscription line priced from the <b>flat plan</b> (' + feeFmt(FLAT_PLAN.base) + ' base + ' + feeFmt(FLAT_PLAN.perHomeMo) + '/home/mo). Enter the home count + cadence; optionally add the one-time setup (' + feeFmt(FLAT_PLAN.setupBase) + ' base + ' + feeFmt(FLAT_PLAN.setupPerHome) + '/home). For <b>recurring</b> billing, prefer the Dynamic pricing toggle above &mdash; it prices from the nation\'s reported home count automatically.</p>'
+      +       '<div style="display:grid;grid-template-columns:120px 150px;gap:8px;">'
+      +         '<div><label>Homes</label><input id="cn-sub-homes" type="number" step="1" min="0" placeholder="0"/></div>'
+      +         '<div><label>Cadence</label><select id="cn-sub-cadence"><option value="monthly">Monthly</option><option value="annual">Annual</option></select></div>'
+      +       '</div>'
+      +       '<label style="display:flex;align-items:center;gap:8px;font-size:13px;margin-top:8px;"><input type="checkbox" id="cn-sub-setup" style="width:auto;"/> Also add the one-time setup line</label>'
+      +       '<div id="cn-sub-hint" class="sub" style="font-size:11px;margin:6px 0;"></div>'
+      +       '<button class="btn sm" type="button" data-act="inv-add-sub">Add subscription line &darr;</button>'
+      +     '</div>'
+      +     '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:2px 0 10px;">'
       +       '<div style="font-weight:700;font-size:12px;margin-bottom:2px;">Professional services &mdash; consulting &amp; travel</div>'
-      +       '<p class="sub" style="margin:0 0 8px;font-size:11px;">Bill hourly work or travel against the <b>contract rates</b>. Pick a service, add a project number + description and the time (or, for travel expenses, the at-cost amount); the line is added below with the total computed from the rate. Travel time is capped at <b>8 hours per travel day</b> (NJC Travel Directive).</p>'
+      +       '<p class="sub" style="margin:0 0 8px;font-size:11px;">Bill hourly work &mdash; consulting/advisory, <b>project management</b>, <b>economic development</b>, <b>application/funding work</b>, data/training &mdash; at the <b>contract rate</b>, or a <b>fixed-price engagement</b> at a quoted lump sum. Pick a service, add a project number + description and the hours (or, for travel expenses / fixed price, the amount); the line is added below. Travel time is capped at <b>8 hours per travel day</b> (NJC Travel Directive).</p>'
       +       '<div style="display:grid;grid-template-columns:1fr 160px;gap:8px;">'
       +         '<div><label>Service</label>' + _svcSelectHtml() + '</div>'
       +         '<div><label>Project #</label><input id="cn-svc-proj" placeholder="e.g. NP-2026-01"/></div>'
@@ -1651,7 +1671,7 @@
       +       '<div style="display:grid;grid-template-columns:120px 150px 1fr;gap:8px;margin-top:2px;">'
       +         '<div><label>Hours</label><input id="cn-svc-hrs" type="number" step="0.25" min="0" placeholder="0.00"/></div>'
       +         '<div><label>Travel days</label><input id="cn-svc-days" type="number" step="1" min="1" placeholder="1"/><div class="sub" style="font-size:10px;margin-top:1px;">travel time only</div></div>'
-      +         '<div><label>Amount $ (at cost)</label><input id="cn-svc-amt" type="number" step="0.01" min="0" placeholder="0.00"/><div class="sub" style="font-size:10px;margin-top:1px;">travel expenses only</div></div>'
+      +         '<div><label>Amount $</label><input id="cn-svc-amt" type="number" step="0.01" min="0" placeholder="0.00"/><div class="sub" style="font-size:10px;margin-top:1px;">travel expenses / fixed price</div></div>'
       +       '</div>'
       +       '<div id="cn-svc-hint" class="sub" style="font-size:11px;margin:6px 0;"></div>'
       +       '<button class="btn sm" type="button" data-act="inv-add-service">Add services line &darr;</button>'
@@ -3830,6 +3850,28 @@
   // policy cap (NJC Travel Directive). Travel expenses bill at the entered
   // at-cost amount (no markup). These are NOT subscription lines, so they never
   // earn reseller commission.
+  // Add a flat-plan subscription (and optional setup) line from the quick-add.
+  // Prices from FLAT_PLAN (flatSubMonthly/flatSubAnnual/flatSetup) so a manual
+  // invoice matches the dynamic path + the contract; the "subscription" wording
+  // keeps it counted by the reseller commission (isRecurringLine). For recurring
+  // billing use the Dynamic pricing toggle instead (reported home count).
+  window.invAddSubLine = function(){
+    var hint = document.getElementById('cn-sub-hint');
+    function warn(m){ if (hint){ hint.textContent = m; hint.style.color = '#c23b4b'; } }
+    function val(id){ var e = document.getElementById(id); return e ? e.value : ''; }
+    var homes = parseInt(val('cn-sub-homes') || '', 10);
+    if (!isFinite(homes) || homes < 0){ warn('Enter the number of homes.'); return; }
+    var monthly = (val('cn-sub-cadence') || 'monthly') !== 'annual';
+    var amt = monthly ? flatSubMonthly(homes) : flatSubAnnual(homes);
+    window.invAddLine({ d: 'Nation Pathways subscription - flat plan (' + homes + ' home' + (homes === 1 ? '' : 's') + ', ' + (monthly ? 'monthly' : 'annual') + ')', q: 1, p: amt });
+    var addSetup = !!((document.getElementById('cn-sub-setup') || {}).checked);
+    if (addSetup){
+      window.invAddLine({ d: 'One-time setup - flat (' + feeFmt(FLAT_PLAN.setupBase) + ' base + ' + feeFmt(FLAT_PLAN.setupPerHome) + '/home x ' + homes + ')', q: 1, p: flatSetup(homes) });
+    }
+    if (hint){ hint.style.color = ''; hint.textContent = 'Added below (' + feeFmt(amt) + (monthly ? '/mo' : '/yr') + (addSetup ? ' + setup ' + feeFmt(flatSetup(homes)) : '') + '). Adjust Qty / Unit if needed, then Create invoice & PDF.'; }
+    var h = document.getElementById('cn-sub-homes'); if (h) h.value = '';
+    var s = document.getElementById('cn-sub-setup'); if (s) s.checked = false;
+  };
   window.invAddServiceLine = function(){
     var sel = document.getElementById('cn-svc-type'); if (!sel) return;
     var it = SVC_ITEMS[parseInt(sel.value, 10)]; if (!it) return;
@@ -3840,9 +3882,10 @@
     var desc = String(val('cn-svc-desc') || '').trim();
     var tail = (proj ? ' — Project #' + proj : '') + (desc ? ' — ' + desc : '');
     var line;
-    if (it.kind === 'atcost'){
+    if (it.kind === 'atcost' || it.kind === 'fixed'){
+      if (it.kind === 'fixed' && !desc){ warn('Add a short description of the fixed-price work.'); return; }
       var amt = parseFloat(val('cn-svc-amt') || '0') || 0;
-      if (!(amt > 0)){ warn('Enter the travel-expense amount (billed at cost).'); return; }
+      if (!(amt > 0)){ warn(it.kind === 'fixed' ? 'Enter the fixed-price amount.' : 'Enter the travel-expense amount (billed at cost).'); return; }
       line = { d: it.label + tail, q: 1, p: Math.round(amt * 100) / 100 };
     } else {
       var rate = feePrice(it.feeDesc);
@@ -4580,6 +4623,7 @@
       case 'copy-text':     window.copyTextBtn(el); break;
       case 'inv-add-line':  window.invAddLine(); break;
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
+      case 'inv-add-sub':     window.invAddSubLine(); break;
       case 'inv-add-service': window.invAddServiceLine(); break;
       case 'inv-del-line':  { var lr = el.closest && el.closest('.inv-line'); if (lr) lr.remove(); break; }
       case 'inv-create':    window.createNationInvoice(el.getAttribute('data-sub') || '', id); break;
