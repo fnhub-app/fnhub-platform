@@ -363,6 +363,7 @@
     { k:'addnation', grp:'Overview', label:'Add a nation',  icon:ICO.add,    eyebrow:'Control Plane', title:'Add a nation',     sub:'Register a nation in the platform directory' },
     { k:'migrations',grp:'Overview', label:'Migrations',    icon:ICO.db,     eyebrow:'Control Plane', title:'Fleet migrations', sub:'Run a SQL migration across every nation' },
     { k:'resellers', grp:'Business', label:'Resellers',     icon:ICO.users,  eyebrow:'Business',      title:'Resellers',        sub:'Agreements, commission statements, and sales' },
+    { k:'pricing',   grp:'Business', label:'Pricing',       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', eyebrow:'Business', title:'Pricing calculator', sub:'Model a nation’s subscription on the flat per-home plan' },
     { k:'sop',       grp:'System',   label:'Onboarding SOP',icon:ICO.doc,    eyebrow:'System',        title:'Onboarding SOP',   sub:'The standard operating procedure for onboarding a nation' },
     { k:'admins',    grp:'System',   label:'Administrators',icon:ICO.shield, eyebrow:'System',        title:'Administrators',   sub:'Platform administrators and two-factor' }
   ];
@@ -612,6 +613,7 @@
       +   panel('migrations', migrationsCard(nations), false)
       // Resellers renders lazily (reseller.js) the first time its tab opens.
       +   panel('resellers', '<div id="rs-root"><p class="sub" style="margin-top:14px;">Loading…</p></div>', false)
+      +   panel('pricing',   '<div id="pricing-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
       +   panel('admins',    adminsCard(admins, meEmail), false)
       + '</div>'   // panels wrapper
       + '</div>'   // .main
@@ -1752,6 +1754,76 @@
     if (name === 'resellers' && typeof window.renderResellers === 'function') window.renderResellers();
     if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
     if (name === 'requests' && typeof window.renderBuildTickets === 'function') window.renderBuildTickets();
+    if (name === 'pricing'  && typeof window.renderPricing === 'function') window.renderPricing();
+  };
+
+  // ===== Pricing calculator (Dashboard -> Pricing) ===========================
+  // A self-contained calculator for the flat per-home plan: a base platform fee
+  // plus a flat rate per home on every home, with editable setup and add-ons.
+  // Purely local arithmetic (nothing saved). Wiring the flat plan into the
+  // contract Schedule A and invoices is a separate step; a note below says so.
+  window.renderPricing = function(){
+    var root = document.getElementById('pricing-root');
+    if (!root) return;
+    var INP = 'font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-variant-numeric:tabular-nums;';
+    function prfield(label, id, val, step, prefix){
+      return '<label style="display:block;font-size:13px;font-weight:600;color:var(--ink);margin-top:12px;">' + esc(label)
+        + '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">'
+        + (prefix ? '<span style="color:var(--muted);font-weight:700;">' + prefix + '</span>' : '')
+        + '<input type="number" id="' + id + '" value="' + val + '" min="0" step="' + step + '" style="' + INP + 'width:140px;"></div></label>';
+    }
+    function prout(label, id, bold){
+      return '<div style="display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;' + (bold ? 'font-weight:700;' : '') + '">'
+        + '<span style="font-size:13px;color:' + (bold ? 'var(--ink)' : 'var(--muted)') + ';">' + esc(label) + '</span>'
+        + '<span id="' + id + '" style="font-variant-numeric:tabular-nums;font-size:' + (bold ? '15px' : '13px') + ';color:var(--ink);">—</span></div>';
+    }
+    root.innerHTML =
+      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-top:10px;">'
+      + '<form id="pr-form" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;">'
+      +   '<h3 style="margin:0 0 4px;font-size:14px;">Flat per-home plan</h3>'
+      +   '<p style="font-size:12px;color:var(--muted);margin:0 0 4px;">A base platform fee plus a flat rate per home, on every home. Every value is editable.</p>'
+      +   prfield('Homes managed', 'pr-homes', '300', '1')
+      +   prfield('Base platform fee / year', 'pr-base', '4560', '10', '$')
+      +   prfield('Per home / month', 'pr-permo', '2', '0.25', '$')
+      +   '<hr style="border:none;border-top:1px solid var(--line);margin:14px 0 2px;">'
+      +   prfield('One-time setup', 'pr-setup', '6000', '100', '$')
+      +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:12px;"><input type="checkbox" id="pr-ai-on"> AI Staff Assistant / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-ai" value="150" min="0" step="5" style="' + INP + 'width:80px;"></label>'
+      +   '<label style="display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);margin-top:8px;"><input type="checkbox" id="pr-sms-on"> Text notifications / mo <span style="color:var(--muted);">$</span><input type="number" id="pr-sms" value="25" min="0" step="5" style="' + INP + 'width:80px;"></label>'
+      + '</form>'
+      + '<div style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;">'
+      +   '<h3 style="margin:0 0 10px;font-size:14px;">This nation would pay</h3>'
+      +   prout('Subscription / year', 'pr-out-sub')
+      +   prout('Billed monthly (annual/12 +10%)', 'pr-out-monthly')
+      +   prout('Effective per home / year', 'pr-out-perhome')
+      +   prout('Add-ons / year', 'pr-out-addons')
+      +   '<div style="border-top:1px solid var(--line);margin:8px 0;"></div>'
+      +   prout('All-in, ongoing / year', 'pr-out-allin', true)
+      +   prout('One-time setup', 'pr-out-setup')
+      +   prout('Year 1 (all-in + setup)', 'pr-out-y1', true)
+      +   '<p style="font-size:11px;color:var(--muted);margin:12px 0 0;line-height:1.5;">Calculator only. The subscription agreement (Schedule A) and invoices still use the current published bands until the flat plan is wired in — that step is pending the base-fee sign-off and the Proctor Solutions invoice logo.</p>'
+      + '</div>'
+      + '</div>';
+    function num(id, d){ var el = root.querySelector('#' + id); var v = el ? parseFloat(el.value) : NaN; return isFinite(v) ? v : d; }
+    function set(id, t){ var el = root.querySelector('#' + id); if (el) el.textContent = t; }
+    function recompute(){
+      var homes  = Math.max(0, num('pr-homes', 300));
+      var sub    = num('pr-base', 4560) + homes * num('pr-permo', 2) * 12;
+      var setup  = num('pr-setup', 6000);
+      var aiOn   = root.querySelector('#pr-ai-on').checked;
+      var smsOn  = root.querySelector('#pr-sms-on').checked;
+      var addons = (aiOn ? num('pr-ai', 150) * 12 : 0) + (smsOn ? num('pr-sms', 25) * 12 : 0);
+      var monthly = Math.round((sub / 12) * 1.1 / 5) * 5;  // the existing annual/12 +10%, rounded to $5
+      var allIn  = sub + addons;
+      set('pr-out-sub', _money(sub) + '/yr');
+      set('pr-out-monthly', _money(monthly) + '/mo');
+      set('pr-out-perhome', homes > 0 ? _money(sub / homes) + '/home' : '—');
+      set('pr-out-addons', addons > 0 ? _money(addons) + '/yr' : '—');
+      set('pr-out-allin', _money(allIn) + '/yr');
+      set('pr-out-setup', _money(setup));
+      set('pr-out-y1', _money(allIn + setup));
+    }
+    root.addEventListener('input', recompute);
+    recompute();
   };
 
   // ===== Requests (development ticket queue) ==================================
