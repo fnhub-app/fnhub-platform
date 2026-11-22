@@ -1765,7 +1765,7 @@
   window.renderPricing = function(){
     var root = document.getElementById('pricing-root');
     if (!root) return;
-    var INP = 'font:inherit;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-variant-numeric:tabular-nums;';
+    var INP = 'font-family:var(--sans);font-size:14px;padding:6px 8px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink);font-variant-numeric:tabular-nums;';
     function prfield(label, id, val, step, prefix){
       return '<label style="display:block;font-size:13px;font-weight:600;color:var(--ink);margin-top:12px;">' + esc(label)
         + '<div style="display:flex;align-items:center;gap:6px;margin-top:4px;">'
@@ -1778,7 +1778,7 @@
         + '<span id="' + id + '" style="font-variant-numeric:tabular-nums;font-size:' + (bold ? '15px' : '13px') + ';color:var(--ink);">—</span></div>';
     }
     root.innerHTML =
-      '<div style="display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-top:10px;">'
+      '<div style="font-family:var(--sans);display:grid;grid-template-columns:1fr 1fr;gap:18px;align-items:start;margin-top:10px;">'
       + '<form id="pr-form" style="background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:16px;">'
       +   '<h3 style="margin:0 0 4px;font-size:14px;">Flat per-home plan</h3>'
       +   '<p style="font-size:12px;color:var(--muted);margin:0 0 4px;">A base platform fee plus a flat rate per home, on every home. Every value is editable.</p>'
@@ -1806,6 +1806,7 @@
       + '</div>';
     function num(id, d){ var el = root.querySelector('#' + id); var v = el ? parseFloat(el.value) : NaN; return isFinite(v) ? v : d; }
     function set(id, t){ var el = root.querySelector('#' + id); if (el) el.textContent = t; }
+    function money(v){ return '$' + (Number(v) || 0).toLocaleString('en-CA', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
     function recompute(){
       var homes  = Math.max(0, num('pr-homes', 300));
       var sub    = num('pr-base', 4560) + homes * num('pr-permo', 2) * 12;
@@ -1815,13 +1816,13 @@
       var addons = (aiOn ? num('pr-ai', 150) * 12 : 0) + (smsOn ? num('pr-sms', 25) * 12 : 0);
       var monthly = Math.round((sub / 12) * 1.1 / 5) * 5;  // the existing annual/12 +10%, rounded to $5
       var allIn  = sub + addons;
-      set('pr-out-sub', _money(sub) + '/yr');
-      set('pr-out-monthly', _money(monthly) + '/mo');
-      set('pr-out-perhome', homes > 0 ? _money(sub / homes) + '/home' : '—');
-      set('pr-out-addons', addons > 0 ? _money(addons) + '/yr' : '—');
-      set('pr-out-allin', _money(allIn) + '/yr');
-      set('pr-out-setup', _money(setup));
-      set('pr-out-y1', _money(allIn + setup));
+      set('pr-out-sub', money(sub) + '/yr');
+      set('pr-out-monthly', money(monthly) + '/mo');
+      set('pr-out-perhome', homes > 0 ? money(sub / homes) + '/home' : '—');
+      set('pr-out-addons', addons > 0 ? money(addons) + '/yr' : '—');
+      set('pr-out-allin', money(allIn) + '/yr');
+      set('pr-out-setup', money(setup));
+      set('pr-out-y1', money(allIn + setup));
     }
     root.addEventListener('input', recompute);
     recompute();
