@@ -172,15 +172,28 @@
   // YYYY-MM-DD for today + n days (browser Date is available here).
   function _dPlus(n){ return new Date(Date.now() + n * 86400000).toISOString().slice(0, 10); }
   // Grouped <select> of the fee schedule (built at render time so _money exists).
+  // Descriptions the structured quick-add builders (Subscription & setup,
+  // Professional services) already handle -- hidden from the raw catalog picker
+  // so each item lives in ONE place. (They stay in FEE_SCHEDULE for pricing and
+  // the recurring-billing fallback picker, which still needs the subscription line.)
+  var _FEE_IN_BUILDER = {
+    'Subscription - Nation Pathways (flat plan, enter amount)': 1,
+    'One-time setup - Nation Pathways (flat, enter amount)': 1,
+    'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)': 1,
+    'Travel time (per hour, max 8 hrs/travel day)': 1,
+    'Travel expenses (at cost, NJC Travel Directive, no markup)': 1
+  };
   function _feeScheduleSelectHtml(){
     var groups = [];
     FEE_SCHEDULE.forEach(function(it, i){
+      if (_FEE_IN_BUILDER[it.d]) return;   // covered by a structured builder below
       var gi = null;
       for (var k = 0; k < groups.length; k++){ if (groups[k].g === it.g){ gi = groups[k]; break; } }
       if (!gi){ gi = { g: it.g, items: [] }; groups.push(gi); }
       gi.items.push({ i: i, it: it });
     });
     var opts = groups.map(function(g){
+      if (!g.items.length) return '';
       return '<optgroup label="' + esc(g.g) + '">' + g.items.map(function(x){
         var price = x.it.custom ? 'enter amount' : (x.it.hours ? _money(x.it.p) + '/hr' : _money(x.it.p));
         return '<option value="' + x.i + '">' + esc(x.it.d) + '  —  ' + price + '</option>';
@@ -1692,10 +1705,10 @@
       +     '<summary>New invoice</summary>'
       +     '<div id="cn-inv-carry" style="display:none;background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin:10px 0;"></div>'
       +     '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">'
-      +       '<div style="flex:1;min-width:230px;"><label>Fee schedule</label>' + _feeScheduleSelectHtml() + '</div>'
+      +       '<div style="flex:1;min-width:230px;"><label>Add-ons &amp; overages</label>' + _feeScheduleSelectHtml() + '</div>'
       +       '<button class="btn sm" type="button" data-act="inv-add-catalog">Add selected &darr;</button>'
       +     '</div>'
-      +     '<p class="sub" style="margin:0 0 8px;font-size:11px;">Pick a fee-schedule item and Add, or use &ldquo;+ Add line&rdquo; for a free-form line. For hourly items, enter the number of hours in <b>Qty</b> (0.25 precision); for custom / at-cost items, fill in the amount.</p>'
+      +     '<p class="sub" style="margin:0 0 8px;font-size:11px;">AI / SMS add-ons and per-use overages. For <b>subscription &amp; setup</b> and <b>consulting / travel</b>, use the builders below. Use &ldquo;+ Add blank line&rdquo; for anything else; fill the amount on custom / at-cost items.</p>'
       +     '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:2px 0 10px;">'
       +       '<div style="font-weight:700;font-size:12px;margin-bottom:2px;">Subscription &amp; setup &mdash; flat plan</div>'
       +       '<p class="sub" style="margin:0 0 8px;font-size:11px;">Add the subscription line priced from the <b>flat plan</b> (' + feeFmt(FLAT_PLAN.base) + ' base + ' + feeFmt(FLAT_PLAN.perHomeMo) + '/home/mo). Enter the home count + cadence; optionally add the one-time setup (' + feeFmt(FLAT_PLAN.setupBase) + ' base + ' + feeFmt(FLAT_PLAN.setupPerHome) + '/home). For <b>recurring</b> billing, prefer the Dynamic pricing toggle above &mdash; it prices from the nation\'s reported home count automatically.</p>'
