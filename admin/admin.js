@@ -1738,11 +1738,11 @@
       + '</div>'
       + '<div class="nic-tabs">'
       +   tab('overview', 'Overview', true) + tab('supabase', 'Config') + tab('email', 'Email Config') + tab('emailintake', 'Email Intake') + tab('sms', 'SMS & Portal') + tab('agreement', 'Agreement')
-      +   tab('billing', 'Billing') + tab('invoices', 'Invoices') + tab('notes', 'Notes') + tab('documents', 'Documents')
+      +   tab('finance', 'Finance') + tab('notes', 'Notes') + tab('documents', 'Documents')
       + '</div>'
       + '<div class="nic-body">'
       +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail) + panel('emailintake', pEmailIntake)
-      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('billing', pBilling) + panel('invoices', pInvoices)
+      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pBilling + pInvoices)
       +   panel('notes', pNotes) + panel('documents', pDocuments)
       + '</div>'
       + '<div class="nic-footer">'
