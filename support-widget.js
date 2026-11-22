@@ -293,13 +293,45 @@
     var sub = document.getElementById('support_subject'); if (sub) setTimeout(function () { try { sub.focus(); } catch (e) {} }, 30);
   }
 
+  // Best-effort device / OS / browser summary from the user agent, captured with
+  // the ticket so staff (and the AI triage prompt) know what the reporter was on
+  // without having to ask.
+  function _device() {
+    var ua = navigator.userAgent || '', m, os = 'Unknown', br = 'Unknown';
+    if (/Windows NT/.test(ua)) os = 'Windows';
+    else if (/iPhone|iPad|iPod/.test(ua)) os = 'iOS';
+    else if (/Mac OS X/.test(ua)) os = 'macOS';
+    else if (/Android/.test(ua)) os = 'Android';
+    else if (/Linux/.test(ua)) os = 'Linux';
+    if ((m = /Edg\/([\d.]+)/.exec(ua))) br = 'Edge ' + m[1];
+    else if ((m = /OPR\/([\d.]+)/.exec(ua))) br = 'Opera ' + m[1];
+    else if ((m = /CriOS\/([\d.]+)/.exec(ua))) br = 'Chrome (iOS) ' + m[1];
+    else if (/Chrome\//.test(ua) && (m = /Chrome\/([\d.]+)/.exec(ua))) br = 'Chrome ' + m[1];
+    else if ((m = /Firefox\/([\d.]+)/.exec(ua))) br = 'Firefox ' + m[1];
+    else if (/Safari/.test(ua) && (m = /Version\/([\d.]+)/.exec(ua))) br = 'Safari ' + m[1];
+    var dt = /iPad|Tablet/i.test(ua) ? 'Tablet'
+      : (/Mobi|iPhone|Android.*Mobile/i.test(ua) ? 'Mobile' : 'Desktop');
+    return { os: os, browser: br, device_type: dt };
+  }
+
   function _ctx() {
+    var d = _device(), tz = '';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || ''; } catch (e) {}
+    var sc = window.screen || {};
     return {
       page: (location.pathname.replace(/^.*\//, '') || 'index.html'),
       url: location.href,
       app_version: (window.CLFN_APP_VERSION || ''),
       user_agent: navigator.userAgent,
-      viewport: (window.innerWidth || 0) + 'x' + (window.innerHeight || 0)
+      viewport: (window.innerWidth || 0) + 'x' + (window.innerHeight || 0),
+      screen: (sc.width || 0) + 'x' + (sc.height || 0),
+      dpr: window.devicePixelRatio || 1,
+      os: d.os,
+      browser: d.browser,
+      device_type: d.device_type,
+      language: navigator.language || '',
+      timezone: tz,
+      touch: ('ontouchstart' in window) || (navigator.maxTouchPoints > 0)
     };
   }
 
