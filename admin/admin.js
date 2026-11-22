@@ -89,20 +89,50 @@
   // description and hours/amount. Travel time carries the policy cap (max 8 hrs
   // per travel day, NJC Travel Directive). These are NOT subscription lines, so
   // they never earn reseller commission (isRecurringLine excludes non-subscription).
-  // The hourly types all bill at the one contract consulting rate (same feeDesc,
-  // so feePrice stays the single source) -- they differ only in the work-type
-  // label that prints on the invoice line. "Fixed-price engagement" (kind:'fixed')
-  // bills a quoted lump sum entered in the Amount field (no hourly rate).
-  var SVC_ITEMS = [
-    { key: 'consult',     kind: 'hourly',      label: 'Consulting / advisory',                      feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
-    { key: 'pm',          kind: 'hourly',      label: 'Project management',                         feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
-    { key: 'ecdev',       kind: 'hourly',      label: 'Economic development work',                  feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
-    { key: 'appwork',     kind: 'hourly',      label: 'Application / funding work',                 feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
-    { key: 'datatrain',   kind: 'hourly',      label: 'Data cleanup / training / custom reports',   feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
-    { key: 'travel_time', kind: 'travel_time', label: 'Travel time',                                feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
-    { key: 'travel_exp',  kind: 'atcost',      label: 'Travel expenses (at cost, no markup)',       feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' },
-    { key: 'fixed',       kind: 'fixed',       label: 'Fixed-price engagement',                     feeDesc: null }
+  // Service types are organized into GROUPS (rendered as <optgroup>s), data-driven
+  // so sub-types are added by editing the tree -- no handler change. The hourly
+  // consulting sub-types all bill at the one contract consulting rate (they share
+  // the group's feeDesc, so feePrice stays the single source); only the work-type
+  // label differs on the printed line. An item may override the group's kind/feeDesc
+  // (Travel, Fixed price). `needsDesc` forces a description ("Other …", fixed price).
+  var _SVC_CONSULT_FEE = 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)';
+  var SVC_GROUPS = [
+    { label: 'Consulting & advisory (hourly)', kind: 'hourly', feeDesc: _SVC_CONSULT_FEE, items: [
+      { key: 'consult',   label: 'General consulting / advisory' },
+      { key: 'pm',        label: 'Project management' },
+      { key: 'ecdev',     label: 'Economic development' },
+      { key: 'appwork',   label: 'Application / funding work' },
+      { key: 'grantadmin',label: 'Grant administration / reporting' },
+      { key: 'datatrain', label: 'Data cleanup / migration' },
+      { key: 'training',  label: 'Training / facilitation' },
+      { key: 'reports',   label: 'Custom reports / analysis' },
+      { key: 'policy',    label: 'Policy / governance support' },
+      { key: 'other_consult', label: 'Other consulting', needsDesc: true }
+    ] },
+    { label: 'Travel', items: [
+      { key: 'travel_time', kind: 'travel_time', label: 'Travel time',                          feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
+      { key: 'travel_exp',  kind: 'atcost',      label: 'Travel expenses (at cost, no markup)', feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' }
+    ] },
+    { label: 'Fixed price', items: [
+      { key: 'fixed', kind: 'fixed', label: 'Fixed-price engagement', needsDesc: true }
+    ] }
   ];
+  // Flatten to an index-addressable list (invAddServiceLine reads SVC_ITEMS[index]);
+  // each item inherits its group's kind/feeDesc unless it overrides, and carries
+  // its group label so the <select> can rebuild the optgroups.
+  var SVC_ITEMS = [];
+  SVC_GROUPS.forEach(function(g){
+    (g.items || []).forEach(function(it){
+      SVC_ITEMS.push({
+        key: it.key,
+        kind: it.kind || g.kind,
+        label: it.label,
+        feeDesc: (it.feeDesc !== undefined) ? it.feeDesc : g.feeDesc,
+        needsDesc: !!it.needsDesc,
+        group: g.label
+      });
+    });
+  });
 
   // Contract prices come from FEE_SCHEDULE (never retyped), so the subscription
   // agreement's Schedule A and the reseller pricing summary always match the
@@ -159,11 +189,17 @@
     return '<select id="cn-inv-catalog">' + opts + '</select>';
   }
   // <select> of professional-service types, each showing its contract rate.
+  // <select> of professional-service types, grouped into <optgroup>s by SVC_ITEMS'
+  // `.group` (which preserves SVC_GROUPS order), each showing its rate.
   function _svcSelectHtml(){
-    return '<select id="cn-svc-type">' + SVC_ITEMS.map(function(s, i){
+    var html = '<select id="cn-svc-type">', cur = null;
+    SVC_ITEMS.forEach(function(s, i){
+      if (s.group !== cur){ if (cur !== null) html += '</optgroup>'; html += '<optgroup label="' + esc(s.group) + '">'; cur = s.group; }
       var rate = s.kind === 'atcost' ? 'at cost' : (s.kind === 'fixed' ? 'fixed price' : _money(feePrice(s.feeDesc)) + '/hr');
-      return '<option value="' + i + '">' + esc(s.label) + '  —  ' + rate + '</option>';
-    }).join('') + '</select>';
+      html += '<option value="' + i + '">' + esc(s.label) + '  —  ' + rate + '</option>';
+    });
+    if (cur !== null) html += '</optgroup>';
+    return html + '</select>';
   }
 
   var app = document.getElementById('app');
@@ -1631,6 +1667,16 @@
       +   '<button class="btn sm" type="button" data-act="note-add" data-sub="' + esc(n.subdomain) + '">Add note</button>'
       + '</div>';
 
+    // At-a-glance KPI strip (TIC-style tile row) — populated by the invoice +
+    // billing renderers (renderNationInvoices / renderNationBilling).
+    var pFinanceKpis =
+        '<div class="dash-kpis" id="cn-fin-kpis" style="margin:14px 0 2px;">'
+      +   '<div class="dash-kpi"><div class="l">Outstanding</div><div class="v" id="kpi-fin-out">&mdash;</div><div class="m" id="kpi-fin-out-m">&nbsp;</div></div>'
+      +   '<div class="dash-kpi"><div class="l">Paid (this year)</div><div class="v" id="kpi-fin-paid">&mdash;</div><div class="m" id="kpi-fin-paid-m">&nbsp;</div></div>'
+      +   '<div class="dash-kpi"><div class="l">Next scheduled</div><div class="v" id="kpi-fin-next">&mdash;</div><div class="m" id="kpi-fin-next-m">&nbsp;</div></div>'
+      +   '<div class="dash-kpi"><div class="l">Overdue</div><div class="v" id="kpi-fin-over">&mdash;</div><div class="m" id="kpi-fin-over-m">&nbsp;</div></div>'
+      + '</div>';
+
     var pBilling =
         '<div class="card"><h3>Recurring billing</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Automated subscription invoicing. On each due date the scheduler generates an invoice from this schedule, advances the next date, and (when Auto-send is on) emails the nation. Generated invoices land in the Invoices tab and count toward Outstanding. Set up the daily scheduler once &mdash; see <code>docs/RECURRING-INVOICING.md</code>.</p>'
@@ -1638,12 +1684,13 @@
       + '</div>';
 
     var pInvoices =
-        '<div class="card"><h3>Invoices</h3>'
-      +   '<p class="sub" style="margin:2px 0 8px;">Subscription, setup and add-on billing for this nation. Creating an invoice generates a PDF and files it in Documents.</p>'
+        '<div class="card"><h3>Invoices<button class="btn sm ghost" type="button" data-act="inv-export" data-sub="' + esc(n.subdomain) + '" title="Export all invoices to CSV">&#8681; Export CSV</button></h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Subscription, setup and add-on billing for this nation. Click an invoice number to open its PDF.</p>'
+      +   '<div class="fin-chips" id="cn-inv-chips"></div>'
       +   '<div id="cn-invoices"><div class="empty">Loading invoices...</div></div>'
-      +   '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px;">'
-      +     '<div style="font-weight:700;font-size:13px;margin-bottom:8px;">New invoice</div>'
-      +     '<div id="cn-inv-carry" style="display:none;background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin-bottom:10px;"></div>'
+      +   '<details class="fin-create">'
+      +     '<summary>New invoice</summary>'
+      +     '<div id="cn-inv-carry" style="display:none;background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin:10px 0;"></div>'
       +     '<div style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap;margin-bottom:8px;">'
       +       '<div style="flex:1;min-width:230px;"><label>Fee schedule</label>' + _feeScheduleSelectHtml() + '</div>'
       +       '<button class="btn sm" type="button" data-act="inv-add-catalog">Add selected &darr;</button>'
@@ -1691,7 +1738,7 @@
       +     '<label>Invoice notes (optional)</label><input id="cn-inv-notes" placeholder="Payable within 30 days; e-transfer to..."/>'
       +     '<div class="msg" id="cn-inv-msg"></div>'
       +     '<button class="btn" type="button" data-act="inv-create" data-sub="' + esc(n.subdomain) + '" data-id="' + esc(n.id) + '">Create invoice &amp; PDF</button>'
-      +   '</div>'
+      +   '</details>'
       + '</div>';
 
     var pAgreement =
@@ -1742,7 +1789,7 @@
       + '</div>'
       + '<div class="nic-body">'
       +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail) + panel('emailintake', pEmailIntake)
-      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pBilling + pInvoices)
+      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pFinanceKpis + pInvoices + pBilling)
       +   panel('notes', pNotes) + panel('documents', pDocuments)
       + '</div>'
       + '<div class="nic-footer">'
@@ -3882,8 +3929,8 @@
     var desc = String(val('cn-svc-desc') || '').trim();
     var tail = (proj ? ' — Project #' + proj : '') + (desc ? ' — ' + desc : '');
     var line;
+    if (it.needsDesc && !desc){ warn(it.kind === 'fixed' ? 'Add a short description of the fixed-price work.' : 'Add a short description of the work.'); return; }
     if (it.kind === 'atcost' || it.kind === 'fixed'){
-      if (it.kind === 'fixed' && !desc){ warn('Add a short description of the fixed-price work.'); return; }
       var amt = parseFloat(val('cn-svc-amt') || '0') || 0;
       if (!(amt > 0)){ warn(it.kind === 'fixed' ? 'Enter the fixed-price amount.' : 'Enter the travel-expense amount (billed at cost).'); return; }
       line = { d: it.label + tail, q: 1, p: Math.round(amt * 100) / 100 };
@@ -3942,46 +3989,39 @@
     rows.forEach(function(x){ var m = re.exec(String(x.number || '')); if (m){ var nn = parseInt(m[1], 10); if (nn > max) max = nn; } });
     return 'NP-' + year + '-' + String(max + 1).padStart(2, '0');
   }
+  // today's ISO (YYYY-MM-DD) for overdue comparison.
+  function _finToday(){ return _dPlus(0); }
+  // Classify one invoice for the list + KPIs: effective status, overdue flag,
+  // balance, paid amount. "partial" = a sent invoice with some (not full) payment.
+  function _invClass(x){
+    var bal = _invBalance(x), paid = Number(x.amount_paid) || 0;
+    var eff = (x.status === 'sent' && paid > 0.005 && bal > 0.005) ? 'partial' : x.status;
+    var overdue = _invOwing(x) && !!x.due_date && String(x.due_date) < _finToday();
+    return { eff: eff, overdue: overdue, bal: bal, paid: paid };
+  }
+  // Does an invoice match a status filter chip? "overdue" is a derived bucket.
+  function _invMatch(x, f){
+    if (f === 'all') return true;
+    var c = _invClass(x);
+    return (f === 'overdue') ? c.overdue : (c.eff === f);
+  }
+  // Set a Finance KPI tile's value + meta spans (ids: <id> and <id>-m).
+  function _finKpi(id, v, m){
+    var ve = document.getElementById(id); if (ve) ve.innerHTML = v;
+    var me = document.getElementById(id + '-m'); if (me) me.innerHTML = (m == null || m === '') ? '&nbsp;' : m;
+  }
   async function renderNationInvoices(sub){
     var host = document.getElementById('cn-invoices'); if (!host) return;
     var r = await api('GET', '/nation_invoices?subdomain=eq.' + encodeURIComponent(sub) + '&order=issue_date.desc');
     var inv = r.ok ? await r.json().catch(function(){ return []; }) : [];
-    // Stash for on-demand PDF view + carry-forward. Clearing any pending
-    // carry-forward intent here means a re-render (nation switch / tab reopen)
-    // can't leak it onto an unrelated invoice; the create flow runs before any
-    // re-render, so the normal carry->create path is unaffected.
+    // Stash for on-demand PDF view + carry-forward + client-side chip filtering.
+    // Clearing any pending carry-forward intent here means a re-render (nation
+    // switch / tab reopen) can't leak it onto an unrelated invoice.
     window._nicInvoices = inv;
     window._nicCarryIds = null;
-    if (!inv.length){ host.innerHTML = '<div class="empty">No invoices yet.</div>'; }
-    else {
-      var rows = inv.map(function(x){
-        var bal = _invBalance(x);
-        var paidAmt = Number(x.amount_paid) || 0;
-        // Show "Partially paid" for a sent invoice with some (but not full) payment.
-        var effStatus = (x.status === 'sent' && paidAmt > 0.005 && bal > 0.005) ? 'partial' : x.status;
-        var st = INV_STATUS[effStatus] || ['?', 'provisioning'];
-        var acts = '';
-        if (x.status === 'draft') acts += '<button class="btn sm ghost" type="button" data-act="inv-status" data-id="' + esc(x.id) + '" data-status="sent" data-sub="' + esc(sub) + '">Mark sent</button>';
-        if (_invOwing(x)) acts += '<button class="btn sm ghost" type="button" data-act="inv-pay" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '">Record payment</button>';
-        if (x.status === 'sent' || x.status === 'partial' || x.status === 'paid') acts += '<button class="btn sm ghost" type="button" data-act="inv-interest" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '" title="Add past-due interest (1%/month)">+ Interest</button>';
-        if (x.status !== 'void' && x.status !== 'paid' && x.status !== 'carried') acts += '<button class="btn sm danger" type="button" data-act="inv-status" data-id="' + esc(x.id) + '" data-status="void" data-sub="' + esc(sub) + '">Void</button>';
-        var meta = [];
-        if (x.due_date)  meta.push('due ' + esc(x.due_date));
-        if (Number(x.discount) > 0.005) meta.push('discount -' + _money(x.discount));
-        if (paidAmt > 0.005 && bal > 0.005) meta.push('paid ' + _money(paidAmt) + ' of ' + _money(x.total));
-        if (x.paid_date) meta.push((bal > 0.005 ? 'last pmt ' : 'paid ') + esc(x.paid_date));
-        if (bal > 0.005 && (x.status === 'sent' || x.status === 'partial')) meta.push('<b style="color:var(--danger);">balance ' + _money(bal) + '</b>');
-        return '<tr>'
-          + '<td><div class="std-id"><div style="min-width:0;">'
-          +   '<div class="std-id-main"><button class="btn sm ghost" type="button" data-act="inv-view" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '" title="View invoice PDF" style="margin:0;padding:2px 6px;font-weight:700;text-decoration:underline;">' + esc(x.number) + '</button></div>'
-          +   (x.issue_date ? '<div class="std-id-sub">issued ' + esc(x.issue_date) + '</div>' : '')
-          + '</div></div></td>'
-          + '<td class="num">' + _money(x.total, x.currency) + '</td>'
-          + '<td><span class="pill ' + st[1] + '">' + st[0] + '</span>' + (meta.length ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">' + meta.join(' · ') + '</div>' : '') + '</td>'
-          + '<td class="std-rowend"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">' + acts + '</div></td></tr>';
-      }).join('');
-      host.innerHTML = '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>Invoice</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
-    }
+    window._nicInvSub = sub;
+    if (window._nicInvFilter == null) window._nicInvFilter = 'all';
+    _nicRenderInvTable();
     // Carry-forward banner in the New invoice area: total unpaid balance across
     // all owing invoices, one click to add it as a line on the next invoice.
     var cf = document.getElementById('cn-inv-carry');
@@ -3996,6 +4036,79 @@
       } else { cf.style.display = 'none'; cf.innerHTML = ''; }
     }
   }
+  // Render the invoice table + status chips + KPI tiles from the stashed invoices
+  // (client-side; no refetch), filtered by window._nicInvFilter. Chips re-call this.
+  function _nicRenderInvTable(){
+    var host = document.getElementById('cn-invoices'); if (!host) return;
+    var inv = window._nicInvoices || [];
+    var sub = window._nicInvSub || '';
+    var f = window._nicInvFilter || 'all';
+    // KPIs
+    var curYear = String(new Date().getFullYear());
+    var outstanding = 0, overdueSum = 0, overdueCount = 0, owingCount = 0, paidYtd = 0;
+    inv.forEach(function(x){
+      var c = _invClass(x);
+      if (_invOwing(x)){ outstanding += c.bal; owingCount++; }
+      if (c.overdue){ overdueSum += c.bal; overdueCount++; }
+      if (x.paid_date && String(x.paid_date).slice(0, 4) === curYear) paidYtd += (Number(x.amount_paid) || 0);
+    });
+    outstanding = Math.round(outstanding * 100) / 100; overdueSum = Math.round(overdueSum * 100) / 100; paidYtd = Math.round(paidYtd * 100) / 100;
+    _finKpi('kpi-fin-out', _money(outstanding), owingCount ? (owingCount + ' open invoice' + (owingCount > 1 ? 's' : '')) : 'all settled');
+    _finKpi('kpi-fin-paid', _money(paidYtd), curYear);
+    _finKpi('kpi-fin-over', overdueCount ? '<span style="color:var(--danger);">' + overdueCount + '</span>' : '0', overdueCount ? _money(overdueSum) + ' past due' : 'none');
+    // Status filter chips (only buckets that have rows, plus All)
+    var BUCKETS = [['all', 'All'], ['draft', 'Draft'], ['sent', 'Sent'], ['partial', 'Partial'], ['overdue', 'Overdue'], ['paid', 'Paid'], ['void', 'Void'], ['carried', 'Carried']];
+    var chips = document.getElementById('cn-inv-chips');
+    if (chips){
+      chips.innerHTML = BUCKETS.map(function(b){
+        var key = b[0];
+        var cnt = (key === 'all') ? inv.length : inv.filter(function(x){ return _invMatch(x, key); }).length;
+        if (key !== 'all' && cnt === 0) return '';
+        return '<button class="fin-chip' + (f === key ? ' on' : '') + '" type="button" data-act="inv-filter" data-status="' + key + '">' + b[1] + '<span class="c">' + cnt + '</span></button>';
+      }).join('');
+    }
+    // Table (filtered)
+    var shown = inv.filter(function(x){ return _invMatch(x, f); });
+    if (!shown.length){ host.innerHTML = '<div class="empty">' + (inv.length ? 'No ' + (f === 'all' ? '' : f + ' ') + 'invoices.' : 'No invoices yet.') + '</div>'; return; }
+    var rows = shown.map(function(x){
+      var c = _invClass(x);
+      var st = INV_STATUS[c.eff] || ['?', 'provisioning'];
+      var acts = '';
+      if (x.status === 'draft') acts += '<button class="btn sm ghost" type="button" data-act="inv-status" data-id="' + esc(x.id) + '" data-status="sent" data-sub="' + esc(sub) + '">Mark sent</button>';
+      if (_invOwing(x)) acts += '<button class="btn sm ghost" type="button" data-act="inv-pay" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '">Record payment</button>';
+      if (x.status === 'sent' || x.status === 'partial' || x.status === 'paid') acts += '<button class="btn sm ghost" type="button" data-act="inv-interest" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '" title="Add past-due interest (1%/month)">+ Interest</button>';
+      if (x.status !== 'void' && x.status !== 'paid' && x.status !== 'carried') acts += '<button class="btn sm danger" type="button" data-act="inv-status" data-id="' + esc(x.id) + '" data-status="void" data-sub="' + esc(sub) + '">Void</button>';
+      var meta = [];
+      if (x.due_date)  meta.push('due ' + esc(x.due_date));
+      if (Number(x.discount) > 0.005) meta.push('discount -' + _money(x.discount));
+      if (c.paid > 0.005 && c.bal > 0.005) meta.push('paid ' + _money(c.paid) + ' of ' + _money(x.total));
+      if (x.paid_date) meta.push((c.bal > 0.005 ? 'last pmt ' : 'paid ') + esc(x.paid_date));
+      if (c.bal > 0.005 && (x.status === 'sent' || x.status === 'partial')) meta.push('<b style="color:var(--danger);">balance ' + _money(c.bal) + '</b>');
+      return '<tr>'
+        + '<td><div class="std-id"><div style="min-width:0;">'
+        +   '<div class="std-id-main"><button class="btn sm ghost" type="button" data-act="inv-view" data-id="' + esc(x.id) + '" data-sub="' + esc(sub) + '" title="View invoice PDF" style="margin:0;padding:2px 6px;font-weight:700;text-decoration:underline;">' + esc(x.number) + '</button></div>'
+        +   (x.issue_date ? '<div class="std-id-sub">issued ' + esc(x.issue_date) + '</div>' : '')
+        + '</div></div></td>'
+        + '<td class="num">' + _money(x.total, x.currency) + '</td>'
+        + '<td><span class="pill ' + st[1] + '">' + st[0] + '</span>' + (c.overdue ? '<span class="inv-overdue">Overdue</span>' : '') + (meta.length ? '<div style="font-size:10px;color:var(--muted);margin-top:2px;">' + meta.join(' · ') + '</div>' : '') + '</td>'
+        + '<td class="std-rowend"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">' + acts + '</div></td></tr>';
+    }).join('');
+    host.innerHTML = '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>Invoice</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }
+  window.invFilter = function(status){ window._nicInvFilter = status || 'all'; _nicRenderInvTable(); };
+  window.exportNationInvoices = function(sub){
+    var inv = window._nicInvoices || [];
+    if (!inv.length){ dlgAlert('No invoices to export.'); return; }
+    function cell(v){ v = (v == null ? '' : String(v)); return /[",\n]/.test(v) ? '"' + v.replace(/"/g, '""') + '"' : v; }
+    var out = [['Number', 'Issued', 'Due', 'Total', 'Paid', 'Balance', 'Status'].map(cell).join(',')];
+    inv.forEach(function(x){ var c = _invClass(x); out.push([x.number, x.issue_date || '', x.due_date || '', (Number(x.total) || 0).toFixed(2), (Number(x.amount_paid) || 0).toFixed(2), c.bal.toFixed(2), c.overdue ? 'overdue' : c.eff].map(cell).join(',')); });
+    try {
+      var blob = new Blob([out.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'invoices-' + (sub || 'nation') + '.csv';
+      document.body.appendChild(a); a.click();
+      setTimeout(function(){ document.body.removeChild(a); URL.revokeObjectURL(a.href); }, 100);
+    } catch (e) { dlgAlert('Could not export: ' + (e && e.message || e)); }
+  };
   window.setInvoiceStatus = async function(id, status, sub){
     if (status === 'void' && !(await dlgConfirm('Void this invoice? This cannot be undone.', { title: 'Void invoice', okText: 'Void invoice' }))) return;
     var r = await api('PATCH', '/nation_invoices?id=eq.' + encodeURIComponent(id), { status: status, updated_at: new Date().toISOString() }, 'return=minimal');
@@ -4294,6 +4407,10 @@
     var r = await api('GET', '/nation_billing?subdomain=eq.' + encodeURIComponent(sub) + '&order=created_at.asc&limit=1');
     var row = (r.ok ? await r.json().catch(function(){ return []; }) : [])[0] || null;
     window._nicBilling = row;
+    // "Next scheduled" Finance KPI (tile lives in the finance panel's KPI strip).
+    var _cadLabel = row ? ((BILL_CADENCE.filter(function(c){ return c[0] === row.cadence; })[0] || [])[1] || row.cadence) : '';
+    _finKpi('kpi-fin-next', row ? (row.next_run_date ? esc(row.next_run_date) : '&mdash;') : 'None',
+      row ? (esc(_cadLabel) + (row.active ? '' : ' &middot; paused')) : 'no schedule yet');
     var b = row || { cadence: 'monthly', description: '', unit_amount: '', tax_rate: 0, next_run_date: _dPlus(30), anchor_day: '', due_days: 30, auto_send: false, recipient_email: '', cc_emails: '', active: true, discount_type: '', discount_value: '', discount_label: '' };
     var cadOpts = BILL_CADENCE.map(function(c){ return '<option value="' + c[0] + '"' + (b.cadence === c[0] ? ' selected' : '') + '>' + c[1] + '</option>'; }).join('');
     var g2 = 'display:grid;grid-template-columns:1fr 1fr;gap:10px;';
@@ -4625,6 +4742,8 @@
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
       case 'inv-add-sub':     window.invAddSubLine(); break;
       case 'inv-add-service': window.invAddServiceLine(); break;
+      case 'inv-filter':      window.invFilter(el.getAttribute('data-status') || 'all'); break;
+      case 'inv-export':      window.exportNationInvoices(el.getAttribute('data-sub') || ''); break;
       case 'inv-del-line':  { var lr = el.closest && el.closest('.inv-line'); if (lr) lr.remove(); break; }
       case 'inv-create':    window.createNationInvoice(el.getAttribute('data-sub') || '', id); break;
       case 'inv-status':    window.setInvoiceStatus(el.getAttribute('data-id') || '', el.getAttribute('data-status') || '', el.getAttribute('data-sub') || ''); break;
