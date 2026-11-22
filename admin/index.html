@@ -150,6 +150,18 @@
     .dash-kpis{grid-template-columns:repeat(2,1fr)}
   }
   @media(max-width:560px){.dash-kpis{grid-template-columns:1fr}.page-hero{flex-wrap:wrap}.page-hero-actions{justify-content:flex-start}}
+  /* Finance tab — status filter chips, overdue flag, collapsible create */
+  .fin-chips{display:flex;flex-wrap:wrap;gap:6px;margin:0 0 12px}
+  .fin-chip{font-size:12px;font-weight:700;border:1px solid var(--hair);background:var(--surface);color:var(--muted);border-radius:999px;padding:4px 12px;cursor:pointer;font-family:inherit;transition:var(--tr)}
+  .fin-chip:hover{border-color:var(--accent);color:var(--accent)}
+  .fin-chip.on{background:var(--accent-light);border-color:#A9C4BA;color:var(--accent)}
+  .fin-chip .c{margin-left:5px;font-weight:800;opacity:.65}
+  .inv-overdue{display:inline-block;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.3px;color:#991b1b;background:#fee2e2;border-radius:999px;padding:1px 7px;margin-left:6px;vertical-align:middle}
+  .fin-create{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+  .fin-create>summary{cursor:pointer;font-weight:700;font-size:13px;list-style:none;display:inline-flex;align-items:center;gap:7px;color:var(--accent);user-select:none}
+  .fin-create>summary::-webkit-details-marker{display:none}
+  .fin-create>summary::before{content:'+';display:inline-grid;place-items:center;width:17px;height:17px;border-radius:5px;background:var(--accent-light);color:var(--accent);font-weight:800}
+  .fin-create[open]>summary::before{content:'\2212'}
 
   /* ============================================================
      std-table (Phase 2 redesign) — light table card + identity
