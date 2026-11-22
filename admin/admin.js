@@ -103,6 +103,19 @@
     { g: 'Custom / at cost (enter amount)', d: 'Travel expenses (at cost, NJC Travel Directive, no markup)', p: 0, q: 1, custom: true }
   );
 
+  // Structured "professional services" billing (consulting + travel) for the
+  // manual invoice builder. Each maps to a FEE_SCHEDULE line so the RATE always
+  // comes from the contract (feePrice, by exact description -- never retyped);
+  // the builder emits a composed invoice line carrying the project number,
+  // description and hours/amount. Travel time carries the policy cap (max 8 hrs
+  // per travel day, NJC Travel Directive). These are NOT subscription lines, so
+  // they never earn reseller commission (isRecurringLine excludes non-subscription).
+  var SVC_ITEMS = [
+    { key: 'consult',     kind: 'hourly',      label: 'Consulting / data cleanup / training / custom reports', feeDesc: 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)' },
+    { key: 'travel_time', kind: 'travel_time', label: 'Travel time',                                            feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
+    { key: 'travel_exp',  kind: 'atcost',      label: 'Travel expenses (at cost, no markup)',                   feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' }
+  ];
+
   // Contract prices come from FEE_SCHEDULE (never retyped), so the subscription
   // agreement's Schedule A and the reseller pricing summary always match the
   // invoice catalog. Lookups are by exact description.
@@ -179,6 +192,13 @@
       }).join('') + '</optgroup>';
     }).join('');
     return '<select id="cn-inv-catalog">' + opts + '</select>';
+  }
+  // <select> of professional-service types, each showing its contract rate.
+  function _svcSelectHtml(){
+    return '<select id="cn-svc-type">' + SVC_ITEMS.map(function(s, i){
+      var rate = s.kind === 'atcost' ? 'at cost' : _money(feePrice(s.feeDesc)) + '/hr';
+      return '<option value="' + i + '">' + esc(s.label) + '  —  ' + rate + '</option>';
+    }).join('') + '</select>';
   }
 
   var app = document.getElementById('app');
@@ -1664,6 +1684,22 @@
       +       '<button class="btn sm" type="button" data-act="inv-add-catalog">Add selected &darr;</button>'
       +     '</div>'
       +     '<p class="sub" style="margin:0 0 8px;font-size:11px;">Pick a fee-schedule item and Add, or use &ldquo;+ Add line&rdquo; for a free-form line. For hourly items, enter the number of hours in <b>Qty</b> (0.25 precision); for custom / at-cost items, fill in the amount.</p>'
+      +     '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:2px 0 10px;">'
+      +       '<div style="font-weight:700;font-size:12px;margin-bottom:2px;">Professional services &mdash; consulting &amp; travel</div>'
+      +       '<p class="sub" style="margin:0 0 8px;font-size:11px;">Bill hourly work or travel against the <b>contract rates</b>. Pick a service, add a project number + description and the time (or, for travel expenses, the at-cost amount); the line is added below with the total computed from the rate. Travel time is capped at <b>8 hours per travel day</b> (NJC Travel Directive).</p>'
+      +       '<div style="display:grid;grid-template-columns:1fr 160px;gap:8px;">'
+      +         '<div><label>Service</label>' + _svcSelectHtml() + '</div>'
+      +         '<div><label>Project #</label><input id="cn-svc-proj" placeholder="e.g. NP-2026-01"/></div>'
+      +       '</div>'
+      +       '<label>Description</label><input id="cn-svc-desc" placeholder="What was done (e.g. historical data cleanup &amp; import)"/>'
+      +       '<div style="display:grid;grid-template-columns:120px 150px 1fr;gap:8px;margin-top:2px;">'
+      +         '<div><label>Hours</label><input id="cn-svc-hrs" type="number" step="0.25" min="0" placeholder="0.00"/></div>'
+      +         '<div><label>Travel days</label><input id="cn-svc-days" type="number" step="1" min="1" placeholder="1"/><div class="sub" style="font-size:10px;margin-top:1px;">travel time only</div></div>'
+      +         '<div><label>Amount $ (at cost)</label><input id="cn-svc-amt" type="number" step="0.01" min="0" placeholder="0.00"/><div class="sub" style="font-size:10px;margin-top:1px;">travel expenses only</div></div>'
+      +       '</div>'
+      +       '<div id="cn-svc-hint" class="sub" style="font-size:11px;margin:6px 0;"></div>'
+      +       '<button class="btn sm" type="button" data-act="inv-add-service">Add services line &darr;</button>'
+      +     '</div>'
       +     '<div id="cn-inv-lines"></div>'
       +     '<button class="btn sm ghost" type="button" data-act="inv-add-line" style="margin-top:2px;">+ Add blank line</button>'
       +     '<div style="' + g2 + 'margin-top:12px;">'
@@ -3828,6 +3864,43 @@
     var it = FEE_SCHEDULE[parseInt(sel.value, 10)]; if (!it) return;
     window.invAddLine({ d: it.d, q: (it.q != null ? it.q : 1), p: it.custom ? '' : it.p });
   };
+  // Add a consulting/travel line from the structured "professional services"
+  // builder. The RATE comes from the contract fee schedule (feePrice, by exact
+  // description); the composed description carries the project number + hours so
+  // it prints on the invoice PDF. Travel time enforces the 8-hrs/travel-day
+  // policy cap (NJC Travel Directive). Travel expenses bill at the entered
+  // at-cost amount (no markup). These are NOT subscription lines, so they never
+  // earn reseller commission.
+  window.invAddServiceLine = function(){
+    var sel = document.getElementById('cn-svc-type'); if (!sel) return;
+    var it = SVC_ITEMS[parseInt(sel.value, 10)]; if (!it) return;
+    var hint = document.getElementById('cn-svc-hint');
+    function warn(m){ if (hint){ hint.textContent = m; hint.style.color = '#c23b4b'; } }
+    function val(id){ var e = document.getElementById(id); return e ? e.value : ''; }
+    var proj = String(val('cn-svc-proj') || '').trim();
+    var desc = String(val('cn-svc-desc') || '').trim();
+    var tail = (proj ? ' — Project #' + proj : '') + (desc ? ' — ' + desc : '');
+    var line;
+    if (it.kind === 'atcost'){
+      var amt = parseFloat(val('cn-svc-amt') || '0') || 0;
+      if (!(amt > 0)){ warn('Enter the travel-expense amount (billed at cost).'); return; }
+      line = { d: it.label + tail, q: 1, p: Math.round(amt * 100) / 100 };
+    } else {
+      var rate = feePrice(it.feeDesc);
+      var hrs = parseFloat(val('cn-svc-hrs') || '0') || 0;
+      if (!(hrs > 0)){ warn('Enter the number of hours.'); return; }
+      if (it.kind === 'travel_time'){
+        var days = parseInt(val('cn-svc-days') || '1', 10) || 1; if (days < 1) days = 1;
+        var cap = 8 * days;
+        if (hrs > cap){ warn('Travel time ' + hrs + ' hrs exceeds the policy maximum of 8 hrs per travel day (8 x ' + days + ' = ' + cap + ' hrs). Increase travel days or reduce hours.'); return; }
+      }
+      var label = (it.kind === 'travel_time') ? 'Travel time (NJC Travel Directive; max 8 hrs/travel day)' : it.label;
+      line = { d: label + tail + ' (' + hrs + ' hrs @ ' + feeFmt(rate) + '/hr)', q: hrs, p: rate };
+    }
+    window.invAddLine(line);
+    ['cn-svc-proj', 'cn-svc-desc', 'cn-svc-hrs', 'cn-svc-days', 'cn-svc-amt'].forEach(function(id){ var e = document.getElementById(id); if (e) e.value = ''; });
+    if (hint){ hint.style.color = ''; hint.textContent = 'Added below. Adjust Qty / Unit if needed, then Create invoice & PDF.'; }
+  };
   // Discount helper: percent-of-base or fixed dollars, clamped to [0, base].
   // Returns the rounded dollar amount taken off. Used by manual invoices, the
   // interest recompute, and recurring-billing generation so the three paths
@@ -4550,6 +4623,7 @@
       case 'copy-text':     window.copyTextBtn(el); break;
       case 'inv-add-line':  window.invAddLine(); break;
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
+      case 'inv-add-service': window.invAddServiceLine(); break;
       case 'inv-del-line':  { var lr = el.closest && el.closest('.inv-line'); if (lr) lr.remove(); break; }
       case 'inv-create':    window.createNationInvoice(el.getAttribute('data-sub') || '', id); break;
       case 'inv-status':    window.setInvoiceStatus(el.getAttribute('data-id') || '', el.getAttribute('data-status') || '', el.getAttribute('data-sub') || ''); break;
