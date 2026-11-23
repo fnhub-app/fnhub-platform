@@ -36,16 +36,20 @@ create table if not exists public.platform_owner (
   business_number  text,                                  -- CRA BN / corporation number
   gst_hst_number   text,
   notes            text,
+  logo             text,                                  -- data: URL of the Provider logo for invoices / contracts
   updated_by       text,
   updated_at       timestamptz not null default now()
 );
+-- Logo column for projects that ran an earlier version of this file (idempotent).
+alter table public.platform_owner add column if not exists logo text;
 
 -- Seed the current owner once (edit afterwards in Platform Admin -> Resellers).
 insert into public.platform_owner (id, legal_name, entity_type, operating_as, product_name,
   signatory_name, signatory_title, street, city, province, postal_code, country, email, phone)
-values (1, 'Kevin Proctor', 'individual', 'Home Land Homes', 'FN Hub',
-  'Kevin Proctor', 'Founder', '152 Simon Lake Drive', 'Naughton', 'ON', 'P0M 2M0', 'Canada',
-  'hello@homelandhomes.ca', '705-960-5076')
+-- Owner entity is Proctor Solutions; the product / brand is Nation Pathways.
+values (1, 'Proctor Solutions', 'sole_prop', 'Nation Pathways', 'Nation Pathways',
+  'Kevin Proctor', 'Founder', '152 Simon Lake Drive, Box 392', 'Naughton', 'ON', 'P0M 2M0', 'Canada',
+  'hello@nationpathways.com', '705-960-5076')
 on conflict (id) do nothing;
 
 -- ── Resellers ───────────────────────────────────────────────────────────────

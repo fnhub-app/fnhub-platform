@@ -58,6 +58,10 @@
     + '.rs-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}'
     + '.rs-grid .full,.rs-grid3 .full{grid-column:1/-1}'
     + '@media(max-width:640px){.rs-grid,.rs-grid3{grid-template-columns:1fr}}'
+    + '#rs-root .rs-logo-row{display:flex;gap:14px;align-items:flex-start;margin:14px 0 4px}'
+    + '#rs-root .rs-logo-prev{width:72px;height:72px;border:1px solid var(--line);border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}'
+    + '#rs-root .rs-logo-prev img{max-width:100%;max-height:100%;object-fit:contain}'
+    + '#rs-root .rs-logo-ph{font-size:10px;color:var(--muted);text-align:center;padding:4px}'
     + '#rs-root textarea{width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:9px;font-size:15px;font-family:inherit;min-height:64px;background:var(--surface);color:var(--ink)}'
     + '#rs-root input:disabled,#rs-root select:disabled,#rs-root textarea:disabled{background:var(--bg);color:var(--muted)}'
     + '#rs-root .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}'
@@ -277,6 +281,7 @@
     }).join('') : '<tr><td colspan="5" class="empty">No resellers yet.</td></tr>';
 
     var o = S.owner || {};
+    S._ownerLogo = (o && o.logo) || null;
     return '<div class="kpis">'
       + kpi('Active agreements', activeAgr.length) + kpi('Registered customers', regCust.length)
       + kpi('Commission owing', money(owing)) + kpi('Statements overdue', overdue ? '<span style="color:var(--danger);">' + overdue + '</span>' : '0')
@@ -284,6 +289,19 @@
       + '<div class="card" id="rs-sales"><h3>Sales by seller</h3><p class="sub">Loading…</p></div>'
       + '<div class="card"><h3>Owner <span>' + btn('↻ Refresh', 'rs-refresh', '', 'ghost') + '</span></h3>'
       +   '<p class="sub" style="margin:0;">The party that owns the software: the <b>Owner</b> in every reseller agreement and the <b>Provider</b> on the nation subscription agreement. If ownership moves to a business entity, update it here. New contracts use the new details; activated reseller agreements keep the details they were signed with.</p>'
+      +   '<div class="rs-logo-row">'
+      +     '<div class="rs-logo-prev" id="rs-o-logo-prev">' + ownerLogoPrevHtml() + '</div>'
+      +     '<div style="flex:1;min-width:0;">'
+      +       '<label style="display:block;">Provider logo</label>'
+      +       '<div class="note" style="font-size:11px;margin:2px 0 0;">Appears on generated invoices and contracts in place of the default app icon. PNG or JPG; a square image works best (it is stored at up to 256&times;256).</div>'
+      +       '<div class="btns" style="margin-top:8px;">'
+      +         '<label class="btn sm ghost" for="rs-o-logo-file" style="cursor:pointer;">Upload logo</label>'
+      +         '<input type="file" id="rs-o-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none;"/>'
+      +         btn('Remove', 'rs-o-logo-remove', ' id="rs-o-logo-rm"' + (S._ownerLogo ? '' : ' style="display:none;"'), 'ghost')
+      +       '</div>'
+      +       msgBox('rs-o-logo-msg')
+      +     '</div>'
+      +   '</div>'
       +   partyFields('rs-o-', o, false)
       +   '<div class="rs-grid">'
       +     fld('Product / brand name', 'rs-o-product_name', o.product_name, { ph: 'e.g. Nation Pathways' })
@@ -301,14 +319,60 @@
       + '</div>';
   }
 
+  // ---- Owner logo (Provider mark on invoices / contracts) --------------------
+  function ownerLogoPrevHtml(){
+    return S._ownerLogo
+      ? '<img src="' + esc(S._ownerLogo) + '" alt="Provider logo"/>'
+      : '<span class="rs-logo-ph">No logo</span>';
+  }
+  // Read a chosen image, downscale to <=256px, keep as a PNG data URL on S._ownerLogo.
+  function handleOwnerLogoPick(input){
+    var f = input.files && input.files[0]; if (!f){ return; }
+    if (!/^image\//.test(f.type || '')){ K().setMsg('rs-o-logo-msg', 'Please choose an image file (PNG or JPG).'); input.value = ''; return; }
+    if (f.size > 5 * 1024 * 1024){ K().setMsg('rs-o-logo-msg', 'That image is too large (max 5 MB).'); input.value = ''; return; }
+    var fr = new FileReader();
+    fr.onload = function(){
+      var img = new Image();
+      img.onload = function(){
+        try {
+          var max = 256, w = img.width || 1, h = img.height || 1, scale = Math.min(1, max / Math.max(w, h));
+          var cw = Math.max(1, Math.round(w * scale)), ch = Math.max(1, Math.round(h * scale));
+          var cv = document.createElement('canvas'); cv.width = cw; cv.height = ch;
+          cv.getContext('2d').drawImage(img, 0, 0, cw, ch);
+          S._ownerLogo = cv.toDataURL('image/png');
+        } catch (e){ S._ownerLogo = String(fr.result || ''); }
+        var prev = document.getElementById('rs-o-logo-prev'); if (prev) prev.innerHTML = ownerLogoPrevHtml();
+        var rm = document.getElementById('rs-o-logo-rm'); if (rm) rm.style.display = '';
+        K().setMsg('rs-o-logo-msg', 'Logo ready — click Save owner to store it.', 'ok');
+      };
+      img.onerror = function(){ K().setMsg('rs-o-logo-msg', 'Could not read that image.'); };
+      img.src = String(fr.result || '');
+    };
+    fr.onerror = function(){ K().setMsg('rs-o-logo-msg', 'Could not read that file.'); };
+    fr.readAsDataURL(f);
+    input.value = '';
+  }
+  window.rsRemoveOwnerLogo = function(){
+    S._ownerLogo = null;
+    var prev = document.getElementById('rs-o-logo-prev'); if (prev) prev.innerHTML = ownerLogoPrevHtml();
+    var rm = document.getElementById('rs-o-logo-rm'); if (rm) rm.style.display = 'none';
+    K().setMsg('rs-o-logo-msg', 'Logo cleared — click Save owner to apply.', 'ok');
+  };
+
   window.rsSaveOwner = async function(){
     var b = readParty('rs-o-');
     if (!b.legal_name){ K().setMsg('rs-o-msg', 'Legal name is required.'); return; }
     ['product_name','business_number','signatory_name','signatory_title','gst_hst_number','notes'].forEach(function(k){ b[k] = v('rs-o-' + k) || null; });
+    b.logo = S._ownerLogo || null;
     b.id = 1; b.updated_by = K().jwtEmail(); b.updated_at = new Date().toISOString();
     var r = await K().api('POST', '/platform_owner', b, 'resolution=merge-duplicates,return=representation');
-    if (!r.ok){ K().setMsg('rs-o-msg', 'Could not save: ' + (await r.text()).slice(0, 200)); return; }
+    if (!r.ok){
+      var t = (await r.text()).slice(0, 200);
+      if (/logo/.test(t) && /column/.test(t)){ K().setMsg('rs-o-msg', 'Could not save the logo — run the latest supabase/platform/reseller.sql (adds the logo column), then try again.'); return; }
+      K().setMsg('rs-o-msg', 'Could not save: ' + t); return;
+    }
     var rows = await r.json(); S.owner = rows[0] || b;
+    if (K().clearOwnerCache) K().clearOwnerCache();
     await K().audit('owner_saved', 'platform_owner', b.legal_name + ' (' + entityLabel(b.entity_type) + ')');
     K().setMsg('rs-o-msg', 'Owner saved.', 'ok');
   };
@@ -1586,6 +1650,7 @@
       case 'rs-refresh':          window.renderResellers(true); break;
       case 'rs-home':             go('home'); break;
       case 'rs-owner-save':       window.rsSaveOwner(); break;
+      case 'rs-o-logo-remove':    window.rsRemoveOwnerLogo(); break;
       case 'rs-open-reseller':    go('reseller', id); break;
       case 'rs-reseller-save':    window.rsSaveReseller(id); break;
       case 'rs-reseller-del':     window.rsDeleteReseller(id); break;
@@ -1636,5 +1701,6 @@
     var t = e.target; if (!t) return;
     if (t.id === 'rs-t-type' || t.id === 'rs-t-notice') calcTermEffective();
     if (t.id === 'rs-link-sel') S._linkPick = t.value;   // read before the dialog closes
+    if (t.id === 'rs-o-logo-file') handleOwnerLogoPick(t);
   });
 })();
