@@ -9502,8 +9502,11 @@ function renderWorklist() {
   // ── Render helpers ────────────────────────────────────────────────────────
   function esc(s){ return String(s==null?'':s).replace(/[&<>"]/g,function(c){return{'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];}); }
 
-  function sectionWrap(icon, label, count, link, rows, extra) {
-    return '<div style="margin-bottom:12px;">'
+  function sectionWrap(icon, label, count, link, rows, extra, secKey) {
+    // Stable anchor id so the landing "needs attention" count tiles can scroll
+    // to this section (_wlJumpTo). Falls back to a slug of the label.
+    var sid = 'wlsec_' + (secKey || String(label).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, ''));
+    return '<div id="' + sid + '" style="margin-bottom:12px;scroll-margin-top:84px;">'
       + '<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 14px;'
       +   'background:var(--bg);border-radius:8px 8px 0 0;border:1px solid var(--border);">'
       +   '<div style="font-size:12px;font-weight:700;">' + icon + ' ' + esc(label)
@@ -9865,7 +9868,7 @@ function renderWorklist() {
       draftCards += wlCard({ title:r.id, pill:_draftPill, open:open, metas:[{k:'Type',v:'RFQ'},{k:'Unit',v:r.addr}].concat(isSuperUser && r.by ? [{k:'By',v:r.by}] : []),
         actions:[{text:'Continue →',onclick:open},{text:'Cancel',ghost:true,onclick:'_wlCancelRfq(\'' + idJs + '\')'}] });
     });
-    html += sectionWrap('✏️', isSuperUser ? 'All Staff Drafts' : 'My Drafts', draftTotal, '', _view==='cards' ? wlGrid(draftCards) : draftRows, 0);
+    html += sectionWrap('✏️', isSuperUser ? 'All Staff Drafts' : 'My Drafts', draftTotal, '', _view==='cards' ? wlGrid(draftCards) : draftRows, 0, 'drafts');
   }
 
   // Applications
@@ -9901,7 +9904,7 @@ function renderWorklist() {
         actions:[{text:(appBtnText[a.status]||'Open')+' →',onclick:open}] });
     }).join('');
     // Overflow = same filter as the rows (appItemsAll), just past the display cap.
-    html += sectionWrap('📋', 'Applications', appItems.length, 'housing.html?view=worklist', _view==='cards' ? wlGrid(appCards) : appRows, Math.max(0, appItemsAll.length - appItems.length));
+    html += sectionWrap('📋', 'Applications', appItems.length, 'housing.html?view=worklist', _view==='cards' ? wlGrid(appCards) : appRows, Math.max(0, appItemsAll.length - appItems.length), 'applications');
   }
 
   // SOWs
@@ -9948,7 +9951,7 @@ function renderWorklist() {
         actions:[{text:(s.status==='hm_approved'?'Final Approve':'Approve'),onclick:approveCall}] });
     }).join('');
     var _sowTotal = (typeof sowItems._total === 'number') ? sowItems._total : sowItems.length;
-    html += sectionWrap('🔨', 'Renovations Waiting Approval', _sowTotal, 'renos.html', _view==='cards' ? wlGrid(sowCards) : sowRows, Math.max(0, _sowTotal - sowItems.length));
+    html += sectionWrap('🔨', 'Renovations Waiting Approval', _sowTotal, 'renos.html', _view==='cards' ? wlGrid(sowCards) : sowRows, Math.max(0, _sowTotal - sowItems.length), 'reno');
   }
 
   // Field Employee — approved work orders to complete
@@ -9974,7 +9977,7 @@ function renderWorklist() {
       return wlCard({ title:s.addr, pill:{text:statLbl,color:'var(--success)',bg:'var(--success-bg)'}, open:openCall,
         metas:[{k:'Project',v:s.pn||'—'}], actions:[{text:'Open →',onclick:openCall}] });
     }).join('');
-    html += sectionWrap('🔧', 'Work Orders to Complete', fieldSowItems.length, 'renos.html', _view==='cards' ? wlGrid(fsCards) : fsRows, 0);
+    html += sectionWrap('🔧', 'Work Orders to Complete', fieldSowItems.length, 'renos.html', _view==='cards' ? wlGrid(fsCards) : fsRows, 0, 'workorders');
   }
 
   // RFQs
@@ -9997,7 +10000,7 @@ function renderWorklist() {
         metas:[{k:'Unit',v:r.addr},{k:'Closes',v:r.closes},{k:'Invited',v:r.recipients},{k:'Bids in',v:r.bids}],
         actions:[{text:'Award →',onclick:open}] });
     }).join('');
-    html += sectionWrap('📊', 'RFQs Open for Bids', rfqItems.length, 'rfq.html', _view==='cards' ? wlGrid(rfqCards) : rfqRows, 0);
+    html += sectionWrap('📊', 'RFQs Open for Bids', rfqItems.length, 'rfq.html', _view==='cards' ? wlGrid(rfqCards) : rfqRows, 0, 'rfqs');
   }
 
   // Contractors
@@ -10027,7 +10030,7 @@ function renderWorklist() {
         metas:[{k:'Trade',v:c.trade},{k:'Submitted',v:(c.submitted?String(c.submitted).slice(0,10):'')}],
         actions:[{text:ctBtnText[c.status] || 'Review →',onclick:ctNav}] });
     }).join('');
-    html += sectionWrap('👷', 'Contractors Waiting Approval', ctItems.length, 'contractors.html', _view==='cards' ? wlGrid(ctCards) : ctRows, 0);
+    html += sectionWrap('👷', 'Contractors Waiting Approval', ctItems.length, 'contractors.html', _view==='cards' ? wlGrid(ctCards) : ctRows, 0, 'contractors');
   }
 
   // Inventory approvals
@@ -10043,7 +10046,7 @@ function renderWorklist() {
       var open = 'if(typeof setNavReferrer===\'function\')setNavReferrer(\'home\');window.location.href=\'inventory.html?unit=' + encodeURIComponent(u.id) + '\'';
       return wlCard({ title:u.addr, pill:{text:u.lbl}, open:open, metas:[], actions:[{text:'Review →',onclick:open}] });
     }).join('');
-    html += sectionWrap('🏘️', 'Inventory Approvals', unitApprItems.length, 'inventory.html', _view==='cards' ? wlGrid(unitApprCards) : unitApprRows, 0);
+    html += sectionWrap('🏘️', 'Inventory Approvals', unitApprItems.length, 'inventory.html', _view==='cards' ? wlGrid(unitApprCards) : unitApprRows, 0, 'inventory');
   }
 
   // Match queue — pill colors mirror the Match page's own tierColor map
@@ -10095,7 +10098,7 @@ function renderWorklist() {
         ],
         actions:[{text:'Match →',onclick:open}] });
     }).join('');
-    html += sectionWrap('🏠', 'Ready to Match', matchItems.length, 'housing.html?view=match', _view==='cards' ? wlGrid(matchCards) : matchRows, 0);
+    html += sectionWrap('🏠', 'Ready to Match', matchItems.length, 'housing.html?view=match', _view==='cards' ? wlGrid(matchCards) : matchRows, 0, 'match');
   }
 
   // ── Arrears — action needed (Policy s.12 machine, management only) ──────
@@ -10884,12 +10887,37 @@ function showWorklist() {
 // Landing hub worklist summary banner (Phase 3). Reuses the counts renderWorklist
 // already computes; shows a total + per-type breakdown + an "Open worklist" button
 // that routes to the dedicated #worklistView page.
+// Count-tile label -> worklist section anchor key (sectionWrap's secKey), so a
+// tile scrolls the worklist to its matching section when opened.
+var _WL_CHIP_KEY = {
+  'Applications':'applications', 'Reno approvals':'reno', 'Work orders':'workorders',
+  'Contractors':'contractors', 'Match':'match', 'Inventory':'inventory',
+  'RFQs':'rfqs', 'Drafts':'drafts'
+};
+// Open the worklist and scroll to a section (from a landing count tile).
+window._wlJumpTo = function(secKey){
+  if (typeof showWorklist === 'function') showWorklist();
+  setTimeout(function(){
+    var el = document.getElementById('wlsec_' + secKey);
+    if (!el) return;
+    if (el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    var prev = el.style.boxShadow;
+    el.style.transition = 'box-shadow .25s';
+    el.style.boxShadow = '0 0 0 2px var(--yellow)';
+    setTimeout(function(){ el.style.boxShadow = prev || ''; }, 1400);
+  }, 90);
+};
 function _updateWorklistSummary(total, counts){
   var el = document.getElementById('hub_wl_summary');
   if (!el) return;
   var mini = '';
   if (counts) {
-    Object.keys(counts).forEach(function(k){ var n = counts[k]; if (n > 0) mini += '<span class="wls-chip"><b>' + n + '</b><i>' + k + '</i></span>'; });
+    Object.keys(counts).forEach(function(k){
+      var n = counts[k]; if (!(n > 0)) return;
+      var key = _WL_CHIP_KEY[k] || '';
+      mini += '<button type="button" class="wls-chip"' + (key ? ' onclick="_wlJumpTo(\'' + key + '\')" title="View ' + k + ' in the worklist"' : '')
+        + '><b>' + n + '</b><i>' + k + '</i></button>';
+    });
   }
   if (total > 0) {
     el.className = 'hub-wl-summary';

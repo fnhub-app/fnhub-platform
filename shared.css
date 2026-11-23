@@ -2254,6 +2254,10 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
   padding: 11px 16px; border-radius: 14px;
   background: var(--bg); border: 1px solid var(--border); text-align: center;
 }
+button.wls-chip { cursor: pointer; font-family: var(--sans); color: inherit; transition: border-color .12s, background .12s, box-shadow .12s, transform .06s; }
+button.wls-chip:hover { border-color: var(--yellow); background: var(--surface); box-shadow: var(--shadow); }
+button.wls-chip:active { transform: translateY(1px); }
+button.wls-chip:focus-visible { outline: 2px solid var(--yellow); outline-offset: 2px; }
 .hub-wl-summary .wls-chip b { font-size: 21px; font-weight: 800; color: var(--text); line-height: 1; }
 .hub-wl-summary .wls-chip i { font-size: 12px; font-style: normal; font-weight: 600; color: var(--muted); }
 .hub-wl-summary .wls-note { font-size: 12.5px; color: var(--muted); }

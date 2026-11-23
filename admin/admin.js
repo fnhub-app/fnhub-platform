@@ -434,6 +434,43 @@
     { k:'admins',    grp:'System',   label:'Administrators',icon:ICO.shield, eyebrow:'System',        title:'Administrators',   sub:'Platform administrators and two-factor' }
   ];
   function dashNavMeta(k){ for (var i=0;i<DASH_NAV.length;i++){ if (DASH_NAV[i].k===k) return DASH_NAV[i]; } return DASH_NAV[0]; }
+  // Which top-level view is mounted, so the rail can route correctly from a
+  // sub-view (nation detail / provision) instead of trying to toggle a panel
+  // that only exists on the dashboard.
+  var _view = 'login';
+  var _pendingDashSection = '';     // section to open after showDashboard rebuilds
+  var _supportActiveCount = null;   // active (new+open) platform support tickets, for the rail badge
+  // Reusable grouped left rail, built from DASH_NAV. Count badges: Nations (live
+  // count) and Support (active tickets, once fetched). Buttons route via
+  // dash-nav so the rail works on the dashboard AND from sub-views.
+  function railMarkup(activeKey){
+    activeKey = activeKey || 'nations';
+    var html = '', lastGrp = '';
+    DASH_NAV.forEach(function(m){
+      if (m.grp !== lastGrp){ html += '<div class="rail-grp">' + esc(m.grp) + '</div>'; lastGrp = m.grp; }
+      var badge = '';
+      if (m.k === 'nations') badge = '<span class="cnt">' + _nations.length + '</span>';
+      else if (m.k === 'support' && _supportActiveCount != null && _supportActiveCount > 0) badge = '<span class="cnt">' + _supportActiveCount + '</span>';
+      html += '<button type="button"' + (m.k === activeKey ? ' class="active"' : '') + ' data-act="dash-nav" data-tab="' + m.k + '">'
+        + m.icon + '<span>' + esc(m.label) + '</span>' + badge + '</button>';
+    });
+    // Signed-in admin, surfaced on every page that shows the rail.
+    var me = jwtEmail();
+    html += '<div class="rail-me" title="' + esc(me) + '"><span class="rail-me-ic">' + ICO.shield + '</span>'
+      + '<span class="rail-me-tx"><span class="rail-me-l">Signed in</span><span class="rail-me-e">' + esc(me) + '</span></span></div>';
+    return html;
+  }
+  // Wrap a sub-view's content in the dashboard shell so the rail persists.
+  function dashShell(contentHtml, activeKey){
+    return '<div class="shell"><nav class="rail">' + railMarkup(activeKey) + '</nav><div class="main">' + contentHtml + '</div></div>';
+  }
+  // Route a rail click: switch panels in place on the dashboard, else rebuild
+  // the dashboard at that section (from a nation detail / provision sub-view).
+  window.goDashSection = function(key){
+    key = key || 'nations';
+    if (_view === 'dashboard' && document.querySelector('.nic-panel[data-panel="' + key + '"]')){ window.nicTab(key); }
+    else { _pendingDashSection = key; showDashboard(); }
+  };
   // The dynamic inner HTML of .page-hero-tx for a section (icon is swapped
   // separately on #dash-hero-ic). esc() is defined earlier in this IIFE.
   function dashHeroTx(m){
@@ -606,6 +643,13 @@
     var nations = nr.ok ? await nr.json().catch(function(){return[];}) : [];
     _nations = nations;
 
+    // Active support tickets (new + open) for the rail badge. Best-effort: a
+    // missing inbox table or RLS denial just leaves the badge off.
+    try {
+      var scr = await api('GET', '/platform_support_tickets?select=id&platform_status=in.(new,open)');
+      if (scr.ok) _supportActiveCount = (await scr.json().catch(function(){ return []; })).length;
+    } catch (_sc){ /* leave _supportActiveCount as-is */ }
+
     // Load per-nation usage (push-reported by each nation's app). Keyed by
     // subdomain; absent until a nation manager has opened Settings -> Nation.
     var ur = await api('GET', '/nation_usage?select=*');
@@ -627,13 +671,7 @@
     var kpi = function(l, v, m, ico){ return '<div class="dash-kpi"><div class="l">' + (ico||'') + '<span>' + esc(l) + '</span></div><div class="v">' + v + '</div><div class="m">' + esc(m) + '</div></div>'; };
     var MONEY_ICO = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>';
     // Grouped left rail, built from DASH_NAV (nations selected by default).
-    var railHtml = '', lastGrp = '';
-    DASH_NAV.forEach(function(m){
-      if (m.grp !== lastGrp){ railHtml += '<div class="rail-grp">' + esc(m.grp) + '</div>'; lastGrp = m.grp; }
-      var badge = (m.k === 'nations') ? '<span class="cnt">' + nations.length + '</span>' : '';
-      railHtml += '<button type="button"' + (m.k === 'nations' ? ' class="active"' : '') + ' data-act="nic-tab" data-tab="' + m.k + '">'
-        + m.icon + '<span>' + esc(m.label) + '</span>' + badge + '</button>';
-    });
+    var railHtml = railMarkup('nations');
     // Overview KPI cards (replace the flat .nic-strip tiles), shown atop Nations.
     var kpisHtml = '<div class="dash-kpis">'
       + kpi('Nations', String(nations.length), 'across all regions', ICO.home)
@@ -685,7 +723,10 @@
       + '</div>'   // panels wrapper
       + '</div>'   // .main
       + '</div>';  // .shell
+    _view = 'dashboard';
     wireAddNation();
+    // If we arrived here from a sub-view's rail click, open that section.
+    if (_pendingDashSection){ var _ps = _pendingDashSection; _pendingDashSection = ''; if (typeof window.nicTab === 'function') window.nicTab(_ps); }
     // Fill each nation's "Sold by" line (reseller.js loads the reseller data).
     if (typeof window.rsDecorateNations === 'function') window.rsDecorateNations();
     // Surface the fail-open two-factor warning (set by requireMfa) if present.
@@ -1471,8 +1512,9 @@
     window._nicSetupState = (n.setup_checklist && typeof n.setup_checklist === 'object') ? n.setup_checklist : {};
     window._nicSetupSub = String(n.subdomain || '').toLowerCase();
     document.getElementById('btn_out').style.display = '';
-    app.className = 'wrap wide';   // nation-detail keeps the centred .nic-shell layout (dashboard uses .dash)
-    app.innerHTML = configureView(n);
+    app.className = 'dash';   // keep the left rail visible on the nation detail
+    _view = 'detail';
+    app.innerHTML = dashShell(configureView(n), 'nations');
     renderNationDocsCard(n.subdomain);
     wireDocFileInput();
     wireLogoUpload();
@@ -1857,10 +1899,11 @@
   window.nicTab = function(name){
     Array.prototype.forEach.call(document.querySelectorAll('.nic-tab'), function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
     Array.prototype.forEach.call(document.querySelectorAll('.nic-panel'), function(p){ p.classList.toggle('active', p.getAttribute('data-panel') === name); });
-    // Dashboard rail + page-hero (absent on the per-nation detail view, which
-    // uses .nic-tab/.nic-hero instead — the guard keeps this a no-op there).
+    // Dashboard rail + page-hero. Only react to real dashboard-section names, so
+    // switching a nation-detail tab (overview/supabase/...) — whose rail is now
+    // always present — doesn't clear the rail highlight or touch the hero.
     var rail = document.querySelector('.rail');
-    if (rail){
+    if (rail && DASH_NAV.some(function(m){ return m.k === name; })){
       Array.prototype.forEach.call(rail.querySelectorAll('button[data-tab]'), function(b){ b.classList.toggle('active', b.getAttribute('data-tab') === name); });
       var meta = dashNavMeta(name);
       var ic = document.getElementById('dash-hero-ic'); if (ic) ic.innerHTML = meta.icon;
@@ -2433,8 +2476,9 @@
       var on = licensed ? !!licensed[m[0]] : true;
       return '<label style="display:inline-flex;align-items:center;gap:6px;font-weight:600;margin:0 12px 8px 0;"><input type="checkbox" class="pv-mod" value="' + m[0] + '" style="width:auto;"' + (on ? ' checked' : '') + '/> ' + esc(m[1]) + '</label>';
     }).join('');
-    app.className = 'wrap wide';   // provision wizard uses the centred narrow layout (dashboard uses .dash)
-    app.innerHTML = '<button class="btn sm ghost" type="button" data-act="' + (n ? 'configure' : 'home') + '"' + (n ? ' data-id="' + v(n.id) + '"' : '') + '>&larr; Back</button>'
+    app.className = 'dash';   // keep the left rail visible on the provision wizard
+    _view = 'provision';
+    app.innerHTML = dashShell('<button class="btn sm ghost" type="button" data-act="' + (n ? 'configure' : 'home') + '"' + (n ? ' data-id="' + v(n.id) + '"' : '') + '>&larr; Back</button>'
       + '<h1 style="margin-top:12px;">' + (n ? 'Provision ' + v(n.display_name) : 'Provision a nation') + '</h1>'
       + '<p class="sub">Assisted: you created the Supabase project; this runs schema, bucket, first ED, and registry.</p>'
       + (n ? '<div class="msg ok" style="display:block;">Prefilled from the registry. The registry row for <code>' + v(n.subdomain) + '</code> will be updated, not duplicated.</div>' : '')
@@ -2470,7 +2514,7 @@
       + '</div>'
       + '<div class="msg" id="pv-msg"></div>'
       + '<button class="btn" id="pv-btn" type="button" data-act="run-provision">Provision nation</button>'
-      + '<div id="pv-results" style="margin-top:14px;"></div>';
+      + '<div id="pv-results" style="margin-top:14px;"></div>', 'provision');
     wireSchemaDropzone();
   };
 
@@ -5116,6 +5160,7 @@
       case 'doc-dl':        window.downloadNationDoc(el.getAttribute('data-path') || '', el.getAttribute('data-name') || ''); break;
       case 'doc-del':       window.deleteNationDoc(el.getAttribute('data-id') || '', el.getAttribute('data-path') || '', el.getAttribute('data-sub') || ''); break;
       case 'nic-tab':       window.nicTab(el.getAttribute('data-tab') || ''); break;
+      case 'dash-nav':      window.goDashSection(el.getAttribute('data-tab') || 'nations'); break;
       case 'print-sop':     window.printOnboardingSop(); break;
       case 'note-add':      window.addNationNote(el.getAttribute('data-sub') || ''); break;
       case 'ai-key-save':   window.saveNationAiKey(el.getAttribute('data-sub') || ''); break;
