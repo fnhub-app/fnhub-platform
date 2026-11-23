@@ -165,6 +165,13 @@
   /* Branching category picker (cascading selects) */
   .svc-branch{display:flex;flex-wrap:wrap;gap:6px}
   .svc-branch select{flex:1 1 160px;min-width:140px}
+  /* Finance sub-tabs (TIC-style: KPI strip on top, inner tabs swap the body) */
+  .fin-subtabs{display:flex;flex-wrap:wrap;gap:2px;margin:16px 0 0;border-bottom:1px solid var(--line)}
+  .fin-subtab{font-size:13px;font-weight:700;border:none;background:none;color:var(--muted);padding:9px 14px;cursor:pointer;font-family:inherit;border-bottom:2px solid transparent;margin-bottom:-1px;transition:var(--tr)}
+  .fin-subtab:hover{color:var(--ink)}
+  .fin-subtab.active{color:var(--accent);border-bottom-color:var(--accent-bar)}
+  .fin-subpanel{display:none}
+  .fin-subpanel.active{display:block}
 
   /* ============================================================
      std-table (Phase 2 redesign) — light table card + identity
