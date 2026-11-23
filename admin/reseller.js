@@ -58,11 +58,11 @@
     + '.rs-grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0 14px}'
     + '.rs-grid .full,.rs-grid3 .full{grid-column:1/-1}'
     + '@media(max-width:640px){.rs-grid,.rs-grid3{grid-template-columns:1fr}}'
-    + '#rs-root .rs-logo-row{display:flex;gap:14px;align-items:flex-start;margin:14px 0 4px}'
-    + '#rs-root .rs-logo-prev{width:72px;height:72px;border:1px solid var(--line);border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}'
-    + '#rs-root .rs-logo-prev img{max-width:100%;max-height:100%;object-fit:contain}'
-    + '#rs-root .rs-logo-ph{font-size:10px;color:var(--muted);text-align:center;padding:4px}'
-    + '#rs-root textarea{width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:9px;font-size:15px;font-family:inherit;min-height:64px;background:var(--surface);color:var(--ink)}'
+    + '#rs-root .rs-logo-row,#biz-root .rs-logo-row{display:flex;gap:14px;align-items:flex-start;margin:14px 0 4px}'
+    + '#rs-root .rs-logo-prev,#biz-root .rs-logo-prev{width:72px;height:72px;border:1px solid var(--line);border-radius:10px;background:var(--bg);display:flex;align-items:center;justify-content:center;overflow:hidden;flex:0 0 auto}'
+    + '#rs-root .rs-logo-prev img,#biz-root .rs-logo-prev img{max-width:100%;max-height:100%;object-fit:contain}'
+    + '#rs-root .rs-logo-ph,#biz-root .rs-logo-ph{font-size:10px;color:var(--muted);text-align:center;padding:4px}'
+    + '#rs-root textarea,#biz-root textarea{width:100%;padding:10px 12px;border:1px solid var(--hair);border-radius:9px;font-size:15px;font-family:inherit;min-height:64px;background:var(--surface);color:var(--ink)}'
     + '#rs-root input:disabled,#rs-root select:disabled,#rs-root textarea:disabled{background:var(--bg);color:var(--muted)}'
     + '#rs-root .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:14px}'
     + '@media(max-width:640px){#rs-root .kpis{grid-template-columns:repeat(2,1fr)}}'
@@ -75,11 +75,11 @@
     + '#rs-root .num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}'
     + '#rs-root .st-in{width:84px;padding:6px 6px;font-size:14px;text-align:right}'
     + '#rs-stmt td:first-child{min-width:150px}#rs-stmt td{padding:6px 4px}'
-    + '#rs-root .note{font-size:12px;color:var(--muted);line-height:1.5;margin:6px 0 0}'
+    + '#rs-root .note,#biz-root .note{font-size:12px;color:var(--muted);line-height:1.5;margin:6px 0 0}'
     + '#rs-root .warn{background:#fffbeb;border:1px solid #fde68a;color:#7a5c00;border-radius:9px;padding:10px 12px;font-size:12px;margin-top:10px;line-height:1.5}'
     + '#rs-root .crumb{background:none;border:none;color:#1d4ed8;font-weight:700;font-size:13px;padding:0;cursor:pointer;font-family:inherit;margin-top:14px}'
-    + '#rs-root .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}'
-    + '#rs-root .btns .btn{margin-top:0}'
+    + '#rs-root .btns,#biz-root .btns{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px;align-items:center}'
+    + '#rs-root .btns .btn,#biz-root .btns .btn{margin-top:0}'
     + '#rs-root .rs-parties{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-top:10px}'
     + '@media(max-width:640px){#rs-root .rs-parties{grid-template-columns:1fr}}'
     + '#rs-root .rs-party{border:1px solid var(--line);border-radius:10px;padding:4px 14px 14px;background:var(--bg)}'
@@ -280,39 +280,13 @@
         + '<td>' + btn('Open', 'rs-open-reseller', ' data-id="' + esc(r.id) + '"', 'ghost') + '</td></tr>';
     }).join('') : '<tr><td colspan="5" class="empty">No resellers yet.</td></tr>';
 
-    var o = S.owner || {};
-    S._ownerLogo = (o && o.logo) || null;
     return '<div class="kpis">'
       + kpi('Active agreements', activeAgr.length) + kpi('Registered customers', regCust.length)
       + kpi('Commission owing', money(owing)) + kpi('Statements overdue', overdue ? '<span style="color:var(--danger);">' + overdue + '</span>' : '0')
       + '</div>'
       + '<div class="card" id="rs-sales"><h3>Sales by seller</h3><p class="sub">Loading…</p></div>'
-      + '<div class="card"><h3>Owner <span>' + btn('↻ Refresh', 'rs-refresh', '', 'ghost') + '</span></h3>'
-      +   '<p class="sub" style="margin:0;">The party that owns the software: the <b>Owner</b> in every reseller agreement and the <b>Provider</b> on the nation subscription agreement. If ownership moves to a business entity, update it here. New contracts use the new details; activated reseller agreements keep the details they were signed with.</p>'
-      +   '<div class="rs-logo-row">'
-      +     '<div class="rs-logo-prev" id="rs-o-logo-prev">' + ownerLogoPrevHtml() + '</div>'
-      +     '<div style="flex:1;min-width:0;">'
-      +       '<label style="display:block;">Provider logo</label>'
-      +       '<div class="note" style="font-size:11px;margin:2px 0 0;">Appears on generated invoices and contracts in place of the default app icon. PNG or JPG; a square image works best (it is stored at up to 256&times;256).</div>'
-      +       '<div class="btns" style="margin-top:8px;">'
-      +         '<label class="btn sm ghost" for="rs-o-logo-file" style="cursor:pointer;">Upload logo</label>'
-      +         '<input type="file" id="rs-o-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none;"/>'
-      +         btn('Remove', 'rs-o-logo-remove', ' id="rs-o-logo-rm"' + (S._ownerLogo ? '' : ' style="display:none;"'), 'ghost')
-      +       '</div>'
-      +       msgBox('rs-o-logo-msg')
-      +     '</div>'
-      +   '</div>'
-      +   partyFields('rs-o-', o, false)
-      +   '<div class="rs-grid">'
-      +     fld('Product / brand name', 'rs-o-product_name', o.product_name, { ph: 'e.g. Nation Pathways' })
-      +     fld('Business / corporation number', 'rs-o-business_number', o.business_number, { ph: 'Optional' })
-      +     fld('Authorized signatory', 'rs-o-signatory_name', o.signatory_name)
-      +     fld('Signatory title', 'rs-o-signatory_title', o.signatory_title, { ph: 'e.g. Owner, President' })
-      +     fld('GST/HST number', 'rs-o-gst_hst_number', o.gst_hst_number, { ph: 'Optional' })
-      +     fld('Notes', 'rs-o-notes', o.notes, { area: true, full: true })
-      +   '</div>'
-      +   (o.updated_at ? '<p class="note">Last updated ' + esc(String(o.updated_at).slice(0, 10)) + (o.updated_by ? ' by ' + esc(o.updated_by) : '') + '.</p>' : '')
-      +   '<div class="btns">' + btn('Save owner', 'rs-owner-save') + msgBox('rs-o-msg') + '</div>'
+      + '<div class="card"><h3>Business profile <span>' + btn('↻ Refresh', 'rs-refresh', '', 'ghost') + '</span></h3>'
+      +   '<p class="sub" style="margin:0;">Your logo, business name, address, contacts and signatory &mdash; used on invoices and generated contracts &mdash; are on the <b>Business profile</b> tab in the left rail.</p>'
       + '</div>'
       + '<div class="card"><h3>Resellers ' + btn('+ Add reseller', 'rs-open-reseller', ' data-id="new"') + '</h3>'
       +   '<div class="std-table-card std-scroll"><table class="std-table"><thead><tr><th>Reseller</th><th>Agreement</th><th class="num">Customers</th><th class="num">Owing</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div>'
@@ -357,6 +331,51 @@
     var prev = document.getElementById('rs-o-logo-prev'); if (prev) prev.innerHTML = ownerLogoPrevHtml();
     var rm = document.getElementById('rs-o-logo-rm'); if (rm) rm.style.display = 'none';
     K().setMsg('rs-o-logo-msg', 'Logo cleared — click Save owner to apply.', 'ok');
+  };
+
+  // The business-profile card (logo + identity + address + contacts), shown on
+  // its own Business profile dashboard tab via renderBusinessConfig. Field ids
+  // stay rs-o-* so the existing save + logo handlers work wherever it mounts.
+  function ownerCardHtml(){
+    var o = S.owner || {};
+    S._ownerLogo = (o && o.logo) || null;
+    return '<div class="card"><h3>Business profile</h3>'
+      +   '<p class="sub" style="margin:0 0 4px;">The business that owns the software: the <b>Provider</b> on every nation subscription and consulting agreement, and the <b>Owner</b> on reseller agreements. The logo, name, address and contacts below appear on generated invoices and contracts. New contracts use the current details; activated reseller agreements keep the details they were signed with.</p>'
+      +   '<div class="rs-logo-row">'
+      +     '<div class="rs-logo-prev" id="rs-o-logo-prev">' + ownerLogoPrevHtml() + '</div>'
+      +     '<div style="flex:1;min-width:0;">'
+      +       '<label style="display:block;">Business logo</label>'
+      +       '<div class="note" style="font-size:11px;margin:2px 0 0;">Appears on generated invoices and contracts in place of the default icon. PNG or JPG; a square image works best (stored at up to 256&times;256).</div>'
+      +       '<div class="btns" style="margin-top:8px;">'
+      +         '<label class="btn sm ghost" for="rs-o-logo-file" style="cursor:pointer;">Upload logo</label>'
+      +         '<input type="file" id="rs-o-logo-file" accept="image/png,image/jpeg,image/webp" style="display:none;"/>'
+      +         btn('Remove', 'rs-o-logo-remove', ' id="rs-o-logo-rm"' + (S._ownerLogo ? '' : ' style="display:none;"'), 'ghost')
+      +       '</div>'
+      +       msgBox('rs-o-logo-msg')
+      +     '</div>'
+      +   '</div>'
+      +   partyFields('rs-o-', o, false)
+      +   '<div class="rs-grid">'
+      +     fld('Product / brand name', 'rs-o-product_name', o.product_name, { ph: 'e.g. Nation Pathways' })
+      +     fld('Business / corporation number', 'rs-o-business_number', o.business_number, { ph: 'Optional' })
+      +     fld('Authorized signatory', 'rs-o-signatory_name', o.signatory_name)
+      +     fld('Signatory title', 'rs-o-signatory_title', o.signatory_title, { ph: 'e.g. Owner, President' })
+      +     fld('GST/HST number', 'rs-o-gst_hst_number', o.gst_hst_number, { ph: 'Optional' })
+      +     fld('Notes', 'rs-o-notes', o.notes, { area: true, full: true })
+      +   '</div>'
+      +   (o.updated_at ? '<p class="note">Last updated ' + esc(String(o.updated_at).slice(0, 10)) + (o.updated_by ? ' by ' + esc(o.updated_by) : '') + '.</p>' : '')
+      +   '<div class="btns">' + btn('Save business profile', 'rs-owner-save') + msgBox('rs-o-msg') + '</div>'
+      + '</div>';
+  }
+  // Dedicated Business profile dashboard tab (admin.js nicTab -> this). Loads the
+  // platform_owner row on its own so it works without opening the Resellers tab.
+  window.renderBusinessConfig = async function(mount){
+    if (!mount) return;
+    ensureStyle();
+    mount.innerHTML = '<div class="card"><p class="sub" style="margin:0;">Loading&hellip;</p></div>';
+    try { var rows = await getJson('/platform_owner?id=eq.1&select=*'); S.owner = (rows && rows[0]) || null; }
+    catch (e){ mount.innerHTML = '<div class="card"><p class="sub" style="margin:0;color:var(--danger);">Could not load the business profile: ' + esc(String(e && e.message || e)) + '</p></div>'; return; }
+    mount.innerHTML = ownerCardHtml();
   };
 
   window.rsSaveOwner = async function(){
