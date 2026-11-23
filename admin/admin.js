@@ -1784,16 +1784,18 @@
       + '</div>';
 
     var pAgreement =
-        '<div class="card"><h3>Subscription agreement</h3>'
-      +   '<p class="sub" style="margin:2px 0 8px;">Generate the Nation Pathways software subscription agreement for this nation as a PDF. It fills in the nation party details below and is saved to the document library.</p>'
+        '<div class="card"><h3>Agreements</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Generate this nation\'s agreements as PDFs from the party details below. Each is saved to the document library.</p>'
       +   '<label>Nation legal name (party)</label><input id="cn-agr-name" value="' + esc(n.display_name || '') + '"/>'
       +   '<label>Administrative / mailing office address</label><input id="cn-agr-addr" placeholder="123 Main St, Town, ON  A1A 1A1" value="' + esc(n.office_address || '') + '"/>'
-      +   '<div class="sub" style="margin:4px 0 0;font-size:11px;">Saved on the nation record and reused on the agreement + recurring-invoice header. Generating the agreement also saves it.</div>'
+      +   '<div class="sub" style="margin:4px 0 0;font-size:11px;">Saved on the nation record and reused on the agreements + recurring-invoice header. Generating either agreement also saves it.</div>'
       +   '<div class="msg" id="cn-agr-msg"></div>'
       +   '<div style="display:flex;gap:8px;flex-wrap:wrap;">'
       +     '<button class="btn ghost" type="button" data-act="agr-save-addr" data-id="' + esc(n.id) + '">Save address</button>'
-      +     '<button class="btn" type="button" data-act="gen-agreement" data-id="' + esc(n.id) + '">Generate agreement PDF</button>'
+      +     '<button class="btn" type="button" data-act="gen-agreement" data-id="' + esc(n.id) + '">Subscription agreement PDF</button>'
+      +     '<button class="btn" type="button" data-act="gen-consulting-sla" data-id="' + esc(n.id) + '">Consulting services agreement PDF</button>'
       +   '</div>'
+      +   '<div class="sub" style="margin:6px 0 0;font-size:11px;">The <b>subscription agreement</b> covers the software platform; the <b>consulting services agreement</b> covers hourly / fixed-price professional work (the Time &amp; activities billing) &mdash; rates come from the same fee schedule.</div>'
       + '</div>';
 
     var pDocuments =
@@ -3112,6 +3114,95 @@
     'For clarity: the AI Assistant is a paid optional add-on that operates only where the Nation has selected and initialled it in Schedule A, which constitutes the Nation\'s acknowledgement and approval of the processing described above (Sections 3.1 and 4.3). Query data is processed outside Canada only for the duration of each query, is not retained for training, and the feature can be disabled by the Nation at any time in Platform settings, at which point no Customer Data flows to that subprocessor. Apart from outbound email delivered under option (b) above, text messages sent through the text-message add-on or phone / text sign-in, and the optional AI Assistant, no listed system stores Customer Data outside Canada. The Provider will keep this Schedule current under the subcontracting terms in Section 16.'
   ].join('\n');
 
+  // Consulting Services Agreement -- governs hourly / fixed-price professional
+  // services (the Time & activities billing: consulting, economic development,
+  // grant work, project management, data work, training, custom reports). Rates
+  // come from the same fee schedule as the invoice builder (feePrice tokens), so
+  // the contract rate always matches what gets billed. {{SERVICES}} is generated
+  // from SVC_TREE so the service list can't drift from the time-log categories.
+  var CONSULTING_SLA_TPL = [
+    '#CONSULTING SERVICES AGREEMENT',
+    '%Nation Pathways - Professional Services',
+    '>TEMPLATE - This agreement was prepared as a working draft and is not legal advice. Have it reviewed by a lawyer (ideally one experienced with First Nations clients) before first use. The Consultant party details are filled in from Platform Admin > Resellers > Owner.',
+    'This Consulting Services Agreement (the "Agreement") is made as of the date of last signature below (the "Effective Date") between:',
+    '{{PROVIDER_PARTY}} (the "Consultant"), and',
+    '{{NATION}}, a First Nation with administrative offices at {{ADDRESS}} (the "Nation").',
+    '##Background',
+    '-The Nation from time to time requires professional and advisory services beyond its software subscription - for example consulting, economic development, grant and funding support, project management, data work, training and custom reporting.',
+    '-The Consultant provides those services and the parties wish to record the terms, rates and service levels that apply.',
+    '-Both parties intend that the Nation\'s data and records remain under the Nation\'s ownership and control at all times, consistent with the principles of OCAP(R) (Ownership, Control, Access and Possession).',
+    '-The parties therefore agree as follows.',
+    '##1. Definitions',
+    '"Services" means the professional and advisory services the Consultant provides to the Nation under this Agreement, as described in Schedule A and in each Work Request.',
+    '"Work Request" means a written request from the Nation (email is sufficient) describing a specific task or engagement, which the Consultant confirms in writing with an estimate before starting.',
+    '"Deliverables" means the reports, documents, plans, applications and other work product the Consultant prepares for the Nation under a Work Request.',
+    '"Fees" means the amounts payable for the Services at the rates in Schedule A.',
+    '"Nation Data" means all data, records, documents and information the Nation provides to, or the Consultant generates for, the Nation under this Agreement.',
+    '##2. Services',
+    '-2.1 Scope. The Consultant will provide the Services described in Schedule A, as requested by the Nation through Work Requests. No work is chargeable unless the Nation has requested it in writing and the Consultant has confirmed it with a written estimate.',
+    '-2.2 Standard of care. The Consultant will perform the Services with the reasonable skill, care and diligence expected of a qualified professional, in accordance with applicable law.',
+    '-2.3 The Nation\'s direction. The Services support, but do not replace, the Nation\'s own decision-making. Decisions, approvals and the use of any Deliverable remain the Nation\'s.',
+    '-2.4 Independent contractor. The Consultant is an independent contractor, not an employee, partner or agent of the Nation, and is responsible for its own taxes, insurance and tools.',
+    '##3. Service levels',
+    '-3.1 Requesting work. The Nation requests Services by a Work Request to the contact in Schedule A. The Consultant will acknowledge a Work Request within two (2) business days.',
+    '-3.2 Estimates and authorization. Before starting chargeable work, the Consultant will give the Nation a written estimate of hours or a fixed price, and will not exceed an approved estimate without the Nation\'s written approval.',
+    '-3.3 Scheduling. The parties will agree target dates for each engagement in the Work Request. The Consultant will tell the Nation promptly if a target date is at risk.',
+    '-3.4 Progress. For an engagement longer than one month, the Consultant will give the Nation a brief written progress update at least monthly.',
+    '##4. Fees, travel and invoicing',
+    '-4.1 Rates. Services are billed at the rates in Schedule A. Hourly work is billed in fifteen (15) minute increments.',
+    '-4.2 Travel. Where the Nation requests on-site or travel work, travel time is billed at the Schedule A travel rate (to a maximum of eight (8) hours of travel time per travel day), and travel expenses (transportation, accommodation, meals and incidentals) are billed at the rates in the National Joint Council (NJC) Travel Directive in effect at the time of travel, at cost, with no markup.',
+    '-4.3 Fixed price. Where a Work Request is quoted as a fixed price, that price applies in place of hourly rates for the described scope; a change to scope is handled as a new estimate.',
+    '-4.4 Invoicing. The Consultant invoices monthly in arrears for work performed, itemized by Work Request. Invoices are payable within thirty (30) days.',
+    '-4.5 Late amounts. Amounts more than thirty (30) days overdue may bear interest at 1% per month (12.68% annually).',
+    '-4.6 Taxes. Fees are exclusive of applicable taxes, which are added where they apply.',
+    '##5. Nation Data, confidentiality and OCAP(R)',
+    '-5.1 Ownership. The Nation owns all Nation Data and, once paid for, all Deliverables. The Consultant acquires no rights in Nation Data beyond using it to perform the Services.',
+    '-5.2 Confidentiality. Each party will protect the other\'s non-public information with at least reasonable care, use it only to perform this Agreement, and not disclose it except to personnel and advisors bound by confidentiality, or as required by law with prompt notice to the other party where permitted.',
+    '-5.3 OCAP(R). The Consultant will handle Nation Data consistently with the Nation\'s ownership, control, access and possession of its own information. On the Nation\'s request, or on expiry of this Agreement, the Consultant will return or securely delete the Nation Data in its possession, keeping only what law requires. OCAP(R) is a registered trademark of the First Nations Information Governance Centre (FNIGC); the Consultant is not affiliated with, endorsed by, or certified by FNIGC, and this Section describes contractual commitments, not a certification.',
+    '-5.4 Privacy. Each party will comply with privacy laws applicable to it in respect of personal information handled under this Agreement.',
+    '##6. Intellectual property',
+    '-6.1 Deliverables. On payment, the Consultant assigns to the Nation the Deliverables prepared specifically for the Nation, except for the Consultant\'s pre-existing materials, tools, templates and know-how, which the Consultant retains and for which it grants the Nation a non-exclusive licence to use them as part of the Deliverables.',
+    '-6.2 Feedback. If the Nation provides suggestions or feedback, the Consultant may use them to improve its services without obligation, provided doing so never incorporates Nation Data.',
+    '##7. Warranties and liability',
+    '-7.1 Warranty. The Consultant warrants that it will perform the Services with reasonable skill and care. Except as stated in this Agreement, the Services are provided without other warranties, express or implied.',
+    '-7.2 Limitation. Except for a party\'s breach of confidentiality or either party\'s gross negligence or wilful misconduct: neither party is liable for indirect, incidental, special or consequential damages, or loss of profits or revenue; and each party\'s total aggregate liability under this Agreement is limited to the Fees paid or payable by the Nation in the twelve (12) months preceding the event giving rise to the claim.',
+    '##8. Term and termination',
+    '-8.1 Term. This Agreement begins on the Effective Date and continues until terminated. It governs each Work Request accepted under it.',
+    '-8.2 Termination for convenience. Either party may terminate this Agreement on thirty (30) days\' written notice. The Nation remains responsible for Services performed, and non-cancellable commitments made, up to the termination date.',
+    '-8.3 Termination for cause. Either party may terminate immediately if the other materially breaches this Agreement and fails to cure within thirty (30) days of written notice describing the breach.',
+    '-8.4 Effect. On termination, the Consultant will deliver work in progress and the Nation will pay for Services performed to the termination date. Sections 5, 6, 7 and this Section survive.',
+    '##9. General',
+    '-Relationship to the subscription. This Agreement is separate from the Nation\'s software subscription agreement; terminating one does not terminate the other unless the parties agree in writing.',
+    '-Assignment. Neither party may assign this Agreement without the other\'s written consent, except the Consultant may assign it to a corporation it forms to carry on the Nation Pathways business, or in connection with a merger or sale of that business, with written notice to the Nation.',
+    '-Force majeure. Neither party is liable for delay or failure caused by events beyond its reasonable control, provided it uses reasonable efforts to mitigate.',
+    '-Notices. Notices must be in writing and delivered to the contacts listed in Schedule A (email is sufficient, with confirmation of receipt for termination or breach notices).',
+    '-Entire agreement. This Agreement (including its Schedules and each Work Request) is the entire agreement between the parties for the Services and supersedes prior discussions. Amendments must be in writing and signed by both parties.',
+    '-Governing law. This Agreement is governed by the laws of the Province of Ontario and the federal laws of Canada applicable in it, without prejudice to the Nation\'s inherent and treaty rights, which are not affected by this Agreement.',
+    '-Counterparts. This Agreement may be signed in counterparts, including electronically.',
+    '##10. Execution',
+    'IN WITNESS WHEREOF, the parties have executed this Agreement by their duly authorized representatives as of the Effective Date. Each signatory confirms that they are authorized to bind the party for which they sign. Where the Nation\'s governance processes require it, the Nation\'s signature may be supported by a Band Council Resolution referenced below.',
+    '@SIG|nation',
+    '@SIG|provider',
+    '##Schedule A - Services and Rate Card',
+    'Prices are in Canadian dollars and match the Consultant\'s published schedule as of the Effective Date. Work is chargeable only when the Nation requests it in writing and the Consultant confirms it with an estimate.',
+    '###Services available',
+    '{{SERVICES}}',
+    '###Rates',
+    '|*Hourly professional services (consulting, data work, training, custom reports)|*{{FEE_HOURLY}} per hour',
+    '|Billing increment|15 minutes',
+    '|Travel time|{{FEE_TRAVEL_HR}} per hour (max 8 hrs per travel day)',
+    '|Travel expenses|At cost - NJC Travel Directive, no markup',
+    '|Fixed-price engagements|By written quote per Work Request',
+    '###Contacts',
+    'Nation\'s primary contact for Work Requests and notices: name ____________________ email ____________________',
+    'Consultant contact for notices: {{PROVIDER_NOTICE}}',
+    '##Schedule B - Service Levels',
+    '-Acknowledgement of a Work Request: within two (2) business days.',
+    '-A written estimate (hours or fixed price) before chargeable work begins; no overrun of an approved estimate without the Nation\'s written approval.',
+    '-A brief written progress update at least monthly for an engagement longer than one month.',
+    '-Monthly invoicing in arrears, itemized by Work Request, payable within thirty (30) days.'
+  ].join('\n');
+
   function _fmtDateLong(){
     // Admin panel runs in a browser; Date is available here (unlike workflow scripts).
     var d = new Date();
@@ -3426,6 +3517,48 @@
     });
   }
 
+  // Services bullets for the Consulting SLA's Schedule A, generated from the
+  // Consulting & advisory branch of SVC_TREE so the contract's service list and
+  // the time-log categories stay in sync (one source).
+  function _slaServicesList(){
+    var consult = (SVC_TREE || []).filter(function(n){ return /consult/i.test(n.label); })[0] || SVC_TREE[0];
+    var out = [];
+    (consult && consult.children || []).forEach(function(c){
+      if (c.key === 'other_consult'){ out.push('-Other professional services on request'); return; }
+      if (c.children && c.children.length){
+        var subs = c.children.filter(function(s){ return !/_gen$/.test(s.key || ''); }).map(function(s){ return s.label; });
+        out.push('-' + c.label + (subs.length ? ' (' + subs.join(', ') + ')' : ''));
+      } else out.push('-' + c.label);
+    });
+    return out.join('\n');
+  }
+
+  function buildConsultingSlaPdf(nationName, address, owner, logo){
+    var o = owner || { legal_name: 'Proctor Solutions', operating_as: PROVIDER.name, signatory_name: 'Kevin Proctor', signatory_title: 'Founder', email: PROVIDER.email };
+    var tpl = CONSULTING_SLA_TPL
+      .replace(/\{\{PROVIDER_PARTY\}\}/g, owner ? partyRecital(o) : partyName(o))
+      .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
+      .replace(/\{\{SERVICES\}\}/g, function(){ return _slaServicesList(); })
+      .replace(/\{\{FEE_HOURLY\}\}/g, function(){ return feeFmt(feePrice('Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)')); })
+      .replace(/\{\{FEE_TRAVEL_HR\}\}/g, function(){ return feeFmt(feePrice('Travel time (per hour, max 8 hrs/travel day)')); })
+      .replace(/\{\{NATION\}\}/g, nationName)
+      .replace(/\{\{ADDRESS\}\}/g, address || '______________________________')
+      .replace(/\{\{DATE\}\}/g, _fmtDateLong());
+    var prov = partyName(o).replace(/"/g, '');
+    return renderMarkerPdf(tpl, {
+      headerTitle: 'Consulting Services Agreement', headerSubtitle: nationName,
+      partyName: o.operating_as || o.legal_name, partyLine: owner ? fmtPartyAddress(o) : (PROVIDER.addr1 + ', ' + PROVIDER.addr2),
+      partyContact: [o.phone || PROVIDER.phone, o.email || PROVIDER.email].filter(Boolean).join('  |  '),
+      logo: logo, footerLeft: 'Consulting Services Agreement - ' + nationName + ' - Confidential',
+      breakBefore: function(h){ return h.indexOf('Schedule ') === 0 || h.indexOf('10. Execution') === 0; },
+      sigs: {
+        nation:   { label: 'For the Nation', party: nationName, extra: ['Band Council Resolution No. (if applicable): ____________________'] },
+        provider: { label: 'For the Consultant', party: prov, name: o.signatory_name || o.legal_name || '',
+                    title: (o.signatory_title || '') + (o.operating_as && o.signatory_title ? ', ' + o.operating_as : '') }
+      }
+    });
+  }
+
 
   // Persist the nation's mailing/office address to the registry row. The field
   // lives on the Agreement tab but had no save path before -- editing it (or
@@ -3473,6 +3606,37 @@
         var blob = doc.output('blob');
         var viewUrl = URL.createObjectURL(blob);
         doc.save(fname);                                   // download for immediate use
+        await uploadDoc(n.subdomain, new File([blob], fname, { type: 'application/pdf' }), 'agreement');
+        setMsgWithView('cn-agr-msg', 'Generated and saved to the document library.', viewUrl);
+        renderNationDocsCard(n.subdomain);
+      } catch (e){ setMsg('cn-agr-msg', 'Could not generate: ' + String(e && e.message || e)); }
+    }, function(){ setMsg('cn-agr-msg', 'Could not load the PDF generator (offline?).'); });
+  };
+
+  // Consulting Services Agreement -- same party details + doc library as the
+  // subscription agreement, governing the hourly / fixed-price consulting work.
+  window.generateConsultingSla = function(id){
+    var n = _nations.filter(function(x){ return String(x.id) === String(id); })[0];
+    if (!n){ setMsg('cn-agr-msg', 'Nation not loaded.'); return; }
+    var name = ((document.getElementById('cn-agr-name') || {}).value || n.display_name || '').trim();
+    var addr = ((document.getElementById('cn-agr-addr') || {}).value || '').trim();
+    if (!name){ setMsg('cn-agr-msg', 'Enter the nation legal name.'); return; }
+    setMsg('cn-agr-msg', 'Generating...', 'ok');
+    ensureJsPdf(async function(){
+      try {
+        if (addr !== (n.office_address || '')){
+          try {
+            var pr = await api('PATCH', '/nations?id=eq.' + encodeURIComponent(id),
+              { office_address: addr || null, updated_at: new Date().toISOString() }, 'return=minimal');
+            if (pr.ok) n.office_address = addr;
+          } catch (_e){ /* keep generating even if the save fails */ }
+        }
+        var doc = buildConsultingSlaPdf(name, addr, await loadOwner(), await loadLogoDataUrl());
+        var safe = name.replace(/[^a-z0-9]+/gi, '-').replace(/^-+|-+$/g, '');
+        var fname = 'Consulting-Services-Agreement-' + safe + '.pdf';
+        var blob = doc.output('blob');
+        var viewUrl = URL.createObjectURL(blob);
+        doc.save(fname);
         await uploadDoc(n.subdomain, new File([blob], fname, { type: 'application/pdf' }), 'agreement');
         setMsgWithView('cn-agr-msg', 'Generated and saved to the document library.', viewUrl);
         renderNationDocsCard(n.subdomain);
@@ -4944,6 +5108,7 @@
       case 'fleet-apply':   window.runFleetMigration(false); break;
       case 'agr-save-addr': window.saveNationAgreementAddress(id); break;
       case 'gen-agreement': window.generateNationAgreement(id); break;
+      case 'gen-consulting-sla': window.generateConsultingSla(id); break;
       case 'doc-view':      window.viewNationDoc(el.getAttribute('data-path') || ''); break;
       case 'doc-dl':        window.downloadNationDoc(el.getAttribute('data-path') || '', el.getAttribute('data-name') || ''); break;
       case 'doc-del':       window.deleteNationDoc(el.getAttribute('data-id') || '', el.getAttribute('data-path') || '', el.getAttribute('data-sub') || ''); break;
