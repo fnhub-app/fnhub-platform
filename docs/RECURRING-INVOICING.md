@@ -48,7 +48,7 @@ Everything runs on the **control-plane** project (`fnhub-platform`,
 For every schedule that is **active** and whose **next invoice date ≤ today**,
 the function:
 
-1. generates the next `HLH-YYYY-NN` invoice number (collision-safe),
+1. generates the next `NP-YYYY-NN` invoice number (collision-safe),
 2. inserts a `nation_invoices` row from the schedule (status `sent`, due in
    `due_days`),
 3. advances `next_run_date` by the cadence (holding the day-of-month anchor) and

@@ -199,10 +199,10 @@
       + 'Prices are locked for the signed term (no discounts). Only recurring subscription fees earn Commission (Section 7.3).';
   }
 
-  // Provider (Nation Pathways) details -- printed on invoices. NOTE: phone is
-  // unchanged pending confirmation; the authoritative party details for
-  // generated contracts come from the Owner record (platform_owner, Resellers
-  // tab) -- update that too.
+  // Provider fallback details -- brand is Nation Pathways; the owner entity is
+  // Proctor Solutions. Printed on invoices only when the Owner record is blank;
+  // the authoritative party details for generated contracts come from the Owner
+  // record (platform_owner, Resellers tab) -- update that too.
   var PROVIDER = {
     name:  'Nation Pathways',
     addr1: '152 Simon Lake Drive, Box 392',
@@ -3106,8 +3106,10 @@
     'Role: processes staff questions for the AI Assistant. Customer Data processed: the staff question and the minimum related housing records needed to answer it; read-only; not used for model training. Data location: United States.',
     '###OpenStreetMap (core - mapping features)',
     'Role: map display for unit locations. Customer Data processed: unit coordinates only (no names or personal information). Data location: global (OpenStreetMap Foundation infrastructure).',
+    '###SMS provider (optional - text-message notifications and phone / text sign-in) - Twilio or Telnyx',
+    'Role: sends text-message (SMS) notifications and one-time sign-in / two-factor codes. Customer Data processed: recipient mobile numbers and the message content sent (e.g., a work-order, portal-invite or submission notice carrying a property address and a secure link, or a one-time verification code); not used for any other purpose. Applies only where the Nation enables the text-message add-on, or where a staff member or contractor uses phone / text sign-in or text-based two-factor authentication. Data location: United States (message content in transit and delivery logs).',
     'Email delivery depends on the Nation\'s setup, and the method used is recorded in Schedule A. Where the Nation operates Microsoft 365 and its Microsoft administrator grants the required application consent, notifications are sent from the Nation\'s own mailbox and message content remains within the Nation\'s Microsoft environment (option (a)). Where that is not available - including where the Provider is not granted administrator access to configure the Nation\'s Microsoft tenant - the Provider uses a transactional email service (option (b)), in which case message content transits, and delivery logs are held on, infrastructure located in the United States. In all cases, email by its nature leaves the Platform to reach recipients\' own mail systems. The parties may switch between email delivery options after the Effective Date by written agreement (email sufficient), and this Schedule is deemed updated accordingly.',
-    'For clarity: the AI Assistant is a paid optional add-on that operates only where the Nation has selected and initialled it in Schedule A, which constitutes the Nation\'s acknowledgement and approval of the processing described above (Sections 3.1 and 4.3). Query data is processed outside Canada only for the duration of each query, is not retained for training, and the feature can be disabled by the Nation at any time in Platform settings, at which point no Customer Data flows to that subprocessor. Apart from outbound email delivered under option (b) above and the optional AI Assistant, no listed system stores Customer Data outside Canada. The Provider will keep this Schedule current under the subcontracting terms in Section 16.'
+    'For clarity: the AI Assistant is a paid optional add-on that operates only where the Nation has selected and initialled it in Schedule A, which constitutes the Nation\'s acknowledgement and approval of the processing described above (Sections 3.1 and 4.3). Query data is processed outside Canada only for the duration of each query, is not retained for training, and the feature can be disabled by the Nation at any time in Platform settings, at which point no Customer Data flows to that subprocessor. Apart from outbound email delivered under option (b) above, text messages sent through the text-message add-on or phone / text sign-in, and the optional AI Assistant, no listed system stores Customer Data outside Canada. The Provider will keep this Schedule current under the subcontracting terms in Section 16.'
   ].join('\n');
 
   function _fmtDateLong(){
@@ -3317,12 +3319,21 @@
   var _logoData = null;
   async function loadLogoDataUrl(){
     if (_logoData !== null) return _logoData;
+    // Prefer the uploaded Provider logo (platform_owner.logo); fall back to the
+    // static app icon so invoices / contracts still carry a mark if none is set.
+    try {
+      var ow = await loadProviderOwner();
+      if (ow && typeof ow.logo === 'string' && /^data:image\//.test(ow.logo)){ _logoData = ow.logo; return _logoData; }
+    } catch (e){}
     try {
       var blob = await (await fetch('icon-192.png')).blob();
       _logoData = await new Promise(function(res){ var fr = new FileReader(); fr.onload = function(){ res(String(fr.result || '')); }; fr.onerror = function(){ res(''); }; fr.readAsDataURL(blob); });
     } catch (e){ _logoData = ''; }
     return _logoData;
   }
+  // Drop the cached Owner + logo so the next PDF re-reads platform_owner (called
+  // from reseller.js after the Owner — incl. its logo — is saved).
+  function clearOwnerCache(){ _logoData = null; _provOwner = undefined; }
 
   // ---- Owner (software owner / "Provider") ---------------------------------
   // One record in platform_owner (supabase/platform/reseller.sql), edited in
@@ -3381,7 +3392,7 @@
   function buildAgreementPdf(nationName, address, owner, logo){
     // Provider details come from the Owner record; the fallbacks keep the
     // agreement generating if reseller.sql hasn't been run yet.
-    var o = owner || { legal_name: 'Kevin Proctor', operating_as: PROVIDER.name, signatory_name: 'Kevin Proctor', signatory_title: 'Founder', email: PROVIDER.email };
+    var o = owner || { legal_name: 'Proctor Solutions', operating_as: PROVIDER.name, signatory_name: 'Kevin Proctor', signatory_title: 'Founder', email: PROVIDER.email };
     var tpl = AGREEMENT_TPL
       .replace(/\{\{PROVIDER_PARTY\}\}/g, owner ? partyRecital(o) : partyName(o))
       .replace(/\{\{PROVIDER_NOTICE\}\}/g, (o.signatory_name || o.legal_name || '') + ' - ' + (o.email || PROVIDER.email))
@@ -4174,9 +4185,9 @@
     var year = new Date().getFullYear();
     var r = await api('GET', '/nation_invoices?select=number');
     var rows = r.ok ? await r.json().catch(function(){ return []; }) : [];
-    // Match any prefix for the current year (legacy HLH or current NP) so the
-    // sequence continues unbroken across the Home Land Homes -> Nation Pathways
-    // rename; issue new numbers under the NP prefix.
+    // Match any prefix for the current year (a legacy prefix or the current NP-)
+    // so the sequence continues unbroken across a brand rename; issue new numbers
+    // under the NP prefix.
     var re = new RegExp('-' + year + '-(\\d+)$'), max = 0;
     rows.forEach(function(x){ var m = re.exec(String(x.number || '')); if (m){ var nn = parseInt(m[1], 10); if (nn > max) max = nn; } });
     return 'NP-' + year + '-' + String(max + 1).padStart(2, '0');
@@ -4985,7 +4996,7 @@
     estCost: estCost, jwtEmail: jwtEmail, nations: function(){ return _nations; },
     ENTITY_TYPES: ENTITY_TYPES, PROVINCES: PROVINCES, provinceName: provinceName,
     fmtPartyAddress: fmtPartyAddress, partyName: partyName, partyRecital: partyRecital,
-    feeScheduleSummary: feeScheduleSummary
+    feeScheduleSummary: feeScheduleSummary, clearOwnerCache: clearOwnerCache
   };
 
   // ---- Boot ------------------------------------------------------------------

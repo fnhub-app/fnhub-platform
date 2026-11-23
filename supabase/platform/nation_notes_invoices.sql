@@ -23,7 +23,7 @@ create policy nation_notes_all on public.nation_notes for all
 create table if not exists public.nation_invoices (
   id          uuid primary key default gen_random_uuid(),
   subdomain   text not null references public.nations(subdomain) on delete cascade,
-  number      text not null,                         -- HLH-YYYY-NN
+  number      text not null,                         -- NP-YYYY-NN
   issue_date  date not null default current_date,
   due_date    date,
   currency    text not null default 'CAD',

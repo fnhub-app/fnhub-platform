@@ -225,9 +225,9 @@ serve(async (req) => {
       // Collision-safe invoice number: scan for the year's max, insert, retry on
       // a unique-violation by bumping the sequence (up to 6 attempts).
       const year = today.slice(0, 4)
-      // Match any prefix for the year (legacy HLH or current NP) so numbering
-      // continues unbroken across the Home Land Homes -> Nation Pathways rename;
-      // issue new numbers under the NP prefix.
+      // Match any prefix for the year (a legacy prefix or the current NP-) so
+      // numbering continues unbroken across a brand rename; issue new numbers
+      // under the NP prefix.
       const { data: numRows } = await admin.from('nation_invoices').select('number').like('number', '%-' + year + '-%')
       let seq = 0
       for (const r of (numRows || [])) {

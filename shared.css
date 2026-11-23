@@ -53,7 +53,7 @@
 *,*::before,*::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Colour palette — Home Land Homes brand (platform default). Individual
+  /* Colour palette — Nation Pathways brand (platform default). Individual
      nations override the accent (and derived header ink) from the admin
      portal; nations without an override inherit this clay palette. */
   --bg:           #FAF7F2;
