@@ -1831,7 +1831,17 @@
       + '</div>'
       + '<div class="nic-body">'
       +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail) + panel('emailintake', pEmailIntake)
-      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pFinanceKpis + pInvoices + pProjects + pTime + pBilling)
+      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pFinanceKpis
+      +     '<div class="fin-subtabs">'
+      +       '<button class="fin-subtab active" type="button" data-act="fin-tab" data-fintab="invoices">Invoices</button>'
+      +       '<button class="fin-subtab" type="button" data-act="fin-tab" data-fintab="projects">Projects</button>'
+      +       '<button class="fin-subtab" type="button" data-act="fin-tab" data-fintab="time">Time &amp; activities</button>'
+      +       '<button class="fin-subtab" type="button" data-act="fin-tab" data-fintab="billing">Recurring billing</button>'
+      +     '</div>'
+      +     '<div class="fin-subpanel active" data-finpanel="invoices">' + pInvoices + '</div>'
+      +     '<div class="fin-subpanel" data-finpanel="projects">' + pProjects + '</div>'
+      +     '<div class="fin-subpanel" data-finpanel="time">' + pTime + '</div>'
+      +     '<div class="fin-subpanel" data-finpanel="billing">' + pBilling + '</div>')
       +   panel('notes', pNotes) + panel('documents', pDocuments)
       + '</div>'
       + '<div class="nic-footer">'
@@ -4286,6 +4296,12 @@
     host.innerHTML = '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>Invoice</th><th>Total</th><th>Status</th><th></th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }
   window.invFilter = function(status){ window._nicInvFilter = status || 'all'; _nicRenderInvTable(); };
+  // Finance sub-tabs (TIC-style): swap which .fin-subpanel is shown.
+  window.finTab = function(name){
+    name = name || 'invoices';
+    Array.prototype.forEach.call(document.querySelectorAll('.fin-subtab'), function(b){ b.classList.toggle('active', b.getAttribute('data-fintab') === name); });
+    Array.prototype.forEach.call(document.querySelectorAll('.fin-subpanel'), function(p){ p.classList.toggle('active', p.getAttribute('data-finpanel') === name); });
+  };
   window.exportNationInvoices = function(sub){
     var inv = window._nicInvoices || [];
     if (!inv.length){ dlgAlert('No invoices to export.'); return; }
@@ -4933,6 +4949,7 @@
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
       case 'inv-add-sub':     window.invAddSubLine(); break;
       case 'inv-filter':      window.invFilter(el.getAttribute('data-status') || 'all'); break;
+      case 'fin-tab':         window.finTab(el.getAttribute('data-fintab') || 'invoices'); break;
       case 'inv-export':      window.exportNationInvoices(el.getAttribute('data-sub') || ''); break;
       case 'proj-add':        window.addNationProject(el.getAttribute('data-sub') || ''); break;
       case 'proj-status':     window.setProjectStatus(id, el.getAttribute('data-status') || 'active', el.getAttribute('data-sub') || ''); break;
