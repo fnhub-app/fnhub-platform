@@ -520,6 +520,14 @@
     var arrears = (l[TIC_C.arrears_balance] != null) ? Number(l[TIC_C.arrears_balance]) : null;
     _ticEl('tic_strip_rent').textContent    = rent != null ? _ticFmtMoney(rent) : '—';
 
+    // Arrears Payment tile: the agreed periodic amount paid toward arrears (the
+    // payment-arrangement installment), shown beside Monthly Rent. '—' when
+    // there's no arrangement. Reads the ledger row first, then the tenant row.
+    var arrPay = (l[TIC_C.arrangement_payment] != null) ? Number(l[TIC_C.arrangement_payment])
+               : (t[TIC_C.arrangement_payment] != null ? Number(t[TIC_C.arrangement_payment]) : null);
+    var arrPayEl = _ticEl('tic_strip_arrpay');
+    if (arrPayEl) arrPayEl.textContent = (arrPay != null && arrPay > 0) ? _ticFmtMoney(arrPay) : '—';
+
     var arrearsEl = _ticEl('tic_strip_arrears');
     arrearsEl.classList.remove('tic-arrears-bad','tic-arrears-good');
     if(arrears == null){
