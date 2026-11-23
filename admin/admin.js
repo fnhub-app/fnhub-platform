@@ -96,43 +96,86 @@
   // label differs on the printed line. An item may override the group's kind/feeDesc
   // (Travel, Fixed price). `needsDesc` forces a description ("Other …", fixed price).
   var _SVC_CONSULT_FEE = 'Consulting / data cleanup / training / custom reports (per hour, 0.25 incr.)';
-  var SVC_GROUPS = [
-    { label: 'Consulting & advisory (hourly)', kind: 'hourly', feeDesc: _SVC_CONSULT_FEE, items: [
-      { key: 'consult',   label: 'General consulting / advisory' },
-      { key: 'pm',        label: 'Project management' },
-      { key: 'ecdev',     label: 'Economic development' },
-      { key: 'appwork',   label: 'Application / funding work' },
-      { key: 'grantadmin',label: 'Grant administration / reporting' },
-      { key: 'datatrain', label: 'Data cleanup / migration' },
-      { key: 'training',  label: 'Training / facilitation' },
-      { key: 'reports',   label: 'Custom reports / analysis' },
-      { key: 'policy',    label: 'Policy / governance support' },
-      { key: 'other_consult', label: 'Other consulting', needsDesc: true }
+  // Branching category tree for the time/activity picker (cascading <select>s).
+  // Each node: {label, key?, kind?, feeDesc?, needsDesc?, children?}. A leaf (no
+  // children) inherits kind + feeDesc from the nearest ancestor that sets them,
+  // so every consulting leaf bills at the one contract rate (feePrice stays the
+  // single source). Add/rename a branch by editing this tree -- it's data-driven.
+  var SVC_TREE = [
+    { label: 'Consulting & advisory', kind: 'hourly', feeDesc: _SVC_CONSULT_FEE, children: [
+      { label: 'General consulting / advisory', key: 'consult' },
+      { label: 'Project management', key: 'pm' },
+      { label: 'Economic development', key: 'ecdev', children: [
+        { label: 'Business / strategic plan', key: 'ecdev_plan' },
+        { label: 'Grant / funding application', key: 'ecdev_grant' },
+        { label: 'Feasibility study', key: 'ecdev_feas' },
+        { label: 'General economic development', key: 'ecdev_gen' }
+      ] },
+      { label: 'Application / funding work', key: 'appwork' },
+      { label: 'Grant administration / reporting', key: 'grantadmin' },
+      { label: 'Data cleanup / migration', key: 'datatrain' },
+      { label: 'Training / facilitation', key: 'training' },
+      { label: 'Custom reports / analysis', key: 'reports' },
+      { label: 'Policy / governance support', key: 'policy' },
+      { label: 'Other consulting', key: 'other_consult', needsDesc: true }
     ] },
-    { label: 'Travel', items: [
-      { key: 'travel_time', kind: 'travel_time', label: 'Travel time',                          feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
-      { key: 'travel_exp',  kind: 'atcost',      label: 'Travel expenses (at cost, no markup)', feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' }
+    { label: 'Travel', children: [
+      { label: 'Travel time', key: 'travel_time', kind: 'travel_time', feeDesc: 'Travel time (per hour, max 8 hrs/travel day)' },
+      { label: 'Travel expenses (at cost)', key: 'travel_exp', kind: 'atcost', feeDesc: 'Travel expenses (at cost, NJC Travel Directive, no markup)' }
     ] },
-    { label: 'Fixed price', items: [
-      { key: 'fixed', kind: 'fixed', label: 'Fixed-price engagement', needsDesc: true }
+    { label: 'Fixed price', children: [
+      { label: 'Fixed-price engagement', key: 'fixed', kind: 'fixed', needsDesc: true }
     ] }
   ];
-  // Flatten to an index-addressable list (invAddServiceLine reads SVC_ITEMS[index]);
-  // each item inherits its group's kind/feeDesc unless it overrides, and carries
-  // its group label so the <select> can rebuild the optgroups.
-  var SVC_ITEMS = [];
-  SVC_GROUPS.forEach(function(g){
-    (g.items || []).forEach(function(it){
-      SVC_ITEMS.push({
-        key: it.key,
-        kind: it.kind || g.kind,
-        label: it.label,
-        feeDesc: (it.feeDesc !== undefined) ? it.feeDesc : g.feeDesc,
-        needsDesc: !!it.needsDesc,
-        group: g.label
+  // Re-render the cascading selects inside `mount` from the current selection,
+  // keeping the first `keep` levels (the change handler drops deeper levels when
+  // a parent changes). Idempotent; wires change handlers on each <select>.
+  function _svcTreeRender(mount, keep){
+    if (!mount) return;
+    keep = (keep == null) ? 999 : keep;
+    var cur = mount.querySelectorAll('select.svc-sel'), idxs = [];
+    for (var i = 0; i < cur.length && i < keep; i++){ var v = cur[i].value; if (v === '') break; idxs.push(parseInt(v, 10)); }
+    var levels = [], nodes = SVC_TREE;
+    for (var L = 0; ; L++){
+      var chosen = (L < idxs.length) ? idxs[L] : null;
+      levels.push({ nodes: nodes, chosen: chosen });
+      if (chosen == null) break;
+      var node = nodes[chosen];
+      if (!node || !node.children || !node.children.length) break;
+      nodes = node.children;
+    }
+    mount.innerHTML = levels.map(function(lv, L){
+      var opts = '<option value="">' + (L === 0 ? '&mdash; category &mdash;' : '&mdash; select &mdash;') + '</option>'
+        + lv.nodes.map(function(nd, j){ return '<option value="' + j + '"' + (lv.chosen === j ? ' selected' : '') + '>' + esc(nd.label) + '</option>'; }).join('');
+      return '<select class="svc-sel" data-level="' + L + '">' + opts + '</select>';
+    }).join('');
+    Array.prototype.forEach.call(mount.querySelectorAll('select.svc-sel'), function(s){
+      s.addEventListener('change', function(){
+        _svcTreeRender(mount, parseInt(s.getAttribute('data-level'), 10) + 1);
+        if (typeof window._svcTreeOnChange === 'function') window._svcTreeOnChange(mount);
       });
     });
-  });
+  }
+  // Resolve the current selection to a leaf, inheriting kind/feeDesc down the path.
+  // Returns null if nothing is chosen or the deepest choice still has children.
+  function _svcTreeResolve(mount){
+    if (!mount) return null;
+    var sels = mount.querySelectorAll('select.svc-sel'), idxs = [];
+    for (var i = 0; i < sels.length; i++){ var v = sels[i].value; if (v === '') return null; idxs.push(parseInt(v, 10)); }
+    if (!idxs.length) return null;
+    var nodes = SVC_TREE, node = null, kind = null, feeDesc = null, needsDesc = false, key = null, path = [];
+    for (var L = 0; L < idxs.length; L++){
+      node = nodes[idxs[L]]; if (!node) return null;
+      path.push(node.label);
+      if (node.kind != null) kind = node.kind;
+      if (node.feeDesc !== undefined) feeDesc = node.feeDesc;
+      if (node.needsDesc) needsDesc = true;
+      if (node.key) key = node.key;
+      nodes = node.children || [];
+    }
+    if (node.children && node.children.length) return null;
+    return { kind: kind, feeDesc: feeDesc, label: path[path.length - 1], fullLabel: path.join(' / '), needsDesc: needsDesc, key: key, path: path };
+  }
 
   // Contract prices come from FEE_SCHEDULE (never retyped), so the subscription
   // agreement's Schedule A and the reseller pricing summary always match the
@@ -202,18 +245,6 @@
     return '<select id="cn-inv-catalog">' + opts + '</select>';
   }
   // <select> of professional-service types, each showing its contract rate.
-  // <select> of professional-service types, grouped into <optgroup>s by SVC_ITEMS'
-  // `.group` (which preserves SVC_GROUPS order), each showing its rate.
-  function _svcSelectHtml(){
-    var html = '<select id="cn-svc-type">', cur = null;
-    SVC_ITEMS.forEach(function(s, i){
-      if (s.group !== cur){ if (cur !== null) html += '</optgroup>'; html += '<optgroup label="' + esc(s.group) + '">'; cur = s.group; }
-      var rate = s.kind === 'atcost' ? 'at cost' : (s.kind === 'fixed' ? 'fixed price' : _money(feePrice(s.feeDesc)) + '/hr');
-      html += '<option value="' + i + '">' + esc(s.label) + '  —  ' + rate + '</option>';
-    });
-    if (cur !== null) html += '</optgroup>';
-    return html + '</select>';
-  }
 
   var app = document.getElementById('app');
   var esc = function (s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]; }); };
@@ -1446,6 +1477,7 @@
     renderNationNotes(n.subdomain);
     renderNationInvoices(n.subdomain);
     window.invAddLine();          // seed one empty invoice line
+    renderNationProjects(n.subdomain);   // chains renderNationTime once projects load
     renderNationBilling(n.subdomain);
     renderSupportKey(n.subdomain);
     loadNicSummary(n.subdomain);
@@ -1690,6 +1722,18 @@
       +   '<div class="dash-kpi"><div class="l">Overdue</div><div class="v" id="kpi-fin-over">&mdash;</div><div class="m" id="kpi-fin-over-m">&nbsp;</div></div>'
       + '</div>';
 
+    var pProjects =
+        '<div class="card"><h3>Projects</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">This nation\'s projects, by Project # and/or PO #. Tag time entries to a project.</p>'
+      +   '<div id="cn-projects"><div class="empty">Loading projects...</div></div>'
+      + '</div>';
+
+    var pTime =
+        '<div class="card"><h3>Time &amp; activities</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Log daily consulting / travel time against a project. Entries accumulate here (unbilled); add them to an invoice from the Invoices card above and they are marked billed. Pick the category through the branching menu &mdash; the rate comes from the contract.</p>'
+      +   '<div id="cn-time"><div class="empty">Loading time log...</div></div>'
+      + '</div>';
+
     var pBilling =
         '<div class="card"><h3>Recurring billing</h3>'
       +   '<p class="sub" style="margin:2px 0 8px;">Automated subscription invoicing. On each due date the scheduler generates an invoice from this schedule, advances the next date, and (when Auto-send is on) emails the nation. Generated invoices land in the Invoices tab and count toward Outstanding. Set up the daily scheduler once &mdash; see <code>docs/RECURRING-INVOICING.md</code>.</p>'
@@ -1720,22 +1764,7 @@
       +       '<div id="cn-sub-hint" class="sub" style="font-size:11px;margin:6px 0;"></div>'
       +       '<button class="btn sm" type="button" data-act="inv-add-sub">Add subscription line &darr;</button>'
       +     '</div>'
-      +     '<div style="border:1px solid var(--line);border-radius:10px;padding:10px 12px;margin:2px 0 10px;">'
-      +       '<div style="font-weight:700;font-size:12px;margin-bottom:2px;">Professional services &mdash; consulting &amp; travel</div>'
-      +       '<p class="sub" style="margin:0 0 8px;font-size:11px;">Bill hourly work &mdash; consulting/advisory, <b>project management</b>, <b>economic development</b>, <b>application/funding work</b>, data/training &mdash; at the <b>contract rate</b>, or a <b>fixed-price engagement</b> at a quoted lump sum. Pick a service, add a project number + description and the hours (or, for travel expenses / fixed price, the amount); the line is added below. Travel time is capped at <b>8 hours per travel day</b> (NJC Travel Directive).</p>'
-      +       '<div style="display:grid;grid-template-columns:1fr 160px;gap:8px;">'
-      +         '<div><label>Service</label>' + _svcSelectHtml() + '</div>'
-      +         '<div><label>Project #</label><input id="cn-svc-proj" placeholder="e.g. NP-2026-01"/></div>'
-      +       '</div>'
-      +       '<label>Description</label><input id="cn-svc-desc" placeholder="What was done (e.g. historical data cleanup &amp; import)"/>'
-      +       '<div style="display:grid;grid-template-columns:120px 150px 1fr;gap:8px;margin-top:2px;">'
-      +         '<div><label>Hours</label><input id="cn-svc-hrs" type="number" step="0.25" min="0" placeholder="0.00"/></div>'
-      +         '<div><label>Travel days</label><input id="cn-svc-days" type="number" step="1" min="1" placeholder="1"/><div class="sub" style="font-size:10px;margin-top:1px;">travel time only</div></div>'
-      +         '<div><label>Amount $</label><input id="cn-svc-amt" type="number" step="0.01" min="0" placeholder="0.00"/><div class="sub" style="font-size:10px;margin-top:1px;">travel expenses / fixed price</div></div>'
-      +       '</div>'
-      +       '<div id="cn-svc-hint" class="sub" style="font-size:11px;margin:6px 0;"></div>'
-      +       '<button class="btn sm" type="button" data-act="inv-add-service">Add services line &darr;</button>'
-      +     '</div>'
+      +     '<div id="cn-inv-time" style="display:none;background:var(--accent-light);border:1px solid #A9C4BA;border-radius:9px;padding:9px 11px;margin:2px 0 10px;"></div>'
       +     '<div id="cn-inv-lines"></div>'
       +     '<button class="btn sm ghost" type="button" data-act="inv-add-line" style="margin-top:2px;">+ Add blank line</button>'
       +     '<div style="' + g2 + 'margin-top:12px;">'
@@ -1802,7 +1831,7 @@
       + '</div>'
       + '<div class="nic-body">'
       +   panel('overview', pOverview, true) + panel('supabase', pSupabase) + panel('email', pEmail) + panel('emailintake', pEmailIntake)
-      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pFinanceKpis + pInvoices + pBilling)
+      +   panel('sms', pSms) + panel('agreement', pAgreement) + panel('finance', pFinanceKpis + pInvoices + pProjects + pTime + pBilling)
       +   panel('notes', pNotes) + panel('documents', pDocuments)
       + '</div>'
       + '<div class="nic-footer">'
@@ -3932,37 +3961,177 @@
     var h = document.getElementById('cn-sub-homes'); if (h) h.value = '';
     var s = document.getElementById('cn-sub-setup'); if (s) s.checked = false;
   };
-  window.invAddServiceLine = function(){
-    var sel = document.getElementById('cn-svc-type'); if (!sel) return;
-    var it = SVC_ITEMS[parseInt(sel.value, 10)]; if (!it) return;
-    var hint = document.getElementById('cn-svc-hint');
-    function warn(m){ if (hint){ hint.textContent = m; hint.style.color = '#c23b4b'; } }
-    function val(id){ var e = document.getElementById(id); return e ? e.value : ''; }
-    var proj = String(val('cn-svc-proj') || '').trim();
-    var desc = String(val('cn-svc-desc') || '').trim();
-    var tail = (proj ? ' — Project #' + proj : '') + (desc ? ' — ' + desc : '');
-    var line;
-    if (it.needsDesc && !desc){ warn(it.kind === 'fixed' ? 'Add a short description of the fixed-price work.' : 'Add a short description of the work.'); return; }
-    if (it.kind === 'atcost' || it.kind === 'fixed'){
-      var amt = parseFloat(val('cn-svc-amt') || '0') || 0;
-      if (!(amt > 0)){ warn(it.kind === 'fixed' ? 'Enter the fixed-price amount.' : 'Enter the travel-expense amount (billed at cost).'); return; }
-      line = { d: it.label + tail, q: 1, p: Math.round(amt * 100) / 100 };
-    } else {
-      var rate = feePrice(it.feeDesc);
-      var hrs = parseFloat(val('cn-svc-hrs') || '0') || 0;
-      if (!(hrs > 0)){ warn('Enter the number of hours.'); return; }
-      if (it.kind === 'travel_time'){
-        var days = parseInt(val('cn-svc-days') || '1', 10) || 1; if (days < 1) days = 1;
-        var cap = 8 * days;
-        if (hrs > cap){ warn('Travel time ' + hrs + ' hrs exceeds the policy maximum of 8 hrs per travel day (8 x ' + days + ' = ' + cap + ' hrs). Increase travel days or reduce hours.'); return; }
-      }
-      var label = (it.kind === 'travel_time') ? 'Travel time (NJC Travel Directive; max 8 hrs/travel day)' : it.label;
-      line = { d: label + tail + ' (' + hrs + ' hrs @ ' + feeFmt(rate) + '/hr)', q: hrs, p: rate };
-    }
-    window.invAddLine(line);
-    ['cn-svc-proj', 'cn-svc-desc', 'cn-svc-hrs', 'cn-svc-days', 'cn-svc-amt'].forEach(function(id){ var e = document.getElementById(id); if (e) e.value = ''; });
-    if (hint){ hint.style.color = ''; hint.textContent = 'Added below. Adjust Qty / Unit if needed, then Create invoice & PDF.'; }
+  // ---- Per-nation projects + daily time/activity log -------------------------
+  function _projNumbers(p){ var b = []; if (p.number) b.push('#' + p.number); if (p.po_number) b.push('PO ' + p.po_number); return b.join(' / '); }
+  function _projLabel(p){ var n = _projNumbers(p); return n ? (n + (p.name ? ' - ' + p.name : '')) : (p.name || 'Project'); }
+  function _projById(id){ return (window._nicProjects || []).filter(function(p){ return String(p.id) === String(id); })[0] || null; }
+
+  async function renderNationProjects(sub){
+    var host = document.getElementById('cn-projects'); if (!host) return;
+    var r = await api('GET', '/nation_projects?subdomain=eq.' + encodeURIComponent(sub) + '&order=created_at.desc');
+    var rows = r.ok ? await r.json().catch(function(){ return []; }) : [];
+    window._nicProjects = rows;
+    var list = !rows.length ? '<div class="empty">No projects yet.</div>'
+      : '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>Project</th><th>Numbers</th><th>Status</th><th></th></tr></thead><tbody>'
+        + rows.map(function(p){
+            return '<tr>'
+              + '<td><div class="std-id-main">' + esc(p.name || '(unnamed)') + '</div></td>'
+              + '<td>' + esc(_projNumbers(p) || '—') + '</td>'
+              + '<td><span class="pill ' + (p.status === 'closed' ? 'suspended' : 'active') + '">' + (p.status === 'closed' ? 'Closed' : 'Active') + '</span></td>'
+              + '<td class="std-rowend"><div style="display:flex;gap:6px;justify-content:flex-end;flex-wrap:wrap;">'
+              +   '<button class="btn sm ghost" type="button" data-act="proj-status" data-id="' + esc(p.id) + '" data-status="' + (p.status === 'closed' ? 'active' : 'closed') + '" data-sub="' + esc(sub) + '">' + (p.status === 'closed' ? 'Reopen' : 'Close') + '</button>'
+              +   '<button class="btn sm danger" type="button" data-act="proj-del" data-id="' + esc(p.id) + '" data-sub="' + esc(sub) + '">Delete</button>'
+              + '</div></td></tr>';
+          }).join('') + '</tbody></table></div></div>';
+    host.innerHTML = list
+      + '<div style="display:grid;grid-template-columns:150px 150px 1fr auto;gap:8px;align-items:end;margin-top:12px;">'
+      +   '<div><label>Project #</label><input id="cn-proj-number" placeholder="e.g. NP-2026-01"/></div>'
+      +   '<div><label>PO #</label><input id="cn-proj-po" placeholder="optional"/></div>'
+      +   '<div><label>Name</label><input id="cn-proj-name" placeholder="e.g. Economic development plan"/></div>'
+      +   '<button class="btn sm" type="button" data-act="proj-add" data-sub="' + esc(sub) + '">+ Add project</button>'
+      + '</div><div class="msg" id="cn-proj-msg"></div>';
+    // Re-render the time log now that projects are loaded (dropdown + labels).
+    if (document.getElementById('cn-time')) renderNationTime(sub);
+  }
+  function _timeProjOptions(){
+    return '<option value="">— no project —</option>' + (window._nicProjects || []).filter(function(p){ return p.status !== 'closed'; })
+      .map(function(p){ return '<option value="' + esc(p.id) + '">' + esc(_projLabel(p)) + '</option>'; }).join('');
+  }
+  window.addNationProject = async function(sub){
+    function v(id){ var e = document.getElementById(id); return e ? e.value.trim() : ''; }
+    var number = v('cn-proj-number'), po = v('cn-proj-po'), name = v('cn-proj-name');
+    if (!number && !po && !name){ setMsg('cn-proj-msg', 'Enter a project number, PO number or name.'); return; }
+    var r = await api('POST', '/nation_projects', { subdomain: sub, number: number || null, po_number: po || null, name: name || null, created_by: jwtEmail() }, 'return=minimal');
+    if (r.ok){ await audit('nation_project_added', sub, (number || po || name)); renderNationProjects(sub); }
+    else setMsg('cn-proj-msg', 'Could not add the project.');
   };
+  window.setProjectStatus = async function(id, status, sub){
+    var r = await api('PATCH', '/nation_projects?id=eq.' + encodeURIComponent(id), { status: status }, 'return=minimal');
+    if (r.ok){ renderNationProjects(sub); }
+  };
+  window.deleteNationProject = async function(id, sub){
+    if (!(await dlgConfirm('Delete this project? Time entries keep their work but lose the project link.', { title: 'Delete project', okText: 'Delete' }))) return;
+    var r = await api('DELETE', '/nation_projects?id=eq.' + encodeURIComponent(id), null, 'return=minimal');
+    if (r.ok){ renderNationProjects(sub); }   // chains renderNationTime
+  };
+
+  // Update the rate hint when the branching category selection changes.
+  window._svcTreeOnChange = function(mount){
+    if (!mount || mount.id !== 'cn-time-cat') return;
+    var hintEl = document.getElementById('cn-time-hint'); if (!hintEl) return;
+    var res = _svcTreeResolve(mount);
+    if (!res){ hintEl.textContent = ''; return; }
+    if (res.kind === 'atcost'){ hintEl.textContent = 'At cost — enter the amount (no markup). Use the Amount field.'; }
+    else if (res.kind === 'fixed'){ hintEl.textContent = 'Fixed price — enter the amount; a description is required. Use the Amount field.'; }
+    else { hintEl.textContent = feeFmt(feePrice(res.feeDesc)) + '/hr — use the Hours field' + (res.kind === 'travel_time' ? ' (travel time capped at 8 hrs/day)' : '') + (res.needsDesc ? '; a description is required' : '') + '.'; }
+  };
+  async function renderNationTime(sub){
+    var host = document.getElementById('cn-time'); if (!host) return;
+    var r = await api('GET', '/nation_time_entries?subdomain=eq.' + encodeURIComponent(sub) + '&billed=eq.false&order=entry_date.desc,created_at.desc');
+    var rows = r.ok ? await r.json().catch(function(){ return []; }) : [];
+    window._nicTime = rows; window._nicTimeSub = sub;
+    var totHours = 0, totAmt = 0;
+    rows.forEach(function(e){
+      if (e.kind === 'atcost' || e.kind === 'fixed'){ totAmt += Number(e.amount) || 0; }
+      else { totHours += Number(e.hours) || 0; totAmt += (Number(e.hours) || 0) * (Number(e.rate) || 0); }
+    });
+    totAmt = Math.round(totAmt * 100) / 100; totHours = Math.round(totHours * 100) / 100;
+    var list = !rows.length ? '<div class="empty">No unbilled time yet.</div>'
+      : '<div class="std-table-card"><div class="std-scroll"><table class="std-table"><thead><tr><th>Date</th><th>Activity</th><th>Project</th><th>Qty</th><th>Amount</th><th></th></tr></thead><tbody>'
+        + rows.map(function(e){
+            var cat = (e.category_path && e.category_path.length) ? e.category_path.join(' / ') : (e.category_key || '—');
+            var proj = _projById(e.project_id);
+            var atcost = (e.kind === 'atcost' || e.kind === 'fixed');
+            var amt = atcost ? (Number(e.amount) || 0) : (Number(e.hours) || 0) * (Number(e.rate) || 0);
+            return '<tr>'
+              + '<td>' + esc(e.entry_date || '') + '</td>'
+              + '<td><div class="std-id-main">' + esc(cat) + '</div>' + (e.description ? '<div class="std-id-sub">' + esc(e.description) + '</div>' : '') + '</td>'
+              + '<td>' + esc(proj ? _projLabel(proj) : '—') + '</td>'
+              + '<td>' + (atcost ? '—' : esc(e.hours + ' hrs')) + '</td>'
+              + '<td class="num">' + _money(amt) + '</td>'
+              + '<td class="std-rowend"><button class="btn sm danger" type="button" data-act="time-del" data-id="' + esc(e.id) + '" data-sub="' + esc(sub) + '" title="Delete">&times;</button></td></tr>';
+          }).join('') + '</tbody></table></div></div>';
+    host.innerHTML =
+        '<div style="display:grid;grid-template-columns:140px 1fr;gap:8px;align-items:start;">'
+      +   '<div><label>Date</label><input id="cn-time-date" type="date" value="' + _dPlus(0) + '"/></div>'
+      +   '<div><label>Category</label><div id="cn-time-cat" class="svc-branch"></div></div>'
+      + '</div>'
+      + '<div style="display:grid;grid-template-columns:1fr 110px 140px;gap:8px;align-items:end;margin-top:6px;">'
+      +   '<div><label>Project</label><select id="cn-time-proj">' + _timeProjOptions() + '</select></div>'
+      +   '<div><label>Hours</label><input id="cn-time-hrs" type="number" step="0.25" min="0" placeholder="0.00"/></div>'
+      +   '<div><label>Amount $</label><input id="cn-time-amt" type="number" step="0.01" min="0" placeholder="travel exp / fixed"/></div>'
+      + '</div>'
+      + '<label>Description</label><input id="cn-time-desc" placeholder="What was done"/>'
+      + '<div id="cn-time-hint" class="sub" style="font-size:11px;margin:6px 0;"></div>'
+      + '<button class="btn sm" type="button" data-act="time-add" data-sub="' + esc(sub) + '">+ Add time entry</button>'
+      + '<div class="msg" id="cn-time-msg"></div>'
+      + '<div style="margin-top:14px;font-weight:700;font-size:13px;">Unbilled &mdash; ' + rows.length + ' entr' + (rows.length === 1 ? 'y' : 'ies') + (totHours ? ' &middot; ' + totHours + ' hrs' : '') + ' &middot; ' + _money(totAmt) + '</div>'
+      + '<div style="margin-top:6px;">' + list + '</div>';
+    _svcTreeRender(document.getElementById('cn-time-cat'));
+    var banner = document.getElementById('cn-inv-time');
+    if (banner){
+      if (rows.length){
+        banner.style.display = '';
+        banner.innerHTML = '<div style="font-size:12px;color:var(--ink);">Unbilled time: <b>' + _money(totAmt) + '</b> across ' + rows.length + ' entr' + (rows.length === 1 ? 'y' : 'ies') + '.</div>'
+          + '<button class="btn sm ghost" type="button" data-act="time-to-inv" data-sub="' + esc(sub) + '" style="margin:6px 0 0;">+ Add unbilled time to this invoice</button>';
+      } else { banner.style.display = 'none'; banner.innerHTML = ''; }
+    }
+  }
+  window.addTimeEntry = async function(sub){
+    function v(id){ var e = document.getElementById(id); return e ? e.value : ''; }
+    function warn(m){ setMsg('cn-time-msg', m); }
+    var res = _svcTreeResolve(document.getElementById('cn-time-cat'));
+    if (!res){ warn('Pick a category all the way to a specific activity.'); return; }
+    var date = v('cn-time-date') || _dPlus(0);
+    var desc = String(v('cn-time-desc') || '').trim();
+    if (res.needsDesc && !desc){ warn('A description is required for this activity.'); return; }
+    var row = { subdomain: sub, project_id: (v('cn-time-proj') || null), entry_date: date, category_path: res.path, category_key: res.key || null, kind: res.kind, description: desc || null, created_by: jwtEmail() };
+    if (res.kind === 'atcost' || res.kind === 'fixed'){
+      var amt = parseFloat(v('cn-time-amt') || '0') || 0;
+      if (!(amt > 0)){ warn('Enter the amount.'); return; }
+      row.amount = Math.round(amt * 100) / 100;
+    } else {
+      var hrs = parseFloat(v('cn-time-hrs') || '0') || 0;
+      if (!(hrs > 0)){ warn('Enter the number of hours.'); return; }
+      if (res.kind === 'travel_time' && hrs > 8){ warn('Travel time is capped at 8 hrs per travel day — log multi-day travel as separate dated entries.'); return; }
+      row.hours = hrs; row.rate = feePrice(res.feeDesc);
+    }
+    var r = await api('POST', '/nation_time_entries', row, 'return=minimal');
+    if (r.ok){ await audit('nation_time_added', sub, res.fullLabel + ' ' + date); renderNationTime(sub); }
+    else warn('Could not save the time entry.');
+  };
+  window.deleteTimeEntry = async function(id, sub){
+    var r = await api('DELETE', '/nation_time_entries?id=eq.' + encodeURIComponent(id), null, 'return=minimal');
+    if (r.ok){ renderNationTime(sub); }
+  };
+  // Compose an invoice line from a time entry.
+  function _timeEntryLine(e){
+    var cat = (e.category_path && e.category_path.length) ? e.category_path[e.category_path.length - 1] : (e.category_key || 'Service');
+    var proj = _projById(e.project_id), projTxt = proj ? _projNumbers(proj) : '';
+    var tail = (projTxt ? ' — ' + projTxt : '') + (e.description ? ' — ' + e.description : '');
+    if (e.kind === 'atcost' || e.kind === 'fixed'){
+      return { d: cat + tail + (e.entry_date ? ' (' + e.entry_date + ')' : ''), q: 1, p: Math.round((Number(e.amount) || 0) * 100) / 100 };
+    }
+    return { d: cat + tail + ' (' + (Number(e.hours) || 0) + ' hrs @ ' + feeFmt(Number(e.rate) || 0) + '/hr' + (e.entry_date ? ', ' + e.entry_date : '') + ')', q: Number(e.hours) || 0, p: Number(e.rate) || 0 };
+  }
+  window.addUnbilledTimeToInvoice = function(sub){
+    var rows = window._nicTime || [];
+    if (!rows.length){ dlgAlert('No unbilled time to add.'); return; }
+    rows.forEach(function(e){ window.invAddLine(_timeEntryLine(e)); });
+    window._pendingTimeEntryIds = rows.map(function(e){ return e.id; });
+    var det = document.querySelector('details.fin-create'); if (det) det.open = true;
+    setMsg('cn-time-msg', rows.length + ' entr' + (rows.length === 1 ? 'y' : 'ies') + ' added to the invoice below — marked billed when you Create it.', 'ok');
+  };
+  // Mark pending time entries billed after an invoice is created from them.
+  async function _markTimeEntriesBilled(number){
+    var ids = window._pendingTimeEntryIds || [];
+    if (!ids.length) return;
+    window._pendingTimeEntryIds = null;
+    for (var i = 0; i < ids.length; i++){
+      try { await api('PATCH', '/nation_time_entries?id=eq.' + encodeURIComponent(ids[i]), { billed: true, invoice_number: number, billed_at: new Date().toISOString() }, 'return=minimal'); } catch (e){}
+    }
+    if (window._nicTimeSub) renderNationTime(window._nicTimeSub);
+  }
   // Discount helper: percent-of-base or fixed dollars, clamped to [0, base].
   // Returns the rounded dollar amount taken off. Used by manual invoices, the
   // interest recompute, and recurring-billing generation so the three paths
@@ -4032,6 +4201,7 @@
     // switch / tab reopen) can't leak it onto an unrelated invoice.
     window._nicInvoices = inv;
     window._nicCarryIds = null;
+    window._pendingTimeEntryIds = null;   // reset the "mark billed" queue on nation switch / re-render
     window._nicInvSub = sub;
     if (window._nicInvFilter == null) window._nicInvFilter = 'all';
     _nicRenderInvTable();
@@ -4289,6 +4459,7 @@
         doc.save(fname);
         try { await uploadDoc(sub, new File([blob], fname, { type: 'application/pdf' }), 'invoice'); } catch(e){}
         await audit('nation_invoice_created', sub, number);
+        await _markTimeEntriesBilled(number);   // stamp any time entries that fed this invoice
         setMsgWithView('cn-inv-msg', 'Invoice ' + number + ' created and filed in Documents.', viewUrl);
         document.getElementById('cn-inv-lines').innerHTML = ''; invAddLine();
         var tn = document.getElementById('cn-inv-notes'); if (tn) tn.value = '';
@@ -4761,9 +4932,14 @@
       case 'inv-add-line':  window.invAddLine(); break;
       case 'inv-add-catalog': window.invAddCatalogLine(); break;
       case 'inv-add-sub':     window.invAddSubLine(); break;
-      case 'inv-add-service': window.invAddServiceLine(); break;
       case 'inv-filter':      window.invFilter(el.getAttribute('data-status') || 'all'); break;
       case 'inv-export':      window.exportNationInvoices(el.getAttribute('data-sub') || ''); break;
+      case 'proj-add':        window.addNationProject(el.getAttribute('data-sub') || ''); break;
+      case 'proj-status':     window.setProjectStatus(id, el.getAttribute('data-status') || 'active', el.getAttribute('data-sub') || ''); break;
+      case 'proj-del':        window.deleteNationProject(id, el.getAttribute('data-sub') || ''); break;
+      case 'time-add':        window.addTimeEntry(el.getAttribute('data-sub') || ''); break;
+      case 'time-del':        window.deleteTimeEntry(id, el.getAttribute('data-sub') || ''); break;
+      case 'time-to-inv':     window.addUnbilledTimeToInvoice(el.getAttribute('data-sub') || ''); break;
       case 'inv-del-line':  { var lr = el.closest && el.closest('.inv-line'); if (lr) lr.remove(); break; }
       case 'inv-create':    window.createNationInvoice(el.getAttribute('data-sub') || '', id); break;
       case 'inv-status':    window.setInvoiceStatus(el.getAttribute('data-id') || '', el.getAttribute('data-status') || '', el.getAttribute('data-sub') || ''); break;

@@ -162,6 +162,9 @@
   .fin-create>summary::-webkit-details-marker{display:none}
   .fin-create>summary::before{content:'+';display:inline-grid;place-items:center;width:17px;height:17px;border-radius:5px;background:var(--accent-light);color:var(--accent);font-weight:800}
   .fin-create[open]>summary::before{content:'\2212'}
+  /* Branching category picker (cascading selects) */
+  .svc-branch{display:flex;flex-wrap:wrap;gap:6px}
+  .svc-branch select{flex:1 1 160px;min-width:140px}
 
   /* ============================================================
      std-table (Phase 2 redesign) — light table card + identity
