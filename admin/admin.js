@@ -427,6 +427,7 @@
     { k:'provision', grp:'Overview', label:'Provision',     icon:ICO.gear,   eyebrow:'Control Plane', title:'Provision',        sub:'Set up a new nation across Supabase, GitHub, and Cloudflare' },
     { k:'addnation', grp:'Overview', label:'Add a nation',  icon:ICO.add,    eyebrow:'Control Plane', title:'Add a nation',     sub:'Register a nation in the platform directory' },
     { k:'migrations',grp:'Overview', label:'Migrations',    icon:ICO.db,     eyebrow:'Control Plane', title:'Fleet migrations', sub:'Run a SQL migration across every nation' },
+    { k:'business',  grp:'Business', label:'Business profile', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>', eyebrow:'Business', title:'Business profile', sub:'Logo, business name, address and contacts used on invoices and contracts' },
     { k:'resellers', grp:'Business', label:'Resellers',     icon:ICO.users,  eyebrow:'Business',      title:'Resellers',        sub:'Agreements, commission statements, and sales' },
     { k:'pricing',   grp:'Business', label:'Pricing',       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', eyebrow:'Business', title:'Pricing calculator', sub:'Model a nation’s subscription on the flat per-home plan' },
     { k:'sop',       grp:'System',   label:'Onboarding SOP',icon:ICO.doc,    eyebrow:'System',        title:'Onboarding SOP',   sub:'The standard operating procedure for onboarding a nation' },
@@ -676,7 +677,8 @@
       +   panel('sop', onboardingSopCard(), false)
       +   panel('addnation', addNationCard(), false)
       +   panel('migrations', migrationsCard(nations), false)
-      // Resellers renders lazily (reseller.js) the first time its tab opens.
+      // Business profile + Resellers render lazily (reseller.js) on first open.
+      +   panel('business', '<div id="biz-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
       +   panel('resellers', '<div id="rs-root"><p class="sub" style="margin-top:14px;">Loading…</p></div>', false)
       +   panel('pricing',   '<div id="pricing-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
       +   panel('admins',    adminsCard(admins, meEmail), false)
@@ -1864,6 +1866,7 @@
       var ic = document.getElementById('dash-hero-ic'); if (ic) ic.innerHTML = meta.icon;
       var tx = document.getElementById('dash-hero-tx'); if (tx) tx.innerHTML = dashHeroTx(meta);
     }
+    if (name === 'business' && typeof window.renderBusinessConfig === 'function') window.renderBusinessConfig(document.getElementById('biz-root'));
     if (name === 'resellers' && typeof window.renderResellers === 'function') window.renderResellers();
     if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
     if (name === 'requests' && typeof window.renderBuildTickets === 'function') window.renderBuildTickets();
