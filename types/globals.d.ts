@@ -351,6 +351,7 @@ declare var _viewToggleHtml: any;
 declare var _wlArchiveApp: any;
 declare var _wlArchiveSow: any;
 declare var _wlCancelRfq: any;
+declare var _wlJumpTo: any;
 declare var _wlLb: any;
 declare var _wlLbShow: any;
 declare var _wlReelNudge: any;
