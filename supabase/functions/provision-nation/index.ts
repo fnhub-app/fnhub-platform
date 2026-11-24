@@ -119,6 +119,30 @@ serve(async (req) => {
   const steps: Array<{ name: string; ok: boolean; detail: string }> = []
   const step = (name: string, ok: boolean, detail: string) => { steps.push({ name, ok, detail }) }
 
+  // --- Step 0: data-residency (OCAP) check ------------------------------------
+  // provision-nation does NOT create the project (the operator does, choosing the
+  // region), so we cannot set the region here -- but we read it and flag it loudly
+  // when it is not a Canadian region, so an OCAP data-residency mistake is caught
+  // at provisioning instead of silently. Advisory only; never blocks.
+  if (ref && MGMT_TOKEN) {
+    try {
+      const pr = await fetch(MGMT_BASE + '/v1/projects/' + encodeURIComponent(ref), {
+        headers: { Authorization: 'Bearer ' + MGMT_TOKEN },
+      })
+      if (pr.ok) {
+        const pj: Record<string, unknown> = await pr.json().catch(() => ({}))
+        const region = String((pj && pj.region) || '').trim()
+        const canadian = /^ca-/.test(region)
+        step('region_check', canadian,
+          region
+            ? (canadian
+                ? ('Project region is ' + region + ' (Canadian -- OCAP data residency OK).')
+                : ('WARNING: project region is ' + region + ', not a Canadian region. For OCAP data residency host the nation in a Canadian region (e.g. ca-central-1). Provisioning is not blocked.'))
+            : 'Could not read the project region to verify data residency.')
+      }
+    } catch (_e) { /* advisory only */ }
+  }
+
   // --- Step 1: run the bootstrap schema on the new project (Management API) ---
   // Schema is auto-fetched from the repo when the payload doesn't include it.
   let schemaToRun = schemaSql
