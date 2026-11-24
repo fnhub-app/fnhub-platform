@@ -1805,6 +1805,26 @@ function _sowNotifyTenantApproved(sow, unitId, prevStatus){
 }
 window._sowNotifyTenantApproved = _sowNotifyTenantApproved;
 
+// Scheduled = final-approved AND has an assignee (contractor or in-house crew)
+// AND a target date. Fires the tenant "scheduled" text/email once, on that
+// transition (de-duped against the prior state).
+function _sowIsScheduled(s){
+  if(!s || !_sowIsApproved(s)) return false;
+  var hasAssignee = !!(s.contractorId || s.assignedTo);
+  var hasDate     = !!(s.endDate || s.startDate);
+  return hasAssignee && hasDate;
+}
+function _sowNotifyTenantScheduled(sow, unitId, prevSow){
+  try {
+    if(typeof notifySowTenantScheduled !== 'function' || !sow) return;
+    if(!_sowIsScheduled(sow)) return;
+    if(_sowIsScheduled(prevSow)) return;   // already scheduled before this change — don't re-fire
+    var u = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x && x.id === unitId; }) || null;
+    notifySowTenantScheduled(sow, u);
+  } catch(e){ console.warn('[SOW] tenant scheduled notify threw:', e); }
+}
+window._sowNotifyTenantScheduled = _sowNotifyTenantScheduled;
+
 // Whether the RFQ (tender) process is still available for a request. A manual
 // HM/ED approval authorizes the work/budget but does NOT select the contractor,
 // so the RFQ button stays available after approval. It's only gone once the
@@ -2236,6 +2256,8 @@ function _wlApproveSow(uid, pn){
     if(typeof upsertSowInList === 'function') upsertSowInList(uid, sow);
     // Tenant "approved" text/email on the transition into a final-approved state.
     _sowNotifyTenantApproved(sow, uid, prevStatus);
+    // Tenant "scheduled" text/email if approving an already-assigned+dated request.
+    _sowNotifyTenantScheduled(sow, uid, { approval_status: prevStatus, contractorId: sow.contractorId, assignedTo: sow.assignedTo, endDate: sow.endDate, startDate: sow.startDate, amount: sow.amount, totalCost: sow.totalCost });
     if(typeof auditEntry === 'function'){
       auditEntry('SOW:'+uid, approver === 'ed' ? 'sow_ed_approval' : 'sow_hm_approval',
         (approver === 'ed' ? 'ED' : 'HM') + ' approval recorded (worklist) — ' + name + ' on ' + today + ' · ' + pn, role);
@@ -3115,6 +3137,8 @@ function saveSOW(opts){
   if(_sowUnitId) upsertSowInList(_sowUnitId, data);
   // Tenant "approved" text/email on the transition into a final-approved state.
   if(_sowUnitId) _sowNotifyTenantApproved(data, _sowUnitId, existingForStatus ? (existingForStatus.approval_status || '') : '');
+  // Tenant "scheduled" text/email on the transition into approved + assigned + dated.
+  if(_sowUnitId) _sowNotifyTenantScheduled(data, _sowUnitId, existingForStatus);
 
   // Contractor Portal: keep the contractor_work_orders projection in sync so a
   // logged-in contractor sees this work order (or stops seeing it if it was
