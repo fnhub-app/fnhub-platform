@@ -199,18 +199,36 @@ function _aiLauncherOn() {
   if (typeof window.aiFeatureOn === 'function') return !!window.aiFeatureOn('chat');
   return !!(window.CLFN_MODULES && CLFN_MODULES.isEnabled && CLFN_MODULES.isEnabled('ai_assistant'));
 }
+// The nation's logo for the launcher, resolved like the app header: the cached
+// theme logo first, then the saved theme, then NATION_CONFIG. Never a hardcoded
+// nation literal; '' falls back to the ✦ glyph.
+function _aiLauncherLogo() {
+  try { var c = sessionStorage.getItem('clfn_logo_cache'); if (c) return c; } catch (e) {}
+  var t = (window._appSettings && window._appSettings.theme && window._appSettings.theme.logo);
+  if (t) return t;
+  if (window.NATION_CONFIG && window.NATION_CONFIG.logo) return window.NATION_CONFIG.logo;
+  return '';
+}
 function _aiEnsureLauncher() {
   var existing = document.getElementById('ai_launcher');
   if (!_aiLauncherOn()) { if (existing && existing.remove) existing.remove(); return; }
-  if (existing) { existing.style.display = _aiPanelOpen ? 'none' : 'flex'; return; }
+  var logo = _aiLauncherLogo();
+  var inner = logo
+    ? '<img src="' + logo + '" alt="AI Assistant" style="width:38px;height:38px;object-fit:contain;display:block;pointer-events:none;">'
+    : '<span style="color:var(--dark);font-size:24px;line-height:1;">✦</span>';
+  if (existing) {
+    existing.innerHTML = inner;                          // keep the logo fresh if the theme loaded after inject
+    existing.style.display = _aiPanelOpen ? 'none' : 'flex';
+    return;
+  }
   if (!document.body) return;
   var b = document.createElement('button');
   b.id = 'ai_launcher';
   b.type = 'button';
   b.title = 'AI Assistant';
   b.setAttribute('aria-label', 'Open AI Assistant');
-  b.setAttribute('style', 'position:fixed;right:20px;bottom:20px;z-index:1190;width:56px;height:56px;padding:0;border-radius:50%;border:none;background:var(--yellow);color:var(--dark);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);');
-  b.innerHTML = '<span style="font-size:24px;line-height:1;">✦</span>';
+  b.setAttribute('style', 'position:fixed;right:20px;bottom:20px;z-index:1190;width:56px;height:56px;padding:0;border-radius:50%;border:1px solid var(--border);background:var(--surface);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);overflow:hidden;');
+  b.innerHTML = inner;
   b.onclick = openAIChat;
   document.body.appendChild(b);
   if (_aiPanelOpen) b.style.display = 'none';
