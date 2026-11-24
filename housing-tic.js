@@ -2953,6 +2953,120 @@
     try { si.title = 'Last saved ' + d.toLocaleString(); } catch(e){}
   }
 
+  // ── Member portal preview (read-only "what the member sees") ───────────────
+  // Mirrors the contractor-portal preview: staff open a read-only replica of the
+  // community member's portal dashboard (text-notification status, My Home +
+  // their maintenance requests, application status) from the TIC footer.
+  window._ticClosePortalPreview = function(){
+    var h = document.getElementById('ticMemberPortalPreview'); if(h) h.innerHTML = '';
+  };
+  function _ticMaskNumber(n){
+    var d = String(n||'').replace(/[^\d]/g,''); if(d.length < 4) return '';
+    return '•••• ' + d.slice(-4);
+  }
+  function _ticSmsModuleOn(){
+    try { return (typeof window.moduleOn === 'function') ? !!window.moduleOn('sms_notifications') : false; } catch(e){ return false; }
+  }
+  var _TIC_MR_MEMBER_STATUS = {
+    'new':      'Received — waiting for review',
+    'approved': 'Accepted — work order issued',
+    'rejected': 'Reviewed — not proceeding'
+  };
+  function _ticAppMemberStatus(s){
+    var map = {
+      submitted:'Submitted — waiting for review', in_review:'In review',
+      mgr_approved:'In the queue', hm_approved:'In the queue',
+      ed_approved:'Approved — on the wait list', approved:'Approved — on the wait list',
+      assigned:'Matched to a home', declined:'Not approved',
+      returned:'Returned — more information needed', changes_requested:'Returned — more information needed',
+      draft:'Draft'
+    };
+    return map[s] || (s ? String(s).replace(/_/g,' ') : 'In progress');
+  }
+  function _ticRenderPortalPreviewModal(name, bodyHtml){
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+    var nc = window.NATION_CONFIG || {};
+    var brand = esc((nc.display_name || nc.short || 'Housing')) + ' — Member Portal';
+    var host = document.getElementById('ticMemberPortalPreview');
+    if(!host){ host = document.createElement('div'); host.id = 'ticMemberPortalPreview'; document.body.appendChild(host); }
+    host.innerHTML =
+      '<div class="modal-overlay" style="display:flex;z-index:1500;" onclick="if(event.target===this)window._ticClosePortalPreview()">'
+      + '<div style="background:var(--surface);border:1px solid var(--border);border-radius:14px;width:100%;max-width:480px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;">'
+      +   '<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;padding:16px 20px;border-bottom:3px solid var(--yellow);">'
+      +     '<div><div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.6px;color:var(--muted);">Portal preview · read-only</div>'
+      +     '<div style="font-size:15px;font-weight:700;color:var(--text);">' + brand + '</div></div>'
+      +     '<button type="button" onclick="window._ticClosePortalPreview()" class="tic-close-btn" aria-label="Close">✕</button>'
+      +   '</div>'
+      +   '<div style="padding:11px 20px;background:var(--bg);border-bottom:1px solid var(--border);font-size:12px;color:var(--muted);line-height:1.5;">👁 This is what <strong>' + esc(name) + '</strong> sees after signing in to the member portal. Read-only — nothing here changes their account.</div>'
+      +   '<div style="padding:16px 20px;overflow-y:auto;">' + bodyHtml + '</div>'
+      +   '<div style="padding:12px 20px;border-top:1px solid var(--border);display:flex;justify-content:flex-end;">'
+      +     '<button type="button" onclick="window._ticClosePortalPreview()" class="btn btn-ghost">Close</button>'
+      +   '</div>'
+      + '</div>'
+      + '</div>';
+  }
+  async function _ticPortalPreview(){
+    var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s==null?'':s); };
+    var t = _ticState.tenant || {}, u = _ticState.unit || {}, a = _ticState.application || {};
+    var name = String((t[TIC_C.full_name] || ((a.fn||'') + ' ' + (a.ln||'')) || '')).trim() || 'this member';
+    var email = String((t[TIC_C.email] || t.email || a.email || '')).trim().toLowerCase();
+    var unitId = _ticAssignedUnitId();
+    var unitAddr = (u.num ? ((u.num||'') + ' ' + (u.street||'')).trim() : (u.address || u.unit_address || '')) || '';
+    _ticRenderPortalPreviewModal(name, '<div style="color:var(--muted);font-size:14px;padding:20px 0;text-align:center;">Loading the member’s view…</div>');
+    var mrs = [], prof = null, canFetch = (typeof SUPABASE_URL !== 'undefined' && typeof HOUSING_HEADERS !== 'undefined');
+    try {
+      var jobs = [];
+      if(canFetch && unitId) jobs.push(
+        fetch(SUPABASE_URL + '/rest/v1/tenant_mr_submissions?unit_id=eq.' + encodeURIComponent(unitId) + '&order=created_at.desc&limit=10', { headers: HOUSING_HEADERS })
+          .then(function(r){ return r.ok ? r.json() : []; }).then(function(rows){ mrs = Array.isArray(rows) ? rows : []; }).catch(function(){})
+      );
+      if(canFetch && email) jobs.push(
+        fetch(SUPABASE_URL + '/rest/v1/applicant_profiles?select=sms_opt_in,sms_number&email=ilike.' + encodeURIComponent(email) + '&limit=1', { headers: HOUSING_HEADERS })
+          .then(function(r){ return r.ok ? r.json() : []; }).then(function(rows){ prof = (rows && rows[0]) || null; }).catch(function(){})
+      );
+      await Promise.all(jobs);
+    } catch(e){}
+
+    function head(txt){ return '<div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);margin:18px 0 8px;">' + txt + '</div>'; }
+
+    var smsOn = _ticSmsModuleOn(), optedIn = !!(prof && prof.sms_opt_in);
+    var smsBody = !smsOn
+      ? '<div style="color:var(--muted);font-size:13px;">Text notifications are turned off for this nation.</div>'
+      : (optedIn
+          ? '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:var(--bg);"><div style="font-weight:600;color:var(--text);">On</div><div style="color:var(--muted);font-size:12px;margin-top:2px;">Texts to ' + esc(_ticMaskNumber(prof.sms_number) || 'a mobile on file') + '</div></div>'
+          : '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:var(--bg);color:var(--muted);font-size:13px;">Not opted in to texts.</div>');
+
+    var homeBody;
+    if(unitAddr){
+      var mrList = mrs.length
+        ? mrs.map(function(m){
+            var lbl = _TIC_MR_MEMBER_STATUS[m.status] || 'Received';
+            return '<div style="border:1px solid var(--border);border-radius:9px;padding:9px 11px;margin-top:6px;background:var(--bg);">'
+              + '<div style="font-weight:600;color:var(--text);font-size:13px;">' + esc(m.category || 'Maintenance') + (m.created_at ? ' · ' + new Date(m.created_at).toLocaleDateString() : '') + '</div>'
+              + '<div style="color:var(--muted);font-size:12px;margin-top:2px;">' + esc(lbl) + '</div></div>';
+          }).join('')
+        : '<div style="color:var(--muted);font-size:13px;margin-top:6px;">No maintenance requests reported.</div>';
+      homeBody = '<div style="border:1px solid var(--border);border-radius:10px;padding:13px;background:var(--surface);">'
+        + '<div style="font-weight:700;color:var(--text);">My home</div>'
+        + '<div style="color:var(--muted);font-size:13px;margin:2px 0 8px;">' + esc(unitAddr) + '</div>'
+        + '<div style="display:inline-block;border:1px solid var(--border);border-radius:8px;padding:7px 12px;font-size:12px;color:var(--muted);background:var(--bg);">🔧 Report a maintenance problem</div>'
+        + '<div style="font-size:12px;font-weight:700;color:var(--text);margin-top:12px;">Your maintenance requests</div>'
+        + mrList + '</div>';
+    } else {
+      homeBody = '<div style="color:var(--muted);font-size:13px;">No home is linked to this member yet, so their portal shows the application flow only.</div>';
+    }
+
+    var appBody = '';
+    if(a && (a.status || a.id)){
+      appBody = head('Your applications')
+        + '<div style="border:1px solid var(--border);border-radius:10px;padding:11px 13px;background:var(--bg);">'
+        + '<div style="font-weight:600;color:var(--text);">' + esc(String(a.appType||a.app_type||'Application').replace(/_/g,' ')) + '</div>'
+        + '<div style="color:var(--muted);font-size:12px;margin-top:2px;">' + esc(_ticAppMemberStatus(a.status)) + '</div></div>';
+    }
+
+    _ticRenderPortalPreviewModal(name, head('Text notifications') + smsBody + head('My home') + homeBody + appBody);
+  }
+
   function _ticSyncFooter(){
     var btn = _ticEl('tic_act_view_unit');
     if(btn) btn.style.display = _ticAssignedUnitId() ? '' : 'none';
@@ -3305,6 +3419,10 @@
     }
     if(t.id === 'tic_act_letter'){
       if(typeof showToast === 'function') showToast('Generate letter — coming soon.', {type:'info'});
+      return;
+    }
+    if(t.id === 'tic_act_portal'){
+      _ticPortalPreview();
       return;
     }
     if(t.id === 'tic_act_invite'){
