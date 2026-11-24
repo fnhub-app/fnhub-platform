@@ -1,3 +1,11 @@
+/* Self-hosted brand fonts (OCAP: the default fonts load from the nation's own
+   origin, not Google — no viewer IP leak to a third party). DM Sans is a
+   variable font (one file covers weights 300-800); DM Serif Display is the
+   heading face. Latin subset. A nation that picks a different Google font in
+   its theme still opts into that explicitly via FONT_DEFS. */
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:300 800;font-display:swap;src:url('/fonts/dm-sans.woff2') format('woff2')}
+@font-face{font-family:'DM Serif Display';font-style:normal;font-weight:400;font-display:swap;src:url('/fonts/dm-serif-display.woff2') format('woff2')}
+
 /*
  * shared.css — CLFN Housing Suite
  * ═══════════════════════════════════════════════════════════════════════════

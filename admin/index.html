@@ -7,7 +7,11 @@
 <title>Nation Pathways — Platform Admin</title>
 <link rel="icon" type="image/png" href="icon-192.png?v=np1"/>
 <link rel="apple-touch-icon" href="icon-192.png?v=np1"/>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700;800&family=DM+Serif+Display&display=swap" rel="stylesheet"/>
+<style>
+/* Self-hosted brand fonts (OCAP: served from the control plane's own origin, not Google). */
+@font-face{font-family:'DM Sans';font-style:normal;font-weight:300 800;font-display:swap;src:url('fonts/dm-sans.woff2') format('woff2')}
+@font-face{font-family:'DM Serif Display';font-style:normal;font-weight:400;font-display:swap;src:url('fonts/dm-serif-display.woff2') format('woff2')}
+</style>
 <style>
   /* Palette mirrors the nation app's tokens in shared.css so the control plane
      reads as the same product. Deliberately PLATFORM branding, not a nation's:

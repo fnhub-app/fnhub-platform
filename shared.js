@@ -51,14 +51,14 @@ window.THEME_DEFAULTS = { yellow:'#9A4A1F', action:'#FFFFFF', tint:'#F3E4D8', da
 
 // Font definitions — maps font name → { css: full font-family stack, google: needs Google Fonts }
 window.FONT_DEFS = {
-  'DM Sans':          { css:"'DM Sans', sans-serif",                       google:true  },
+  'DM Sans':          { css:"'DM Sans', sans-serif",                       google:false },
   'Inter':            { css:"'Inter', sans-serif",                         google:true  },
   'Roboto':           { css:"'Roboto', sans-serif",                        google:true  },
   'Open Sans':        { css:"'Open Sans', sans-serif",                     google:true  },
   'Nunito':           { css:"'Nunito', sans-serif",                        google:true  },
   'Source Sans 3':    { css:"'Source Sans 3', sans-serif",                 google:true  },
   'System Default':   { css:"system-ui, -apple-system, sans-serif",        google:false },
-  'DM Serif Display': { css:"'DM Serif Display', serif",                   google:true  },
+  'DM Serif Display': { css:"'DM Serif Display', serif",                   google:false },
   'Playfair Display': { css:"'Playfair Display', serif",                   google:true  },
   'Lora':             { css:"'Lora', serif",                               google:true  },
   'Merriweather':     { css:"'Merriweather', serif",                       google:true  },
@@ -68,6 +68,9 @@ window.FONT_DEFS = {
 // Load a Google Font dynamically — idempotent, no-op if already loaded.
 window._loadGoogleFont = function(name) {
   if (!name) return;
+  // Self-hosted fonts (FONT_DEFS google:false, incl. the default DM faces) never
+  // reach Google -- they are served from the nation's own origin via @font-face.
+  if (window.FONT_DEFS && window.FONT_DEFS[name] && window.FONT_DEFS[name].google === false) return;
   var id = 'gfont-' + name.replace(/\s+/g, '-').toLowerCase();
   if (document.getElementById(id)) return;
   var link = document.createElement('link');
