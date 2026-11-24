@@ -1258,6 +1258,10 @@ function confirmAssignment() {
   if(typeof renderWorklist === 'function') renderWorklist();
   showToast('✓ '+name+' assigned to '+addr+(isEdOverride2?' (override)':''), {type:'info'});
 
+  // Text the applicant that they've been matched to a home (member portal
+  // opt-in; fully guarded by _sendEventSms — module + event Text toggle + opted-in).
+  if(typeof notifyMemberHousingOffer === 'function') notifyMemberHousingOffer(app, addr, moveIn);
+
   // Hand-off: the tenant is now housed -> offer to generate the occupancy
   // agreement right away. Opening their TIC with the _ticAutoLease flag set
   // auto-opens the agreement modal, pre-filled from the application + unit.
