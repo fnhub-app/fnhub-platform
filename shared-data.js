@@ -4524,6 +4524,8 @@ function _tenantMrApprove(id){
     if(typeof showToast === 'function') showToast('✓ Approved — creating maintenance request', {type:'info'});
     var x = document.getElementById('tenant_mr_modal'); if(x) x.remove();
     if(typeof auditEntry === 'function') auditEntry('UNIT:' + s.unit_id, 'tenant_mr_approved', 'Tenant maintenance request approved — ' + (s.category || '') + ': ' + String(s.description || '').slice(0, 140), actor);
+    // Text the member who reported it (portal opt-in), if the SMS module + event are on.
+    if(typeof notifyMemberMrReviewed === 'function') notifyMemberMrReviewed(s, 'accepted and a work order is being created');
     // Carry the tenant photos onto the unit's Documents tab (they already live
     // in Storage under tenants/<unitId>/...; a file-meta row surfaces them).
     _tenantMrFilePhotos(s.unit_id, photoPaths);
@@ -4578,6 +4580,8 @@ function _tenantMrReject(id){
     if(typeof showToast === 'function') showToast('Request rejected', {type:'info'});
     var x = document.getElementById('tenant_mr_modal'); if(x) x.remove();
     if(s && typeof auditEntry === 'function') auditEntry('UNIT:' + s.unit_id, 'tenant_mr_rejected', 'Tenant maintenance request rejected' + (note ? ' — ' + note : ''), (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || '');
+    // Text the member who reported it (portal opt-in), if the SMS module + event are on.
+    if(s && typeof notifyMemberMrReviewed === 'function') notifyMemberMrReviewed(s, 'reviewed and is not proceeding at this time');
     if(typeof renderWorklist === 'function') renderWorklist();
   }).catch(function(err){ console.warn('[tenant-mr] reject failed:', err); if(typeof showToast === 'function') showToast('Reject failed — please retry', {type:'error'}); });
 }

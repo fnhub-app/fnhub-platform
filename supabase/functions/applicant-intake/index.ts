@@ -730,7 +730,7 @@ serve(async (req) => {
       }
       const { data: mrIns, error: mrErr } = await admin.from('tenant_mr_submissions').insert({
         unit_id: unit.id, unit_address: unit.address, category, description, urgency,
-        contact_name: contactName, contact_phone: contactPhone, status: 'new', source_ip: ip,
+        contact_name: contactName, contact_phone: contactPhone, reporter_email: email, status: 'new', source_ip: ip,
       }).select('id').limit(1)
       if (mrErr) return json({ error: 'Could not save your request. Please try again.' }, 500)
       // Contact email = the verified sign-in address (best-effort column, may
