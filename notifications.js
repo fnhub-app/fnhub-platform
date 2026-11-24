@@ -213,12 +213,17 @@ var EMAIL_EVENT_REGISTRY = [
   },
   {
     key:                   'sow_tenant_copy',
-    label:                 'Tenant Copy of Maintenance Request (PDF)',
-    description:           'Sent to the tenant when a request is submitted (only if the tenant has an email on file and the preparer ticks the inline checkbox). PDF of the request is attached.',
+    label:                 'Tenant Copy of Maintenance Request (PDF / text)',
+    description:           'Sent to the tenant when a request is submitted (the preparer ticks the inline checkbox). Emails a PDF of the request if the tenant has an email on file, and texts a short notice if the tenant has opted in to texts with a mobile on file.',
     recipientType:         'tenant',
     defaultRecipientRoles: [],
     defaultCcRoles:        [],
     wired:                 true,
+    // SMS: a short notice that a maintenance request was logged. OFF by default
+    // (each nation opts in via Settings -> Notifications). ASCII-only (GSM-7).
+    smsCapable:            true,
+    smsDefault:            false,
+    sms:                   '{nationShort} Housing: a maintenance request ({projectNumber}) was logged for {unitAddress}. We will keep you updated. Reply STOP to opt out.',
     placeholders:          ['tenantName','unitAddress','projectNumber','totalCost','condition','contractor','nationShort','appLink'],
     defaults: {
       subject:  '{nationShort} Housing — Maintenance Request for {unitAddress}',
@@ -2189,6 +2194,30 @@ async function _resolveTenantPhoneForUnit(unit) {
 }
 window._resolveTenantPhoneForUnit = _resolveTenantPhoneForUnit;
 
+// The tenant's opted-in textable mobile for a unit, or '' if none opted in.
+// Selects the SMS consent fields and runs them through _smsNumberIfOptedIn, so
+// an un-opted-in or non-E.164 number is never texted (a hard gate, not a hint).
+async function _resolveTenantSmsForUnit(unit) {
+  if (!unit || !unit.assignedName) return '';
+  if (typeof SUPABASE_URL === 'undefined' || typeof HOUSING_HEADERS === 'undefined') return '';
+  try {
+    var url = SUPABASE_URL
+            + '/rest/v1/tenants?select=sms_number,sms_opt_in,merged_into&full_name=eq.'
+            + encodeURIComponent(unit.assignedName)
+            + '&merged_into=is.null';
+    var r = await fetch(url, { headers: HOUSING_HEADERS });
+    if (!r.ok) { console.warn('[notify] tenant SMS lookup HTTP ' + r.status); return ''; }
+    var rows = await r.json();
+    if (!Array.isArray(rows)) return '';
+    for (var i = 0; i < rows.length; i++) {
+      var n = _smsNumberIfOptedIn(rows[i]);
+      if (n) return n;
+    }
+    return '';
+  } catch (e) { console.warn('[notify] tenant SMS lookup error:', e); return ''; }
+}
+window._resolveTenantSmsForUnit = _resolveTenantSmsForUnit;
+
 // Wired from saveSOW() in housing-modals-sow.js when the preparer ticks
 // the inline "Email a copy to the tenant" checkbox on the submit
 // confirmation. Sends the SOW PDF to the tenant's email + any active
@@ -2221,8 +2250,19 @@ async function notifySowTenantCopy(sow, unit) {
     extraRecipients.forEach(function(r){ _addEmail(r.email); });
   }
 
+  // Text the tenant too — independent of the email path (a tenant may have a
+  // mobile on file but no email). Fully guarded by _sendEventSms (event SMS
+  // channel on + a valid opted-in E.164 number); silent no-op otherwise.
+  try {
+    var _tenantSms = await _resolveTenantSmsForUnit(unit);
+    if (_tenantSms) {
+      var _smsName = (sow.tenantName) || (unit && unit.assignedName) || '';
+      await _sendEventSms(eventKey, _tenantSms, _emailTokensForSowTenant(sow, unit, _smsName), { type: 'sow', id: sow.project_number || '-' });
+    }
+  } catch (e) { console.warn('[notify] sow_tenant_copy SMS error:', e); }
+
   if (!emails.length) {
-    console.log('[notify] sow_tenant_copy skipped - no tenant email or CC recipients for SOW ' + (sow.project_number || '—'));
+    console.log('[notify] sow_tenant_copy email skipped - no tenant email or CC recipients for SOW ' + (sow.project_number || '—'));
     return;
   }
 

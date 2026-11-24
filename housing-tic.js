@@ -740,6 +740,28 @@
       +   '</div>'
       + '</div>';
 
+    // Text Notifications (tenant SMS consent) — Phase 1. Shown only when the
+    // sms_notifications module is on for the nation; the edit button is hidden
+    // for read-only roles (the save is gated by _ticWrite as a backstop).
+    if ((typeof moduleOn === 'function') ? moduleOn('sms_notifications') : false) {
+      var _tsms  = _ticState.tenant || {};
+      var _tnum  = String(_tsms.sms_number || '').trim();
+      var _topt  = _tsms.sms_opt_in === true;
+      var _tstat = (_topt && _tnum)
+        ? '<span style="color:var(--success);font-weight:700;">On</span> &middot; ' + _ticEsc(_tnum)
+        : (_tnum ? 'Number on file &middot; texts off' : '<span class="tic-empty">Not set up</span>');
+      html += '<div class="tic-section">'
+           +    '<div class="tic-section-h">Text Notifications</div>'
+           +    '<div class="tic-rows">'
+           +      '<div class="tic-row"><div class="tic-row-lbl">Maintenance text updates</div>'
+           +        '<div class="tic-row-val">' + _tstat + '</div></div>'
+           +    '</div>'
+           +    (_ticReadOnlyRole() ? ''
+                 : '<div class="tic-form-actions"><button type="button" class="btn btn-ghost" data-tic-action="sms-prefs">'
+                   + (_tnum ? 'Edit text settings' : 'Set up text updates') + '</button></div>')
+           + '</div>';
+    }
+
     // Income section — editable list of app.incomes. Amount is intentionally
     // hidden from the TIC; if it's set elsewhere (application form), the value
     // is preserved through edits but never displayed or surfaced for input.
@@ -2692,6 +2714,74 @@
     });
   }
 
+  // ── Tenant text-notification (SMS) consent ────────────────────────────────
+  // Captures the tenant's mobile + opt-in for maintenance texts (tenants.sms_*).
+  // Staff records consent the tenant has given. Reuses the app-wide E.164
+  // formatter/validator (_wireSmsNumberField / _toE164 from shared-data.js).
+  function _ticOpenSmsPrefs(){
+    if(_ticReadOnlyRole()){
+      if(typeof showToast === 'function') showToast('Your role cannot change text settings.', {type:'error'});
+      return;
+    }
+    var ex = document.getElementById('ticSmsModal'); if(ex) ex.remove();
+    var t = _ticState.tenant || {};
+    var curNum = String(t.sms_number || '');
+    var curOpt = t.sms_opt_in === true;
+    var m = document.createElement('div');
+    m.id = 'ticSmsModal';
+    m.className = 'modal-overlay modal-overlay-centered modal-z-1100 is-open';
+    m.innerHTML = '<div class="modal-body modal-body-sm">'
+      + '<div class="modal-hdr"><div class="modal-hdr-title">Text Notifications</div>'
+      +   '<button id="ticSmsClose" class="btn-close-dark-30">&times;</button></div>'
+      + '<div class="modal-body-stack">'
+      +   '<div class="f"><label>Tenant mobile for texts <span style="font-weight:normal;color:var(--muted);">&mdash; e.g. (705) 555-1234; saved as +1&hellip;</span></label>'
+      +     '<input type="tel" id="tic_sms_number" value="' + _ticEsc(curNum) + '" placeholder="+1 705 555 1234"/>'
+      +     '<div id="tic_sms_hint" style="font-size:11px;margin-top:4px;min-height:14px;"></div></div>'
+      +   '<div class="f"><label style="display:flex;align-items:center;gap:8px;font-weight:400;cursor:pointer;">'
+      +     '<input type="checkbox" id="tic_sms_optin" ' + (curOpt ? 'checked' : '') + ' style="width:16px;height:16px;min-width:16px;flex:0 0 16px;margin:0;"/>'
+      +     '<span><strong>This tenant consents to maintenance text updates (SMS).</strong> They can reply STOP to any message to opt out at any time.</span></label></div>'
+      +   '<div class="box-bg-card txt-help">Only record this with the tenant\'s permission. Texts are sent only for events with SMS turned on (Settings &rarr; Notifications) while the Text/SMS module is enabled. Standard carrier message rates may apply.</div>'
+      + '</div>'
+      + '<div class="modal-footer"><button id="ticSmsCancel" class="btn btn-ghost">Cancel</button>'
+      +   '<button id="ticSmsSave" class="btn btn-primary">Save</button></div>'
+      + '</div>';
+    document.body.appendChild(m);
+    document.getElementById('ticSmsClose').addEventListener('click', function(){ m.remove(); });
+    document.getElementById('ticSmsCancel').addEventListener('click', function(){ m.remove(); });
+    m.addEventListener('click', function(e){ if(e.target === m) m.remove(); });
+    document.getElementById('ticSmsSave').addEventListener('click', function(){ _ticSaveSmsPrefs(t, m); });
+    if(typeof _wireSmsNumberField === 'function') _wireSmsNumberField('tic_sms_number','tic_sms_optin','tic_sms_hint');
+  }
+
+  function _ticSaveSmsPrefs(original, modal){
+    var btn   = document.getElementById('ticSmsSave');
+    var numEl = document.getElementById('tic_sms_number');
+    var optEl = document.getElementById('tic_sms_optin');
+    var e164    = (typeof window._toE164 === 'function') ? window._toE164(numEl && numEl.value) : '';
+    var wantOpt = !!(optEl && optEl.checked);
+    if(wantOpt && !e164){
+      if(typeof showToast === 'function') showToast('Enter a valid mobile (e.g. +17055551234) before turning texts on.', {type:'error'});
+      return;
+    }
+    if(btn){ btn.disabled = true; btn.textContent = 'Saving…'; }
+    _ticEnsureTenantRow().then(function(pk){
+      var patch = { sms_number: e164 || null, sms_opt_in: wantOpt };
+      var nowIso = new Date().toISOString();
+      if(wantOpt && original.sms_opt_in !== true)  patch.sms_opt_in_at  = nowIso;
+      if(!wantOpt && original.sms_opt_in === true) patch.sms_opt_out_at = nowIso;
+      return _ticWrite('PATCH', TIC_T.tenants + '?' + TIC_C.tenant_pk + '=eq.' + encodeURIComponent(pk), patch).then(function(){
+        _ticState.tenant = Object.assign({}, _ticState.tenant, patch);
+        if(typeof _ticRenderOverview === 'function') _ticRenderOverview();
+        _ticAudit('tic_sms_prefs', wantOpt ? 'Tenant opted in to maintenance texts' : 'Tenant texts turned off');
+        if(typeof showToast === 'function') showToast('Text settings saved.', {type:'info'});
+        modal.remove();
+      });
+    }).catch(function(err){
+      if(btn){ btn.disabled = false; btn.textContent = 'Save'; }
+      if(typeof showToast === 'function') showToast('Save failed: ' + (err && err.message || err), {type:'error'});
+    });
+  }
+
   function _ticSaveNote(){
     var inp = _ticEl('tic_note_input');
     var body = (inp && inp.value || '').trim();
@@ -2744,6 +2834,7 @@
     var act = btn && btn.getAttribute && btn.getAttribute('data-tic-action');
     if(!act) return;
     if(act === 'slp-open')     { _slpOpen(); return; }
+    if(act === 'sms-prefs')    { _ticOpenSmsPrefs(); return; }
     // Income (employment)
     if(act === 'inc-add')      { _ticResetIncForm(); _ticEl('tic_inc_form').classList.add('tic-open'); return; }
     if(act === 'inc-cancel')   { _ticResetIncForm(); return; }
