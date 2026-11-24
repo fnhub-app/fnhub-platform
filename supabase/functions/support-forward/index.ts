@@ -70,6 +70,18 @@ serve(async (req) => {
   const t = rows && rows[0]
   if (!t) return json({ ok: false, error: 'ticket_not_found' }, 200)
 
+  // Per-nation opt-out (OCAP Control): a nation can stop mirroring its support
+  // tickets (subject/body + reporter name/email/phone) to the platform support
+  // inbox. Default ON (backwards compatible) -- only an explicit false opts out.
+  // The ticket is always stored on the nation regardless; this only governs the
+  // copy that crosses to the platform owner.
+  try {
+    const { data: setRows } = await admin.from('housing_settings').select('value').eq('key', 'support_mirror').limit(1)
+    let v: any = setRows && setRows[0] ? setRows[0].value : null
+    if (v && typeof v === 'object' && 'value' in v) v = (v as any).value
+    if (v === false || v === 'false') return json({ ok: true, skipped: 'opted_out' }, 200)
+  } catch (_e) { /* read failed -> default ON */ }
+
   const payload = {
     subdomain: sub,
     nation_name: String(body.nationName || '').slice(0, 200),
