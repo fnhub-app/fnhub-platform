@@ -430,7 +430,6 @@
     { k:'business',  grp:'Business', label:'Business profile', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>', eyebrow:'Business', title:'Business profile', sub:'Logo, business name, address and contacts used on invoices and contracts' },
     { k:'resellers', grp:'Business', label:'Resellers',     icon:ICO.users,  eyebrow:'Business',      title:'Resellers',        sub:'Agreements, commission statements, and sales' },
     { k:'pricing',   grp:'Business', label:'Pricing',       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', eyebrow:'Business', title:'Pricing calculator', sub:'Model a nation’s subscription on the flat per-home plan' },
-    { k:'assist',    grp:'System',   label:'Assistant',     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.3L18 9l-4.4 1.7L12 15l-1.6-4.3L6 9l4.4-1.7z"/><path d="M18.5 14.5l.7 1.9 1.8.7-1.8.7-.7 1.9-.7-1.9-1.8-.7 1.8-.7z"/></svg>', eyebrow:'System', title:'Admin assistant', sub:'Ask how to run the control plane' },
     { k:'sop',       grp:'System',   label:'Onboarding SOP',icon:ICO.doc,    eyebrow:'System',        title:'Onboarding SOP',   sub:'The standard operating procedure for onboarding a nation' },
     { k:'admins',    grp:'System',   label:'Administrators',icon:ICO.shield, eyebrow:'System',        title:'Administrators',   sub:'Platform administrators and two-factor' }
   ];
@@ -482,6 +481,7 @@
 
   // ---- Views -----------------------------------------------------------------
   function showLogin(prefill){
+    if(typeof window._asstRemoveFab === 'function') window._asstRemoveFab();
     app.className = 'wrap';
     app.innerHTML =
       '<h1>Platform admin sign-in</h1>'
@@ -720,13 +720,13 @@
       +   panel('business', '<div id="biz-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
       +   panel('resellers', '<div id="rs-root"><p class="sub" style="margin-top:14px;">Loading…</p></div>', false)
       +   panel('pricing',   '<div id="pricing-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
-      +   panel('assist',    '<div id="asst-root"></div>', false)
       +   panel('admins',    adminsCard(admins, meEmail), false)
       + '</div>'   // panels wrapper
       + '</div>'   // .main
       + '</div>';  // .shell
     _view = 'dashboard';
     wireAddNation();
+    if(typeof window._asstEnsureFab === 'function') window._asstEnsureFab();   // floating admin assistant
     // If we arrived here from a sub-view's rail click, open that section.
     if (_pendingDashSection){ var _ps = _pendingDashSection; _pendingDashSection = ''; if (typeof window.nicTab === 'function') window.nicTab(_ps); }
     // Fill each nation's "Sold by" line (reseller.js loads the reseller data).
@@ -1916,7 +1916,6 @@
     if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
     if (name === 'requests' && typeof window.renderBuildTickets === 'function') window.renderBuildTickets();
     if (name === 'pricing'  && typeof window.renderPricing === 'function') window.renderPricing();
-    if (name === 'assist'   && typeof window.renderAdminAssist === 'function') window.renderAdminAssist();
   };
 
   // ===== Pricing calculator (Dashboard -> Pricing) ===========================
@@ -2123,14 +2122,16 @@
   window._asstHistory = window._asstHistory || [];
   function _asstRenderLog(){
     var log = document.getElementById('asst-log'); if(!log) return;
+    var ex = document.getElementById('asst-ex');
     if(!window._asstHistory.length){
-      log.innerHTML = '<div class="sub" style="margin:auto;text-align:center;max-width:36ch;">Ask me how to do something in the control plane and I will point you to the right tab and steps.</div>';
+      log.innerHTML = '<div class="asst-empty">Ask me how to do something in the control plane and I will point you to the right tab and the steps.</div>';
+      if(ex) ex.style.display = '';
       return;
     }
+    if(ex) ex.style.display = 'none';
     log.innerHTML = window._asstHistory.map(function(m){
-      var me = m.role === 'user';
-      return '<div style="align-self:' + (me ? 'flex-end' : 'flex-start') + ';max-width:82%;background:' + (me ? 'var(--accent)' : 'var(--bg)') + ';color:' + (me ? '#fff' : 'var(--ink)') + ';border:1px solid ' + (me ? 'var(--accent)' : 'var(--hair)') + ';border-radius:12px;padding:9px 12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">' + esc(m.text) + '</div>';
-    }).join('') + (window._asstPending ? '<div class="sub" style="align-self:flex-start;font-size:12px;">thinking&hellip;</div>' : '');
+      return '<div class="asst-msg ' + (m.role === 'user' ? 'me' : 'bot') + '">' + esc(m.text) + '</div>';
+    }).join('') + (window._asstPending ? '<div class="asst-think">thinking&hellip;</div>' : '');
     log.scrollTop = log.scrollHeight;
   }
   async function _asstSend(){
@@ -2154,30 +2155,48 @@
     }
     window._asstPending = false; _asstRenderLog();
   }
-  window.renderAdminAssist = function(){
-    var root = document.getElementById('asst-root'); if(!root) return;
-    var examples = ['How do I provision a new nation?','Turn on text notifications for a nation','Run a migration across every nation','Where do I set the AI Assistant key?','How does reseller commission work?'];
-    root.innerHTML =
-        '<div class="card" style="display:flex;flex-direction:column;gap:12px;">'
-      +   '<div id="asst-log" style="display:flex;flex-direction:column;gap:10px;min-height:220px;max-height:52vh;overflow:auto;padding:4px;"></div>'
-      +   '<div style="display:flex;gap:8px;align-items:flex-end;">'
-      +     '<textarea id="asst-input" rows="2" placeholder="Ask about running the control plane…" style="flex:1;resize:vertical;min-height:46px;"></textarea>'
-      +     '<button class="btn" id="asst-send" type="button">Send</button>'
+  // Floating launcher (bottom-right) + chat popover, injected into <body> so it
+  // survives dashboard re-renders. Idempotent; removed on sign-out.
+  window._asstEnsureFab = function(){
+    if(document.getElementById('asst-fab-wrap')) return;
+    var examples = ['Provision a new nation','Turn on text notifications for a nation','Run a migration across every nation','Where do I set the AI Assistant key?','How does reseller commission work?'];
+    var spark = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.7 4.6L18 9l-4.3 1.4L12 15l-1.7-4.6L6 9l4.3-1.4z"/><path d="M18.5 14.5l.7 1.9 1.8.7-1.8.7-.7 1.9-.7-1.9-1.8-.7 1.8-.7z"/></svg>';
+    var wrap = document.createElement('div');
+    wrap.id = 'asst-fab-wrap';
+    wrap.innerHTML =
+        '<div id="asst-pop" class="asst-pop" hidden>'
+      +   '<div class="asst-pop-hd"><span class="asst-pop-ttl">' + spark + ' Admin assistant</span>'
+      +     '<button id="asst-close" class="asst-x" type="button" aria-label="Close">&times;</button></div>'
+      +   '<div id="asst-log" class="asst-log"></div>'
+      +   '<div id="asst-ex" class="asst-ex">'
+      +     examples.map(function(x){ return '<button class="asst-chip" type="button" data-asst-ex="' + esc(x) + '">' + esc(x) + '</button>'; }).join('')
       +   '</div>'
-      +   '<div id="asst-ex" style="display:flex;flex-wrap:wrap;gap:6px;">'
-      +     examples.map(function(x){ return '<button class="btn sm ghost" type="button" data-asst-ex="' + esc(x) + '">' + esc(x) + '</button>'; }).join('')
+      +   '<div class="asst-row">'
+      +     '<textarea id="asst-input" class="asst-input" rows="1" placeholder="Ask about the control plane…"></textarea>'
+      +     '<button id="asst-send" class="asst-sendbtn" type="button" aria-label="Send">'
+      +       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l16-8-6 16-3-7z"/></svg></button>'
       +   '</div>'
-      +   '<p class="sub" style="margin:0;font-size:11px;">Help only, grounded in the control-plane guides. It cannot see nation data and never changes anything. For a real bug or a feature, use the Requests tab.</p>'
-      + '</div>';
-    _asstRenderLog();
+      +   '<div class="asst-foot">Help only &mdash; it cannot see nation data or change anything. For a bug or feature, use the Requests tab.</div>'
+      + '</div>'
+      + '<button id="asst-fab" class="asst-fab" type="button" aria-label="Open admin assistant">' + spark + '</button>';
+    document.body.appendChild(wrap);
+    var pop = document.getElementById('asst-pop');
+    var fab = document.getElementById('asst-fab');
+    function toggle(open){
+      var show = (open == null) ? pop.hasAttribute('hidden') : open;
+      if(show){ pop.removeAttribute('hidden'); fab.classList.add('on'); var i = document.getElementById('asst-input'); if(i) i.focus(); }
+      else { pop.setAttribute('hidden', ''); fab.classList.remove('on'); }
+    }
+    fab.addEventListener('click', function(){ toggle(); });
+    document.getElementById('asst-close').addEventListener('click', function(){ toggle(false); });
+    document.getElementById('asst-send').addEventListener('click', function(){ _asstSend(); });
     var input = document.getElementById('asst-input');
-    var send  = document.getElementById('asst-send');
-    if(send)  send.addEventListener('click', function(){ _asstSend(); });
     if(input) input.addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); _asstSend(); } });
     var ex = document.getElementById('asst-ex');
-    if(ex) ex.addEventListener('click', function(e){ var b = e.target.closest('[data-asst-ex]'); if(!b) return; var i = document.getElementById('asst-input'); if(i){ i.value = b.getAttribute('data-asst-ex'); i.focus(); } });
-    if(input) input.focus();
+    if(ex) ex.addEventListener('click', function(e){ var b = e.target.closest('[data-asst-ex]'); if(!b) return; var i = document.getElementById('asst-input'); if(i){ i.value = b.getAttribute('data-asst-ex'); i.focus(); _asstSend(); } });
+    _asstRenderLog();
   };
+  window._asstRemoveFab = function(){ var w = document.getElementById('asst-fab-wrap'); if(w) w.remove(); };
 
   window.renderBuildTickets = async function(){
     var root = document.getElementById('rq-root'); if (!root) return;
