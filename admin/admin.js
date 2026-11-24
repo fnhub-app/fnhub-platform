@@ -1762,6 +1762,10 @@
       +   '<div class="msg" id="cn-sms-msg"></div>'
       +   '<button class="btn sm" type="button" data-act="sms-apply" data-sub="' + esc(n.subdomain) + '">Apply to project</button>'
       + '</div>'
+      + '<div class="card"><h3>SMS activity</h3>'
+      +   '<p class="sub" style="margin:2px 0 8px;">Every text this nation has attempted, grouped by notification <b>event</b> and delivery <b>status</b>, from <code>sms_log</code> (aggregate counts only &mdash; no numbers or message text leave the nation). <b>Failed</b> / <b>Opt-out</b> sends never count toward the billed totals. Most maintenance-request activity notifies by email/in-app, not SMS, so a low count here is normal. Refreshes when a manager opens the nation app\'s <b>Settings &rarr; Data &amp; Storage Usage</b> panel.</p>'
+      +   '<div id="cn-sms-activity"><div class="empty">Loading SMS activity&hellip;</div></div>'
+      + '</div>'
       + '<div class="card"><h3>Contractor Portal &mdash; setup</h3>'
       +   '<p class="sub" style="margin:2px 0 10px;">Contractors sign in at <a href="' + portalUrl + '" target="_blank" rel="noopener"><code>' + portalUrl + '</code></a> with an SMS one-time code (Supabase phone auth via <b>Twilio Verify</b> &mdash; separate from the notification sender above) and see only their own work orders (enforced by RLS). Do these once per nation:</p>'
       +   '<div style="font-size:12px;font-weight:700;color:var(--muted);margin-bottom:2px;">Progress: <span id="chk_prog_portal">' + _chkProgress('portal') + '</span></div>'
@@ -3949,6 +3953,42 @@
   function _money(n, cur){ return (cur || 'CAD') === 'CAD' ? '$' + (Number(n) || 0).toFixed(2) : (Number(n) || 0).toFixed(2) + ' ' + cur; }
   function _sumLbl(t){ return '<div style="color:var(--muted);text-transform:uppercase;letter-spacing:.4px;font-size:10px;font-weight:700;">' + t + '</div>'; }
 
+  // Pivot nation_usage.sms_breakdown (a flat [{event,status,count}] aggregate
+  // pushed from the nation's hs_data_usage) into an event x status table so an
+  // admin can see which notification events are texting and whether any fail.
+  function _renderSmsBreakdown(bd){
+    if (!Array.isArray(bd) || !bd.length){
+      return '<div class="empty">No SMS activity reported yet. It fills in once a manager opens the nation app\'s Settings &rarr; Data &amp; Storage Usage panel (and only for nations that have texted).</div>';
+    }
+    var STAT = ['sent','delivered','failed','skipped_optout'];
+    var LABEL = { sent:'Sent', delivered:'Delivered', failed:'Failed', skipped_optout:'Opt-out' };
+    var byEvent = {}, extra = {};
+    bd.forEach(function(r){
+      var ev = (r && r.event) || '(none)', st = (r && r.status) || '(none)', n = Number((r && r.count) || 0);
+      if (!byEvent[ev]) byEvent[ev] = {};
+      byEvent[ev][st] = (byEvent[ev][st] || 0) + n;
+      if (STAT.indexOf(st) < 0) extra[st] = true;
+    });
+    var cols = STAT.concat(Object.keys(extra).sort());
+    var events = Object.keys(byEvent).sort();
+    var totals = {};
+    var head = '<tr><th style="text-align:left;">Event</th>'
+      + cols.map(function(s){ return '<th style="text-align:right;">' + esc(LABEL[s] || s) + '</th>'; }).join('') + '</tr>';
+    var body = events.map(function(ev){
+      var cells = cols.map(function(s){
+        var v = byEvent[ev][s] || 0; totals[s] = (totals[s] || 0) + v;
+        if (!v) return '<td style="text-align:right;color:var(--muted);">&middot;</td>';
+        var col = s === 'failed' ? 'var(--danger)' : (s === 'skipped_optout' ? 'var(--muted)' : '');
+        return '<td style="text-align:right;' + (col ? 'color:' + col + ';font-weight:700;' : '') + '">' + v.toLocaleString('en-CA') + '</td>';
+      }).join('');
+      return '<tr><td style="font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;">' + esc(ev) + '</td>' + cells + '</tr>';
+    }).join('');
+    var totRow = '<tr style="font-weight:700;border-top:2px solid var(--hair);"><td>Total</td>'
+      + cols.map(function(s){ return '<td style="text-align:right;">' + Number(totals[s] || 0).toLocaleString('en-CA') + '</td>'; }).join('') + '</tr>';
+    return '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">'
+      + '<thead>' + head + '</thead><tbody>' + body + totRow + '</tbody></table></div>';
+  }
+
   async function loadNicSummary(sub){
     try {
       var u = await api('GET', '/nation_usage?subdomain=eq.' + encodeURIComponent(sub));
@@ -3974,6 +4014,8 @@
                 : '')
           : (usg ? 'no SMS yet' : '&mdash;');
       }
+      var ael = document.getElementById('cn-sms-activity');
+      if (ael) ael.innerHTML = _renderSmsBreakdown(usg && usg.sms_breakdown);
     } catch(e){}
     try {
       var iv = await api('GET', '/nation_invoices?subdomain=eq.' + encodeURIComponent(sub) + '&select=total,amount_paid,status');
