@@ -316,6 +316,10 @@
       }
     }
     var row = {
+      // finance_arrangements.nation_id is NOT NULL (every finance table is
+      // nation-scoped, like finance_rent_ledger above). The finance module's
+      // _arrangementToRow always sends it; omitting it here 400'd the insert.
+      nation_id: (window.NATION_CONFIG && NATION_CONFIG.id) || 'default',
       tenant_id: tenantId,
       total_owing: totalOwing,
       payment_amount: payment,
@@ -334,7 +338,7 @@
         headers: _hdrs({ 'Content-Type': 'application/json', Prefer: 'return=representation' }),
         body: JSON.stringify(row)
       });
-      if (!r.ok) throw new Error('HTTP ' + r.status);
+      if (!r.ok) { var _b = await r.text().catch(function () { return ''; }); throw new Error('HTTP ' + r.status + (_b ? ' — ' + _b.slice(0, 180) : '')); }
       var saved = (await r.json())[0] || row;
       e.arrangements.unshift(saved);
       _audit(tenantId, 'arrears_review', 'Repayment arrangement submitted: $' + payment.toFixed(2) + '/month toward $' + totalOwing.toFixed(2) + ' (policy minimum $' + minPay.toFixed(2) + ')');
