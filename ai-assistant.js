@@ -666,7 +666,15 @@ function _aiPdfClean(s){
   return String(s == null ? '' : s)
     // eslint-disable-next-line no-misleading-character-class -- intentionally strips emoji code points + the variation selector (U+FE0F) individually
     .replace(/[\u{1F000}-\u{1FAFF}\u{2600}-\u{27BF}\u{2B00}-\u{2BFF}\u{2190}-\u{21FF}\u{FE0F}]/gu, '')
-    .replace(/\*\*/g, '').replace(/`/g, '').replace(/•/g, '').trim();
+    .replace(/\*/g, '').replace(/`/g, '').replace(/•/g, '').trim();   // strip all emphasis asterisks (leave underscores: new_housing etc. are real)
+}
+// Parse "#RRGGBB" to an [r,g,b] array for jsPDF draw/fill colors; grey fallback.
+function _aiHexToRgb(hex){
+  var h = String(hex == null ? '' : hex).replace('#', '');
+  if (h.length === 3) h = h.replace(/(.)/g, '$1$1');
+  var n = parseInt(h, 16);
+  if (isNaN(n) || h.length !== 6) return [210, 210, 210];
+  return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
 }
 // Parse a number out of a markdown cell (handles $, %, commas).
 function _aiParseNum(s){ if (s == null) return null; var m = String(s).replace(/[$,%\s]/g,'').match(/-?\d+(\.\d+)?/); return m ? parseFloat(m[0]) : null; }
@@ -747,12 +755,26 @@ function _aiBuildReplyPdf(work, explicitImages, tableImages){
   var tm = work.match(/^#\s+(.+)$/m); var title = tm ? _aiPdfClean(tm[1]) : 'Report';
   var today = new Date().toISOString().slice(0, 10);
 
-  doc.setFont('helvetica','bold'); doc.setFontSize(13); doc.setTextColor(20);
-  doc.text(nation + ' Housing', margin, y); y += 7;
-  doc.setFontSize(16); doc.text(title, margin, y); y += 6;
+  // Branded header: the nation logo (resolved like the app header / finance
+  // PDFs) + nation name + title + generated date, over a theme-accent rule.
+  var logo = '';
+  try { logo = sessionStorage.getItem('clfn_logo_cache') || ''; } catch (e) {}
+  if (!logo) logo = (window._appSettings && _appSettings.theme && _appSettings.theme.logo)
+    || (window.NATION_CONFIG && NATION_CONFIG.logo) || '';
+  var top = 15, hx = margin;
+  if (logo) { try { doc.addImage(logo, 'PNG', margin, top, 18, 18); hx = margin + 22; } catch (e) { hx = margin; } }
+  doc.setFont('helvetica','bold'); doc.setFontSize(12); doc.setTextColor(30);
+  doc.text(nation + ' Housing', hx, top + 5);
+  doc.setFontSize(16); doc.setTextColor(20);
+  doc.text(title, hx, top + 12);
   doc.setFont('helvetica','normal'); doc.setFontSize(9); doc.setTextColor(120);
-  doc.text('Generated ' + today, margin, y); y += 3;
-  doc.setDrawColor(220); doc.line(margin, y, pageW - margin, y); y += 6;
+  doc.text('Generated ' + today, hx, top + 17);
+  y = top + 21;
+  var acc = (typeof window._themeAccentHex === 'function' && window._themeAccentHex()) || '';
+  var argb = acc ? _aiHexToRgb(acc) : null;
+  if (argb) { doc.setDrawColor(argb[0], argb[1], argb[2]); doc.setLineWidth(0.8); }
+  else { doc.setDrawColor(210); doc.setLineWidth(0.4); }
+  doc.line(margin, y, pageW - margin, y); doc.setLineWidth(0.2); y += 6;
   doc.setTextColor(25);
 
   function ensure(h){ if (y + h > pageH - 16) { doc.addPage(); y = 16; } }
@@ -794,6 +816,14 @@ function _aiBuildReplyPdf(work, explicitImages, tableImages){
       ensure(sz * 0.6 + 4); y += lvl === 1 ? 2 : 3;
       doc.setFont('helvetica','bold'); doc.setFontSize(sz); doc.text(_aiPdfClean(h[2]), margin, y);
       y += sz * 0.5; doc.setFont('helvetica','normal'); doc.setFontSize(10);
+      i++; continue;
+    }
+    // A line that is ENTIRELY bold (**Section title**) is a section header -
+    // render it bold instead of leaking the asterisks into the body text.
+    var bh = raw.match(/^\*\*(.+?)\*\*:?\s*$/);
+    if (bh){
+      var bt = _aiPdfClean(bh[1]);
+      if (bt){ ensure(10); y += 2; doc.setFont('helvetica','bold'); doc.setFontSize(11); doc.text(bt, margin, y); y += 6; doc.setFont('helvetica','normal'); doc.setFontSize(10); }
       i++; continue;
     }
     var isList = /^[-*]\s+/.test(raw) || /^\d+\.\s+/.test(raw);
