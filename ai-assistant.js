@@ -97,6 +97,9 @@ function _ensureAIPanel() {
     +   '<button onclick="closeAIChat()" style="background:none;border:1px solid #444;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">✕</button>'
     + '</div>'
     + '<div id="ai_chat_messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;"></div>'
+    + '<div id="ai_report_row" style="padding:6px 14px 0;flex-shrink:0;display:none;">'
+    +   '<button type="button" id="ai_report_issue" onclick="_aiReportIssue()" style="background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:3px 0;font-family:var(--sans);">🛟 Report an issue to a person</button>'
+    + '</div>'
     + '<div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;">'
     +   '<textarea id="ai_chat_input" rows="1" placeholder="Ask anything about applications, units, or policy..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:var(--sans);resize:none;outline:none;line-height:1.4;max-height:80px;overflow-y:auto;" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,80)+\'px\'"></textarea>'
     +   '<button id="ai_chat_send" onclick="aiSendMessage()" class="btn btn-primary" style="flex-shrink:0;align-self:flex-end;">Send</button>'
@@ -155,9 +158,15 @@ function openAIChat() {
   if (panel) panel.style.display = 'flex';
   _aiMakeDraggable();
   _aiPanelOpen = true;
+  // The "Report an issue" affordance is shown only when the Help & Support
+  // module is on for this nation (it routes into the support ticket pipeline).
+  var supportOn = (typeof moduleOn !== 'function') || moduleOn('support');
+  var reportRow = document.getElementById('ai_report_row');
+  if (reportRow) reportRow.style.display = supportOn ? '' : 'none';
   // Greet on first open
   if (_aiHistory.length === 0) {
-    _appendAIMessage('assistant', 'Hi! I can help you look up applications, check unit availability, or answer housing policy questions. What do you need?');
+    _appendAIMessage('assistant', 'Hi! I can help you look up applications, check unit availability, or answer housing policy questions. What do you need?'
+      + (supportOn ? '\n\nIf something is broken or you need a person, use **Report an issue** below.' : ''));
   }
   _aiRenderSuggestions();
   setTimeout(function() {
@@ -232,6 +241,21 @@ window._aiPickSuggestion = function(text){
   if (inp) inp.value = text;
   var box = document.getElementById('ai_chat_suggestions'); if (box) box.style.display = 'none';
   aiSendMessage();
+};
+
+// ── Report an issue (unified assistant) ──────────────────────────────────────
+// The ✦ AI assistant is the single staff help surface: besides answering data /
+// how-to / policy questions, it hands off to the Help & Support ticket form so
+// staff can report a problem to a person — carrying this conversation along as
+// the ticket transcript. Reuses the support widget's whole pipeline (form +
+// insert + email + platform-inbox forward), so there's no duplicate ticket UI.
+window._aiReportIssue = function(){
+  var transcript = _aiHistory.map(function(m){
+    return { role: (m.role === 'user' ? 'user' : 'assistant'), text: m.content };
+  });
+  if (typeof window.openSupportTicket === 'function') { window.openSupportTicket({ transcript: transcript }); return; }
+  if (typeof window.openSupportWidget === 'function') { window.openSupportWidget(); return; }
+  if (typeof showToast === 'function') showToast('Reporting an issue is not available on this page.', { type: 'info' });
 };
 
 // ── Chat: send a message ─────────────────────────────────────────────────────

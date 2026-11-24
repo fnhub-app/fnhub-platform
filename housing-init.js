@@ -2937,7 +2937,16 @@ document.addEventListener('DOMContentLoaded', function(){
       e.preventDefault();
       if(hap.getAttribute('data-hap')==='help'){ _closeAvatarPopover(); if(typeof openHelpTraining==='function') openHelpTraining(); return; }
       if(hap.getAttribute('data-hap')==='resources'){ _closeAvatarPopover(); if(typeof openResources==='function') openResources(); return; }
-      if(hap.getAttribute('data-hap')==='support'){ _closeAvatarPopover(); if(typeof openSupportWidget==='function') openSupportWidget(); return; }
+      if(hap.getAttribute('data-hap')==='support'){
+        _closeAvatarPopover();
+        // Unified assistant: when the ✦ AI chat is available it hosts help +
+        // "Report an issue", so route there; otherwise open the support widget.
+        var _aiOn = (typeof window.aiFeatureOn === 'function') ? window.aiFeatureOn('chat')
+                  : (window.CLFN_MODULES && CLFN_MODULES.isEnabled && CLFN_MODULES.isEnabled('ai_assistant'));
+        if(_aiOn && typeof openAIChat==='function'){ openAIChat(); return; }
+        if(typeof openSupportWidget==='function') openSupportWidget();
+        return;
+      }
       if(hap.getAttribute('data-hap')==='mfa'){ _closeAvatarPopover(); if(typeof openMfaSetup==='function') openMfaSetup(); return; }
       if(hap.getAttribute('data-hap')==='signout'){ _closeAvatarPopover(); if(typeof headerSignOut==='function') headerSignOut(); else if(typeof doLogout==='function') doLogout(); }
       return;

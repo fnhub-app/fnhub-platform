@@ -134,7 +134,7 @@
       +       '<div class="sw-hint">We’ll include the page you’re on and your account (and this chat) so the team can follow up.</div>'
       +       '<div id="support_err" class="sw-err"></div>'
       +       '<div class="sw-row" style="justify-content:flex-end;margin-top:12px;">'
-      +         '<button type="button" class="sw-btn" onclick="_supportShowChat()">← Back</button>'
+      +         '<button type="button" id="support_form_back" class="sw-btn" onclick="_supportShowChat()">← Back</button>'
       +         '<button type="button" id="support_send_btn" class="sw-btn sw-btn-primary" onclick="_supportSubmit()">Send to help desk</button>'
       +       '</div>'
       +     '</div>'
@@ -208,6 +208,7 @@
     _setView('chat');
     var err = document.getElementById('support_err'); if (err) err.style.display = 'none';
     var btn = document.getElementById('support_send_btn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to help desk'; }
+    var bk = document.getElementById('support_form_back'); if (bk) bk.style.display = '';   // normal open: restore "Back to chat"
     _attach = [];                                          // fresh session: drop any prior attachments
     var tb = document.getElementById('support_thumbs'); if (tb) tb.innerHTML = '';
     var fi = document.getElementById('support_files'); if (fi) fi.value = '';
@@ -221,6 +222,43 @@
     var ci = document.getElementById('support_chat_input'); if (ci) setTimeout(function () { try { ci.focus(); } catch (e) {} }, 30);
   }
   function closeSupportWidget() { var ov = document.getElementById('supportWidget'); if (ov) ov.style.display = 'none'; }
+
+  // Open the widget STRAIGHT TO the report-an-issue form, seeding the transcript
+  // from an external assistant (the unified staff AI panel's conversation) so it
+  // rides the ticket. This is how the merged "one assistant" routes "Report an
+  // issue" into the same ticket pipeline without duplicating the form.
+  function openSupportTicket(opts) {
+    if (typeof moduleOn === 'function' && !moduleOn('support')) {
+      if (typeof showToast === 'function') showToast('Help & Support is turned off for this nation.', { type: 'info' });
+      return;
+    }
+    opts = opts || {};
+    _ensure();
+    // Seed the chat transcript from the caller (the AI conversation) so staff
+    // keep the context on the ticket. Falls back to whatever the support chat
+    // already holds when no transcript is passed.
+    if (Array.isArray(opts.transcript)) {
+      _chat.length = 0;
+      opts.transcript.forEach(function (m) {
+        if (m && m.text) _chat.push({ role: (m.role === 'user' ? 'user' : 'assistant'), text: String(m.text) });
+      });
+    }
+    _attach = [];
+    var tb = document.getElementById('support_thumbs'); if (tb) tb.innerHTML = '';
+    var fi = document.getElementById('support_files'); if (fi) fi.value = '';
+    var err = document.getElementById('support_err'); if (err) err.style.display = 'none';
+    var btn = document.getElementById('support_send_btn'); if (btn) { btn.disabled = false; btn.textContent = 'Send to help desk'; }
+    // Optional prefill from the caller.
+    var sub = document.getElementById('support_subject'); if (sub) sub.value = opts.subject || '';
+    var bodyEl = document.getElementById('support_body'); if (bodyEl) bodyEl.value = opts.body || '';
+    if (opts.category) { var ce = document.getElementById('support_cat'); if (ce) ce.value = opts.category; }
+    // Entry was the AI panel, not the support chat, so hide the "Back to chat".
+    var bk = document.getElementById('support_form_back'); if (bk) bk.style.display = 'none';
+    _setView('form');
+    var ov = document.getElementById('supportWidget'); if (ov) ov.style.display = 'flex';
+    _swMakeDraggable();
+    if (sub) setTimeout(function () { try { sub.focus(); } catch (e) {} }, 30);
+  }
 
   // ---- Chat ------------------------------------------------------------------
   function _chatMsgs() { return document.getElementById('support_chat_msgs'); }
@@ -489,11 +527,24 @@
   // get it -- it's their only entry point. The staff app shows it too, but gated
   // by the nation setting `support_launcher` (default ON, ED-toggled in
   // Settings -> Nation) plus the support module and a signed-in session.
+  // Whether the unified ✦ AI assistant is the active help surface on the STAFF
+  // app. When it is, it hosts help + "Report an issue" (via openSupportTicket),
+  // so the standalone support chat + floating launcher are redundant on staff.
+  // Portals have no ✦ AI, so this is always false there (the widget stays their
+  // only entry point).
+  function _aiAssistantActive() {
+    if (_host()) return false;                               // portals: keep the widget
+    try {
+      if (typeof window.aiFeatureOn === 'function') return !!window.aiFeatureOn('chat');
+      return !!(window.CLFN_MODULES && window.CLFN_MODULES.isEnabled && window.CLFN_MODULES.isEnabled('ai_assistant'));
+    } catch (e) { return false; }
+  }
   function _launcherOn() {
     if (typeof moduleOn === 'function' && !moduleOn('support')) return false;
     if (_host()) return true;                                // portals: always on
     var signedIn = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.accessToken);
     if (!signedIn) return false;                             // not on the login screen
+    if (_aiAssistantActive()) return false;                  // staff: ✦ AI hosts help + report now
     var s = (window._appSettings && window._appSettings.support_launcher);
     return (typeof s === 'boolean') ? s : true;              // default ON
   }
@@ -527,6 +578,7 @@
   window.showSupportLauncher = _injectLauncher;
 
   window.openSupportWidget = openSupportWidget;
+  window.openSupportTicket = openSupportTicket;
   window.closeSupportWidget = closeSupportWidget;
   window._supportSubmit = _supportSubmit;
   window._supportPickFiles = _supportPickFiles;
