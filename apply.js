@@ -462,11 +462,48 @@
       + tile('Application', stripApp)
       + '</div></div>';
 
+    // Text-notification opt-in -- shown only when the nation has the SMS module
+    // on (res.data.sms_enabled). Consent + mobile, saved via applicant-intake.
+    var smsHtml = '';
+    if (res.data && res.data.sms_enabled) {
+      var _optedIn = !!(prof && prof.sms_opt_in);
+      var _smsNum = esc((prof && (prof.sms_number || prof.phone)) || '');
+      smsHtml =
+        '<div class="card"><h3>Text notifications</h3>'
+        + '<p class="sub" style="margin:4px 0 12px;">Get text-message updates about your application and maintenance requests.</p>'
+        + '<label style="display:flex;align-items:flex-start;gap:9px;cursor:pointer;font-size:14px;line-height:1.45;">'
+        +   '<input type="checkbox" id="sms_optin"' + (_optedIn ? ' checked' : '') + ' style="margin-top:3px;flex:0 0 auto;">'
+        +   '<span>Yes, text me updates at the number below. Message &amp; data rates may apply; reply STOP to opt out.</span>'
+        + '</label>'
+        + '<div style="margin-top:12px;"><label for="sms_number" style="font-size:13px;font-weight:600;display:block;margin-bottom:4px;">Mobile number</label>'
+        +   '<input id="sms_number" type="tel" autocomplete="tel" inputmode="tel" value="' + _smsNum + '" placeholder="(705) 555-1234" style="width:100%;box-sizing:border-box;"></div>'
+        + '<div id="sms_msg" class="sub" style="margin-top:8px;min-height:16px;"></div>'
+        + '<button class="btn" type="button" style="margin-top:6px;" onclick="savePortalSms()">Save preferences</button>'
+        + '</div>';
+    }
+
     app.innerHTML =
       heroShell
       + homeHtml
-      + '<div class="card"><h3>Your applications</h3>' + listHtml + cardHint + actionHtml + '</div>';
+      + '<div class="card"><h3>Your applications</h3>' + listHtml + cardHint + actionHtml + '</div>'
+      + smsHtml;
   }
+
+  // Save the member's text-notification preference via applicant-intake.
+  window.savePortalSms = async function () {
+    var optIn = !!((document.getElementById('sms_optin') || {}).checked);
+    var num = ((document.getElementById('sms_number') || {}).value || '').trim();
+    var msgEl = document.getElementById('sms_msg');
+    function say(t) { if (msgEl) msgEl.textContent = t; }
+    if (optIn && !num) { say('Please enter your mobile number.'); return; }
+    say('Saving…');
+    try {
+      var r = await api('save_sms_prefs', { sms_opt_in: optIn, sms_number: num });
+      var d = await r.json().catch(function () { return {}; });
+      if (!r.ok || d.error) { say(d.error || 'Could not save. Please try again.'); return; }
+      say(optIn ? 'Saved — you’ll get text updates.' : 'Saved — text updates are off.');
+    } catch (e) { say('Could not save. Please try again.'); }
+  };
 
   // -- Maintenance request (member portal) ------------------------------------
   // GUIDED report, mirroring the staff Renovation Questionnaire: the shared
