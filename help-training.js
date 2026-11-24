@@ -32,12 +32,13 @@
   // BUMP THIS whenever the procedures are updated to match app changes so staff
   // can see how current the guidance is. A single doc may override it with its
   // own `rev` field once its content diverges from the rest of the set.
-  var SOP_REVISION = '2026-11-18';
+  var SOP_REVISION = '2026-11-24';
 
   // Revision history shown at the foot of every document. Add a new entry
   // (keep newest first) whenever the procedures change; a DOCS entry may
   // override it with its own `history` array once its change log diverges.
   var SOP_HISTORY = [
+    { date: '2026-11-24', change: 'Updated the AI Assistant SOP for the unified help window: open it from the round assistant button in the bottom-right corner (your nation&rsquo;s logo) instead of a header button; one window now handles chat, how-to (grounded in your Support FAQ and housing policy), Draft-with-AI notes, and Report-an-issue to the help desk; the quick-start prompt chips were removed.' },
     { date: '2026-11-18', change: 'Added a Unit Codes & Keys SOP: automatic unit codes and back-fill, the per-unit Key Inventory tab (add / issue / return / lost / retire), printable key tags (code + QR, no address), key-pickup instructions that reach the contractor portal, and enabling the optional Key Inventory module.' },
     { date: '2026-11-09', change: 'Added step-flow and approval-chain infographics to every SOP — the two end-to-end guides, each module, and each Settings tab — so key workflows read at a glance.' },
     { date: '2026-11-09', change: 'Added a Notes & File Records SOP: where each kind of note is stored, the Tenant Card as the single place that shows every note about a person, the new “has notes” worklist chips, destination hints on note fields, and Internal Notes shown on the approval scorecard.' },
@@ -930,25 +931,32 @@
     </ul>`;
 
   var MOD_AI = `
-    <p>The AI Assistant is a staff chat helper that answers questions about applications, units, maintenance requests, renovations, contractors, inspections, capital projects, policy, and how-to procedures &mdash; and can draft professional decision notes. It is available on every page via the AI button.</p>
+    <p>The AI Assistant is the staff help window. From one place it answers questions about applications, units, maintenance requests, renovations, contractors, inspections, capital projects, and housing policy; explains how to do things in the app (grounded in your nation&rsquo;s Support FAQ); drafts professional decision notes; and lets you <strong>report a problem to a real person</strong>. Open it from the round assistant button in the <strong>bottom-right corner</strong> of any page &mdash; it shows your nation&rsquo;s logo.</p>
     <div class="ht-fig"><div class="ht-flow">
-    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the AI panel</div><div class="ht-fsub">The ✦ button in the header.</div></div>
-    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Ask in plain language</div><div class="ht-fsub">Counts, lists, or how-to questions.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">1</span><div class="ht-fttl">Open the assistant</div><div class="ht-fsub">The round logo button, bottom-right.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">2</span><div class="ht-fttl">Ask in plain language</div><div class="ht-fsub">Counts, lists, policy, or how-to.</div></div>
     <div class="ht-fstep"><span class="ht-fnum">3</span><div class="ht-fttl">It reads (never writes)</div><div class="ht-fsub">Within your role&rsquo;s data limits.</div></div>
-    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">You decide</div><div class="ht-fsub">Review any drafted note before saving.</div></div>
+    <div class="ht-fstep"><span class="ht-fnum">4</span><div class="ht-fttl">Stuck? Report it</div><div class="ht-fsub">&ldquo;Report an issue&rdquo; reaches the help desk.</div></div>
     </div></div>
     <h2>Who can use it</h2>
     <ul><li>Staff. What it can read is limited by the signed-in staff member's role (finance tables only for ED/CFO/Finance; applications hidden from field employees).</li></ul>
-    <h2>The two ways to use it</h2>
-    <table><thead><tr><th>Surface</th><th>What it does</th></tr></thead><tbody>
-    <tr><td>Chat panel (AI button)</td><td>Ask questions in plain language. It answers from the data on your screen, and for exact counts or complete lists it can run a read-only database lookup.</td></tr>
+    <h2>What you can do from the window</h2>
+    <table><thead><tr><th>Action</th><th>What it does</th></tr></thead><tbody>
+    <tr><td>Chat &amp; help</td><td>Ask questions in plain language. It answers from the data on your screen plus your nation&rsquo;s housing policy and Support FAQ; for exact counts or complete lists it can run a read-only database lookup.</td></tr>
+    <tr><td>Report an issue</td><td>The &ldquo;Report an issue to a person&rdquo; link at the bottom opens a short form (already carrying your chat) that files a ticket to the housing help desk.</td></tr>
     <tr><td>Draft with AI</td><td>On an approval, fills the notes box with a professional decision note for the current application and action, which you then edit.</td></tr>
     </tbody></table>
     <h2>Ask a question</h2>
     <ol>
-    <li>Click the <strong>AI</strong> button in the header to open the chat panel.</li>
+    <li>Click the <strong>assistant button</strong> in the bottom-right corner to open the window.</li>
     <li>Type a question &mdash; for example "how many applicants are waiting to be matched?" or "how do I complete a maintenance request?"</li>
     <li>Read the answer. For counts and lists it may look records up directly; for how-to questions it explains the real steps.</li>
+    </ol>
+    <h2>Report an issue to a person</h2>
+    <ol>
+    <li>Open the assistant and click <strong>&ldquo;Report an issue to a person&rdquo;</strong> at the bottom of the window.</li>
+    <li>Add a subject and describe what happened (a screenshot helps). Your chat is attached to the ticket automatically.</li>
+    <li>Click <strong>Send to help desk</strong> &mdash; it reaches your housing help desk and the platform support inbox for follow-up.</li>
     </ol>
     <h2>Draft a decision note</h2>
     <ol>
@@ -1113,7 +1121,7 @@
     <tr><td>Renovations</td><td>Maintenance Requests, scopes of work, progress, reno approvals.</td></tr>
     <tr><td>RFQ</td><td>Requests for Quotes and contractor contracts.</td></tr>
     <tr><td>Mapping</td><td>Unit location pins and the Set Location &amp; Photo tool.</td></tr>
-    <tr><td>AI Assistant</td><td>The chat assistant and Draft-with-AI note helper.</td></tr>
+    <tr><td>AI Assistant</td><td>The bottom-right help window: chat / how-to, Draft-with-AI notes, and Report-an-issue to the help desk.</td></tr>
     <tr><td>Inspections</td><td>Unit-condition inspection reports.</td></tr>
     <tr><td>Capital Projects</td><td>Funded builds and lot development, milestones, claims.</td></tr>
     <tr><td>Email Intake</td><td>Forward-to-file email triage queue.</td></tr>

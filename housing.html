@@ -1552,15 +1552,15 @@
 
 <!-- ─── AI CHAT PANEL ─── -->
 <div id="ai_chat_panel" style="display:none;position:fixed;bottom:24px;right:24px;width:360px;max-height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,0.5);z-index:1200;flex-direction:column;overflow:hidden;">
-  <div style="background:var(--dark);padding:14px 18px;border-bottom:2px solid var(--yellow);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
+  <div style="background:var(--surface);padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">
     <div style="display:flex;align-items:center;gap:8px;">
       <span style="color:var(--yellow);font-size:16px;">✦</span>
       <div>
-        <div style="font-family:'DM Serif Display',serif;font-size:15px;color:#fff;">AI Assistant</div>
-        <div style="font-size:11px;color:#666;" data-nation="display_name">Constance Lake First Nation</div>
+        <div style="font-family:'DM Serif Display',serif;font-size:15px;color:var(--text);">AI Assistant</div>
+        <div style="font-size:11px;color:var(--muted);" data-nation="display_name">Constance Lake First Nation</div>
       </div>
     </div>
-    <button onclick="closeAIChat()" style="background:none;border:1px solid #444;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;" onmouseover="this.style.borderColor='#888'" onmouseout="this.style.borderColor='#444'">✕</button>
+    <button onclick="closeAIChat()" style="background:none;border:none;color:var(--muted);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;">✕</button>
   </div>
   <div id="ai_chat_messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;"></div>
   <div id="ai_report_row" style="padding:6px 14px 0;flex-shrink:0;display:none;">
