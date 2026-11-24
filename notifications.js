@@ -215,6 +215,23 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'member_housing_offer',
+    label:                 'Member Housing Offer / Assignment (Text)',
+    description:           'Texts the applicant when staff assign them to a unit (matched to a home). Uses the consented mobile from the member portal text opt-in; gated by the SMS / Text Notifications module and this event’s Text channel. No email is sent for this event.',
+    recipientType:         'tenant',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    smsCapable:            true,
+    smsDefault:            true,
+    sms:                   '{nationShort} Housing: you have been matched to a home at {unitAddress}{moveInLine}. The Housing office will contact you about next steps. Reply STOP to opt out.',
+    placeholders:          ['unitAddress','moveInLine','nationShort'],
+    defaults: {
+      subject:  '{nationShort} Housing — You have been matched to a home',
+      bodyHtml: '<p>You have been matched to a home at {unitAddress}{moveInLine}. The Housing office will contact you about next steps.</p>'
+    }
+  },
+  {
     key:                   'member_mr_reviewed',
     label:                 'Member Maintenance Request Reviewed (Text)',
     description:           'Texts the member who reported a maintenance request from the member portal when staff accept or decline it. Uses the consented mobile from the portal text opt-in; gated by the SMS / Text Notifications module and this event’s Text channel. No email is sent for this event. QR-flow (anonymous) reports are never texted.',
@@ -3734,6 +3751,26 @@ async function _resolveMemberSmsByEmail(email) {
 // it (accepted / declined). Resolves their consented portal number from the
 // reporter_email stored on the submission. SMS-only; fully guarded end-to-end
 // by _sendEventSms, so a QR (anonymous) report or a non-opted-in member no-ops.
+// Text the applicant when staff assign them to a unit (matched to a home).
+// Resolves their consented portal number by the application email. SMS-only;
+// fully guarded by _sendEventSms (module on + event Text toggle + opted-in).
+async function notifyMemberHousingOffer(app, unitAddress, moveInDate) {
+  try {
+    if (!app) return;
+    var email = String(app.email || '').trim();
+    if (!email) return;
+    var num = await _resolveMemberSmsByEmail(email);
+    if (!num) return;
+    var tokens = {
+      nationShort: (window.NATION_CONFIG && (NATION_CONFIG.short || NATION_CONFIG.display_name)) || 'Housing',
+      unitAddress: unitAddress || 'your new unit',
+      moveInLine:  moveInDate ? (' (move-in ' + moveInDate + ')') : ''
+    };
+    await _sendEventSms('member_housing_offer', num, tokens, { type: 'application', id: app.id || '-' });
+  } catch (e) { /* best-effort; never disturbs the assignment flow */ }
+}
+window.notifyMemberHousingOffer = notifyMemberHousingOffer;
+
 async function notifyMemberMrReviewed(submission, outcome) {
   try {
     if (!submission) return;
