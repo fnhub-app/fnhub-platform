@@ -301,6 +301,28 @@
     return r;
   }
 
+  // Authed fetch for Edge Functions (and any arbitrary URL). Unlike a raw
+  // fetch, it STAMPS A FRESH token on every attempt and, on a 401 (expired
+  // access token -> gateway "Invalid JWT"), refreshes the session once and
+  // retries -- the same self-healing api() already gives REST. The admin tab
+  // stays open past the ~1h access-token TTL, and the dashboard's REST loads
+  // kept refreshing it while these raw function calls did not, so a long
+  // session would hit "Invalid JWT" on Apply-migration / set-secret / etc.
+  // The caller's method/body/extra headers are preserved; Authorization +
+  // apikey are set here (so the retry carries the NEW token, not the stale one
+  // the caller captured). Returns the Response, exactly like fetch.
+  async function afetch(url, opts){
+    opts = opts || {};
+    var mk = function(){
+      var h = Object.assign({ apikey:ANON }, opts.headers || {});
+      h.Authorization = 'Bearer ' + getAT();     // always current, rebuilt per attempt
+      return { method: opts.method || 'GET', headers: h, body: opts.body };
+    };
+    var r = await fetch(url, mk());
+    if (r.status === 401 && await refreshSession()) r = await fetch(url, mk());
+    return r;
+  }
+
   // ---- Two-factor (TOTP) -- enforced at admin sign-in ------------------------
   // The magic-link sign-in establishes an AAL1 session. Super-admins run the
   // control plane over every nation, so we require a SECOND factor: a TOTP
@@ -1313,7 +1335,7 @@
     if (file) payload.migration = file; else { payload.sql = sql; if (label) payload.label = label; }
     var r;
     try {
-      r = await fetch(PBASE + '/functions/v1/run-nation-migration', {
+      r = await afetch(PBASE + '/functions/v1/run-nation-migration', {
         method: 'POST', headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
@@ -2167,7 +2189,7 @@
     window._asstHistory.push({ role:'user', text:msg });
     window._asstPending = true; _asstRenderLog();
     try {
-      var r = await fetch(PBASE + '/functions/v1/platform-assist', {
+      var r = await afetch(PBASE + '/functions/v1/platform-assist', {
         method:'POST',
         headers:{ apikey:ANON, Authorization:'Bearer ' + getAT(), 'Content-Type':'application/json' },
         body: JSON.stringify({ message: msg, history: window._asstHistory.slice(0, -1).slice(-16) })
@@ -2687,7 +2709,7 @@
     var btn = document.getElementById('pv-btn'); if (btn){ btn.disabled = true; btn.textContent = 'Provisioning...'; }
     document.getElementById('pv-results').innerHTML = '<p class="sub">Running... this can take a minute.</p>';
     try {
-      var r = await fetch(PBASE + '/functions/v1/provision-nation', {
+      var r = await afetch(PBASE + '/functions/v1/provision-nation', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2719,7 +2741,7 @@
     if (!ok) return;
     var r;
     try {
-      r = await fetch(PBASE + '/functions/v1/enter-nation', {
+      r = await afetch(PBASE + '/functions/v1/enter-nation', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: n.subdomain })
@@ -2781,7 +2803,7 @@
     setMsg('cn-supportkey-msg', rotate ? 'Rotating...' : 'Generating...', 'ok');
     var r;
     try {
-      r = await fetch(PBASE + '/functions/v1/gen-support-key', {
+      r = await afetch(PBASE + '/functions/v1/gen-support-key', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, rotate: !!rotate })
@@ -2993,7 +3015,7 @@
       + '<p style="white-space:pre-wrap;">' + esc(reply) + '</p>';
     var sent = false, errMsg = '';
     try {
-      var r = await fetch(PBASE + '/functions/v1/send-notification', {
+      var r = await afetch(PBASE + '/functions/v1/send-notification', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ to: t.reporter_email, to_name: t.reporter_name || '', subject: 'Re: ' + (t.subject || 'your support request'), html: replyHtml, brand: 'Nation Pathways' })
@@ -3977,7 +3999,7 @@
     if (key.length < 8){ setMsg('cn-ai-msg', 'That does not look like a valid key.'); return; }
     setMsg('cn-ai-msg', 'Applying to project...', 'ok');
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-secret', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-secret', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, name: 'ANTHROPIC_API_KEY', value: key })
@@ -4014,7 +4036,7 @@
     }
     setMsg('cn-em-msg', 'Applying to project...', 'ok');
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-secret', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-secret', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, secrets: secrets })
@@ -4037,7 +4059,7 @@
     if (!el) return;
     if (!supabaseUrl){ el.textContent = ''; return; }
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-secret', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-secret', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, action: 'status' })
@@ -4105,7 +4127,7 @@
     if (msvc)  secrets.push({ name: 'TWILIO_MESSAGING_SERVICE_SID', value: msvc });
     setMsg('cn-sms-msg', 'Applying to project...', 'ok');
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-secret', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-secret', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, secrets: secrets })
@@ -4136,7 +4158,7 @@
     }
     var enabled = {};
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-module', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, action: 'get' })
@@ -4169,7 +4191,7 @@
     if(!supabaseUrl){ body.innerHTML = '<div class="empty">This nation has no Supabase project yet. Provision it first.</div>'; return; }
     var cfg = {};
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-module', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, action: 'get_ai_limit' })
@@ -4197,7 +4219,7 @@
     }
     setMsg('cn-ai-limit-msg', 'Saving...', 'ok');
     try {
-      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-module', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, action: 'set_ai_limit', monthly_tokens: val })
@@ -4222,7 +4244,7 @@
         if(!lr.ok){ if(cb) cb.checked = false; var lt = await lr.text().catch(function(){return '';}); setMsg('cn-mod-enable-msg', 'Could not license ' + module + ': ' + esc(String(lt).slice(0,160))); return; }
       }
       // 2) Enable/disable on the nation project.
-      var r = await fetch(PBASE + '/functions/v1/set-nation-module', {
+      var r = await afetch(PBASE + '/functions/v1/set-nation-module', {
         method: 'POST',
         headers: { apikey: ANON, Authorization: 'Bearer ' + getAT(), 'Content-Type': 'application/json' },
         body: JSON.stringify({ subdomain: sub, action: 'set', module: module, enabled: on })
