@@ -1574,7 +1574,6 @@
     var obOpt = function(v,l){ return '<option value="' + v + '"' + (curOb === v ? ' selected' : '') + '>' + l + '</option>'; };
     var tab = function(k, l, active){ return '<button class="nic-tab' + (active ? ' active' : '') + '" type="button" data-act="nic-tab" data-tab="' + k + '">' + l + '</button>'; };
     var panel = function(k, html, active){ return '<div class="nic-panel' + (active ? ' active' : '') + '" data-panel="' + k + '">' + html + '</div>'; };
-    var modCount = Object.keys(n.modules_licensed || {}).filter(function(k){ return n.modules_licensed[k]; }).length;
 
     // Panel content (existing card markup, regrouped under tabs).
     // Access + status actions live here (moved off the nations-list rows,
@@ -1896,7 +1895,7 @@
       + '</div>'
       + '<div class="nic-strip">'
       +   '<div class="nic-strip-tile"><div class="l">Status</div><div class="v"><span class="pill ' + esc(n.status||'provisioning') + '">' + esc(n.status||'provisioning') + '</span></div></div>'
-      +   '<div class="nic-strip-tile"><div class="l">Licensed modules</div><div class="v">' + modCount + '</div></div>'
+      +   '<div class="nic-strip-tile"><div class="l">Texts sent</div><div class="v" id="cn-sum-sms" style="color:var(--muted);">&mdash;</div></div>'
       +   '<div class="nic-strip-tile"><div class="l">Data usage</div><div class="v" id="cn-sum-usage" style="color:var(--muted);">&mdash;</div></div>'
       +   '<div class="nic-strip-tile"><div class="l">Outstanding</div><div class="v" id="cn-sum-inv" style="color:var(--muted);">&mdash;</div></div>'
       + '</div>'
@@ -3959,11 +3958,21 @@
         el.style.color = usg ? '' : 'var(--muted)';
         el.innerHTML = usg
           ? esc(fmtBytes(usg.database_bytes)) + ' db &middot; ' + esc(fmtBytes(usg.storage_bytes)) + ' files'
-            + ((usg.sms_month_count != null || usg.sms_lifetime_count != null)
-                ? ' &middot; ' + Number(usg.sms_month_count || 0).toLocaleString('en-CA') + ' texts this month'
-                  + (usg.sms_lifetime_count != null ? ' (' + Number(usg.sms_lifetime_count).toLocaleString('en-CA') + ' lifetime)' : '')
-                : '')
           : 'not reported';
+      }
+      // Texts sent (this calendar month, and lifetime) from nation_usage. Shows
+      // only when the nation has reported SMS counts (sms_log present); a nation
+      // with no SMS set up reads muted "no SMS yet", a never-reported one "--".
+      var sel = document.getElementById('cn-sum-sms');
+      if (sel){
+        var hasSms = usg && (usg.sms_month_count != null || usg.sms_lifetime_count != null);
+        sel.style.color = hasSms ? '' : 'var(--muted)';
+        sel.innerHTML = hasSms
+          ? Number(usg.sms_month_count || 0).toLocaleString('en-CA') + ' this month'
+            + (usg.sms_lifetime_count != null
+                ? ' <span style="color:var(--muted);">&middot; ' + Number(usg.sms_lifetime_count).toLocaleString('en-CA') + ' lifetime</span>'
+                : '')
+          : (usg ? 'no SMS yet' : '&mdash;');
       }
     } catch(e){}
     try {
