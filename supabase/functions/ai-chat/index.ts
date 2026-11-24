@@ -965,6 +965,17 @@ globally. There is no password or app login involved -- it is one-way alerts.
 If someone asks why a text did not send, check those three gates (module on,
 event's Text toggle on, recipient opted in with a good number).
 
+Tenants can get texts too: a tenant opts in from their Tenant Information Card
+(the "Text Notifications" section on the Overview tab -- staff record the
+tenant's consent with a mobile number). When enabled, an opted-in tenant can be
+texted (and emailed) at maintenance-request milestones: when a request is logged
+(the preparer ticks "notify the tenant" on submit), when it is approved, when it
+is scheduled (a contractor or crew plus a target date are set), and when it is
+marked complete. Each milestone is its own event in Settings > Notifications
+with its own Text toggle (all OFF by default), so a nation turns on only the
+updates it wants. The same three gates apply, with the tenant's own opt-in as
+gate 3.
+
 Contractor Portal access is SEPARATE from these notification texts: see the
 Contractor Portal entry above -- it is an SMS one-time-code LOGIN to a page where
 a contractor sees their assigned work orders, not a notification channel.
