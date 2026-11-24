@@ -45,6 +45,7 @@ on:
       - 'supabase/functions/run-nation-migration/**'
       - 'supabase/functions/platform-ticket-intake/**'
       - 'supabase/functions/send-notification/**'
+      - 'supabase/functions/platform-assist/**'
       - 'supabase/functions/_shared/**'
       - '.github/workflows/deploy-platform-functions.yml'
   workflow_dispatch:
@@ -104,4 +105,6 @@ jobs:
           supabase functions deploy platform-ticket-intake --project-ref "$REF" --no-verify-jwt --yes
           echo "──── Deploying send-notification to $REF (JWT verify ON; staff OR super-admin gated) ────"
           supabase functions deploy send-notification --project-ref "$REF" --yes
+          echo "──── Deploying platform-assist to $REF (JWT verify ON; super-admin-gated admin help chat) ────"
+          supabase functions deploy platform-assist --project-ref "$REF" --yes
           echo "Platform functions deployed."
