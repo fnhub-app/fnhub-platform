@@ -2132,10 +2132,6 @@ function renderAppHeader(){
     +       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>'
     +       '<span>Settings</span>'
     +     '</button>'
-    +     '<button id="header_ai_btn" class="header-settings" onclick="toggleAIChat()" title="AI Assistant">'
-    +       '<span class="ai-ico" style="color:var(--yellow);font-size:15px;line-height:1;">✦</span>'
-    +       '<span>AI</span>'
-    +     '</button>'
     +     '<div class="create-wrap">'
     +       '<button class="btn-create" id="header_create_btn" type="button">'
     +         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>'
@@ -2172,17 +2168,17 @@ function renderAppHeader(){
 // Show or hide the AI header button based on the ai_assistant module state.
 // Called after initModuleEnablement() and from _onModuleToggle.
 function _syncAIHeaderBtn() {
+  // The AI assistant now lives only as the bottom-right launcher (FAB) -- the
+  // header AI button was removed. Keep the FAB in sync with the AI chat feature
+  // (Settings -> Nation -> AI Features, under the ai_assistant module switch).
+  if (typeof window.showAILauncher === 'function') window.showAILauncher();
+  // Back-compat: if any page still renders #header_ai_btn, gate it the same way.
   var btn = document.getElementById('header_ai_btn');
   if (!btn) return;
-  // The floating assistant chat is the app-wide 'chat' capability in the AI
-  // feature matrix (Settings -> Nation -> AI Features), itself under the
-  // ai_assistant module master switch.
   var on = (typeof window.aiFeatureOn === 'function')
     ? window.aiFeatureOn('chat')
     : (window.CLFN_MODULES && CLFN_MODULES.isEnabled('ai_assistant'));
   btn.style.display = on ? 'flex' : 'none';
-  // Keep the bottom-right AI launcher (FAB) in lockstep with the header button.
-  if (typeof window.showAILauncher === 'function') window.showAILauncher();
 }
 
 // HEADER_NAV — single source of truth for the primary nav strip.
