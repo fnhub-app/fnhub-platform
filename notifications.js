@@ -260,6 +260,29 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'sow_tenant_scheduled',
+    label:                 'Maintenance Request Scheduled — Tenant',
+    description:           'Sent to the tenant when an approved maintenance request is scheduled (a contractor or crew is assigned and a target date is set). Texts if the tenant has opted in with a mobile on file; emails if an email is on file.',
+    recipientType:         'tenant',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    smsCapable:            true,
+    smsDefault:            false,
+    sms:                   '{nationShort} Housing: your maintenance work for {unitAddress} ({projectNumber}) is scheduled. Target completion: {targetDate}. Reply STOP to opt out.',
+    placeholders:          ['tenantName','unitAddress','projectNumber','startDate','endDate','targetDate','contractor','nationShort','appLink'],
+    defaults: {
+      subject:  '{nationShort} Housing — Maintenance Request Scheduled ({projectNumber})',
+      bodyHtml: '<p>Hello {tenantName},</p>'
+              + '<p>Your approved maintenance request for <strong>{unitAddress}</strong> has been <strong>scheduled</strong>.</p>'
+              + '<p>Project #: <strong>{projectNumber}</strong><br/>'
+              +    'Assigned to: <strong>{contractor}</strong><br/>'
+              +    'Target completion: <strong>{targetDate}</strong></p>'
+              + '<p>Please make sure the unit is accessible on the scheduled day. If you have any questions, please contact the {nationShort} Housing office.</p>'
+              + '<p>Thank you,<br/>{nationShort} Housing</p>'
+    }
+  },
+  {
     key:                   'sow_tenant_completed',
     label:                 'Maintenance Request Completed — Tenant',
     description:           'Sent to the tenant when a maintenance request is marked complete. Texts if the tenant has opted in with a mobile on file; emails if an email is on file.',
@@ -2357,8 +2380,9 @@ async function _notifySowTenantStatus(eventKey, sow, unit) {
   if (!sow) return;
   var tenantName = (sow.tenantName) || (unit && unit.assignedName) || '';
   var tokens = _emailTokensForSowTenant(sow, unit, tenantName);
-  tokens.startDate = (sow.startDate) || '';
-  tokens.endDate   = (sow.endDate)   || '';
+  tokens.startDate  = (sow.startDate) || '';
+  tokens.endDate    = (sow.endDate)   || '';
+  tokens.targetDate = (sow.endDate || sow.startDate || '');
 
   // Text the tenant (guarded end-to-end by _sendEventSms).
   try {
@@ -2395,8 +2419,10 @@ async function _notifySowTenantStatus(eventKey, sow, unit) {
   }, eventKey);
 }
 async function notifySowTenantApproved(sow, unit)  { return _notifySowTenantStatus('sow_tenant_approved', sow, unit); }
+async function notifySowTenantScheduled(sow, unit) { return _notifySowTenantStatus('sow_tenant_scheduled', sow, unit); }
 async function notifySowTenantCompleted(sow, unit) { return _notifySowTenantStatus('sow_tenant_completed', sow, unit); }
 window.notifySowTenantApproved  = notifySowTenantApproved;
+window.notifySowTenantScheduled = notifySowTenantScheduled;
 window.notifySowTenantCompleted = notifySowTenantCompleted;
 
 // ── RFQ PDF generator ────────────────────────────────────────────────────
