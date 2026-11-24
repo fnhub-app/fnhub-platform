@@ -287,10 +287,21 @@ function aiSendMessage() {
                       return sum + (parseFloat(i.cost || i.amount || i.total || 0) || 0);
                     }, 0);
         var status = s.approval_status || '';
+        // Resolve the CONTRACTOR name. assignedToName is the in-house crew
+        // member, so for a contractor-assigned job the name lives on contractor_name/
+        // contractor, or must be looked up from the registry by contractorId.
+        var contractorName = s.contractor_name || s.contractor || '';
+        if (!contractorName && s.contractorId && Array.isArray(window._contractors)) {
+          var _ct = window._contractors.filter(function(c){ return String(c.id) === String(s.contractorId); })[0];
+          if (_ct) contractorName = _ct.name || '';
+        }
+        if (!contractorName && s.assignedTeam === 'contractor') contractorName = s.assignedToName || '';
         sowList.push({
           unit_id:          uid,
           project_number:   s.project_number || '',
-          contractor:       s.assignedToName || s.contractor_name || s.contractor || '',
+          contractor:       contractorName,
+          contractor_id:    s.contractorId || '',
+          assigned_to_name: s.assignedToName || '',
           assigned_team:    s.assignedTeam || '',
           approval_status:  status,
           approved:         (status === 'ed_approved' || status === 'hm_approved' || status === 'completed'),
@@ -407,8 +418,13 @@ function aiSendMessage() {
   }).then(function(data) {
     if (data.error) throw new Error(data.error);
     _removeTyping();
-    _appendAIMessage('assistant', data.reply);
-    _aiHistory.push({ role: 'assistant', content: data.reply });
+    // Never surface a bare empty / "(no response)" bubble -- give something useful.
+    var reply = (data.reply == null ? '' : String(data.reply)).trim();
+    if (!reply || reply === '(no response)') {
+      reply = 'I could not put together an answer for that one. Try rephrasing, or ask about a specific unit, applicant, or contractor (for example, "which maintenance requests are assigned to <contractor>?").';
+    }
+    _appendAIMessage('assistant', reply);
+    _aiHistory.push({ role: 'assistant', content: reply });
   }).catch(function(err) {
     _removeTyping();
     _appendAIMessage('assistant', 'Sorry, something went wrong: ' + err.message);

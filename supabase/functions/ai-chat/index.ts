@@ -690,7 +690,7 @@ serve(async (req) => {
 
       if (resp.stop_reason !== 'tool_use') {
         const text = content.filter((b) => b.type === 'text').map((b) => b.text as string).join('\n').trim()
-        const reply = text || '(no response)'
+        const reply = text || "I could not put together an answer for that. Try rephrasing, or ask about a specific unit, applicant, or contractor."
         await writeAiAudit({ email, name: actorName, role, mode: 'chat', question: message || '', replyChars: reply.length, tables: tablesQueried, turns, inputTokens: usage.input, outputTokens: usage.output })
         return json({ reply })
       }
@@ -1181,7 +1181,7 @@ Rules:
     : '\n\n## Housing Units\nNo unit data available.'
 
   const sowsJson = ctx?.sows?.length
-    ? `\n\n## Maintenance Requests - ${ctx.sows.length} records\nThese are stored internally as SOWs (Scope of Work) in the housing_sow table, but ALWAYS call them "Maintenance Requests" when talking to staff - that is the term shown in the app UI. Each maintenance request is linked to a housing unit.\nApproval fields: approval_status is one of ''/draft/signed/submitted/hm_approved/ed_approved/completed; approved=true means hm_approved, ed_approved, or completed. IMPORTANT: if system_approved=true the maintenance request was AUTO-approved by the tendering workflow (an RFQ was awarded), NOT signed off by the Executive Director - call this "System Approved", and do NOT count it as an ED approval even though approval_status reads 'ed_approved'. approved_via_rfq marks the same thing.\n` + JSON.stringify(ctx.sows)
+    ? `\n\n## Maintenance Requests - ${ctx.sows.length} records\nThese are stored internally as SOWs (Scope of Work) in the housing_sow table, but ALWAYS call them "Maintenance Requests" when talking to staff - that is the term shown in the app UI. Each maintenance request is linked to a housing unit.\nApproval fields: approval_status is one of ''/draft/signed/submitted/hm_approved/ed_approved/completed; approved=true means hm_approved, ed_approved, or completed. IMPORTANT: if system_approved=true the maintenance request was AUTO-approved by the tendering workflow (an RFQ was awarded), NOT signed off by the Executive Director - call this "System Approved", and do NOT count it as an ED approval even though approval_status reads 'ed_approved'. approved_via_rfq marks the same thing.\nAssignment fields: assigned_team is 'contractor' or 'in_house'; contractor is the contractor COMPANY name for a contractor-assigned job (contractor_id is its id); assigned_to_name is the in-house crew member. To answer "how many work orders were sent to / assigned to contractor X", count the maintenance requests whose contractor matches X (case-insensitive, allow partial name matches); ALWAYS give a number (0 if none match) - never reply with nothing.\n` + JSON.stringify(ctx.sows)
     : '\n\n## Maintenance Requests\nNo maintenance request data loaded yet.'
 
   const rfqsJson = ctx?.rfqs?.length
@@ -1283,7 +1283,8 @@ containing ONLY JSON describing it, for example:
 
 Rules:
 - For unit counts, ALWAYS use the Housing Units section (or query_database) - never the maintenance request count.
-- For maintenance/repair/work-order questions, use the Maintenance Requests section from the loaded context (the housing_sow table is not directly queryable).
+- For maintenance/repair/work-order questions, use the Maintenance Requests section from the loaded context (the housing_sow table is not directly queryable). To count work orders for a contractor, match the Maintenance Requests' contractor field (case-insensitive, partial names OK) and give a number (0 if none).
+- ALWAYS reply with text. If you genuinely cannot answer, say so in one short sentence and suggest how to rephrase - never return an empty message or stop on a tool call without a written answer.
 - The audit log (housing_audit_log) records ACTIONS (who did what, when), NOT records. For "how many / list X" about records - notes, applications, tenants, units, inspections, contractors, RFQs - query the dedicated table for X (e.g. housing_application_notes + tenant_notes for notes). Do not answer record-count questions from the audit log.
 - For "how do I ..." questions, answer from the Support FAQ section above when it covers the question (it is this nation's own answers); otherwise use the How-to knowledge and tailor to the staff role.
 - For housing POLICY questions (eligibility, points / scoring rules, arrears, transfers, evictions, pets, occupancy standards, "what does the policy say ..."), answer from the Housing policy section above and cite the relevant part in plain language; never invent policy that is not written there.
