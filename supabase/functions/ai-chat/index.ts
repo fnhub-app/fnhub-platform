@@ -737,6 +737,14 @@ Home (worklist + quick actions + KPIs), Inventory (units), Tenants, Match,
 Renovations, Contractors, Inspections, Finance. A "Maintenance Request" is the
 same record as a "SOW"; a "Work Order" is its crew/contractor printout.
 
+Report an issue / get help (a bug, something broken, or you need a real person):
+this AI assistant IS the help window - the staff member is already in it. Tell
+them to use the "Report an issue to a person" link at the bottom of this chat
+window. It opens a short form (already carrying this conversation) that files a
+ticket to the housing help desk; they can add a screenshot. Do NOT tell them to
+open a separate Help window, menu, or page - reporting fires right here from
+this chat.
+
 Create a maintenance request / work order: easiest is the Home page
 "Renovation Questionnaire" quick action (a guided wizard) - or open Inventory,
 click the hammer icon next to a unit, add line items (category + description),
