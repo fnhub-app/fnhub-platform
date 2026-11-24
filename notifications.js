@@ -195,11 +195,14 @@ var EMAIL_EVENT_REGISTRY = [
   {
     key:                   'application_approved_waitlist',
     label:                 'Applicant Approved — Added to Wait List',
-    description:           'Sent to the applicant when staff approve their application (checkbox on the portal-submission review). Wording is deliberate: approval means the application joined the housing wait list — it is NOT an offer of housing.',
+    description:           'Sent to the applicant when staff approve their application (checkbox on the portal-submission review). Wording is deliberate: approval means the application joined the housing wait list — it is NOT an offer of housing. Also texts the applicant if they opted in to texts on the member portal and have a mobile on file (requires the SMS / Text Notifications module).',
     recipientType:         'applicant',
     defaultRecipientRoles: [],
     defaultCcRoles:        [],
     wired:                 true,
+    smsCapable:            true,
+    smsDefault:            true,
+    sms:                   '{nationShort} Housing: your application {applicantId} is approved and added to the housing wait list. This is not an offer of housing. Reply STOP to opt out.',
     placeholders:          ['applicantName','applicantId','nationShort'],
     defaults: {
       subject:  '{nationShort} Housing — Application {applicantId} Approved: You Are on the Wait List',
@@ -1333,6 +1336,13 @@ async function notifyApplicationApprovedWaitlist(app) {
       entity_id:   app.id || '—'
     };
   }, eventKey);
+
+  // Also text the applicant if they opted in on the member portal (fully
+  // guarded by _sendEventSms: module on + event Text channel on + opted-in).
+  try {
+    var _mnum = await _resolveMemberSmsByEmail(email);
+    if (_mnum) await _sendEventSms(eventKey, _mnum, _emailTokensForApp(app), { type: 'application', id: app.id || '-' });
+  } catch (e) { /* SMS is best-effort; never blocks the email path */ }
 }
 window.notifyApplicationApprovedWaitlist = notifyApplicationApprovedWaitlist;
 
@@ -3682,6 +3692,25 @@ function _smsNumberIfOptedIn(row) {
   if (!row || row.sms_opt_in !== true) return '';
   var n = String(row.sms_number || '').trim();
   return _SMS_E164_RE.test(n) ? n : '';
+}
+
+// A community member's (applicant's) textable number by email, or '' if they
+// have not opted in on the member portal. Reads applicant_profiles (active
+// staff can SELECT it per RLS, using the staff JWT in HOUSING_HEADERS); the
+// member sets sms_opt_in / sms_number there via the portal's opt-in card.
+// Mirrors _sbLoadStaffSmsByEmail + _smsNumberIfOptedIn.
+async function _resolveMemberSmsByEmail(email) {
+  if (!_smsModuleOn()) return '';
+  var e = String(email || '').trim().toLowerCase();
+  if (!e) return '';
+  try {
+    var url = SUPABASE_URL + '/rest/v1/applicant_profiles?select=email,sms_number,sms_opt_in'
+            + '&sms_opt_in=eq.true&email=ilike.' + encodeURIComponent(e) + '&limit=1';
+    var r = await fetch(url, { headers: HOUSING_HEADERS });
+    if (!r.ok) return '';
+    var rows = await r.json();
+    return _smsNumberIfOptedIn((rows && rows[0]) || null);
+  } catch (e2) { return ''; }
 }
 
 // Look up a single active staff member's SMS consent fields by email (for
