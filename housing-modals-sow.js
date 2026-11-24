@@ -1789,6 +1789,22 @@ function _sowIsApproved(sow){
 }
 window._sowIsApproved = _sowIsApproved;
 
+// Fire the tenant "approved" text/email once, on the transition INTO a
+// final-approved state (ready for the work order). No-op if it was already
+// approved, or if notifications.js isn't loaded. prevStatus is the request's
+// approval_status before this save/approval.
+function _sowNotifyTenantApproved(sow, unitId, prevStatus){
+  try {
+    if(typeof notifySowTenantApproved !== 'function' || !sow) return;
+    if(!_sowIsApproved(sow)) return;
+    var prevObj = { approval_status: prevStatus || '', amount: sow.amount, totalCost: sow.totalCost };
+    if(_sowIsApproved(prevObj)) return;   // already approved before this change — don't re-fire
+    var u = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x && x.id === unitId; }) || null;
+    notifySowTenantApproved(sow, u);
+  } catch(e){ console.warn('[SOW] tenant approved notify threw:', e); }
+}
+window._sowNotifyTenantApproved = _sowNotifyTenantApproved;
+
 // Whether the RFQ (tender) process is still available for a request. A manual
 // HM/ED approval authorizes the work/budget but does NOT select the contractor,
 // so the RFQ button stays available after approval. It's only gone once the
@@ -2218,6 +2234,8 @@ function _wlApproveSow(uid, pn){
       sow.approval_status = 'hm_approved';
     }
     if(typeof upsertSowInList === 'function') upsertSowInList(uid, sow);
+    // Tenant "approved" text/email on the transition into a final-approved state.
+    _sowNotifyTenantApproved(sow, uid, prevStatus);
     if(typeof auditEntry === 'function'){
       auditEntry('SOW:'+uid, approver === 'ed' ? 'sow_ed_approval' : 'sow_hm_approval',
         (approver === 'ed' ? 'ED' : 'HM') + ' approval recorded (worklist) — ' + name + ' on ' + today + ' · ' + pn, role);
@@ -2324,6 +2342,13 @@ function _sowDoComplete(pn, tenantName, note){
   upsertSowInList(_sowUnitId, sow);
   _sowSyncPortalProjection(sow);
   auditEntry('SOW:'+_sowUnitId, 'sow_completed', 'SOW '+pn+' marked Completed', _realRoleForPermissions());
+  // Tenant "completed" text/email.
+  try {
+    if(typeof notifySowTenantCompleted === 'function'){
+      var _cu2 = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x && x.id === _sowUnitId; }) || null;
+      notifySowTenantCompleted(sow, _cu2);
+    }
+  } catch(e){ console.warn('[SOW] tenant completed notify threw:', e); }
   // If this completion drained the last active SOW on the unit, revert the
   // unit's status back to whatever it was before the renovation kicked in.
   try {
@@ -3088,6 +3113,8 @@ function saveSOW(opts){
   _sowComputeApprovalStatus(data, existingForStatus, _saveRole, _saveMode);
 
   if(_sowUnitId) upsertSowInList(_sowUnitId, data);
+  // Tenant "approved" text/email on the transition into a final-approved state.
+  if(_sowUnitId) _sowNotifyTenantApproved(data, _sowUnitId, existingForStatus ? (existingForStatus.approval_status || '') : '');
 
   // Contractor Portal: keep the contractor_work_orders projection in sync so a
   // logged-in contractor sees this work order (or stops seeing it if it was

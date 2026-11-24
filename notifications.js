@@ -238,6 +238,48 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'sow_tenant_approved',
+    label:                 'Maintenance Request Approved — Tenant',
+    description:           'Sent to the tenant when a maintenance request reaches final approval (ready for the work order). Texts if the tenant has opted in with a mobile on file; emails if an email is on file.',
+    recipientType:         'tenant',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    smsCapable:            true,
+    smsDefault:            false,
+    sms:                   '{nationShort} Housing: your maintenance request {projectNumber} for {unitAddress} was approved. We will update you. Reply STOP to opt out.',
+    placeholders:          ['tenantName','unitAddress','projectNumber','startDate','endDate','nationShort','appLink'],
+    defaults: {
+      subject:  '{nationShort} Housing — Maintenance Request Approved ({projectNumber})',
+      bodyHtml: '<p>Hello {tenantName},</p>'
+              + '<p>Your maintenance request for <strong>{unitAddress}</strong> has been <strong>approved</strong> and is being scheduled.</p>'
+              + '<p>Project #: <strong>{projectNumber}</strong><br/>'
+              +    'Target completion: <strong>{endDate}</strong></p>'
+              + '<p>We will let you know when the work is complete. If you have any questions, please contact the {nationShort} Housing office.</p>'
+              + '<p>Thank you,<br/>{nationShort} Housing</p>'
+    }
+  },
+  {
+    key:                   'sow_tenant_completed',
+    label:                 'Maintenance Request Completed — Tenant',
+    description:           'Sent to the tenant when a maintenance request is marked complete. Texts if the tenant has opted in with a mobile on file; emails if an email is on file.',
+    recipientType:         'tenant',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    smsCapable:            true,
+    smsDefault:            false,
+    sms:                   '{nationShort} Housing: the maintenance work for {unitAddress} ({projectNumber}) is complete. Thank you. Reply STOP to opt out.',
+    placeholders:          ['tenantName','unitAddress','projectNumber','nationShort','appLink'],
+    defaults: {
+      subject:  '{nationShort} Housing — Maintenance Request Completed ({projectNumber})',
+      bodyHtml: '<p>Hello {tenantName},</p>'
+              + '<p>The maintenance work for <strong>{unitAddress}</strong> (Project #: <strong>{projectNumber}</strong>) is now <strong>complete</strong>.</p>'
+              + '<p>If anything still needs attention, please contact the {nationShort} Housing office.</p>'
+              + '<p>Thank you,<br/>{nationShort} Housing</p>'
+    }
+  },
+  {
     key:                   'rfq_invite',
     label:                 'RFQ Invitation to Contractors',
     description:           'Sent to each selected contractor individually when an RFQ is issued. The housing mailbox is always the TO; contractors are BCC\'d. Use CC below to include housing staff.',
@@ -2305,6 +2347,57 @@ async function notifySowTenantCopy(sow, unit) {
     };
   }, eventKey);
 }
+
+// ── Tenant maintenance status notices (Phase 2) ──────────────────────────
+// A short email + text to the tenant on a maintenance-request milestone
+// (approved, completed). No PDF. Fully guarded: SMS only to an opted-in E.164
+// number with the event's SMS channel on; email only when an address is on
+// file (plus any CC roles configured in Settings -> Notifications).
+async function _notifySowTenantStatus(eventKey, sow, unit) {
+  if (!sow) return;
+  var tenantName = (sow.tenantName) || (unit && unit.assignedName) || '';
+  var tokens = _emailTokensForSowTenant(sow, unit, tenantName);
+  tokens.startDate = (sow.startDate) || '';
+  tokens.endDate   = (sow.endDate)   || '';
+
+  // Text the tenant (guarded end-to-end by _sendEventSms).
+  try {
+    var tsms = await _resolveTenantSmsForUnit(unit);
+    if (tsms) await _sendEventSms(eventKey, tsms, tokens, { type: 'sow', id: sow.project_number || '-' });
+  } catch (e) { console.warn('[notify] ' + eventKey + ' SMS error:', e); }
+
+  // Email the tenant + any configured CC roles (short status email, no PDF).
+  var seen = {}, emails = [];
+  function _add(a) {
+    if (!a) return;
+    var c = String(a).trim().toLowerCase();
+    if (!c || seen[c] || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return;
+    seen[c] = true; emails.push(c);
+  }
+  try { _add(await _resolveTenantEmailForUnit(unit)); } catch (e) {}
+  var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+  if (extraRoles.length) {
+    try { (await _resolveActiveStaffForRoles(extraRoles)).forEach(function(r){ _add(r.email); }); } catch (e) {}
+  }
+  if (!emails.length) return;
+  var rendered = _renderEmailTemplate(eventKey, tokens);
+  if (!rendered) return;
+  await _sendSerially(emails.map(function(e){ return { email: e }; }), function(rcp){
+    return {
+      to:          rcp.email,
+      to_name:     '',
+      subject:     rendered.subject,
+      bodyHtml:    rendered.bodyHtml,
+      event:       eventKey,
+      entity_type: 'sow',
+      entity_id:   sow.project_number || '—'
+    };
+  }, eventKey);
+}
+async function notifySowTenantApproved(sow, unit)  { return _notifySowTenantStatus('sow_tenant_approved', sow, unit); }
+async function notifySowTenantCompleted(sow, unit) { return _notifySowTenantStatus('sow_tenant_completed', sow, unit); }
+window.notifySowTenantApproved  = notifySowTenantApproved;
+window.notifySowTenantCompleted = notifySowTenantCompleted;
 
 // ── RFQ PDF generator ────────────────────────────────────────────────────
 // Generates the Request for Quotations document as a PDF base64 string.
