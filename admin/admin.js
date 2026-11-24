@@ -2120,6 +2120,25 @@
   // Edge Function (Claude; super-admin-gated; help-only, no data tools, cannot
   // see nation data or change anything). Lazy-rendered when the tab opens.
   window._asstHistory = window._asstHistory || [];
+  // Minimal, XSS-safe markdown for assistant replies: escape first, then only
+  // introduce <strong>, <ol>/<ul>/<li> and paragraph <div>s. Nothing raw from
+  // the model reaches the DOM.
+  function _asstMd(text){
+    var s = esc(String(text || ''));
+    s = s.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    var out = [], list = null;
+    function close(){ if(list){ out.push('</' + list + '>'); list = null; } }
+    s.split('\n').forEach(function(ln){
+      var t = ln.replace(/\s+$/, ''), tr = t.trim();
+      var ol = /^\d+\.\s+(.*)$/.exec(tr), ul = /^[-*]\s+(.*)$/.exec(tr);
+      if(ol){ if(list !== 'ol'){ close(); out.push('<ol>'); list = 'ol'; } out.push('<li>' + ol[1] + '</li>'); }
+      else if(ul){ if(list !== 'ul'){ close(); out.push('<ul>'); list = 'ul'; } out.push('<li>' + ul[1] + '</li>'); }
+      else if(tr === ''){ close(); }
+      else { close(); out.push('<p>' + t + '</p>'); }
+    });
+    close();
+    return out.join('');
+  }
   function _asstRenderLog(){
     var log = document.getElementById('asst-log'); if(!log) return;
     var ex = document.getElementById('asst-ex');
@@ -2130,7 +2149,8 @@
     }
     if(ex) ex.style.display = 'none';
     log.innerHTML = window._asstHistory.map(function(m){
-      return '<div class="asst-msg ' + (m.role === 'user' ? 'me' : 'bot') + '">' + esc(m.text) + '</div>';
+      var me = m.role === 'user';
+      return '<div class="asst-msg ' + (me ? 'me' : 'bot') + '">' + (me ? esc(m.text) : _asstMd(m.text)) + '</div>';
     }).join('') + (window._asstPending ? '<div class="asst-think">thinking&hellip;</div>' : '');
     log.scrollTop = log.scrollHeight;
   }
