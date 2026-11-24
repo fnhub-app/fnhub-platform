@@ -111,7 +111,9 @@ serve(async (req) => {
     units_count: usage.units_count == null ? null : Number(usage.units_count),
     // Texts sent this calendar month -- drives the SMS overage line.
     sms_month_count: usage.sms_month_count == null ? null : Number(usage.sms_month_count),
-    reported_by: callerEmail || null,
+    // OCAP minimization: do NOT store the reporting staff member's email on the
+    // control plane -- usage reporting needs only metrics, not who triggered it.
+    reported_by: null,
     reported_at: new Date().toISOString(),
   }
   let { error } = await admin.from('nation_usage').upsert(row, { onConflict: 'subdomain' })

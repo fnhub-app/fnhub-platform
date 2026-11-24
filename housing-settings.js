@@ -539,6 +539,7 @@ function renderSupportFaqPanel() {
   if (typeof moduleOn === 'function' && !moduleOn('support')) { el.innerHTML = ''; return; }
   var faq = (window._appSettings && window._appSettings.support_faq) || '';
   var launcherOn = (window._appSettings && typeof window._appSettings.support_launcher === 'boolean') ? window._appSettings.support_launcher : true;
+  var mirrorOn = (window._appSettings && typeof window._appSettings.support_mirror === 'boolean') ? window._appSettings.support_mirror : true;
   el.innerHTML =
     '<div class="card card-flush-gold" style="margin-top:20px;">'
     + '<div class="modal-hdr"><div>'
@@ -551,6 +552,11 @@ function renderSupportFaqPanel() {
     +     '<span style="font-size:13px;color:var(--text);">Show a floating <strong>Help</strong> button (bottom-right circle) on every page</span>'
     +   '</label>'
     +   '<div class="txt-sm-meta" style="margin:0 0 18px 32px;">Staff can always reach Help from the avatar menu; this adds a quick floating shortcut. Members and contractors on the portals always see it.</div>'
+    +   '<label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;margin-bottom:6px;">'
+    +     '<input type="checkbox" id="support_mirror_toggle" ' + (mirrorOn ? 'checked' : '') + ' onchange="saveSupportMirrorSetting(this.checked)" style="width:auto;margin:3px 0 0;transform:scale(1.2);flex:0 0 auto;">'
+    +     '<span style="font-size:13px;color:var(--text);">Share support requests with the <strong>platform support desk</strong> for cross-nation help</span>'
+    +   '</label>'
+    +   '<div class="txt-sm-meta" style="margin:0 0 18px 32px;">When on, a copy of each support request (subject, message, and the reporter&rsquo;s name / email / phone) is sent to the platform support inbox so the software team can help. Turn it off to keep every request <strong>only on your nation</strong> &mdash; either way the request is always stored with you (OCAP).</div>'
     +   '<div class="lbl-yellow" style="margin-bottom:6px;">&#128269; Support FAQ (Help Assistant)</div>'
     +   '<div class="txt-sm-meta" style="margin-bottom:8px;">Answers the Help Assistant uses for your nation. Add common questions and answers in plain text &mdash; the assistant prefers these over its built-in knowledge.</div>'
     +   '<textarea id="support_faq_text" rows="10" style="width:100%;box-sizing:border-box;padding:10px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:var(--sans);background:var(--surface);color:var(--text);resize:vertical;" placeholder="Q: How do I reset my password?&#10;A: On the sign-in screen, tap Forgot password and follow the email link.&#10;&#10;Q: Who do I call for an emergency repair?&#10;A: Call the housing office at (your number).">' + escapeHtml(faq) + '</textarea>'
@@ -580,6 +586,26 @@ function saveSupportLauncherSetting(enabled) {
   }
 }
 window.saveSupportLauncherSetting = saveSupportLauncherSetting;
+
+// Per-nation opt-out for mirroring support tickets to the platform support desk
+// (OCAP Control). Default ON. The support-forward Edge Function reads the saved
+// setting server-side; the ticket is always stored on the nation regardless.
+function saveSupportMirrorSetting(enabled) {
+  if (!_supportFaqIsEd()) { showToast('Only the Executive Director can change this.', { type: 'error' }); renderSupportFaqPanel(); return; }
+  if (!window._appSettings) window._appSettings = {};
+  window._appSettings.support_mirror = !!enabled;
+  if (typeof saveSettingWithDraftFallback === 'function') {
+    saveSettingWithDraftFallback('support_mirror', !!enabled).then(function (ok) {
+      if (ok) {
+        showToast(enabled ? '✓ Sharing support requests with the platform desk' : '✓ Support requests now stay only on your nation', { type: 'info' });
+        if (typeof auditEntry === 'function') auditEntry('SETTINGS', 'support_mirror_updated', 'Support-request sharing to the platform desk ' + (enabled ? 'enabled' : 'disabled'), (window._realRole || window.currentRole) || 'ed');
+      } else {
+        showToast('Save failed — open browser console (F12) for details', { type: 'error' });
+      }
+    });
+  }
+}
+window.saveSupportMirrorSetting = saveSupportMirrorSetting;
 
 function saveSupportFaq() {
   if (!_supportFaqIsEd()) { showToast('Only the Executive Director can edit the Support FAQ.', { type: 'error' }); renderSupportFaqPanel(); return; }
