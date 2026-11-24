@@ -2181,6 +2181,8 @@ function _syncAIHeaderBtn() {
     ? window.aiFeatureOn('chat')
     : (window.CLFN_MODULES && CLFN_MODULES.isEnabled('ai_assistant'));
   btn.style.display = on ? 'flex' : 'none';
+  // Keep the bottom-right AI launcher (FAB) in lockstep with the header button.
+  if (typeof window.showAILauncher === 'function') window.showAILauncher();
 }
 
 // HEADER_NAV — single source of truth for the primary nav strip.

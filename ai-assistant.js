@@ -101,7 +101,7 @@ function _ensureAIPanel() {
     +   '<button type="button" id="ai_report_issue" onclick="_aiReportIssue()" style="background:none;border:none;color:var(--muted);font-size:11.5px;text-decoration:underline;cursor:pointer;padding:3px 0;font-family:var(--sans);">🛟 Report an issue to a person</button>'
     + '</div>'
     + '<div style="padding:12px 14px;border-top:1px solid var(--border);display:flex;gap:8px;flex-shrink:0;">'
-    +   '<textarea id="ai_chat_input" rows="1" placeholder="Ask anything about applications, units, or policy..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:var(--sans);resize:none;outline:none;line-height:1.4;max-height:80px;overflow-y:auto;" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,80)+\'px\'"></textarea>'
+    +   '<textarea id="ai_chat_input" rows="2" placeholder="Ask anything about applications, units, or policy..." style="flex:1;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;color:var(--text);font-family:var(--sans);resize:none;outline:none;line-height:1.4;min-height:48px;max-height:140px;overflow-y:auto;" oninput="this.style.height=\'auto\';this.style.height=Math.min(this.scrollHeight,140)+\'px\'"></textarea>'
     +   '<button id="ai_chat_send" onclick="aiSendMessage()" class="btn btn-primary" style="flex-shrink:0;align-self:flex-end;">Send</button>'
     + '</div>';
   document.body.appendChild(wrap);
@@ -158,6 +158,7 @@ function openAIChat() {
   if (panel) panel.style.display = 'flex';
   _aiMakeDraggable();
   _aiPanelOpen = true;
+  var _lb = document.getElementById('ai_launcher'); if (_lb) _lb.style.display = 'none';  // hide the FAB while open
   // The "Report an issue" affordance is shown only when the Help & Support
   // module is on for this nation (it routes into the support ticket pipeline).
   var supportOn = (typeof moduleOn !== 'function') || moduleOn('support');
@@ -179,11 +180,42 @@ function closeAIChat() {
   var panel = document.getElementById('ai_chat_panel');
   if (panel) panel.style.display = 'none';
   _aiPanelOpen = false;
+  _aiEnsureLauncher();                                   // bring the FAB back
 }
 
 function toggleAIChat() {
   _aiPanelOpen ? closeAIChat() : openAIChat();
 }
+
+// ── Floating launcher (bottom-right FAB) ─────────────────────────────────────
+// The ✦ AI assistant also lives as a round launcher in the bottom-right corner
+// (mirrors the admin assistant FAB). Shown when the AI chat feature is on and a
+// staff session is active; hidden while the panel itself is open (the panel has
+// its own ✕). Idempotent + self-removing so the gate applies live. ai-assistant.js
+// loads only on staff pages, so this never appears on the member/contractor portals.
+function _aiLauncherOn() {
+  var signedIn = (typeof HOUSING_SESSION !== 'undefined' && HOUSING_SESSION && HOUSING_SESSION.accessToken);
+  if (!signedIn) return false;                           // not on the login screen
+  if (typeof window.aiFeatureOn === 'function') return !!window.aiFeatureOn('chat');
+  return !!(window.CLFN_MODULES && CLFN_MODULES.isEnabled && CLFN_MODULES.isEnabled('ai_assistant'));
+}
+function _aiEnsureLauncher() {
+  var existing = document.getElementById('ai_launcher');
+  if (!_aiLauncherOn()) { if (existing && existing.remove) existing.remove(); return; }
+  if (existing) { existing.style.display = _aiPanelOpen ? 'none' : 'flex'; return; }
+  if (!document.body) return;
+  var b = document.createElement('button');
+  b.id = 'ai_launcher';
+  b.type = 'button';
+  b.title = 'AI Assistant';
+  b.setAttribute('aria-label', 'Open AI Assistant');
+  b.setAttribute('style', 'position:fixed;right:20px;bottom:20px;z-index:1190;width:56px;height:56px;padding:0;border-radius:50%;border:none;background:var(--yellow);color:var(--dark);cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:var(--shadow);');
+  b.innerHTML = '<span style="font-size:24px;line-height:1;">✦</span>';
+  b.onclick = openAIChat;
+  document.body.appendChild(b);
+  if (_aiPanelOpen) b.style.display = 'none';
+}
+window.showAILauncher = _aiEnsureLauncher;
 
 // ── Quick-start suggestion chips ─────────────────────────────────────────────
 // Copilot-style prompt pills shown above the input before the first message, to
@@ -318,6 +350,11 @@ function aiSendMessage() {
     // cite it. The ai-chat function also reads the policy live server-side as a
     // fallback, so this stays current even if _appSettings is stale.
     policyText:  (typeof _aiPolicyText === 'function') ? _aiPolicyText() : '',
+    // The nation's Support FAQ, so the unified assistant answers help / how-to
+    // from it. The ai-chat function also reads it live server-side (authoritative);
+    // this is the fallback hint, mirroring policyText.
+    faqText:     (window._supportFaq != null ? String(window._supportFaq)
+                  : ((window._appSettings && window._appSettings.support_faq) || '')),
     // Nation identity so the assistant speaks as THIS nation (OCAP / multi-
     // nation), never a hardcoded one. Falls back server-side if absent.
     nation:      (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '',
@@ -828,6 +865,16 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 });
+
+// ── Boot the bottom-right launcher ───────────────────────────────────────────
+// Module/role state hydrates after login, so (like the support launcher) run a
+// few idempotent passes; _syncAIHeaderBtn() also calls window.showAILauncher()
+// so the FAB appears/disappears in lockstep with the header AI button.
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', _aiEnsureLauncher);
+else _aiEnsureLauncher();
+try { window.addEventListener('load', _aiEnsureLauncher); } catch (e) {}
+setTimeout(_aiEnsureLauncher, 1500);
+setTimeout(_aiEnsureLauncher, 4000);
 
 // ── Write Letter with AI (Document Library) ──────────────────────────────────
 // Invoked by the "Write Letter with AI" button the DocLibrary renders when
