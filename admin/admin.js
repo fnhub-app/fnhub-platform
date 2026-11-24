@@ -430,6 +430,7 @@
     { k:'business',  grp:'Business', label:'Business profile', icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>', eyebrow:'Business', title:'Business profile', sub:'Logo, business name, address and contacts used on invoices and contracts' },
     { k:'resellers', grp:'Business', label:'Resellers',     icon:ICO.users,  eyebrow:'Business',      title:'Resellers',        sub:'Agreements, commission statements, and sales' },
     { k:'pricing',   grp:'Business', label:'Pricing',       icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>', eyebrow:'Business', title:'Pricing calculator', sub:'Model a nation’s subscription on the flat per-home plan' },
+    { k:'assist',    grp:'System',   label:'Assistant',     icon:'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.6 4.3L18 9l-4.4 1.7L12 15l-1.6-4.3L6 9l4.4-1.7z"/><path d="M18.5 14.5l.7 1.9 1.8.7-1.8.7-.7 1.9-.7-1.9-1.8-.7 1.8-.7z"/></svg>', eyebrow:'System', title:'Admin assistant', sub:'Ask how to run the control plane' },
     { k:'sop',       grp:'System',   label:'Onboarding SOP',icon:ICO.doc,    eyebrow:'System',        title:'Onboarding SOP',   sub:'The standard operating procedure for onboarding a nation' },
     { k:'admins',    grp:'System',   label:'Administrators',icon:ICO.shield, eyebrow:'System',        title:'Administrators',   sub:'Platform administrators and two-factor' }
   ];
@@ -719,6 +720,7 @@
       +   panel('business', '<div id="biz-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
       +   panel('resellers', '<div id="rs-root"><p class="sub" style="margin-top:14px;">Loading…</p></div>', false)
       +   panel('pricing',   '<div id="pricing-root"><p class="sub" style="margin-top:14px;">Loading&hellip;</p></div>', false)
+      +   panel('assist',    '<div id="asst-root"></div>', false)
       +   panel('admins',    adminsCard(admins, meEmail), false)
       + '</div>'   // panels wrapper
       + '</div>'   // .main
@@ -1914,6 +1916,7 @@
     if (name === 'support' && typeof window.renderPlatformSupport === 'function') window.renderPlatformSupport();
     if (name === 'requests' && typeof window.renderBuildTickets === 'function') window.renderBuildTickets();
     if (name === 'pricing'  && typeof window.renderPricing === 'function') window.renderPricing();
+    if (name === 'assist'   && typeof window.renderAdminAssist === 'function') window.renderAdminAssist();
   };
 
   // ===== Pricing calculator (Dashboard -> Pricing) ===========================
@@ -2014,8 +2017,8 @@
     'Photo Library':'photo uploads via DocLibrary (image category) / the unit-photo pattern',
     'Contract generation':'the jsPDF contract/agreement generator (like the RFQ contract / lease agreement)',
     'Report / export':'the shared Export dropdown (CSV/Excel) and the jsPDF+autotable report pattern',
-    'Email notification':'the notifications.js EMAIL_EVENT_REGISTRY (add a registered event + notify helper)',
-    'Text (SMS) notification':'the SMS pipeline (send-sms / _sendEventSms, module + opt-in gated)',
+    'Email notification':'the notifications.js EMAIL_EVENT_REGISTRY (add a registered event + notify helper; it auto-appears in Settings > Notifications for editing)',
+    'Text (SMS) notification':'the SAME notifications.js EMAIL_EVENT_REGISTRY: mark the event smsCapable + add a short sms template, send via _sendEventSms. Gated by the SMS module + the per-event Text toggle + the recipient opting in (staff from Users, a tenant from their TIC Text Notifications, a contractor from their record)',
     'Approval workflow':'APPROVAL_AUTHORITY role-gating + a status chain',
     'Map / location':'the TIC map / Set Location & Photo (Leaflet) pattern',
     'AI assist':'the ai-chat Edge Function (draft/chat), role-gated'
@@ -2112,6 +2115,69 @@
     pre.textContent = has ? rqBuildPrompt(s, rqNextNumber()) : 'Fill in the questions and your prompt will build here.';
   }
   function rqPill(st){ var map = { 'new':'provisioning', 'building':'active', 'done':'suspended' }; return '<span class="pill ' + (map[st] || 'provisioning') + '">' + esc(st === 'building' ? 'in progress' : (st || 'new')) + '</span>'; }
+
+  // ===== Admin assistant (Dashboard -> Assistant) ===========================
+  // A super-admin help chat for the control plane, backed by the platform-assist
+  // Edge Function (Claude; super-admin-gated; help-only, no data tools, cannot
+  // see nation data or change anything). Lazy-rendered when the tab opens.
+  window._asstHistory = window._asstHistory || [];
+  function _asstRenderLog(){
+    var log = document.getElementById('asst-log'); if(!log) return;
+    if(!window._asstHistory.length){
+      log.innerHTML = '<div class="sub" style="margin:auto;text-align:center;max-width:36ch;">Ask me how to do something in the control plane and I will point you to the right tab and steps.</div>';
+      return;
+    }
+    log.innerHTML = window._asstHistory.map(function(m){
+      var me = m.role === 'user';
+      return '<div style="align-self:' + (me ? 'flex-end' : 'flex-start') + ';max-width:82%;background:' + (me ? 'var(--accent)' : 'var(--bg)') + ';color:' + (me ? '#fff' : 'var(--ink)') + ';border:1px solid ' + (me ? 'var(--accent)' : 'var(--hair)') + ';border-radius:12px;padding:9px 12px;font-size:13.5px;line-height:1.5;white-space:pre-wrap;word-break:break-word;">' + esc(m.text) + '</div>';
+    }).join('') + (window._asstPending ? '<div class="sub" style="align-self:flex-start;font-size:12px;">thinking&hellip;</div>' : '');
+    log.scrollTop = log.scrollHeight;
+  }
+  async function _asstSend(){
+    var input = document.getElementById('asst-input');
+    var msg = input ? String(input.value || '').trim() : '';
+    if(!msg || window._asstPending) return;
+    if(input) input.value = '';
+    window._asstHistory.push({ role:'user', text:msg });
+    window._asstPending = true; _asstRenderLog();
+    try {
+      var r = await fetch(PBASE + '/functions/v1/platform-assist', {
+        method:'POST',
+        headers:{ apikey:ANON, Authorization:'Bearer ' + getAT(), 'Content-Type':'application/json' },
+        body: JSON.stringify({ message: msg, history: window._asstHistory.slice(0, -1).slice(-16) })
+      });
+      var d = await r.json().catch(function(){ return {}; });
+      var reply = (d && d.reply) ? d.reply : (d && d.error ? ('Could not answer: ' + d.error) : 'No response.');
+      window._asstHistory.push({ role:'assistant', text: reply });
+    } catch(e){
+      window._asstHistory.push({ role:'assistant', text:'The assistant is unavailable right now (network error).' });
+    }
+    window._asstPending = false; _asstRenderLog();
+  }
+  window.renderAdminAssist = function(){
+    var root = document.getElementById('asst-root'); if(!root) return;
+    var examples = ['How do I provision a new nation?','Turn on text notifications for a nation','Run a migration across every nation','Where do I set the AI Assistant key?','How does reseller commission work?'];
+    root.innerHTML =
+        '<div class="card" style="display:flex;flex-direction:column;gap:12px;">'
+      +   '<div id="asst-log" style="display:flex;flex-direction:column;gap:10px;min-height:220px;max-height:52vh;overflow:auto;padding:4px;"></div>'
+      +   '<div style="display:flex;gap:8px;align-items:flex-end;">'
+      +     '<textarea id="asst-input" rows="2" placeholder="Ask about running the control plane…" style="flex:1;resize:vertical;min-height:46px;"></textarea>'
+      +     '<button class="btn" id="asst-send" type="button">Send</button>'
+      +   '</div>'
+      +   '<div id="asst-ex" style="display:flex;flex-wrap:wrap;gap:6px;">'
+      +     examples.map(function(x){ return '<button class="btn sm ghost" type="button" data-asst-ex="' + esc(x) + '">' + esc(x) + '</button>'; }).join('')
+      +   '</div>'
+      +   '<p class="sub" style="margin:0;font-size:11px;">Help only, grounded in the control-plane guides. It cannot see nation data and never changes anything. For a real bug or a feature, use the Requests tab.</p>'
+      + '</div>';
+    _asstRenderLog();
+    var input = document.getElementById('asst-input');
+    var send  = document.getElementById('asst-send');
+    if(send)  send.addEventListener('click', function(){ _asstSend(); });
+    if(input) input.addEventListener('keydown', function(e){ if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); _asstSend(); } });
+    var ex = document.getElementById('asst-ex');
+    if(ex) ex.addEventListener('click', function(e){ var b = e.target.closest('[data-asst-ex]'); if(!b) return; var i = document.getElementById('asst-input'); if(i){ i.value = b.getAttribute('data-asst-ex'); i.focus(); } });
+    if(input) input.focus();
+  };
 
   window.renderBuildTickets = async function(){
     var root = document.getElementById('rq-root'); if (!root) return;
