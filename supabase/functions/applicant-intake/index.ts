@@ -208,6 +208,22 @@ async function portalEnabled(admin: any): Promise<boolean> {
   const v = await readNationSetting(admin, 'external_applications_enabled')
   return !(v === false || v === 'false')
 }
+// Whether the sms_notifications module is enabled for this nation (drives the
+// member portal's text-notification opt-in card). module_enablement is a plain
+// jsonb object { sms_notifications: true, ... } in housing_settings.
+async function smsModuleEnabled(admin: any): Promise<boolean> {
+  const v = await readNationSetting(admin, 'module_enablement')
+  return !!(v && typeof v === 'object' && (v as Record<string, unknown>).sms_notifications === true)
+}
+// Normalize a typed number to E.164 (NANP-friendly). Returns '' when it cannot
+// make a plausible number, so the caller can reject an opt-in with no number.
+function toE164(raw: string): string {
+  const d = String(raw || '').replace(/[^\d]/g, '')
+  if (d.length === 10) return '+1' + d
+  if (d.length === 11 && d[0] === '1') return '+' + d
+  if (d.length >= 11 && d.length <= 15) return '+' + d
+  return ''
+}
 const PORTAL_CLOSED_MSG = 'Online applications are currently closed. Please contact the Housing office.'
 // Generic on purpose -- never disclose the expected length or prefix.
 const BAND_FAIL_MSG = 'That band / membership number could not be verified. Please check the number on your status card, or contact the Housing office.'
@@ -410,7 +426,7 @@ serve(async (req) => {
     // 'report_mr' still files. Closing application intake is a routine event
     // and must not silently kill tenant maintenance reporting.
     const applicationsOpen = await portalEnabled(admin)
-    if (!applicationsOpen && action !== 'ping' && action !== 'report_mr') {
+    if (!applicationsOpen && action !== 'ping' && action !== 'report_mr' && action !== 'save_sms_prefs') {
       if (action === 'invite') return json({ error: 'External applications are turned OFF in Settings -> Config. Turn them on to invite applicants.' }, 503)
       return json({ error: PORTAL_CLOSED_MSG, portal_disabled: true }, 503)
     }
@@ -534,6 +550,7 @@ serve(async (req) => {
         } catch (_e) { /* list is optional */ }
       }
       return json({ ok: true, uid, email, profile: (prof && prof[0]) || null, submissions: subs || [], band_required: !!bandPrefix, unit: memberUnit, maintenance: memberMrs,
+        sms_enabled: await smsModuleEnabled(admin),
         portal_disabled: applicationsOpen ? undefined : true,
         closed_message: applicationsOpen ? undefined : PORTAL_CLOSED_MSG })
     }
@@ -663,6 +680,27 @@ serve(async (req) => {
       await admin.from('application_submissions')
         .update({ status: 'withdrawn', updated_at: new Date().toISOString() }).eq('id', subId)
       return json({ ok: true })
+    }
+
+    // --- save_sms_prefs: the signed-in member opts in / out of text updates and
+    // sets their mobile number. Written with the service role (the profile's
+    // UPDATE policy is staff-only) onto THEIR OWN row (keyed by uid). Gated by
+    // the nation's sms_notifications module; allowed even when application
+    // intake is closed (housed members still manage their preference). ---
+    if (action === 'save_sms_prefs') {
+      if (!(await smsModuleEnabled(admin))) return json({ error: 'Text notifications are not available for this nation.' }, 503)
+      const optIn = body.sms_opt_in === true || body.sms_opt_in === 'true'
+      const num = toE164(String(body.sms_number || ''))
+      if (optIn && !num) return json({ error: 'Please enter a valid mobile number to receive texts.' }, 400)
+      const now = new Date().toISOString()
+      await admin.from('applicant_profiles').upsert({
+        uid, email,
+        sms_opt_in:     optIn,
+        sms_number:     num || null,
+        sms_consent_at: optIn ? now : null,
+        updated_at:     now,
+      }, { onConflict: 'uid' })
+      return json({ ok: true, sms_opt_in: optIn, sms_number: num || null })
     }
 
     // --- report_mr: authenticated member files a maintenance request against
