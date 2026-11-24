@@ -627,6 +627,42 @@ function saveSupportFaq() {
 }
 window.saveSupportFaq = saveSupportFaq;
 
+// Data-sharing / sub-processor disclosure (OCAP Control + transparency). Lists
+// the outside services that help run the system and what each receives, driven
+// by the nation's CURRENT module state so turning a module off visibly stops a
+// flow. ED/super_user only; informational (no saving).
+function renderDataSharingPanel() {
+  var el = document.getElementById('data_sharing_panel_body');
+  if (!el) return;
+  if (!_supportFaqIsEd()) { el.innerHTML = ''; return; }
+  function on(mod){ return (typeof moduleOn === 'function') ? moduleOn(mod) : false; }
+  var mirrorOn = (window._appSettings && typeof window._appSettings.support_mirror === 'boolean') ? window._appSettings.support_mirror : true;
+  var rows = [];
+  function row(name, data, note){
+    rows.push('<div style="border:1px solid var(--border);border-radius:9px;padding:11px 13px;margin-bottom:8px;background:var(--surface);">'
+      + '<div style="font-weight:700;color:var(--text);font-size:13.5px;">' + name + '</div>'
+      + '<div style="color:var(--muted);font-size:12.5px;margin-top:3px;line-height:1.5;">' + data + '</div>'
+      + (note ? '<div style="color:var(--muted);font-size:11.5px;margin-top:4px;font-style:italic;">' + note + '</div>' : '')
+      + '</div>');
+  }
+  row('Supabase', 'Hosts your nation’s database, files, and sign-ins. Your records live in your <strong>own isolated project</strong> &mdash; never shared with other nations.', 'Possession: a workspace that is yours; its region is chosen for your nation at setup.');
+  row('Cloudflare', 'Serves the app and a few code libraries (PDF / chart tools). Sees requests and IP addresses; <strong>no record content</strong> passes through it.', '');
+  row('Email provider (Microsoft 365, Resend, or SendGrid)', 'Sends the emails your department sends &mdash; including applicant confirmation PDFs (a full application). Your nation chooses the provider.', 'Needed to deliver mail.');
+  if (on('ai_assistant')) row('Anthropic (AI Assistant)', 'When staff use the AI, it receives the records needed to answer &mdash; applications, units, maintenance requests, notes, and your housing policy. <strong>Read-only, role-limited, and every use is logged.</strong>', 'Turn off the AI Assistant module to send nothing here.');
+  if (on('sms_notifications')) row('SMS provider (Twilio / Telnyx)', 'Sends text messages &mdash; the recipient’s mobile number and the message text (name, address, status). Only to people who <strong>opted in</strong>.', 'Consent-based; reply STOP to opt out.');
+  if (on('mapping')) row('OpenStreetMap', 'Shows unit maps and turns addresses into coordinates. Receives unit addresses / coordinates. <strong>Not Google</strong> &mdash; no account, no API key.', 'Deliberately OCAP-friendly. Turn off the Mapping module to send nothing here.');
+  if ((typeof moduleOn !== 'function' || moduleOn('support')) && mirrorOn) row('Platform support desk', 'A copy of each support request (subject, message, and the reporter’s name / email / phone) so the software team can help.', 'Turn off “Share support requests…” above to keep requests only on your nation.');
+
+  el.innerHTML =
+    '<div class="card card-flush-gold" style="margin-top:20px;">'
+    + '<div class="modal-hdr"><div>'
+    +   '<div class="lbl-yellow">&#128274; Data sharing &amp; sub-processors</div>'
+    +   '<div class="txt-sm-meta">The outside services that help run your housing system, and what each one receives. This reflects your <strong>current</strong> settings &mdash; turning a module off stops its data flow. OCAP: your data stays under your control.</div>'
+    + '</div></div>'
+    + '<div class="sec-pad">' + rows.join('') + '</div></div>';
+}
+window.renderDataSharingPanel = renderDataSharingPanel;
+
 // (The "AI quick-start prompt chips" editor was removed along with the chips
 // themselves -- the AI assistant opens straight to the chat with no prompt
 // pills, so there is nothing to configure here anymore.)
@@ -804,7 +840,7 @@ function showSettingsSection(section) {
     t.classList.toggle('active', tabSec===section);
   });
   if(section==='sec_users'       && typeof renderHousingUserTable==='function') renderHousingUserTable();
-  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderAiFairUsePanel==='function') renderAiFairUsePanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); }
+  if(section==='sec_nation'){ if(typeof renderNationPanel==='function') renderNationPanel(); if(typeof renderAiFeaturesPanel==='function') renderAiFeaturesPanel(); if(typeof renderAiFairUsePanel==='function') renderAiFairUsePanel(); if(typeof renderSupportFaqPanel==='function') renderSupportFaqPanel(); if(typeof renderDataSharingPanel==='function') renderDataSharingPanel(); }
   if(section==='sec_app_scoring') {
     if(APPROVAL_AUTHORITY.can('editScoreModel', window.currentRole) && typeof renderV2ScoringEditor === 'function') {
       renderV2ScoringEditor();
