@@ -767,6 +767,11 @@
     return '<div style="font-variant-numeric:tabular-nums;line-height:1.35;">'
       + '<div>' + esc(fmtBytes(u.database_bytes)) + ' <span style="color:var(--muted);">db</span></div>'
       + '<div>' + esc(fmtBytes(u.storage_bytes)) + ' <span style="color:var(--muted);">files</span></div>'
+      + ((u.sms_month_count != null || u.sms_lifetime_count != null)
+          ? '<div>' + Number(u.sms_month_count || 0).toLocaleString('en-CA') + ' <span style="color:var(--muted);">texts/mo</span>'
+            + (u.sms_lifetime_count != null ? ' <span style="color:var(--muted);">(' + Number(u.sms_lifetime_count).toLocaleString('en-CA') + ' total)</span>' : '')
+            + '</div>'
+          : '')
       + '<div style="font-size:10px;color:var(--muted);">' + esc(timeAgo(u.reported_at)) + '</div>'
       + '</div>';
   }
@@ -3932,6 +3937,10 @@
         el.style.color = usg ? '' : 'var(--muted)';
         el.innerHTML = usg
           ? esc(fmtBytes(usg.database_bytes)) + ' db &middot; ' + esc(fmtBytes(usg.storage_bytes)) + ' files'
+            + ((usg.sms_month_count != null || usg.sms_lifetime_count != null)
+                ? ' &middot; ' + Number(usg.sms_month_count || 0).toLocaleString('en-CA') + ' texts this month'
+                  + (usg.sms_lifetime_count != null ? ' (' + Number(usg.sms_lifetime_count).toLocaleString('en-CA') + ' lifetime)' : '')
+                : '')
           : 'not reported';
       }
     } catch(e){}

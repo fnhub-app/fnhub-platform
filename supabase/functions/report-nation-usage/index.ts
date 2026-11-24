@@ -111,16 +111,18 @@ serve(async (req) => {
     units_count: usage.units_count == null ? null : Number(usage.units_count),
     // Texts sent this calendar month -- drives the SMS overage line.
     sms_month_count: usage.sms_month_count == null ? null : Number(usage.sms_month_count),
+    // Texts sent all time (lifetime) -- display only, on the nation dashboard.
+    sms_lifetime_count: usage.sms_lifetime_count == null ? null : Number(usage.sms_lifetime_count),
     // OCAP minimization: do NOT store the reporting staff member's email on the
     // control plane -- usage reporting needs only metrics, not who triggered it.
     reported_by: null,
     reported_at: new Date().toISOString(),
   }
   let { error } = await admin.from('nation_usage').upsert(row, { onConflict: 'subdomain' })
-  if (error && /units_count|sms_month_count/.test(String(error.message || ''))) {
+  if (error && /units_count|sms_month_count|sms_lifetime_count/.test(String(error.message || ''))) {
     // Optional columns not added yet on this platform -- report the rest
     // rather than failing usage reporting on column order-of-deploy.
-    const { units_count: _uc, sms_month_count: _sc, ...rest } = row as Record<string, unknown>
+    const { units_count: _uc, sms_month_count: _sc, sms_lifetime_count: _sl, ...rest } = row as Record<string, unknown>
     const r2 = await admin.from('nation_usage').upsert(rest, { onConflict: 'subdomain' })
     error = r2.error
   }
