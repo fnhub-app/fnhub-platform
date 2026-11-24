@@ -86,15 +86,15 @@ function _ensureAIPanel() {
   wrap.id = 'ai_chat_panel';
   wrap.style.cssText = 'display:none;position:fixed;bottom:24px;right:24px;width:360px;max-height:520px;background:var(--surface);border:1px solid var(--border);border-radius:16px;box-shadow:0 24px 60px rgba(0,0,0,0.5);z-index:1200;flex-direction:column;overflow:hidden;';
   wrap.innerHTML = ''
-    + '<div style="background:var(--dark);padding:14px 18px;border-bottom:2px solid var(--yellow);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'
+    + '<div style="background:var(--surface);padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-shrink:0;">'
     +   '<div style="display:flex;align-items:center;gap:8px;">'
     +     '<span style="color:var(--yellow);font-size:16px;">✦</span>'
     +     '<div>'
-    +       '<div style="font-family:\'DM Serif Display\',serif;font-size:15px;color:#fff;">AI Assistant</div>'
-    +       '<div style="font-size:11px;color:#666;">' + natSub + '</div>'
+    +       '<div style="font-family:\'DM Serif Display\',serif;font-size:15px;color:var(--text);">AI Assistant</div>'
+    +       '<div style="font-size:11px;color:var(--muted);">' + natSub + '</div>'
     +     '</div>'
     +   '</div>'
-    +   '<button onclick="closeAIChat()" style="background:none;border:1px solid #444;color:#ccc;width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;">✕</button>'
+    +   '<button onclick="closeAIChat()" style="background:none;border:none;color:var(--muted);width:28px;height:28px;border-radius:6px;cursor:pointer;font-size:20px;line-height:1;display:flex;align-items:center;justify-content:center;">✕</button>'
     + '</div>'
     + '<div id="ai_chat_messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;"></div>'
     + '<div id="ai_report_row" style="padding:6px 14px 0;flex-shrink:0;display:none;">'
@@ -465,7 +465,7 @@ function _appendAIMessage(role, text, id) {
     'line-height:1.5;white-space:pre-wrap;word-break:break-word;',
     isUser
       ? 'background:var(--yellow);color:var(--dark);border-bottom-right-radius:3px;'
-      : 'background:#2f3033;border:1px solid #444;color:#e8e8e5;border-bottom-left-radius:3px;',
+      : 'background:var(--bg);border:1px solid var(--border);color:var(--text);border-bottom-left-radius:3px;',
   ].join('');
   if (isUser) bubble.textContent = displayText;             // user input: never interpret markup
   else bubble.innerHTML = _aiMdToHtml(displayText);         // assistant: light markdown
@@ -478,7 +478,7 @@ function _appendAIMessage(role, text, id) {
     var pdfBtn = document.createElement('button');
     pdfBtn.type = 'button';
     pdfBtn.textContent = '⬇ Export PDF';
-    pdfBtn.style.cssText = 'align-self:flex-start;margin-top:6px;background:none;border:1px solid #555;color:#aaa;border-radius:6px;font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;font-family:var(--sans);';
+    pdfBtn.style.cssText = 'align-self:flex-start;margin-top:6px;background:none;border:1px solid var(--border);color:var(--muted);border-radius:6px;font-size:11px;font-weight:700;padding:3px 9px;cursor:pointer;font-family:var(--sans);';
     pdfBtn.addEventListener('click', function(){ _aiExportReplyPdf(text); });
     wrap.appendChild(pdfBtn);
   }
@@ -571,7 +571,7 @@ function _aiDrawWordCloud(canvas, spec, cb) {
 function _aiRenderChart(wrap, spec) {
   if (!spec || !spec.type) return;
   var holder = document.createElement('div');
-  holder.style.cssText = 'background:#fff;border:1px solid #444;border-radius:10px;padding:10px;margin-top:8px;width:85%;max-width:100%;box-sizing:border-box;';
+  holder.style.cssText = 'background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:10px;margin-top:8px;width:85%;max-width:100%;box-sizing:border-box;';
   var canvas = document.createElement('canvas');
   // Word cloud uses wordcloud2.js, not Chart.js.
   if (spec.type === 'wordcloud') {
