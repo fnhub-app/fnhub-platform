@@ -215,6 +215,23 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'member_mr_reviewed',
+    label:                 'Member Maintenance Request Reviewed (Text)',
+    description:           'Texts the member who reported a maintenance request from the member portal when staff accept or decline it. Uses the consented mobile from the portal text opt-in; gated by the SMS / Text Notifications module and this event’s Text channel. No email is sent for this event. QR-flow (anonymous) reports are never texted.',
+    recipientType:         'tenant',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    smsCapable:            true,
+    smsDefault:            true,
+    sms:                   '{nationShort} Housing: your maintenance request for {unitAddress} was {mrOutcome}. Reply STOP to opt out.',
+    placeholders:          ['unitAddress','mrOutcome','nationShort'],
+    defaults: {
+      subject:  '{nationShort} Housing — Maintenance request update',
+      bodyHtml: '<p>Your maintenance request for {unitAddress} was {mrOutcome}.</p>'
+    }
+  },
+  {
     key:                   'sow_tenant_copy',
     label:                 'Tenant Copy of Maintenance Request (PDF / text)',
     description:           'Sent to the tenant when a request is submitted (the preparer ticks the inline checkbox). Emails a PDF of the request if the tenant has an email on file, and texts a short notice if the tenant has opted in to texts with a mobile on file.',
@@ -3712,6 +3729,27 @@ async function _resolveMemberSmsByEmail(email) {
     return _smsNumberIfOptedIn((rows && rows[0]) || null);
   } catch (e2) { return ''; }
 }
+
+// Text the member who reported a portal maintenance request when staff review
+// it (accepted / declined). Resolves their consented portal number from the
+// reporter_email stored on the submission. SMS-only; fully guarded end-to-end
+// by _sendEventSms, so a QR (anonymous) report or a non-opted-in member no-ops.
+async function notifyMemberMrReviewed(submission, outcome) {
+  try {
+    if (!submission) return;
+    var email = String(submission.reporter_email || '').trim();
+    if (!email) return;
+    var num = await _resolveMemberSmsByEmail(email);
+    if (!num) return;
+    var tokens = {
+      nationShort: (window.NATION_CONFIG && (NATION_CONFIG.short || NATION_CONFIG.display_name)) || 'Housing',
+      unitAddress: submission.unit_address || 'your unit',
+      mrOutcome:   outcome || 'reviewed'
+    };
+    await _sendEventSms('member_mr_reviewed', num, tokens, { type: 'mr', id: submission.id || '-' });
+  } catch (e) { /* best-effort; never disturbs the review action */ }
+}
+window.notifyMemberMrReviewed = notifyMemberMrReviewed;
 
 // Look up a single active staff member's SMS consent fields by email (for
 // crew/field-employee texting, where the recipient is identified by email).

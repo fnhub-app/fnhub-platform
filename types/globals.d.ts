@@ -388,6 +388,7 @@ declare var liveMatchPriorityModel: any;
 declare var liveV2Tiers: any;
 declare var loadJsPdf: any;
 declare var notifyApplicationApprovedWaitlist: any;
+declare var notifyMemberMrReviewed: any;
 declare var notifyContractorStatusChange: any;
 declare var notifyContractorSubmitted: any;
 declare var notifyRfqAward: any;
