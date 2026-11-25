@@ -4518,33 +4518,68 @@ function _tenantMrApprove(id){
   var s = (window._tenantMrSubmissions || []).find(function(x){ return x.id === id; });
   if(!s) return;
   var note = (document.getElementById('tenant_mr_note') || {}).value || '';
-  var actor = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || '';
   var photoPaths = _tenantMrPhotoPaths(s);
-  sbResolveTenantMr(id, 'approved', note).then(function(){
-    if(typeof showToast === 'function') showToast('✓ Approved — creating maintenance request', {type:'info'});
-    var x = document.getElementById('tenant_mr_modal'); if(x) x.remove();
-    if(typeof auditEntry === 'function') auditEntry('UNIT:' + s.unit_id, 'tenant_mr_approved', 'Tenant maintenance request approved — ' + (s.category || '') + ': ' + String(s.description || '').slice(0, 140), actor);
+  var x = document.getElementById('tenant_mr_modal'); if(x) x.remove();
+  // Seed a fresh maintenance request with the tenant's report so staff can
+  // categorize / cost / assign before submitting.
+  window._sowForceNew = true;
+  window._sowSeed = {
+    items: [{ category: '', description: '[' + (s.category || 'Tenant report') + '] ' + (s.description || '') }],
+    notes: 'Tenant-reported via QR maintenance form.'
+      + (s.contact_name || s.contact_phone || s.contact_email ? '\nContact: ' + [s.contact_name, s.contact_phone, s.contact_email].filter(Boolean).join(' · ') : '')
+      + '\nReported urgency: ' + (s.urgency || 'routine')
+      + (photoPaths.length ? '\n' + photoPaths.length + ' tenant photo(s) filed on the unit Documents tab.' : '')
+  };
+  var pending = { id: id, note: note, photoPaths: photoPaths, unitId: s.unit_id, submission: s };
+  if(typeof openSowModal === 'function'){
+    // DEFERRED COMMIT (the fix): the portal submission STAYS in the worklist
+    // (status 'new') and is only resolved — approved + member-notified + photos
+    // filed — once the maintenance request is actually SAVED. saveSOW's
+    // first-save hook consumes window._pendingTenantMr via _tenantMrFinalize.
+    // If staff abandon the SOW without saving, NOTHING is lost: the request is
+    // still queued to retry. (Previously this resolved the submission up front,
+    // so an abandoned SOW silently dropped the request from the worklist with
+    // no work order ever created.)
+    window._pendingTenantMr = pending;
+    if(typeof showToast === 'function') showToast('Opening a maintenance request from this report. It stays in your worklist until you save the request.', {type:'info'});
+    openSowModal(s.unit_id);
+  } else {
+    // Fallback: no SOW modal on this page, so we navigate to renos.html, which
+    // loses the in-memory pending link. Commit immediately (as the old flow did)
+    // so the submission isn't stranded, then hand off.
+    _tenantMrFinalize(pending, null);
+    if(typeof setNavReferrer === 'function') setNavReferrer('home');
+    window.location.href = 'renos.html?unit=' + encodeURIComponent(s.unit_id);
+  }
+}
+window._tenantMrApprove = _tenantMrApprove;
+
+// Commit a deferred tenant-MR approval: mark the portal submission approved,
+// audit it, text the member (portal opt-in), file the reported photos onto the
+// unit's Documents tab, and refresh the worklist. Called by saveSOW's first-save
+// hook once the maintenance request is actually persisted (projectNumber set),
+// or immediately by _tenantMrApprove's renos.html fallback (projectNumber null).
+// Fire-and-forget safe; a failure leaves the submission in the worklist.
+function _tenantMrFinalize(pending, projectNumber){
+  if(!pending || !pending.id) return;
+  var s = pending.submission || (window._tenantMrSubmissions || []).find(function(x){ return x.id === pending.id; }) || {};
+  var actor = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || '';
+  return sbResolveTenantMr(pending.id, 'approved', pending.note || '').then(function(){
+    if(typeof auditEntry === 'function') auditEntry('UNIT:' + pending.unitId, 'tenant_mr_approved',
+      'Tenant maintenance request approved — ' + (s.category || '') + ': ' + String(s.description || '').slice(0, 140)
+      + (projectNumber ? ' (→ ' + projectNumber + ')' : ''), actor);
     // Text the member who reported it (portal opt-in), if the SMS module + event are on.
     if(typeof notifyMemberMrReviewed === 'function') notifyMemberMrReviewed(s, 'accepted and a work order is being created');
     // Carry the tenant photos onto the unit's Documents tab (they already live
     // in Storage under tenants/<unitId>/...; a file-meta row surfaces them).
-    _tenantMrFilePhotos(s.unit_id, photoPaths);
+    _tenantMrFilePhotos(pending.unitId, pending.photoPaths);
     if(typeof renderWorklist === 'function') renderWorklist();
-    // Seed a fresh maintenance request with the tenant's report, then open it so
-    // staff can categorize / cost / assign before submitting.
-    window._sowForceNew = true;
-    window._sowSeed = {
-      items: [{ category: '', description: '[' + (s.category || 'Tenant report') + '] ' + (s.description || '') }],
-      notes: 'Tenant-reported via QR maintenance form.'
-        + (s.contact_name || s.contact_phone || s.contact_email ? '\nContact: ' + [s.contact_name, s.contact_phone, s.contact_email].filter(Boolean).join(' · ') : '')
-        + '\nReported urgency: ' + (s.urgency || 'routine')
-        + (photoPaths.length ? '\n' + photoPaths.length + ' tenant photo(s) filed on the unit Documents tab.' : '')
-    };
-    if(typeof openSowModal === 'function') openSowModal(s.unit_id);
-    else { if(typeof setNavReferrer === 'function') setNavReferrer('home'); window.location.href = 'renos.html?unit=' + encodeURIComponent(s.unit_id); }
-  }).catch(function(err){ console.warn('[tenant-mr] approve failed:', err); if(typeof showToast === 'function') showToast('Approve failed — please retry', {type:'error'}); });
+  }).catch(function(err){
+    console.warn('[tenant-mr] finalize failed:', err);
+    if(typeof showToast === 'function') showToast('The request saved, but marking the portal submission done failed — it may still show in your worklist.', {type:'error'});
+  });
 }
-window._tenantMrApprove = _tenantMrApprove;
+window._tenantMrFinalize = _tenantMrFinalize;
 
 // Write a housing_audit_log `file_uploaded` row for each already-stored tenant
 // photo so the unit's DocLibrary (entity 'tenant', prefix tenants/<unitId>)
@@ -6132,6 +6167,12 @@ function closeSowModal(opts) {
   opts = opts || {};
   var modal = document.getElementById('sowModal');
   if(modal) modal.style.display = 'none';
+  // Drop any un-consumed deferred tenant-MR link. On a save it was already
+  // consumed (nulled) by saveSOW's first-save hook before this close; if it's
+  // still set, the SOW was abandoned — the member's submission stays queued in
+  // the worklist, and clearing it here stops a later unrelated save on this
+  // unit from wrongly resolving it.
+  window._pendingTenantMr = null;
   // Internal hand-off (e.g. footer "New Request" closes this form only to
   // immediately reopen a fresh one on the same unit): skip BOTH return
   // navigations below — they would leave the page before the reopen runs.
