@@ -299,6 +299,7 @@ declare var _currentScorecardApp: any;
 declare var _docSigsHidden: any;
 declare var _emailEventCcRoles: any;
 declare var _generateRfqPdfBase64: any;
+declare var _generateWorkOrderPdfBase64: any;
 declare var _inspections: any;
 declare var _lastScoreResult: any;
 declare var _matchActiveChip: any;
