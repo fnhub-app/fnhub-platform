@@ -393,6 +393,38 @@
     }).catch(function () { progMsg('Could not update progress. Please try again.', true); });
   }
 
+  // Mark the whole job complete and send it to the housing office for their
+  // FINAL sign-off (contractor-upload kind=completion). This does NOT close the
+  // job -- housing approves it. Moves the work order to "Awaiting sign-off".
+  function completeMsg(m, isErr) {
+    var e = el('cp_complete_msg'); if (!e) return;
+    e.textContent = m || ''; e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
+  }
+  function markComplete() {
+    if (!currentWO || !session || !session.access_token) return;
+    if (typeof window.confirm === 'function' &&
+        !window.confirm('Mark this job complete and send it to the housing office for their final sign-off?')) return;
+    completeMsg('Sending…');
+    fetch(SB + '/functions/v1/contractor-upload', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+      body: JSON.stringify({ unitId: currentWO.sow_unit_id, projectNumber: currentWO.sow_project_number, kind: 'completion' })
+    }).then(function (r) {
+      return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+    }).then(function (res) {
+      if (res.ok && res.d && res.d.ok) {
+        if (!currentWO.data) currentWO.data = {};
+        currentWO.data.completionRequested = true;
+        currentWO.data.progressPercent = 100;
+        currentWO.status = 'awaiting_signoff';
+        var i = workOrders.indexOf(currentWO);
+        if (i >= 0) showWorkOrder(i);   // re-render: now "Awaiting sign-off"
+      } else {
+        completeMsg((res.d && res.d.error) || 'Could not send. Please try again.', true);
+      }
+    }).catch(function () { completeMsg('Could not send. Please try again.', true); });
+  }
+
   function showWorkOrder(idx) {
     var w = workOrders[idx];
     if (!w) return;
@@ -471,6 +503,13 @@
             + '<div class="cp-note">Report how far along the work is. Setting 100% tells the housing office it’s ready for their final sign-off &mdash; they mark the job complete.</div>'
             + '<div class="cp-upload-row"><button type="button" class="cp-upbtn" data-cp-progress="1">Update progress</button></div>'
             + '<div class="cp-msg" id="cp_prog_msg"></div>'))
+      + (isClosed ? ''
+          : (d.completionRequested
+              ? '<div class="cp-note" style="margin-top:12px;">&#10003; You marked this job complete. It&rsquo;s with the housing office for their final sign-off.</div>'
+              : '<h3 class="cp-h3">Finished?</h3>'
+                + '<div class="cp-upload-row"><button type="button" class="cp-upbtn" data-cp-complete="1">&#9989; Mark work complete</button></div>'
+                + '<div class="cp-note">When the work is done, mark it complete to send it to the housing office for their final sign-off &mdash; they approve it to close the job.</div>'
+                + '<div class="cp-msg" id="cp_complete_msg"></div>'))
       + notesReadHtml
       + '<div id="cp_sub_status"></div>'
       + (isClosed ? '<div class="cp-note">✓ This job is marked complete. You can still send your <strong>final invoice</strong>, photos, or a note below.</div>' : '')
@@ -646,6 +685,7 @@
       }
       if (e.target.closest('[data-cp-note]'))     { sendNote(); return; }
       if (e.target.closest('[data-cp-progress]')) { updateProgress(); return; }
+      if (e.target.closest('[data-cp-complete]')) { markComplete(); return; }
       var doc = e.target.closest('.cp-doc[data-cpdoc]');
       if (doc) {
         var p = doc.getAttribute('data-cpdoc');
