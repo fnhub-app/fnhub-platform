@@ -368,6 +368,9 @@ async function completeMagicLinkSignIn(h) {
       sessionStorage.setItem('clfn_housing_name',          HOUSING_SESSION.name  || '');
       sessionStorage.setItem('clfn_housing_email_session', HOUSING_SESSION.email || '');
     } catch (e) {}
+    // Persist the full session on this device so a later email link opens
+    // straight into the app (cleared on logout / idle-timeout / expiry).
+    try { if (typeof _persistSession === 'function') _persistSession(); } catch (e) {}
 
     window.location.href = _loginDest();
   } catch (e) {
@@ -454,6 +457,9 @@ async function submitNewPassword() {
       sessionStorage.setItem('clfn_housing_name',          HOUSING_SESSION.name  || '');
       sessionStorage.setItem('clfn_housing_email_session', HOUSING_SESSION.email || '');
     } catch(e) {}
+    // Persist the full session on this device so a later email link opens
+    // straight into the app (cleared on logout / idle-timeout / expiry).
+    try { if (typeof _persistSession === 'function') _persistSession(); } catch(e) {}
 
     // Reset is a sign-in event too — stamp last_login_at the same way the
     // regular password path does, so the Settings → Users table reflects
@@ -626,6 +632,9 @@ async function startSignIn() {
       sessionStorage.setItem('clfn_housing_name',          HOUSING_SESSION.name  || '');
       sessionStorage.setItem('clfn_housing_email_session', HOUSING_SESSION.email || '');
     } catch(e) {}
+    // Persist the full session on this device so a later email link opens
+    // straight into the app (cleared on logout / idle-timeout / expiry).
+    try { if (typeof _persistSession === 'function') _persistSession(); } catch(e) {}
 
     // Hand off to the authenticated app — housing-init.js handles data load + home view render
     window.location.href = _loginDest();

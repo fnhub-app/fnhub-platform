@@ -3026,7 +3026,23 @@ function _sowFireEmails(data, existingForStatus, isNew, sendTenantCopy, saveMode
   // re-notify.
   var _prevStatus = existingForStatus ? (existingForStatus.approval_status || '') : '';
   var _alreadyInflight = (_prevStatus === 'submitted' || _prevStatus === 'hm_approved' || _prevStatus === 'ed_approved' || _prevStatus === 'completed');
-  if (saveMode === 'submit' && !_alreadyInflight && typeof notifySowCreated === 'function') {
+  // Don't send the "Review & Approve" email for a request that is ALREADY
+  // resolved at submit time -- an approver clicking it would only get a dead-end
+  // "already approved, no action needed" toast. A request can reach an approved
+  // state in the same save that submits it: an HM/ED creates + signs it in one
+  // step (hm/ed_approved), it is System Approved via an RFQ award, or a disabled
+  // approval-chain step auto-approves it. The gate only fires when someone still
+  // genuinely owes an approval: 'submitted'/'signed' (awaiting HM), or
+  // 'hm_approved' that still needs ED (over the HM budget threshold). Fully
+  // approved / HM-final / system-approved / completed / cancelled => no send.
+  var _newStatus = (data && data.approval_status) || '';
+  var _stillNeedsApproval =
+       !(data && (data.system_approved || data.cancelled))
+    && _newStatus !== 'ed_approved'
+    && _newStatus !== 'completed'
+    && !(_newStatus === 'hm_approved'
+         && !(typeof sowRequiresEdApproval === 'function' && sowRequiresEdApproval(data)));
+  if (saveMode === 'submit' && !_alreadyInflight && _stillNeedsApproval && typeof notifySowCreated === 'function') {
     notifySowCreated(data, _sowUnitId);
   }
 

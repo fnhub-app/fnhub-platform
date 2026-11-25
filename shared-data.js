@@ -2514,131 +2514,10 @@ function sigBlock(label, pName, title, dt, imgSrc) {
     +'</div>';
 }
 
-function _buildContractorAgreementHTML(ct) {
-  // Print-window HTML is same-origin — escape every stored contractor field
-  // (an injected name/address executed in the popup otherwise).
-  var _esc2 = function(v){ return escapeHtml(v == null || v === '' ? '—' : String(v)); };
-  var today = new Date().toLocaleDateString('en-CA');
-  var logoSrc = (document.querySelector('.app-logo img')||{}).src || '';
-  var _natDisp  = (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '';
-  var _natShort = (window.NATION_CONFIG && NATION_CONFIG.short) || '';
-
-  var classLabels = {
-    internal_indigenous:     'Internal — Indigenous',
-    external_indigenous:     'External — Indigenous',
-    external_non_indigenous: 'External — Non-Indigenous'
-  };
-  var classLabel = classLabels[ct.classification] || '—';
-
-
-
-  return '<!DOCTYPE html><html lang="en"><head>'
-    +'<meta charset="UTF-8"/>'
-    +'<title>Contractor Agreement — '+_natShort+' Housing</title>'
-    +'<style>'
-    +_printThemeStyles()
-    +'*{box-sizing:border-box;margin:0;padding:0;}'
-    +'body{font-family:Georgia,serif;font-size:11px;color:var(--text);background:var(--surface);}'
-    +'@page{size:letter portrait;margin:15mm 15mm 18mm 15mm;}'
-    +'@media print{body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}.no-print{display:none!important;}}'
-    +'.header{background:var(--dark);color:#fff;padding:14px 20px;display:flex;align-items:center;justify-content:space-between;}'
-    +'.org{font-size:13px;font-weight:bold;color:'+window._themeAccentInkHex()+';letter-spacing:.04em;}'
-    +'.dept{font-size:10px;color:var(--txt-on-dark);margin-top:2px;}'
-    +'.doc-type{font-size:16px;font-weight:bold;color:'+window._themeAccentInkHex()+';letter-spacing:.05em;text-align:right;}'
-    +'.doc-date{font-size:9px;color:var(--muted);margin-top:3px;text-align:right;}'
-    +'.yellow-bar{background:'+window._themeAccentHex()+';height:4px;}'
-    +'.body{padding:18px 0 0;}'
-    +'.section{margin-bottom:18px;}'
-    +'.section-title{font-size:9px;font-weight:bold;text-transform:uppercase;letter-spacing:.08em;color:#fff;background:var(--dark);padding:5px 10px;}'
-    +'.section-body{border:1px solid var(--border);border-top:none;padding:12px 14px;}'
-    +'.grid-2{display:grid;grid-template-columns:1fr 1fr;gap:10px 24px;}'
-    +'.grid-3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px 18px;}'
-    +'.field label{display:block;font-size:8.5px;font-weight:bold;text-transform:uppercase;letter-spacing:.06em;color:#666;margin-bottom:3px;}'
-    +'.field span{display:block;font-size:11px;color:var(--text);min-height:14px;border-bottom:1px solid #e0e0e0;padding-bottom:3px;}'
-    +'.class-badge{display:inline-block;background:'+window._themeAccentHex()+';color:#000;font-size:9px;font-weight:bold;padding:3px 10px;border-radius:3px;margin-top:4px;}'
-    +'table{width:100%;border-collapse:collapse;}'
-    +'th{background:var(--dark);color:var(--yellow);padding:6px 10px;text-align:left;font-size:9px;font-weight:bold;text-transform:uppercase;}'
-    +'td{padding:6px 10px;font-size:10px;border-bottom:1px solid #eee;}'
-    +'.tor-clause{margin-bottom:8px;padding:8px 12px;background:var(--bg);border-left:3px solid '+window._themeAccentHex()+';font-size:9.5px;color:#333;line-height:1.6;}'
-    +'.tor-clause strong{display:block;font-size:9px;text-transform:uppercase;letter-spacing:.05em;color:#000;margin-bottom:3px;}'
-    +'.sig-grid{display:grid;grid-template-columns:1fr 1fr;gap:28px;margin-top:4px;}'
-    +'.footer{margin-top:20px;border-top:3px solid '+window._themeAccentHex()+';padding-top:8px;display:flex;justify-content:space-between;}'
-    +'.footer span{font-size:8px;color:var(--muted);}'
-    +'</style></head><body>'
-
-    /* HEADER */
-    +'<div class="header">'
-      +'<div style="display:flex;align-items:center;gap:14px;">'
-        +(logoSrc ? '<img src="'+logoSrc+'" style="height:48px;width:auto;" alt="'+_natShort+'"/>' : '')
-        +'<div><div class="org">'+_natDisp+'</div><div class="dept">Housing Department — Contractor Registry</div></div>'
-      +'</div>'
-      +'<div><div class="doc-type">CONTRACTOR AGREEMENT</div><div class="doc-date">Generated: '+today+'</div></div>'
-    +'</div>'
-    +'<div class="yellow-bar"></div>'
-
-    +'<div class="body">'
-
-    /* Company Information */
-    +'<div class="section"><div class="section-title">Contractor Information</div>'
-    +'<div class="section-body"><div class="grid-3">'
-      +'<div class="field"><label>Company / Name</label><span>'+_esc2(ct.name)+'</span></div>'
-      +'<div class="field"><label>Trade / Specialty</label><span>'+_esc2(ct.trade)+'</span></div>'
-      +'<div class="field"><label>HST / Business #</label><span>'+_esc2(ct.hst)+'</span></div>'
-      +'<div class="field"><label>Phone</label><span>'+(ct.phone?formatPhone(ct.phone):'—')+'</span></div>'
-      +'<div class="field"><label>Email</label><span>'+_esc2(ct.email)+'</span></div>'
-      +'<div class="field"><label>Address</label><span>'+_esc2(ct.address)+'</span></div>'
-    +'</div></div></div>'
-
-    /* Classification */
-    +'<div class="section"><div class="section-title">Business Classification</div>'
-    +'<div class="section-body">'
-      +'<div class="field"><label>Classification</label>'
-        +'<span class="class-badge">'+classLabel+'</span>'
-      +'</div>'
-      +(ct.classProof ? '<div class="field" style="margin-top:8px;"><label>Proof of Indigenous Ownership</label><span>'+_esc2(ct.classProof)+'</span></div>' : '')
-    +'</div></div>'
-
-    /* Compliance */
-    +'<div class="section"><div class="section-title">Compliance &amp; Insurance</div>'
-    +'<div class="section-body"><div class="grid-3">'
-      +'<div class="field"><label>WSIB Account #</label><span>'+_esc2(ct.wsibNum)+'</span></div>'
-      +'<div class="field"><label>WSIB Expiry</label><span>'+_esc2(ct.wsibExpiry)+'</span></div>'
-      +'<div class="field"></div>'
-      +'<div class="field"><label>Insurance Provider</label><span>'+_esc2(ct.insProvider)+'</span></div>'
-      +'<div class="field"><label>Policy #</label><span>'+_esc2(ct.insPolicy)+'</span></div>'
-      +'<div class="field"><label>Coverage / Expiry</label><span>'+_esc2(ct.insAmount)+' · '+_esc2(ct.insExpiry)+'</span></div>'
-    +'</div></div></div>'
-
-    /* Terms of Reference */
-    +'<div class="section"><div class="section-title">Terms of Reference</div>'
-    +'<div class="section-body">'
-      +'<div class="tor-clause"><strong>1. Scope of Engagement</strong>The contractor agrees to perform only the work described in the approved SOW. No work beyond the approved scope may commence without written amendment signed by the Housing Manager or Executive Director.</div>'
-      +'<div class="tor-clause"><strong>2. Licensing &amp; Insurance</strong>The contractor warrants that it holds all required trade licences, WSIB clearance, and liability insurance in force for the duration of the work. Expiry of any required coverage automatically suspends the right to work on '+_natShort+' property.</div>'
-      +'<div class="tor-clause"><strong>3. Invoicing &amp; Payment</strong>Invoices must reference the SOW number, unit address, and work completed. Payment is subject to satisfactory inspection. Standard payment terms are Net 30 days from invoice approval. Holdback provisions apply per the Construction Act (Ontario).</div>'
-      +'<div class="tor-clause"><strong>4. On-Reserve Conduct</strong>The contractor and all workers must conduct themselves respectfully on reserve lands. Alcohol, drugs, and firearms are prohibited on all work sites. All workers must check in with the Housing Department on first arrival.</div>'
-      +'<div class="tor-clause"><strong>5. Deficiency &amp; Warranty</strong>The contractor guarantees all labour and materials for a minimum of one (1) year from the date of completion. Deficiencies must be rectified within 30 days at no additional cost to '+_natShort+'.</div>'
-      +'<div class="tor-clause"><strong>6. Indigenous Procurement Priority</strong>'+_natShort+' is committed to economic reconciliation. Classification provided is subject to verification. Misrepresentation of Indigenous status may result in termination and removal from the approved contractor list.</div>'
-      +'<div class="tor-clause"><strong>7. Termination</strong>'+_natShort+' may terminate with 5 days written notice for convenience, or immediately for cause. The contractor is entitled to payment only for work satisfactorily completed to the date of termination.</div>'
-      +(ct.torAgreed ? '<div style="margin-top:10px;padding:6px 12px;background:var(--success-bg);border:1px solid var(--success-border);border-radius:4px;font-size:9px;color:var(--success);font-weight:bold;">✓ Terms agreed by contractor representative — '+( ct.torAgreedAt||today)+'</div>' : '')
-    +'</div></div>'
-
-    /* Signatures */
-    +'<div class="section"><div class="section-title">Signatures &amp; Acknowledgement</div>'
-    +'<div class="section-body">'
-      +'<div style="font-size:9.5px;color:var(--text);line-height:1.6;margin-bottom:14px;padding:10px 12px;background:var(--bg);border-left:3px solid var(--yellow);">'
-        +'By signing below, the contractor representative confirms that all information provided is accurate and complete, and that they have read and agree to the Terms of Reference above. The '+_natShort+' Housing staff member confirms this registration is authorized.'
-      +'</div>'
-      +'<div class="sig-grid">'
-        +sigBlock(_natShort+' Housing Staff', ct.sigStaff && ct.sigStaff.name, '', ct.sigStaff && ct.sigStaff.date, ct.sigStaff && ct.sigStaff.image)
-        +sigBlock('Contractor Representative', ct.sigCt && ct.sigCt.name, ct.sigCt && ct.sigCt.title, ct.sigCt && ct.sigCt.date, ct.sigCt && ct.sigCt.image)
-      +'</div>'
-    +'</div></div>'
-
-    +'</div>' /* end body */
-
-    +'<div class="footer"><span>'+escapeHtml(buildNationFooterStrip({ suffix: "Contractor Registry", includeConfidential: false }))+'</span><span>Generated '+today+' · CONFIDENTIAL</span></div>'
-    +'</body></html>';
-}
+// _buildContractorAgreementHTML (the old HTML print-window agreement) was
+// removed when Print was unified onto the branded jsPDF generator
+// (_generateContractorAgreementPdfBase64 in notifications.js), so the printed
+// and emailed Contractor Agreement are now one identical document.
 // Tab names for the CIC modal. Drives the "Save Draft → Submit Contractor"
 // gate via _updateCicSaveButtonState — until every tab has been opened the
 // Save button writes status='draft' so the contractor doesn't enter the
@@ -5981,6 +5860,47 @@ function _magicLinkBrand(){
 }
 window._magicLinkBrand = _magicLinkBrand;
 
+// Rasterize a logo (any image data URL — including SVG, which Gmail will NOT
+// render as an <img>) to a Gmail-safe PNG data URL for email headers. Draws onto
+// a white canvas (so a transparent/SVG logo isn't invisible and flattens
+// cleanly) at <=256px, which also shrinks an oversized logo under the Edge
+// Function's inline-attachment size cap. Cached per source. Resolves null on any
+// failure so the caller can fall back to the hosted app icon. Browser-only
+// (uses Image + canvas); sendNotification only runs in the browser.
+window._emailLogoPngCache = window._emailLogoPngCache || {};
+function _emailLogoPng(src){
+  return new Promise(function(resolve){
+    if(!src){ resolve(null); return; }
+    if(Object.prototype.hasOwnProperty.call(window._emailLogoPngCache, src)){ resolve(window._emailLogoPngCache[src]); return; }
+    try {
+      if(typeof document === 'undefined' || typeof Image === 'undefined'){ resolve(null); return; }
+      var img = new Image();
+      img.onload = function(){
+        try {
+          var W = img.naturalWidth || img.width || 0;
+          var H = img.naturalHeight || img.height || 0;
+          if(!W || !H){ W = 256; H = 256; } // SVG with no intrinsic size
+          var max = 256, scale = Math.min(1, max / Math.max(W, H));
+          var cw = Math.max(1, Math.round(W * scale));
+          var ch = Math.max(1, Math.round(H * scale));
+          var cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          var cx = cv.getContext('2d');
+          cx.fillStyle = '#ffffff';
+          cx.fillRect(0, 0, cw, ch);
+          cx.drawImage(img, 0, 0, cw, ch);
+          var out = cv.toDataURL('image/png');
+          window._emailLogoPngCache[src] = out || null;
+          resolve(out || null);
+        } catch(e){ window._emailLogoPngCache[src] = null; resolve(null); }
+      };
+      img.onerror = function(){ window._emailLogoPngCache[src] = null; resolve(null); };
+      img.src = src;
+    } catch(e){ resolve(null); }
+  });
+}
+window._emailLogoPng = _emailLogoPng;
+
 window.sendNotification = async function(opts) {
   if(!opts || !opts.to || !opts.subject || (!opts.message && !opts.html && !opts.bodyHtml)) {
     throw new Error('sendNotification: requires to + subject + (message|html|bodyHtml)');
@@ -6030,13 +5950,28 @@ window.sendNotification = async function(opts) {
     // strip data: URIs from HTML, but the send-notification Edge Function turns
     // logo_data into an INLINE image (cid:) so the header shows the real nation
     // logo instead of the generic app icon above. Prefer the saved theme logo,
-    // else NATION_CONFIG.logo; only when it's a data:image. (logo_url stays as
-    // the https fallback for when there is no data-URL logo.)
+    // else NATION_CONFIG.logo. (logo_url stays as the https fallback for when
+    // there is no data-URL logo.)
+    //
+    // We RASTERIZE the logo to a PNG before sending, because Gmail (and some
+    // other webmail clients) do NOT render an SVG <img> at all -- an SVG data-URL
+    // logo showed as an empty box in the header. _emailLogoPng draws the logo
+    // onto a white canvas and exports PNG (also shrinking an oversized logo under
+    // the Edge Function's inline-attachment size cap). A hosted https logo is
+    // passed through as logo_url instead; on any failure we fall back to the
+    // generic app icon already set on logo_url above.
     if(opts.logo_data == null){
       try {
         var _thm = (window._appSettings && window._appSettings.theme) || {};
-        var _lg = _thm.logo || _nc.logo || '';
-        if(/^data:image\//i.test(String(_lg))) opts.logo_data = _lg;
+        var _lg = String(_thm.logo || _nc.logo || '').trim();
+        if(/^https:\/\//i.test(_lg)){
+          // A hosted logo renders directly; prefer it over the generic app icon.
+          opts.logo_url = _lg;
+        } else if(/^data:image\//i.test(_lg) && typeof _emailLogoPng === 'function'){
+          var _png = await _emailLogoPng(_lg);
+          if(_png) opts.logo_data = _png;          // Gmail-safe PNG of the real logo
+          else if(/^data:image\/(png|jpeg|jpg|gif);/i.test(_lg)) opts.logo_data = _lg; // last resort: raster formats render as-is
+        }
       } catch(e){}
     }
     // Per-nation email delivery method. The Edge Function honours the requested
@@ -6987,14 +6922,93 @@ async function saveMySmsPrefs(id, original, modal) {
   }
 }
 
-function emailContractorAgreement() {
-  // Stub — the contractor-agreement send was on the legacy EmailJS path.
-  // Re-implement against window.sendNotification when the contractor
-  // notification surface is wired into notifications.js (Phase 3+).
-  // Two buttons in contractors.html still bind to this onclick, so
-  // keeping it callable (with a clear "not wired yet" toast) avoids
-  // ReferenceErrors on click.
-  showToast('Email agreement is being re-wired — coming soon.', {type:'info'});
+// True when the contractor record (or any of its key contacts) has a plausible
+// email — gates whether the hero "Email to Contractor" button is revealed.
+function _ctHasAnyEmail(ct) {
+  if (!ct) return false;
+  var re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  if (ct.email && re.test(String(ct.email).trim())) return true;
+  return (ct.people || []).some(function(p){ return p && p.email && re.test(String(p.email).trim()); });
+}
+
+async function emailContractorAgreement() {
+  // Email the branded Contractor Agreement PDF to the contractor. Mirrors the
+  // SOW/work-order email path: resolve the recipients (company email + any key
+  // contacts), let the staff member pick who gets it, then hand off to
+  // notifyContractorAgreement (notifications.js), which generates the same
+  // branded PDF the Print button produces and sends it serially through the
+  // send-notification pipeline.
+  var ct = window._ctLastSaved || (typeof _readContractorFormData === 'function' ? _readContractorFormData() : null);
+  if (!ct) { showToast('Open or save a contractor first.', {type:'error'}); return; }
+  if (typeof notifyContractorAgreement !== 'function') {
+    showToast('Email is not available on this page.', {type:'error'});
+    return;
+  }
+  // Flush any key contacts typed into the form but not yet saved.
+  var people = (typeof ctGetPeople === 'function') ? ctGetPeople() : (ct.people || []);
+  var emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  var esc = (typeof escapeHtml === 'function') ? escapeHtml : function(s){ return String(s == null ? '' : s); };
+  var seen = {}, recips = [];
+  function add(addr, label){
+    if(!addr) return;
+    var c = String(addr).trim();
+    if(!emailRe.test(c)) return;
+    var k = c.toLowerCase();
+    if(seen[k]) return;
+    seen[k] = true;
+    recips.push({ email: c, label: label || '' });
+  }
+  add(ct.email, ct.name || 'Company');
+  (people || []).forEach(function(p){ if(p && p.email) add(p.email, p.name || 'Contact'); });
+  if (!recips.length) {
+    showToast('No valid email on file for this contractor or its key contacts. Add one on the Overview tab first.', {type:'error'});
+    return;
+  }
+
+  // Per-recipient picker (all default on). showConfirm with `checkboxes`
+  // resolves { ok, selected:[emails] }.
+  var res = { ok: true, selected: recips.map(function(r){ return r.email; }) };
+  if (typeof showConfirm === 'function') {
+    res = await showConfirm({
+      title: 'Email Contractor Agreement',
+      message: 'Send the branded Contractor Agreement PDF to:',
+      checkboxes: recips.map(function(r){
+        return {
+          id: r.email,
+          label: esc(r.email) + (r.label ? ' <span style="color:var(--muted);">(' + esc(r.label) + ')</span>' : ''),
+          defaultChecked: true
+        };
+      }),
+      confirmText: 'Send',
+      cancelText: 'Cancel'
+    });
+  }
+  if (!res || !res.ok) return;
+  var chosen = (res.selected && res.selected.length) ? res.selected : [];
+  if (!chosen.length) { showToast('No recipients selected.', {type:'info'}); return; }
+
+  var btn = document.getElementById('ct_email_btn');
+  if (btn) btn.disabled = true;
+  try {
+    // Pass the (possibly unsaved) key contacts so the PDF reads the live record.
+    var ctForPdf = Object.assign({}, ct, { people: people });
+    var ok = await notifyContractorAgreement(ctForPdf, chosen);
+    if (ok) {
+      showToast('✓ Contractor agreement emailed.', {type:'info'});
+      try {
+        if (typeof auditEntry === 'function') {
+          auditEntry(ct.id || 'CONTRACTOR', 'contractor_agreement_emailed',
+            'Agreement emailed to: ' + chosen.join(', '), window.currentRole || 'ed');
+        }
+      } catch(e){}
+    } else {
+      showToast('Could not send — no deliverable email.', {type:'error'});
+    }
+  } catch(e) {
+    showToast('Email failed: ' + (e && e.message ? e.message : e), {type:'error'});
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 function exportContractors(format) {
   var contractors = window._contractors || [];
@@ -7327,10 +7341,10 @@ function openAddContractorModal(editIdx){
       if (cas) cas.style.display = '';
       if(typeof _ctSetCicStatusBanner === 'function') _ctSetCicStatusBanner(ct);
       if(typeof _ctRenderActions === 'function')      _ctRenderActions(ct, 'cic');
-      // Reveal the hero Print (always) and Email (only when contractor has an
-      // email on file) — the top-right doc-generation surface.
+      // Reveal the hero Print (always) and Email (when the contractor OR any key
+      // contact has an email on file) — the top-right doc-generation surface.
       var hp=document.getElementById('ct_print_btn'); if(hp){ hp.classList.remove('hidden'); hp.style.display=''; }
-      var he=document.getElementById('ct_email_btn'); if(he && ct.email){ he.classList.remove('hidden'); he.style.display=''; }
+      var he=document.getElementById('ct_email_btn'); if(he && _ctHasAnyEmail(ct)){ he.classList.remove('hidden'); he.style.display=''; }
     }
   } else {
     title = document.getElementById('ct_modal_title');
@@ -7469,13 +7483,21 @@ function populateSow(data){
   if (typeof _sowOnRequestSourceChange === 'function') _sowOnRequestSourceChange();
 }
 function printContractorAgreement() {
-  // Read live form data — no save required to print
-  var ct = window._ctLastSaved || _readContractorFormData();
-  var html = _buildContractorAgreementHTML(ct);
-  var w = window.open('','_blank','width=900,height=750,toolbar=0,menubar=0');
-  if(!w){ showToast('Please allow popups to print', {type:'error'}); return; }
-  w.document.open(); w.document.write(html); w.document.close();
-  w.onload = function(){ w.focus(); w.print(); };
+  // Open the SAME branded Contractor Agreement jsPDF that the "Email to
+  // Contractor" button attaches (standard letterhead with the nation logo), so
+  // the printed and emailed copies are one identical, on-brand document --
+  // mirrors printWorkOrder / printApplicationPreview. Reads live form data (no
+  // save required). _generateContractorAgreementPdfBase64 lives in
+  // notifications.js (loaded wherever the contractor card appears).
+  var ct = window._ctLastSaved || (typeof _readContractorFormData === 'function' ? _readContractorFormData() : {});
+  if (typeof _generateContractorAgreementPdfBase64 === 'function') {
+    Promise.resolve(_generateContractorAgreementPdfBase64(ct, 'print')).catch(function(e){
+      console.warn('[contractor agreement] print failed:', e);
+      if (typeof showToast === 'function') showToast('Could not generate the contractor agreement PDF.', { type:'error' });
+    });
+  } else if (typeof showToast === 'function') {
+    showToast('Contractor agreement PDF generator is not available on this page.', { type:'error' });
+  }
 }
 
 function printWorkOrder(){
@@ -10341,7 +10363,7 @@ function saveContractorAndFinalize() {
       var hp = document.getElementById('ct_print_btn');
       var he = document.getElementById('ct_email_btn');
       if(hp){ hp.classList.remove('hidden'); hp.style.display=''; }
-      if(he && window._ctLastSaved.email){ he.classList.remove('hidden'); he.style.display=''; }
+      if(he && _ctHasAnyEmail(window._ctLastSaved)){ he.classList.remove('hidden'); he.style.display=''; }
       // Keep the hero title on the company name and refresh the glance strip
       // (Status tile now reflects the saved record). Re-render the Notes tab
       // too: a brand-new contractor now has an id, so notes become addable.

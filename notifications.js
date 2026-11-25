@@ -470,6 +470,23 @@ var EMAIL_EVENT_REGISTRY = [
     }
   },
   {
+    key:                   'contractor_agreement',
+    label:                 'Contractor Agreement (PDF)',
+    description:           'Sent to a contractor from the "Email to Contractor" button on the contractor card. Emails the branded Contractor Agreement PDF to the recipients the staff member picks (the contractor email on file and any key-contact emails), plus any CC roles configured below.',
+    recipientType:         'contractor',
+    defaultRecipientRoles: [],
+    defaultCcRoles:        [],
+    wired:                 true,
+    placeholders:          ['contractorName','nationShort'],
+    defaults: {
+      subject:  '{nationShort} Housing — Contractor Agreement',
+      bodyHtml: '<p>Dear {contractorName},</p>'
+              + '<p>Please find attached your Contractor Agreement with {nationShort} Housing. It sets out the terms of reference, the insurance and compliance requirements, and the conduct expected for work on {nationShort} property.</p>'
+              + '<p>Kindly review the attached agreement. If a signature is required, please sign where indicated and return a copy to the housing office, or reply to this email with any questions.</p>'
+              + '<p>Thank you,<br/>{nationShort} Housing</p>'
+    }
+  },
+  {
     key:                   'sow_assigned_to_field_employee',
     label:                 'Work Order Assigned to Field Employee',
     description:           'Sent to the assigned in-house field employee (and CC\'d to the Housing Manager) when a maintenance request is submitted with them assigned. The printable in-house Work Order checklist PDF is attached. Goes to the employee\'s email on file (silent skip if none).',
@@ -3015,6 +3032,132 @@ async function _generateWorkOrderPdfBase64(mode) {
   return mode === 'print' ? ctx.openDoc('Work-Order.pdf') : ctx.finish();
 }
 
+// Branded Contractor Agreement PDF — same standard letterhead (nation logo +
+// header + accent rule + "Page X of Y" footer) as the Work Order / Application,
+// so the emailed copy and a printed copy are one identical, on-brand document.
+// Reads the passed `ct` record (window._ctLastSaved or live form data), so it
+// does not depend on any particular DOM being mounted. mode 'print' opens it in
+// a new tab for viewing/saving; otherwise returns base64 for an email
+// attachment. Mirrors _generateWorkOrderPdfBase64.
+async function _generateContractorAgreementPdfBase64(ct, mode) {
+  ct = ct || {};
+  await _loadJsPdf();
+  var _logoUrl = (typeof _fetchLogoForPdf === 'function') ? await _fetchLogoForPdf() : null;
+  var short    = (typeof nationShort === 'function') ? nationShort()
+               : ((window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing');
+  var today    = new Date().toLocaleDateString('en-CA');
+  var ctx = _makePdfDoc({
+    headerTitle:    'Contractor Agreement',
+    headerSubtitle: 'Generated ' + today,
+    logoDataUrl:    _logoUrl,
+    footerLeft:     (short ? short + ' Housing — Contractor Registry · Confidential'
+                           : 'Contractor Registry · Confidential')
+  });
+  var pdf = ctx.pdf, marginL = ctx.marginL, contentW = ctx.contentW;
+  var sectionHeader = ctx.sectionHeader.bind(ctx), row = ctx.row.bind(ctx),
+      paragraph = ctx.paragraph.bind(ctx), gap = ctx.gap.bind(ctx), needSpace = ctx.needSpace.bind(ctx);
+  var fmtPh = (typeof formatPhone === 'function') ? formatPhone : function(p){ return p || ''; };
+
+  // Reference line — the company name as the document subject (the letterhead
+  // above already carries the nation logo + name).
+  pdf.setFont('helvetica', 'bold'); pdf.setFontSize(12); pdf.setTextColor(20);
+  pdf.text(ct.name || 'Contractor', marginL, ctx.y + 4);
+  pdf.setFont('helvetica', 'normal'); pdf.setFontSize(9); pdf.setTextColor(110);
+  var _refBits = [];
+  if (ct.trade) _refBits.push(ct.trade);
+  _refBits.push('Date: ' + today);
+  pdf.text(_refBits.join('   |   '), marginL, ctx.y + 9);
+  pdf.setTextColor(0);
+  ctx.y += 13;
+
+  // Contractor Information
+  sectionHeader('Contractor Information');
+  row('Company / Name',    ct.name);
+  row('Trade / Specialty', ct.trade);
+  row('HST / Business #',   ct.hst);
+  row('Phone',              ct.phone ? fmtPh(ct.phone) : '');
+  row('Email',              ct.email);
+  row('Address',            ct.address);
+  gap();
+
+  // Business Classification
+  var classLabels = {
+    internal_indigenous:     'Internal — Indigenous',
+    external_indigenous:     'External — Indigenous',
+    external_non_indigenous: 'External — Non-Indigenous'
+  };
+  sectionHeader('Business Classification');
+  row('Classification', classLabels[ct.classification] || '—');
+  if (ct.classProof) row('Proof of Indigenous Ownership', ct.classProof);
+  gap();
+
+  // Compliance & Insurance
+  sectionHeader('Compliance & Insurance');
+  row('WSIB Account #',     ct.wsibNum);
+  row('WSIB Expiry',        ct.wsibExpiry);
+  row('Insurance Provider', ct.insProvider);
+  row('Policy #',           ct.insPolicy);
+  row('Coverage / Expiry',  [ct.insAmount, ct.insExpiry].filter(Boolean).join(' · '));
+  gap();
+
+  // Terms of Reference — same seven clauses as the printed agreement, nation
+  // name supplied from config (no hardcoded nation literal).
+  sectionHeader('Terms of Reference');
+  var _tor = [
+    ['1. Scope of Engagement',           'The contractor agrees to perform only the work described in the approved SOW. No work beyond the approved scope may commence without written amendment signed by the Housing Manager or Executive Director.'],
+    ['2. Licensing & Insurance',         'The contractor warrants that it holds all required trade licences, WSIB clearance, and liability insurance in force for the duration of the work. Expiry of any required coverage automatically suspends the right to work on ' + short + ' property.'],
+    ['3. Invoicing & Payment',           'Invoices must reference the SOW number, unit address, and work completed. Payment is subject to satisfactory inspection. Standard payment terms are Net 30 days from invoice approval. Holdback provisions apply per the Construction Act (Ontario).'],
+    ['4. On-Reserve Conduct',            'The contractor and all workers must conduct themselves respectfully on reserve lands. Alcohol, drugs, and firearms are prohibited on all work sites. All workers must check in with the Housing Department on first arrival.'],
+    ['5. Deficiency & Warranty',         'The contractor guarantees all labour and materials for a minimum of one (1) year from the date of completion. Deficiencies must be rectified within 30 days at no additional cost to ' + short + '.'],
+    ['6. Indigenous Procurement Priority', short + ' is committed to economic reconciliation. Classification provided is subject to verification. Misrepresentation of Indigenous status may result in termination and removal from the approved contractor list.'],
+    ['7. Termination',                   short + ' may terminate with 5 days written notice for convenience, or immediately for cause. The contractor is entitled to payment only for work satisfactorily completed to the date of termination.']
+  ];
+  _tor.forEach(function(cl){
+    needSpace(13);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(20);
+    pdf.text(cl[0], marginL, ctx.y + 3);
+    ctx.y += 4.5;
+    paragraph(cl[1], 8.5);
+    ctx.gap(1.5);
+  });
+  if (ct.torAgreed) {
+    needSpace(8);
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(8.5); pdf.setTextColor(20);
+    pdf.text('Terms agreed by contractor representative — ' + (ct.torAgreedAt || today), marginL, ctx.y + 3);
+    pdf.setTextColor(0); ctx.y += 6;
+  }
+  gap();
+
+  // Signatures & Acknowledgement — embeds captured signature images when present.
+  sectionHeader('Signatures & Acknowledgement');
+  paragraph('By signing below, the contractor representative confirms that all information provided is accurate and complete, and that they have read and agree to the Terms of Reference above. The ' + short + ' Housing staff member confirms this registration is authorized.', 8.5);
+  gap(2);
+  var sigBlockH = 30, sigGap = 6, sigW = (contentW - sigGap) / 2;
+  needSpace(sigBlockH + 4);
+  var _sigTop = ctx.y;
+  function agSigBox(x, role, who) {
+    who = who || {};
+    pdf.setFont('helvetica', 'bold'); pdf.setFontSize(9); pdf.setTextColor(60);
+    pdf.text(role, x, _sigTop + 4);
+    if (who.image) {
+      try { pdf.addImage(who.image, 'PNG', x + 1, _sigTop + 7, Math.min(sigW - 2, 55), 14); } catch (e) {}
+    }
+    pdf.setDrawColor(160); pdf.setLineWidth(0.3);
+    pdf.line(x, _sigTop + 22, x + sigW, _sigTop + 22);
+    pdf.setFont('helvetica', 'normal'); pdf.setFontSize(7); pdf.setTextColor(120);
+    pdf.text('Name: ' + (who.name || '________________________'), x, _sigTop + 26);
+    if (who.title) pdf.text(String(who.title), x, _sigTop + 29.5);
+    pdf.text('Date: ' + (who.date || '____________'), x + sigW, _sigTop + 26, { align: 'right' });
+    pdf.setDrawColor(0); pdf.setTextColor(0);
+  }
+  agSigBox(marginL,                 short + ' Housing Staff',    ct.sigStaff);
+  agSigBox(marginL + sigW + sigGap, 'Contractor Representative', ct.sigCt);
+  ctx.y = _sigTop + sigBlockH + 4;
+
+  return mode === 'print' ? ctx.openDoc('Contractor-Agreement.pdf') : ctx.finish();
+}
+window._generateContractorAgreementPdfBase64 = _generateContractorAgreementPdfBase64;
+
 // ── Maintenance-request source letters (tenant / referral acknowledgment) ────
 // Builds a branded letter PDF for a Maintenance Request based on its Request
 // Source (Overview tab). kind:
@@ -3399,6 +3542,73 @@ async function notifyContractorPortalInvite(ct, people, portalLink) {
   return true;
 }
 window.notifyContractorPortalInvite = notifyContractorPortalInvite;
+
+// Email the branded Contractor Agreement PDF to a contractor. Fired from
+// emailContractorAgreement() (shared-data.js — the "Email to Contractor" button
+// on the contractor card). Sends to an explicit recipientEmails list when given
+// (the per-recipient picker the staff member confirmed), else to the contractor
+// email on file + any key-contact emails, plus any CC roles from Settings. The
+// agreement PDF is generated here and attached. Fire-and-forget; caller gates on
+// having a contractor + at least one email. Returns true if at least one email
+// was queued.
+async function notifyContractorAgreement(ct, recipientEmails, opts) {
+  if (!ct) return false;
+  opts = opts || {};
+  var eventKey = 'contractor_agreement';
+  var seen = {}, emails = [];
+  function _addEmail(a){ if(!a) return; var c=String(a).trim().toLowerCase(); if(!c||seen[c]) return; if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(c)) return; seen[c]=true; emails.push(c); }
+  if (Array.isArray(recipientEmails) && recipientEmails.length) {
+    recipientEmails.forEach(function(e){ _addEmail(e); });
+  } else {
+    if (ct.email) _addEmail(ct.email);
+    (ct.people || []).forEach(function(p){ if(p && p.email) _addEmail(p.email); });
+  }
+  // CC roles configured in Settings -> Notifications (defaults to none).
+  var extraRoles = _emailEventRecipientRoles(eventKey).concat(_emailEventCcRoles(eventKey));
+  if (extraRoles.length) { var extra = await _resolveActiveStaffForRoles(extraRoles); extra.forEach(function(r){ _addEmail(r.email); }); }
+  if (!emails.length) { console.log('[notify] contractor_agreement skipped — no contractor/contact email for ' + (ct.id || '—')); return false; }
+
+  var natShort = (window.NATION_CONFIG && NATION_CONFIG.short) || 'Housing';
+  var rendered = _renderEmailTemplate(eventKey, {
+    contractorName: ct.name || 'Contractor',
+    nationShort:    natShort
+  });
+  if (!rendered) return false;
+
+  var pdfBase64 = null;
+  try { pdfBase64 = await _generateContractorAgreementPdfBase64(ct); }
+  catch (e) { console.warn('[notify] Contractor Agreement PDF generation failed, sending without attachment:', e); }
+
+  var attachments = null;
+  var bodyHtml = rendered.bodyHtml;
+  if (pdfBase64) {
+    var safeName = String(ct.name || 'contractor').replace(/[^\w\- ]+/g, '').trim().slice(0, 40) || 'contractor';
+    attachments = [{
+      name:         'Contractor Agreement - ' + safeName + '.pdf',
+      contentType:  'application/pdf',
+      contentBytes: pdfBase64
+    }];
+  } else {
+    bodyHtml += '<p style="font-size:12px;font-style:italic;">'
+              + '(The agreement PDF could not be generated automatically. Reply to this email to request a copy.)'
+              + '</p>';
+  }
+
+  await _sendSerially(emails.map(function(e){ return { email: e }; }), function(rcp){
+    return {
+      to:          rcp.email,
+      to_name:     '',
+      subject:     rendered.subject,
+      bodyHtml:    bodyHtml,
+      attachments: attachments,
+      event:       eventKey,
+      entity_type: 'contractor',
+      entity_id:   ct.id || '—'
+    };
+  }, eventKey);
+  return true;
+}
+window.notifyContractorAgreement = notifyContractorAgreement;
 
 // RFQ regret notices to the OTHER bidders (recorded a bid, not the winner).
 // `losers` is an array of contractor records. Uses the editable `rfq_regret`

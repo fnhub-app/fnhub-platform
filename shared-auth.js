@@ -89,6 +89,71 @@ function _hydrateTokenMeta() {
   } catch (e) {}
 }
 
+// ── Persisted ("remember this device") session ───────────────────────────────
+// By default the auth token lives only in sessionStorage, which is PER TAB. A
+// Maintenance Request / RFQ / application email link opens in a NEW tab, which
+// therefore starts unauthenticated and bounces to the login screen even when the
+// user is signed in elsewhere. To let an email link open straight into the app
+// on the SAME DEVICE, we mirror the session into localStorage (shared across
+// tabs, survives tab close) and rehydrate sessionStorage from it on boot.
+//
+// Security (this is the "persist session on device" option): the persisted copy
+// is cleared on EVERY sign-out path -- the logout button (_clearLocalClientState),
+// the idle timeout (_idleLogout) and a dead/expired session (_handleSessionExpired)
+// -- so persistence never defeats those. It also self-expires after
+// _PERSIST_MAX_AGE_MS so an abandoned session on a shared device can't linger.
+var _PERSIST_KEYS = ['clfn_housing_token','clfn_housing_refresh','clfn_housing_token_exp',
+                     'clfn_housing_role','clfn_housing_name','clfn_housing_email_session'];
+var _PERSIST_AT_KEY     = 'clfn_housing_persist_at';
+var _PERSIST_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+// Snapshot the current sessionStorage auth keys into localStorage (+ a
+// timestamp). No-op when there's no token to persist.
+function _persistSession() {
+  try {
+    if (!sessionStorage.getItem('clfn_housing_token')) return;
+    _PERSIST_KEYS.forEach(function(k){
+      try { var v = sessionStorage.getItem(k); if (v != null) localStorage.setItem(k, v); } catch(e) {}
+    });
+    try { localStorage.setItem(_PERSIST_AT_KEY, String(Date.now())); } catch(e) {}
+  } catch(e) {}
+}
+window._persistSession = _persistSession;
+
+// Remove the persisted copy. Called on every sign-out path.
+function _clearPersistedSession() {
+  try {
+    _PERSIST_KEYS.concat([_PERSIST_AT_KEY]).forEach(function(k){ try { localStorage.removeItem(k); } catch(e) {} });
+  } catch(e) {}
+}
+window._clearPersistedSession = _clearPersistedSession;
+
+// Fill this tab's empty sessionStorage from the persisted copy (e.g. a fresh tab
+// opened from an email link). Runs at shared-auth load, before the page-init
+// scripts read sessionStorage. Skips the post-logout/timeout login screen so a
+// just-cleared session is never resurrected (those paths also clear the copy),
+// and drops a copy older than the max age. Returns true if it filled a token.
+function _rehydrateSessionFromPersist() {
+  try {
+    if (sessionStorage.getItem('clfn_housing_token')) return false; // this tab already signed in
+    var qs = (typeof window !== 'undefined' && window.location && window.location.search) || '';
+    if (/[?&](timeout|loggedout)=1/.test(qs)) return false;
+    var tok = localStorage.getItem('clfn_housing_token');
+    if (!tok) return false;
+    var at = parseInt(localStorage.getItem(_PERSIST_AT_KEY) || '0', 10);
+    if (!at || (Date.now() - at) > _PERSIST_MAX_AGE_MS) { _clearPersistedSession(); return false; }
+    _PERSIST_KEYS.forEach(function(k){
+      try { var v = localStorage.getItem(k); if (v != null) sessionStorage.setItem(k, v); } catch(e) {}
+    });
+    return true;
+  } catch(e) { return false; }
+}
+window._rehydrateSessionFromPersist = _rehydrateSessionFromPersist;
+
+// Run the rehydration once, now, at shared-auth load — before page-init scripts
+// (housing-init.js, renos.html, …) read sessionStorage for the token.
+try { _rehydrateSessionFromPersist(); } catch(e) {}
+
 // Apply a token payload ({access_token, refresh_token, expires_in}) to the
 // session + headers + sessionStorage. Returns true on success.
 function _applyTokenPayload(data) {
@@ -102,6 +167,10 @@ function _applyTokenPayload(data) {
     if (data.refresh_token) sessionStorage.setItem('clfn_housing_refresh', data.refresh_token);
     sessionStorage.setItem('clfn_housing_token_exp', String(HOUSING_SESSION.tokenExp));
   } catch (e) {}
+  // Mirror the refreshed token into the persisted device copy so a later email
+  // link opens with a current token (no-op if nothing is persisted yet — the
+  // full copy is written at login once email/role/name are resolved).
+  try { _persistSession(); } catch (e) {}
   return true;
 }
 window._applyTokenPayload = _applyTokenPayload;
@@ -365,6 +434,9 @@ function _clearLocalClientState() {
   ];
   try { lsKeys.forEach(function(k) { try { localStorage.removeItem(k); } catch(e) {} }); } catch(e) {}
 
+  // Persisted ("remember this device") session copy — so logout clears it too.
+  try { if (typeof _clearPersistedSession === 'function') _clearPersistedSession(); } catch(e) {}
+
   // sessionStorage
   try {
     ['clfn_housing_token','clfn_housing_refresh','clfn_housing_token_exp',
@@ -473,6 +545,9 @@ function _idleLogout() {
       try { sessionStorage.removeItem(k); } catch(e) {}
     });
   } catch(e) {}
+  // Clear the persisted device copy too, synchronously, BEFORE the redirect —
+  // otherwise the next page load would rehydrate it and defeat the idle logout.
+  try { if (typeof _clearPersistedSession === 'function') _clearPersistedSession(); } catch(e) {}
 
   // 2. Fire the full cleanup + Supabase sign-out in the background.
   //    We don't await it — the redirect below must not block on network.
@@ -545,6 +620,9 @@ function _handleSessionExpired() {
       try { sessionStorage.removeItem(k); } catch(e) {}
     });
   } catch(e) {}
+  // Clear the persisted device copy too, synchronously, BEFORE the redirect —
+  // otherwise the next page load would rehydrate the dead session.
+  try { if (typeof _clearPersistedSession === 'function') _clearPersistedSession(); } catch(e) {}
   stopIdleTimer();
   if (typeof doLogout === 'function') {
     try { doLogout('expired').catch(function(e){ console.warn('[CLFN] expired doLogout:', e); }); } catch(e) {}

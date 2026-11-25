@@ -3061,8 +3061,10 @@ function _maybeShowMrNotice() {
     setTimeout(function(){
       try {
         if (pending && action && typeof setSowTab === 'function') {
+          // Land on Work Items (scope) so the approver first sees the scope
+          // they are being asked to approve/decline — not the Signatures tab.
           if (action === 'notes') setSowTab('notes');
-          else if (action === 'approve' || action === 'decline') setSowTab('sigs');
+          else if (action === 'approve' || action === 'decline') setSowTab('scope');
         }
         var m;
         if (!pending) {

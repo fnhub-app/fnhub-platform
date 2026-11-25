@@ -466,9 +466,14 @@ serve(async (req: Request) => {
     if (mLogo) {
       const ct  = mLogo[1].toLowerCase();
       const b64 = mLogo[2].replace(/\s+/g, "");
+      // Skip SVG: Gmail (and some webmail clients) do NOT render an SVG <img>,
+      // so an inline SVG logo shows as an empty box. Fall back to the hosted PNG
+      // icon instead. The client rasterizes logos to PNG before sending, so this
+      // is a safety net for any caller that still passes an SVG data URL.
+      const isSvg = ct === "image/svg+xml" || ct === "image/svg";
       // Bound the size (the app caps logos at ~200KB; base64 is ~1.37x). Skip an
       // oversized/implausible one and keep the https icon fallback.
-      if (b64.length > 64 && b64.length <= 400 * 1024) {
+      if (!isSvg && b64.length > 64 && b64.length <= 400 * 1024) {
         const ext = ct === "image/png" ? "png" : ct === "image/jpeg" ? "jpg"
           : ct === "image/gif" ? "gif" : ct === "image/svg+xml" ? "svg" : "png";
         logoAttachment = { name: "logo." + ext, contentType: ct, contentBytes: b64, contentId: "nationlogo", inline: true };
