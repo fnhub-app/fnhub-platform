@@ -29,7 +29,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 const STORAGE_BUCKET       = Deno.env.get("STORAGE_BUCKET") || "housing-files";
 const MAX_B64_LEN          = 14000000;              // ~10 MB raw
 const MAX_NOTE_LEN         = 4000;
-const ALLOWED_KINDS        = ["photo", "invoice", "note", "progress", "wsib", "insurance", "add_person"];
+const ALLOWED_KINDS        = ["photo", "invoice", "note", "progress", "wsib", "insurance", "add_person", "completion"];
 // Compliance proofs file to the CONTRACTOR record (not a unit), under the same
 // contractors/<id>/<bucket>/ path the Contractor card reads back.
 const COMPLIANCE_KINDS     = ["wsib", "insurance"];
@@ -86,6 +86,7 @@ const REVIEW_KIND_DOC: Record<string, string> = {
   wsib:       "a WSIB clearance certificate",
   insurance:  "an insurance certificate",
   add_person: "a request to add a team member",
+  completion: "a request to sign off the completed job",
 };
 
 function normRole(r: string): string {
@@ -409,6 +410,50 @@ serve(async (req: Request) => {
       });
     } catch (_e) { /* non-fatal */ }
     return jsonResponse({ ok: true, kind: "progress", percent: percent, status: newStatus });
+  }
+
+  // Completion request: the contractor says the work is done. This does NOT
+  // complete the job -- housing gives the final sign-off. It flags the SOW
+  // (sow.completionRequest), sets progress to 100%, moves the portal status to
+  // "awaiting_signoff", and files a staff review item (contractor_submissions,
+  // kind=completion, pending) that staff Approve (-> mark complete) or Reject.
+  if (kind === "completion") {
+    const nowIso = new Date().toISOString();
+    const byName = user.phone || contractorId;
+    try {
+      const { data: sowRows } = await admin.from("housing_sow").select("data").eq("unit_id", unitId).limit(1);
+      const sowRow = sowRows && (sowRows[0] as Record<string, unknown> | undefined);
+      const data = sowRow && (sowRow.data as Record<string, unknown> | undefined);
+      const sows = data && Array.isArray(data.sows) ? data.sows as Array<Record<string, unknown>> : null;
+      const sow = sows ? sows.find((s) => s && String(s.project_number) === projectNumber) : null;
+      if (!data || !sow) return jsonResponse({ error: "Work order not found" }, 404);
+      if (sow.approval_status === "completed" || sow.cancelled) {
+        return jsonResponse({ error: "This job is already closed." }, 409);
+      }
+      const prevProgress = (sow.progress && typeof sow.progress === "object") ? sow.progress as Record<string, unknown> : {};
+      sow.progress = Object.assign({}, prevProgress, { percent: 100, updatedAt: nowIso, by: "contractor", byName: byName });
+      sow.completionRequest = { at: nowIso, by: "contractor", byName: byName, note: noteText || "" };
+      await admin.from("housing_sow").update({ data: data, updated_at: nowIso }).eq("unit_id", unitId);
+    } catch (_e) {
+      return jsonResponse({ error: "Could not submit the completion request" }, 500);
+    }
+    // Mirror onto the projection so the portal shows awaiting sign-off on reload.
+    try {
+      const woData = (wo.data && typeof wo.data === "object") ? wo.data as Record<string, unknown> : {};
+      woData.progressPercent = 100;
+      woData.completionRequested = true;
+      await admin.from("contractor_work_orders").update({ data: woData, status: "awaiting_signoff", updated_at: nowIso }).eq("id", wo.id);
+    } catch (_e) { /* non-fatal */ }
+    try {
+      await admin.from("housing_audit_log").insert({
+        entity_type: "tenant", entity_id: unitId, action: "contractor_completion_requested",
+        detail: JSON.stringify({ project_number: projectNumber, note: noteText || "", source: "contractor_portal", actor_name: byName }),
+        actor: user.phone || user.id, created_at: nowIso,
+      });
+    } catch (_e) { /* non-fatal */ }
+    await recordSubmission({ kind: "completion", status: "pending", text: noteText || "" });
+    await notifyStaffOfSubmission(admin, { kind: "completion", contractorId, address: woAddress, amount: null });
+    return jsonResponse({ ok: true, kind: "completion", status: "awaiting_signoff" });
   }
 
   // 3) Decode (size already bounded above).

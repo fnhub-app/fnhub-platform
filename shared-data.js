@@ -2932,7 +2932,13 @@ function _cwoStatusForSow(sow){
   if(!sow) return 'active';
   if(sow.cancelled) return 'closed';
   if(sow.approval_status === 'completed') return 'closed';
+  // An explicit contractor "mark complete" request (pending housing sign-off)
+  // moves the job to awaiting_signoff regardless of the reported %.
+  if(sow.completionRequest && !sow.completionRequest.resolved) return 'awaiting_signoff';
   var pct = (sow.progress && typeof sow.progress.percent !== 'undefined') ? (parseFloat(sow.progress.percent) || 0) : 0;
+  // Housing REJECTED the completion -> back to the crew. Don't leave it parked
+  // in awaiting_signoff just because the contractor had reported 100%.
+  if(sow.completionRequest && sow.completionRequest.resolved === 'rejected') return pct > 0 ? 'in_process' : 'active';
   if(pct >= 100) return 'awaiting_signoff';   // was 'closed' — contractor-reported 100% no longer self-closes the job
   if(pct > 0) return 'in_process';
   return 'active';
@@ -3007,7 +3013,11 @@ function _cwoDetailFromSow(sow, unit){
     // Work-progress % (0-100). Mirrors sow.progress.percent so the contractor
     // sees it in the portal; the contractor can update it (contractor-upload
     // kind=progress), which writes back to sow.progress AND this projection.
-    progressPercent:  (sow.progress && typeof sow.progress.percent === 'number') ? sow.progress.percent : 0
+    progressPercent:  (sow.progress && typeof sow.progress.percent === 'number') ? sow.progress.percent : 0,
+    // True once the contractor has asked housing to sign the job off (and it
+    // hasn't been approved/rejected yet) — the portal shows "awaiting sign-off"
+    // and hides the Mark-complete button.
+    completionRequested: !!(sow.completionRequest && !sow.completionRequest.resolved)
   };
 }
 window._cwoDetailFromSow = _cwoDetailFromSow;
@@ -4092,6 +4102,101 @@ async function _wlRejectContractorInvoice(id){
   renderWorklist();
 }
 window._wlRejectContractorInvoice = _wlRejectContractorInvoice;
+
+// Approve a contractor's "mark work complete" request — the FINAL housing
+// sign-off. Mirrors _sowDoComplete but via REST (the SOW modal isn't open):
+// sets approval_status='completed' on the housing_sow.data entry, resolves the
+// completion flag, syncs the portal projection (-> closed), notifies the tenant,
+// reverts the unit from under-repair when no active SOWs remain, and clears the
+// submission from the worklist.
+async function _wlApproveContractorCompletion(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s){ if(typeof showToast==='function') showToast('Submission not found', {type:'error'}); return; }
+  if(typeof showConfirm !== 'function') return;
+  var pn = s.sow_project_number || 'the work order';
+  var ok = await showConfirm({ title: 'Approve completion & close this job?', message: 'The contractor marked ' + pn + ' at ' + (s.address || s.unit_id) + ' as complete. Approving is the final housing sign-off: it marks the maintenance request Completed and locks it (only the ED can reopen).', confirmText: 'Approve & mark complete' });
+  if(!ok) return;
+  try {
+    var unitId = s.unit_id, pnum = s.sow_project_number;
+    var gr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId) + '&select=data', { headers: HOUSING_HEADERS });
+    if(!gr.ok) throw new Error('could not load the work order (HTTP ' + gr.status + ')');
+    var rows = await gr.json();
+    var data = (rows && rows[0] && rows[0].data) ? rows[0].data : null;
+    var sows = (data && Array.isArray(data.sows)) ? data.sows : null;
+    var sow  = sows ? sows.find(function(x){ return x && String(x.project_number) === String(pnum); }) : null;
+    if(!sow) throw new Error('the work order (' + pnum + ') was not found');
+    if(sow.approval_status !== 'completed'){
+      sow.approval_status = 'completed';
+      sow.completed_at = new Date().toISOString();
+      sow.completed_by = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || 'staff';
+      sow.completed_via = 'contractor_request';
+      if(sow.completionRequest) sow.completionRequest.resolved = 'approved';
+      var pr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId), {
+        method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+        body: JSON.stringify({ data: data, updated_at: new Date().toISOString() })
+      });
+      if(!pr.ok) throw new Error('could not save the completion (HTTP ' + pr.status + ')');
+      if(window._sowCache) window._sowCache[unitId] = data;
+      // Sync the portal projection so the contractor sees it signed off (closed).
+      try { var _u = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x && x.id === unitId; });
+        if(typeof sbSyncContractorWorkOrder === 'function') sbSyncContractorWorkOrder(Object.assign({}, sow, { unitId: unitId }), _u); } catch(_e){}
+      // Tenant "completed" text/email.
+      try { if(typeof notifySowTenantCompleted === 'function'){ var _u2 = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x && x.id === unitId; }) || null; notifySowTenantCompleted(sow, _u2); } } catch(_e){}
+      // Revert the unit from under-repair if this drained the last active SOW.
+      try {
+        var _au = (typeof housingUnits !== 'undefined' && housingUnits.length) ? housingUnits : [];
+        var _uu = _au.find(function(x){ return x && x.id === unitId; });
+        if(_uu && typeof hasActiveSows === 'function' && !hasActiveSows(unitId) && typeof revertUnitFromRepair === 'function' && revertUnitFromRepair(_uu) && typeof saveUnitWithDraftFallback === 'function'){ saveUnitWithDraftFallback(_uu); }
+      } catch(_e){}
+      if(typeof auditEntry === 'function') auditEntry('SOW:' + unitId, 'sow_completed', 'SOW ' + pnum + ' marked Completed (contractor-requested, approved by housing)', window.currentRole || 'staff');
+    }
+    await _sbResolveContractorSub(id, 'approved');
+    if(typeof auditEntry === 'function') auditEntry('SOW:' + unitId, 'contractor_completion_approved', 'Approved contractor completion for ' + pnum, window.currentRole || 'staff');
+    if(typeof showToast === 'function') showToast('Completion approved — ' + pnum + ' marked complete.', {type:'info'});
+  } catch(e){
+    console.warn('[contractor-sub] completion approve failed:', e);
+    if(typeof showToast === 'function') showToast('Could not approve: ' + (e && e.message || e), {type:'error'});
+  }
+  renderWorklist();
+  if(typeof udpRenderSowTable === 'function' && document.getElementById('udp_sow_table_wrap')) udpRenderSowTable(s.unit_id);
+}
+window._wlApproveContractorCompletion = _wlApproveContractorCompletion;
+
+// Reject a contractor's completion request: the job is NOT completed. Clear the
+// completion flag so the portal returns the job to in-progress, and drop the
+// submission from the worklist. Progress (%) is left as the contractor reported.
+async function _wlRejectContractorCompletion(id){
+  var s = (window._contractorSubmissions || []).find(function(x){ return x.id === id; });
+  if(!s) return;
+  if(typeof showConfirm !== 'function') return;
+  var ok = await showConfirm({ title: 'Reject completion?', message: 'The job is NOT marked complete. The contractor sees it return to in-progress and can keep working or resubmit. The reported progress stays as-is.', confirmText: 'Reject', danger: true });
+  if(!ok) return;
+  try {
+    var unitId = s.unit_id, pnum = s.sow_project_number;
+    var gr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId) + '&select=data', { headers: HOUSING_HEADERS });
+    if(gr.ok){
+      var rows = await gr.json();
+      var data = (rows && rows[0] && rows[0].data) ? rows[0].data : null;
+      var sows = (data && Array.isArray(data.sows)) ? data.sows : null;
+      var sow  = sows ? sows.find(function(x){ return x && String(x.project_number) === String(pnum); }) : null;
+      if(sow && sow.completionRequest && !sow.completionRequest.resolved){
+        sow.completionRequest.resolved = 'rejected';
+        var pr = await fetch(SUPABASE_URL + '/rest/v1/housing_sow?unit_id=eq.' + encodeURIComponent(unitId), {
+          method: 'PATCH', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
+          body: JSON.stringify({ data: data, updated_at: new Date().toISOString() })
+        });
+        if(pr.ok && window._sowCache) window._sowCache[unitId] = data;
+        try { var _u = (typeof housingUnits !== 'undefined' ? housingUnits : []).find(function(x){ return x && x.id === unitId; });
+          if(typeof sbSyncContractorWorkOrder === 'function') sbSyncContractorWorkOrder(Object.assign({}, sow, { unitId: unitId }), _u); } catch(_e){}
+      }
+    }
+    await _sbResolveContractorSub(id, 'rejected');
+    if(typeof auditEntry === 'function') auditEntry('SOW:' + s.unit_id, 'contractor_completion_rejected', 'Rejected contractor completion for ' + (s.sow_project_number||''), window.currentRole || 'staff');
+    if(typeof showToast === 'function') showToast('Completion rejected — the job stays open.', {type:'info'});
+  } catch(e){ if(typeof showToast==='function') showToast('Could not reject: ' + (e && e.message || e), {type:'error'}); }
+  renderWorklist();
+}
+window._wlRejectContractorCompletion = _wlRejectContractorCompletion;
 
 // PATCH a people-request's status + reviewer stamp, and drop it from the open
 // queue. Mirrors _sbResolveContractorSub.
@@ -9732,8 +9837,8 @@ function renderWorklist() {
   // flagged here so staff know to read them (View / Mark read).
   var ctSubItems = isManagement ? (window._contractorSubmissions || []) : [];
   if (ctSubItems.length) {
-    var _csKindLbl = { invoice:'Invoice', photo:'Photo', note:'Note', wsib:'WSIB proof', insurance:'Insurance proof' };
-    var _csKindIcon = { invoice:'🧾', note:'📝', photo:'📷', wsib:'🛡️', insurance:'🛡️' };
+    var _csKindLbl = { invoice:'Invoice', photo:'Photo', note:'Note', wsib:'WSIB proof', insurance:'Insurance proof', completion:'Completion request' };
+    var _csKindIcon = { invoice:'🧾', note:'📝', photo:'📷', wsib:'🛡️', insurance:'🛡️', completion:'✅' };
     var csRows = '', csCards = '';
     function csBtnHtml(b){
       var bg = b.primary ? 'var(--yellow)' : 'var(--surface)';
@@ -9761,7 +9866,8 @@ function renderWorklist() {
     });
     // Pending invoices first (they need a decision), then newest-first.
     _csRenderList.sort(function(a,b){
-      var ap = (a.kind==='invoice')?0:1, bp = (b.kind==='invoice')?0:1;
+      var _dec = { invoice:0, completion:0 };
+      var ap = (_dec[a.kind]!=null)?0:1, bp = (_dec[b.kind]!=null)?0:1;
       if(ap!==bp) return ap-bp;
       return String(b.created_at||'').localeCompare(String(a.created_at||''));
     }).forEach(function(s){
@@ -9796,12 +9902,14 @@ function renderWorklist() {
       if (s._photoGroup) s = s.items[0];   // unwrap a single-photo group to a normal row
       var idJs = esc(s.id).replace(/'/g, "\\'");
       var isInvoice = (s.kind === 'invoice');
+      var isCompletion = (s.kind === 'completion');
+      var needsDecision = isInvoice || isCompletion;
       var kindLbl = _csKindLbl[s.kind] || 'Submission';
       var money = (s.amount != null && s.amount !== '') ? ((typeof formatCurrency==='function') ? formatCurrency(Number(s.amount)||0) : ('$'+(Number(s.amount)||0).toFixed(2))) : '';
-      var subtitle = isInvoice ? (money || (s.file_name||'')) : (s.kind==='note' ? (s.text||'') : (s.file_name||''));
+      var subtitle = isInvoice ? (money || (s.file_name||'')) : ((s.kind==='note' || isCompletion) ? (s.text||'') : (s.file_name||''));
       var who = s.address || s.unit_id || '';
-      var pillTxt = isInvoice ? 'PENDING' : 'NEW';
-      var pillColor = isInvoice ? 'var(--warn-amber-text)' : 'var(--muted)';
+      var pillTxt = needsDecision ? 'PENDING' : 'NEW';
+      var pillColor = needsDecision ? 'var(--warn-amber-text)' : 'var(--muted)';
       // "Open" affordances so staff can review before deciding: the linked SOW
       // (maintenance request) via card/row tap, and the submitted file itself.
       var openSowFn  = s.unit_id   ? ('_wlOpenContractorSubSow(\'' + idJs + '\')') : '';
@@ -9813,6 +9921,9 @@ function renderWorklist() {
         acts.push({ t:'✓ Approve', fn:'_wlApproveContractorInvoice(\'' + idJs + '\')', primary:true });
         acts.push({ t:'Reject',    fn:'_wlRejectContractorInvoice(\'' + idJs + '\')', primary:false });
         if (viewFileFn) acts.push({ t:'📄 Invoice', fn: viewFileFn, primary:false });
+      } else if (isCompletion) {
+        acts.push({ t:'✓ Approve & complete', fn:'_wlApproveContractorCompletion(\'' + idJs + '\')', primary:true });
+        acts.push({ t:'Reject',               fn:'_wlRejectContractorCompletion(\'' + idJs + '\')', primary:false });
       } else {
         acts.push({ t:'View',      fn:'_wlViewContractorSub(\'' + idJs + '\')', primary:true });
         acts.push({ t:'Mark read', fn:'_wlMarkContractorSubRead(\'' + idJs + '\')', primary:false });
