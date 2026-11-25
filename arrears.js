@@ -781,11 +781,30 @@
       }
       _loadJsPdf().then(function () {
         var doc = new window.jspdf.jsPDF();
+        var pageW = doc.internal.pageSize.getWidth();
+        // Branded letterhead: nation logo (PNG/JPEG data URL only — jsPDF can't
+        // rasterize SVG) + name + title + accent rule, matching the finance docs.
+        var _arLogo = (function () {
+          var l = (window._appSettings && _appSettings.theme && _appSettings.theme.logo)
+            || (window.NATION_CONFIG && NATION_CONFIG.logo) || '';
+          return /^data:image\/(png|jpe?g)/i.test(l || '') ? l : '';
+        })();
+        var _arTx = 14;
+        if (_arLogo) { try { doc.addImage(_arLogo, 'PNG', 14, 8, 14, 14); _arTx = 32; } catch (e) {} }
         doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-        doc.text(nation, 14, 16);
-        doc.setFontSize(12); doc.text(rptTitle, 14, 24);
-        doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-        doc.text('As of ' + d.asOf + ' · generated from the housing management system rent ledger', 14, 30);
+        doc.text(nation, _arTx, 16);
+        doc.setFontSize(12); doc.text(rptTitle, _arTx, 24);
+        doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90);
+        doc.text('As of ' + d.asOf + ' · generated from the housing management system rent ledger', _arTx, 30);
+        doc.setTextColor(0);
+        try {
+          if (window._themeAccentHex) {
+            doc.setDrawColor(window._themeAccentHex());
+            doc.setLineWidth(0.8);
+            doc.line(14, 34, pageW - 14, 34);
+            doc.setDrawColor(0);
+          }
+        } catch (e) {}
         var s = d.sum;
         var lines;
         if (noHouse) {
@@ -1511,11 +1530,30 @@
     }
     _loadJsPdf().then(function () {
       var doc = new window.jspdf.jsPDF();
+      var pageW = doc.internal.pageSize.getWidth();
+      // Branded letterhead: nation logo (PNG/JPEG data URL only) + name + title
+      // + accent rule, matching the finance docs and the A/R report.
+      var _arLogo = (function () {
+        var l = (window._appSettings && _appSettings.theme && _appSettings.theme.logo)
+          || (window.NATION_CONFIG && NATION_CONFIG.logo) || '';
+        return /^data:image\/(png|jpe?g)/i.test(l || '') ? l : '';
+      })();
+      var _arTx = 14;
+      if (_arLogo) { try { doc.addImage(_arLogo, 'PNG', 14, 8, 14, 14); _arTx = 32; } catch (e) {} }
       doc.setFont('helvetica', 'bold'); doc.setFontSize(15);
-      doc.text(nation, 14, 16);
-      doc.setFontSize(12); doc.text('A/R Cleanup Classification Report', 14, 24);
-      doc.setFont('helvetica', 'normal'); doc.setFontSize(9);
-      doc.text('As of ' + asOf + ' · classifications recorded during the arrears ledger reconciliation', 14, 30);
+      doc.text(nation, _arTx, 16);
+      doc.setFontSize(12); doc.text('A/R Cleanup Classification Report', _arTx, 24);
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(9); doc.setTextColor(90);
+      doc.text('As of ' + asOf + ' · classifications recorded during the arrears ledger reconciliation', _arTx, 30);
+      doc.setTextColor(0);
+      try {
+        if (window._themeAccentHex) {
+          doc.setDrawColor(window._themeAccentHex());
+          doc.setLineWidth(0.8);
+          doc.line(14, 34, pageW - 14, 34);
+          doc.setDrawColor(0);
+        }
+      } catch (e) {}
       var lines = [rows.length + ' account(s) classified · flagged accounts total ' + money(sum.flaggedTotal)];
       Object.keys(sum.flags).forEach(function (f) {
         lines.push(f + ': ' + sum.flags[f].n + ' account(s) · ' + money(sum.flags[f].total));
