@@ -1676,8 +1676,12 @@ function _makePdfDoc(opts) {
     pdf.setTextColor(0);
   };
   ctx.gap = function(h) { ctx.y += (h || 3); };
-  ctx.finish = function() {
-    // Draw footer on every page now that total page count is known
+  // Draw the "Page X of Y" footer on every page. Idempotent (a doc is either
+  // finished to base64 OR opened for print, never both, but guard anyway).
+  ctx._footersDrawn = false;
+  ctx._drawFooters = function() {
+    if (ctx._footersDrawn) return;
+    ctx._footersDrawn = true;
     var total = pdf.internal.getNumberOfPages();
     var footerLeft = opts.footerLeft || (nationName ? nationName + ' Housing — Confidential' : '');
     for (var p = 1; p <= total; p++) {
@@ -1696,8 +1700,27 @@ function _makePdfDoc(opts) {
       pdf.text('Page ' + p + ' of ' + total, pageW - marginR, pageH - 7, { align: 'right' });
       pdf.setTextColor(0);
     }
+  };
+  ctx.finish = function() {
+    ctx._drawFooters();
     var dataUri = pdf.output('datauristring');
     return dataUri.substring(dataUri.indexOf(',') + 1);
+  };
+  // Open the finished branded PDF in a new tab for viewing / printing / saving —
+  // the SAME letterhead as the emailed copy, so print and email match exactly.
+  // Used by the print buttons (printWorkOrder / printApplicationPreview). Falls
+  // back to a direct download if a popup blocker stops the new tab.
+  ctx.openDoc = function(filename) {
+    ctx._drawFooters();
+    filename = filename || 'document.pdf';
+    try {
+      var url = pdf.output('bloburl');
+      var w = window.open(url, '_blank');
+      if (!w) pdf.save(filename);
+    } catch (e) {
+      try { pdf.save(filename); } catch (_e) { /* give up silently */ }
+    }
+    return true;
   };
 
   // Draw header on page 1; subsequent pages get it via needSpace → addPage
@@ -1706,11 +1729,12 @@ function _makePdfDoc(opts) {
   return ctx;
 }
 
-async function _generateApplicationPdfBase64() {
+async function _generateApplicationPdfBase64(mode) {
   await _loadJsPdf();
-  var ctx         = _makePdfDoc();
-  var pdf         = ctx.pdf, pageW = ctx.pageW;
-  var marginL     = ctx.marginL, marginR = ctx.marginR;
+  var _logoUrl    = (typeof _fetchLogoForPdf === 'function') ? await _fetchLogoForPdf() : null;
+  var ctx         = _makePdfDoc({ headerTitle: 'Housing Application', logoDataUrl: _logoUrl });
+  var pdf         = ctx.pdf;
+  var marginL     = ctx.marginL;
   var contentW    = ctx.contentW;
   var needSpace   = ctx.needSpace.bind(ctx);
   var sectionHeader = ctx.sectionHeader.bind(ctx);
@@ -1760,31 +1784,17 @@ async function _generateApplicationPdfBase64() {
   var hasArr    = chk('arrToggle');
   var isHomeless= chk('homelessToggle');
 
-  // ── HEADER ────────────────────────────────────────────────────────
+  // ── Reference line (the standard letterhead above carries the logo + nation) ─
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.text((short ? short + ' ' : '') + 'Housing Application', marginL, ctx.y + 5);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(110);
-  if (nation) pdf.text(nation, marginL, ctx.y + 10);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
+  pdf.setFontSize(12);
   pdf.setTextColor(20);
-  pdf.text(fullName, pageW - marginR, ctx.y + 5, { align: 'right' });
+  pdf.text(fullName, marginL, ctx.y + 4);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(110);
-  pdf.text(appId,             pageW - marginR, ctx.y + 10, { align: 'right' });
-  pdf.text('Date: ' + today,  pageW - marginR, ctx.y + 15, { align: 'right' });
-  ctx.y += 17;
-  pdf.setDrawColor(window._themeAccentHex());
-  pdf.setLineWidth(1);
-  pdf.line(marginL, ctx.y, pageW - marginR, ctx.y);
-  pdf.setDrawColor(0);
+  pdf.text([appId ? 'Application ' + appId : '', 'Date: ' + today].filter(Boolean).join('   |   '), marginL, ctx.y + 9);
   pdf.setTextColor(0);
-  ctx.y += 6;
+  ctx.y += 13;
 
   // ── 1. APPLICANT INFORMATION ──────────────────────────────────────
   sectionHeader('Applicant Information');
@@ -2046,7 +2056,7 @@ async function _generateApplicationPdfBase64() {
   drawSig(sigX, 'Received by — Housing Staff', staffName, staffDate, sigStaImg);
   ctx.y += sigBlockH + 4;
 
-  return ctx.finish();
+  return mode === 'print' ? ctx.openDoc('Housing-Application.pdf') : ctx.finish();
 }
 
 // ── SOW PDF generator ─────────────────────────────────────────────────────
@@ -2730,9 +2740,10 @@ async function _generateRfqPdfBase64(rfq, unit) {
 // PDF: surfaces line-item quoted prices (not estimates), includes the
 // Work Authorization notice, and has signature lines for both the
 // contractor representative and the authorized housing signatory.
-async function _generateWorkOrderPdfBase64() {
+async function _generateWorkOrderPdfBase64(mode) {
   await _loadJsPdf();
-  var ctx         = _makePdfDoc();
+  var _logoUrlWO  = (typeof _fetchLogoForPdf === 'function') ? await _fetchLogoForPdf() : null;
+  var ctx         = _makePdfDoc({ headerTitle: 'Work Order', logoDataUrl: _logoUrlWO });
   var pdf         = ctx.pdf, pageW = ctx.pageW;
   var marginL     = ctx.marginL, marginR = ctx.marginR;
   var contentW    = ctx.contentW;
@@ -2756,36 +2767,21 @@ async function _generateWorkOrderPdfBase64() {
   }
 
   var today    = new Date().toLocaleDateString('en-CA');
-  var nation   = (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '';
   var short    = nationShort();
   var projNum  = (window._sowEditingProjectNumber) || '—';
   var unitAddr = fld('sow_address') || '—';
 
-  // Header
+  // Reference line (the standard letterhead above carries the logo + nation).
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.text((short ? short + ' ' : '') + 'Work Order', marginL, ctx.y + 5);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(110);
-  if (nation) pdf.text(nation + ' — Housing Department', marginL, ctx.y + 10);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
+  pdf.setFontSize(12);
   pdf.setTextColor(20);
-  pdf.text(unitAddr,           pageW - marginR, ctx.y + 5,  { align: 'right' });
+  pdf.text(unitAddr, marginL, ctx.y + 4);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(110);
-  pdf.text(projNum,            pageW - marginR, ctx.y + 10, { align: 'right' });
-  pdf.text('Date: ' + today,   pageW - marginR, ctx.y + 15, { align: 'right' });
-  ctx.y += 17;
-  pdf.setDrawColor(window._themeAccentHex());
-  pdf.setLineWidth(1);
-  pdf.line(marginL, ctx.y, pageW - marginR, ctx.y);
-  pdf.setDrawColor(0);
+  pdf.text(['Project ' + projNum, 'Date: ' + today].join('   |   '), marginL, ctx.y + 9);
   pdf.setTextColor(0);
-  ctx.y += 6;
+  ctx.y += 13;
 
   // In-house crew work orders print as a field checklist (no pricing, no terms);
   // contractor work orders keep quoted prices + a work-authorization notice.
@@ -2933,7 +2929,7 @@ async function _generateWorkOrderPdfBase64() {
     woSigBox(marginL + _sgW + _sgGap,   _sgW, (short ? short + ' ' : '') + 'Housing - Supervisor');
     ctx.y += 30;
 
-    return ctx.finish();
+    return mode === 'print' ? ctx.openDoc('Work-Order.pdf') : ctx.finish();
   }
 
   // Scope of Work — use quoted price when available, fall back to estimate.
@@ -3030,7 +3026,7 @@ async function _generateWorkOrderPdfBase64() {
   ctx.y += sigBlockH + 4;
   }
 
-  return ctx.finish();
+  return mode === 'print' ? ctx.openDoc('Work-Order.pdf') : ctx.finish();
 }
 
 // ── Maintenance-request source letters (tenant / referral acknowledgment) ────
