@@ -1844,9 +1844,7 @@ function udpRenderMap(u) {
   var canSetLoc = typeof APPROVAL_AUTHORITY !== 'undefined'
     && APPROVAL_AUTHORITY.can('setUnitLocation', window.currentRole || '');
   var locBtn = canSetLoc
-    ? '<button onclick="udpOpenLocationPicker(\'' + String(u.id).replace(/'/g, "\\'") + '\')" '
-        + 'style="background:var(--yellow);border:1.5px solid var(--yellow);border-radius:7px;padding:5px 14px;'
-        + 'font-size:11px;font-weight:700;color:#111110;cursor:pointer;font-family:var(--sans);white-space:nowrap;">'
+    ? '<button type="button" class="btn btn-primary btn-sm" onclick="udpOpenLocationPicker(\'' + String(u.id).replace(/'/g, "\\'") + '\')">'
         + (lat && lng ? '&#128205; Edit Location' : '&#128205; Set Location')
         + '</button>'
     : '';
