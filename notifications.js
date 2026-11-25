@@ -2064,11 +2064,12 @@ async function _generateApplicationPdfBase64(mode) {
 // from the live SOW modal form fields (the modal is still open at notify
 // time, same as the application-confirmation flow). Selectable text, sharp
 // at any zoom; tenant + staff signatures embedded as PNG images.
-async function _generateSowPdfBase64() {
+async function _generateSowPdfBase64(mode) {
   await _loadJsPdf();
-  var ctx         = _makePdfDoc();
-  var pdf         = ctx.pdf, pageW = ctx.pageW;
-  var marginL     = ctx.marginL, marginR = ctx.marginR;
+  var _logoUrlSow = (typeof _fetchLogoForPdf === 'function') ? await _fetchLogoForPdf() : null;
+  var ctx         = _makePdfDoc({ headerTitle: 'Maintenance Request', logoDataUrl: _logoUrlSow });
+  var pdf         = ctx.pdf;
+  var marginL     = ctx.marginL;
   var contentW    = ctx.contentW;
   var needSpace   = ctx.needSpace.bind(ctx);
   var sectionHeader = ctx.sectionHeader.bind(ctx);
@@ -2100,36 +2101,20 @@ async function _generateSowPdfBase64() {
   }
 
   var today    = new Date().toLocaleDateString('en-CA');
-  var nation   = (window.NATION_CONFIG && (NATION_CONFIG.display_name || NATION_CONFIG.name)) || '';
-  var short    = nationShort();
   var projNum  = (window._sowEditingProjectNumber) || '—';
   var unitAddr = fld('sow_address') || '—';
 
-  // Header
+  // Reference line (the standard letterhead above carries the logo + nation).
   pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(15);
-  pdf.text((short ? short + ' ' : '') + 'Maintenance Request', marginL, ctx.y + 5);
-  pdf.setFont('helvetica', 'normal');
-  pdf.setFontSize(9);
-  pdf.setTextColor(110);
-  if (nation) pdf.text(nation + ' — Housing Department', marginL, ctx.y + 10);
-
-  pdf.setFont('helvetica', 'bold');
-  pdf.setFontSize(11);
+  pdf.setFontSize(12);
   pdf.setTextColor(20);
-  pdf.text(unitAddr,           pageW - marginR, ctx.y + 5,  { align: 'right' });
+  pdf.text(unitAddr, marginL, ctx.y + 4);
   pdf.setFont('helvetica', 'normal');
   pdf.setFontSize(9);
   pdf.setTextColor(110);
-  pdf.text(projNum,            pageW - marginR, ctx.y + 10, { align: 'right' });
-  pdf.text('Date: ' + today,   pageW - marginR, ctx.y + 15, { align: 'right' });
-  ctx.y += 17;
-  pdf.setDrawColor(window._themeAccentHex());
-  pdf.setLineWidth(1);
-  pdf.line(marginL, ctx.y, pageW - marginR, ctx.y);
-  pdf.setDrawColor(0);
+  pdf.text(['Project ' + projNum, 'Date: ' + today].join('   |   '), marginL, ctx.y + 9);
   pdf.setTextColor(0);
-  ctx.y += 6;
+  ctx.y += 13;
 
   // Unit Information
   sectionHeader('Unit Information');
@@ -2263,7 +2248,7 @@ async function _generateSowPdfBase64() {
   ctx.y += sigBlockH + 4;
   }
 
-  return ctx.finish();
+  return mode === 'print' ? ctx.openDoc('Maintenance-Request.pdf') : ctx.finish();
 }
 
 // Resolve the tenant's email from the tenants table by looking up the
