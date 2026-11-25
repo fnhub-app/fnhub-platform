@@ -686,10 +686,27 @@ serve(async (req) => {
       turns++
       const resp = await callClaude(system, messages, [QUERY_TOOL, AUDIT_TOOL], usage)
       const content = (resp.content as Array<Record<string, unknown>>) || []
-      messages.push({ role: 'assistant', content })
+      // An assistant message with empty content is rejected by the API on the
+      // next call, so only keep it when it has something in it.
+      if (content.length) messages.push({ role: 'assistant', content })
 
       if (resp.stop_reason !== 'tool_use') {
-        const text = content.filter((b) => b.type === 'text').map((b) => b.text as string).join('\n').trim()
+        let text = content.filter((b) => b.type === 'text').map((b) => b.text as string).join('\n').trim()
+        // The model sometimes ends its turn with no written answer (most often
+        // right after a tool result, or when it stops on max_tokens mid tool
+        // call). Ask ONCE more, with no tools, for a plain-text answer before
+        // falling back to the canned "could not answer" line.
+        if (!text) {
+          try {
+            // A turn cut off mid tool call (max_tokens) leaves a tool_use with
+            // no tool_result, which the API rejects -- drop that turn first.
+            if (content.some((b) => b.type === 'tool_use') && messages[messages.length - 1] && (messages[messages.length - 1] as any).role === 'assistant') messages.pop()
+            messages.push({ role: 'user', content: 'Please answer my previous question now in plain written text, using what you already know (the how-to guide and the loaded context). Do not call any tools.' })
+            turns++
+            const retry = await callClaude(system, messages, undefined, usage)
+            text = replyText(retry).trim()
+          } catch (_) { /* fall through to the canned reply */ }
+        }
         const reply = text || "I could not put together an answer for that. Try rephrasing, or ask about a specific unit, applicant, or contractor."
         await writeAiAudit({ email, name: actorName, role, mode: 'chat', question: message || '', replyChars: reply.length, tables: tablesQueried, turns, inputTokens: usage.input, outputTokens: usage.output })
         return json({ reply })
@@ -985,7 +1002,18 @@ tenant's consent with a mobile number). When enabled, an opted-in tenant can be
 texted (and emailed) at maintenance-request milestones: when a request is logged
 (the preparer ticks "notify the tenant" on submit), when it is approved, when it
 is scheduled (a contractor or crew plus a target date are set), and when it is
-marked complete. Each milestone is its own event in Settings > Notifications
+marked complete.
+
+How the "Maintenance Request Scheduled" notice works: it fires automatically,
+ONCE, the first time a request has all three of (1) final approval (ED approved,
+or HM approved at or under the HM budget limit, default $25,000), (2) someone
+assigned (a contractor, or an in-house crew member under Assigned To), and (3) a
+Target Start or Target Completion date. Order does not matter: it goes out at
+whichever save or approval completes the last of the three. Changing the date
+or assignee afterwards does NOT re-notify the tenant. It emails the tenant if
+an email is on their Tenant Information Card (silently skipped otherwise), texts
+only if the event's Text toggle is on and the tenant opted in with a mobile, and
+copies any staff roles ticked under Recipients / Optional CC for that event. Each milestone is its own event in Settings > Notifications
 with its own Text toggle (all OFF by default), so a nation turns on only the
 updates it wants. The same three gates apply, with the tenant's own opt-in as
 gate 3.
