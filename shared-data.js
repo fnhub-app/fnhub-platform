@@ -5921,6 +5921,19 @@ window.sendNotification = async function(opts) {
         if(/^https:\/\//i.test(_origin)) opts.logo_url = _origin + '/icon-192.png';
       } catch(e){}
     }
+    // The nation's OWN logo (Settings -> Themes) is a data: URL. Mail clients
+    // strip data: URIs from HTML, but the send-notification Edge Function turns
+    // logo_data into an INLINE image (cid:) so the header shows the real nation
+    // logo instead of the generic app icon above. Prefer the saved theme logo,
+    // else NATION_CONFIG.logo; only when it's a data:image. (logo_url stays as
+    // the https fallback for when there is no data-URL logo.)
+    if(opts.logo_data == null){
+      try {
+        var _thm = (window._appSettings && window._appSettings.theme) || {};
+        var _lg = _thm.logo || _nc.logo || '';
+        if(/^data:image\//i.test(String(_lg))) opts.logo_data = _lg;
+      } catch(e){}
+    }
     // Per-nation email delivery method. The Edge Function honours the requested
     // provider only when its keys are configured server-side, else falls back to
     // its EMAIL_PROVIDER secret. from/from_name apply to the resend/sendgrid path.

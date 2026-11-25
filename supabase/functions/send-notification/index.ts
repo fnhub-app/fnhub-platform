@@ -60,7 +60,7 @@ const corsHeaders = {
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
-type Attachment = { name: string; contentType: string; contentBytes: string };
+type Attachment = { name: string; contentType: string; contentBytes: string; contentId?: string; inline?: boolean };
 type OutMessage = {
   to: string;
   to_name?: string;
@@ -114,12 +114,18 @@ async function sendViaGraph(m: OutMessage): Promise<void> {
   const token = await getGraphToken();
   const sendUrl = "https://graph.microsoft.com/v1.0/users/" + encodeURIComponent(GRAPH_FROM_USER!) + "/sendMail";
   const graphAttachments = (m.attachments && m.attachments.length)
-    ? m.attachments.map((a) => ({
-        "@odata.type": "#microsoft.graph.fileAttachment",
-        name:          a.name,
-        contentType:   a.contentType,
-        contentBytes:  a.contentBytes,
-      }))
+    ? m.attachments.map((a) => {
+        const att: Record<string, unknown> = {
+          "@odata.type": "#microsoft.graph.fileAttachment",
+          name:          a.name,
+          contentType:   a.contentType,
+          contentBytes:  a.contentBytes,
+        };
+        // Inline image (e.g. the nation logo in the header): Graph renders it
+        // where the HTML has <img src="cid:<contentId>">.
+        if (a.contentId) { att.contentId = a.contentId; att.isInline = !!a.inline; }
+        return att;
+      })
     : undefined;
   const graphMessage: Record<string, unknown> = {
     subject:      m.subject,
@@ -151,7 +157,12 @@ async function sendViaResend(m: OutMessage): Promise<void> {
     reply_to: m.replyTo,
   };
   if (m.attachments && m.attachments.length) {
-    body.attachments = m.attachments.map((a) => ({ filename: a.name, content: a.contentBytes }));
+    body.attachments = m.attachments.map((a) => {
+      const o: Record<string, unknown> = { filename: a.name, content: a.contentBytes };
+      // Inline image: Resend references it from the HTML via cid:<content_id>.
+      if (a.contentId) o.content_id = a.contentId;
+      return o;
+    });
   }
   const r = await fetch("https://api.resend.com/emails", {
     method:  "POST",
@@ -173,12 +184,17 @@ async function sendViaSendgrid(m: OutMessage): Promise<void> {
     content: [{ type: "text/html", value: m.emailHtml }],
   };
   if (m.attachments && m.attachments.length) {
-    body.attachments = m.attachments.map((a) => ({
-      content:     a.contentBytes,
-      filename:    a.name,
-      type:        a.contentType,
-      disposition: "attachment",
-    }));
+    body.attachments = m.attachments.map((a) => {
+      const o: Record<string, unknown> = {
+        content:     a.contentBytes,
+        filename:    a.name,
+        type:        a.contentType,
+        disposition: a.inline ? "inline" : "attachment",
+      };
+      // Inline image: SendGrid references it from the HTML via cid:<content_id>.
+      if (a.contentId) o.content_id = a.contentId;
+      return o;
+    });
   }
   const r = await fetch("https://api.sendgrid.com/v3/mail/send", {
     method:  "POST",
@@ -236,7 +252,11 @@ function brandedEmailShell(opts: {
 }): string {
   const rule    = opts.brandColor || "#1f2937";
   const name    = escapeHtml(opts.nationName || opts.brandFooter || "Housing");
-  const logo    = /^https:\/\//i.test(String(opts.logoUrl || "")) ? String(opts.logoUrl) : "";
+  // Accept an https URL (hosted icon) OR a cid: reference (an inline attachment,
+  // e.g. the nation's data-URL logo sent as an inline image). The cid value is
+  // generated server-side, so it is trusted; the pattern just bounds it.
+  const logoRaw = String(opts.logoUrl || "");
+  const logo    = (/^https:\/\//i.test(logoRaw) || /^cid:[A-Za-z0-9._-]+$/.test(logoRaw)) ? logoRaw : "";
   const logoImg = logo
     ? '<img src="' + escapeHtml(logo) + '" alt="" width="42" height="42" style="display:block;border:0;outline:none;text-decoration:none;border-radius:10px;margin:0 0 10px;"/>'
     : '';
@@ -429,12 +449,39 @@ serve(async (req: Request) => {
   // else the app icon at the nation's APP_URL. Data: URIs are rejected (mail
   // clients strip them), so the app's data-URL logo never reaches here.
   const payloadLogo = String((payload.logo_url as string) || "").trim();
-  const logoUrl = /^https:\/\//i.test(payloadLogo) ? payloadLogo
+  const httpsLogo = /^https:\/\//i.test(payloadLogo) ? payloadLogo
     : (/^https:\/\//i.test(String(EMAIL_LOGO_URL || "")) ? String(EMAIL_LOGO_URL)
     : (APP_URL_ENV && /^https:\/\//i.test(APP_URL_ENV) ? APP_URL_ENV + "/icon-192.png" : ""));
 
+  // Prefer the nation's OWN logo (Settings -> Themes). It is a data: URL, which
+  // mail clients strip from HTML -- so send it as an INLINE attachment the shell
+  // references by cid:nationlogo. Falls back to the https icon above when there
+  // is no usable logo_data. Only when we build the shell (not caller `html`),
+  // so an unreferenced image is never attached to a caller-authored document.
+  let logoForShell = httpsLogo;
+  let logoAttachment: Attachment | null = null;
+  if (!html) {
+    const logoData = String((payload.logo_data as string) || "").trim();
+    const mLogo = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/=\s]+)$/i.exec(logoData);
+    if (mLogo) {
+      const ct  = mLogo[1].toLowerCase();
+      const b64 = mLogo[2].replace(/\s+/g, "");
+      // Bound the size (the app caps logos at ~200KB; base64 is ~1.37x). Skip an
+      // oversized/implausible one and keep the https icon fallback.
+      if (b64.length > 64 && b64.length <= 400 * 1024) {
+        const ext = ct === "image/png" ? "png" : ct === "image/jpeg" ? "jpg"
+          : ct === "image/gif" ? "gif" : ct === "image/svg+xml" ? "svg" : "png";
+        logoAttachment = { name: "logo." + ext, contentType: ct, contentBytes: b64, contentId: "nationlogo", inline: true };
+        logoForShell = "cid:nationlogo";
+      }
+    }
+  }
+  const finalAttachments: Attachment[] | undefined = logoAttachment
+    ? ([] as Attachment[]).concat(attachments || [], [logoAttachment])
+    : attachments;
+
   const emailHtml = html ?? brandedEmailShell({
-    subject, innerHtml, nationName, brandColor, contactLine, brandFooter: brand, logoUrl,
+    subject, innerHtml, nationName, brandColor, contactLine, brandFooter: brand, logoUrl: logoForShell,
   });
 
   // Resolve the delivery method for THIS message. The client (nation config) may
@@ -461,7 +508,7 @@ serve(async (req: Request) => {
   }
 
   const outMessage: OutMessage = {
-    to, to_name, subject, emailHtml, replyTo, attachments,
+    to, to_name, subject, emailHtml, replyTo, attachments: finalAttachments,
     fromEmail: provider === "graph" ? undefined : fromEmail,
     fromName:  provider === "graph" ? undefined : fromName,
   };
