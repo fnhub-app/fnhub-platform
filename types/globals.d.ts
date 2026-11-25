@@ -336,6 +336,7 @@ declare var _sowSafePreprintSave: any;
 declare var _sowSeed: any;
 declare var _staffCache: any;
 declare var _staffFilter: any;
+declare var _pendingTenantMr: any;
 declare var _tenantFilesLib: any;
 declare var _tenantFilesUnitId: any;
 declare var _tenantMrSubmissions: any;

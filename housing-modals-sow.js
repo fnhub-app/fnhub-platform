@@ -3173,6 +3173,16 @@ function saveSOW(opts){
   var isNew = !window._sowWasPreviouslySaved;
   window._sowWasPreviouslySaved = true;
 
+  // Tenant-reported request: now that this SOW is actually saved (its first
+  // save, this unit), commit the originating portal submission — mark it
+  // approved, text the member, file the photos, and drop it from the worklist.
+  // _tenantMrApprove deferred this so an abandoned request never vanished from
+  // the worklist with no work order created. Consumed once, then cleared.
+  if(isNew && window._pendingTenantMr && window._pendingTenantMr.unitId === _sowUnitId && typeof window._tenantMrFinalize === 'function'){
+    var _pendMr = window._pendingTenantMr; window._pendingTenantMr = null;
+    window._tenantMrFinalize(_pendMr, data.project_number);
+  }
+
   // Core save event
   var detail = (isNew ? 'SOW created' : 'SOW updated') + ' — ' + addr;
   if(data.totalCost) detail += ' · Total: ' + data.totalCost;
