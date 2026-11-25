@@ -376,3 +376,80 @@
   transition: opacity .15s;
 }
 .contracts-token-chip:hover { opacity: .75; }
+
+/* ── Tile hub (Settings -> Notifications landing) ───────────────────── */
+.ntf-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 6px;
+}
+.ntf-filter-chip {
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--text);
+  cursor: pointer;
+}
+.ntf-filter-chip:hover     { border-color: var(--yellow); }
+.ntf-filter-chip.is-active { background: var(--yellow); border-color: var(--yellow); color: var(--on-accent); }
+.ntf-filter-n { font-weight: 400; opacity: .75; margin-left: 2px; }
+
+.ntf-tile { gap: 8px; }
+.ntf-tile .hub-tile-nm { padding-right: 52px; }  /* clear the Pending badge */
+.ntf-tile-sub {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.ntf-tile-pending {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .4px;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--muted);
+}
+
+/* Channel pills: lit = on, dashed/grey = available but off */
+.ntf-ch-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: auto;
+}
+.ntf-ch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+.ntf-ch-on   { background: var(--success-bg); color: var(--success); border: 1px solid transparent; }
+.ntf-ch-off  { background: transparent; color: var(--muted); border: 1px dashed var(--border); font-weight: 600; }
+.ntf-ch-both { background: var(--yellow); color: var(--on-accent); border: 1px solid var(--yellow); }
+
+.ntf-back { margin-bottom: 12px; }
+
+/* Phones: one compact column -- icon hidden, one-line description,
+   so ~36 events stay scannable without endless scrolling. */
+@media (max-width: 480px) {
+  .ntf-tiles { grid-template-columns: 1fr; gap: 8px; }
+  .ntf-tile  { min-height: 0; padding: 12px 13px; gap: 5px; }
+  .ntf-tile .hub-tile-ic { display: none; }
+  .ntf-tile-sub { -webkit-line-clamp: 1; }
+}

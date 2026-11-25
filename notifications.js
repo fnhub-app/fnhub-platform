@@ -160,6 +160,7 @@ var EMAIL_EVENT_REGISTRY = [
   {
     key:                   'contractor_submission',
     label:                 'Contractor Submission Needs Review (Text Alert)',
+    emailChannel:          false,   // server-side SMS only -- no email is sent
     description:           'Texts staff when a contractor uploads something that needs review/approval in the Contractor Portal -- an invoice, a WSIB or insurance certificate, or a request to add a team member. Fired server-side from the contractor-upload function. Use the recipients below to choose WHO is texted (default Housing Manager) and the Text channel to turn it on/off; the message wording (contractor name, property address, document type, app link) is composed by the system. Requires the SMS / Text Notifications module and a recipient who has opted in with a mobile. Photos, notes, and progress updates do NOT text -- they are flagged on the worklist.',
     defaultRecipientRoles: ['housing_manager'],
     defaultCcRoles:        [],
@@ -3834,10 +3835,10 @@ async function _resolveActiveStaffForRoles(roles) {
 // ════════════════════════════════════════════════════════════════════════
 // Settings -> Notifications tab UI (Phase 2)
 // ────────────────────────────────────────────────────────────────────────
-// Two-column layout:
-//   • Left  - registry-driven event list, click to load template
-//   • Right - editor pane (subject + placeholder chips + rich text body
-//             + Save/Reset/Send Test buttons)
+// Tile hub (standard .hub-tile grid, grouped by audience) showing each
+// event's delivery channels at a glance (Email / Text / both / Letter).
+// Tapping a tile opens the editor (subject + placeholder chips + rich
+// text body + Save/Reset/Send Test) with a back control to the tiles.
 // All functions in this section are window-globals via plain function
 // declarations so onclick="..." handlers in dynamically-rendered HTML
 // can reach them (matches the rest of the app's pattern).
@@ -3873,14 +3874,165 @@ function renderNotificationsTab() {
     + '</div>';
 
   body.innerHTML =
-      testStrip
-    + '<div class="ntf-grid">'
-    +   '<div class="ntf-event-list" id="ntf_event_list">' + _ntfRenderEventListHtml() + '</div>'
-    +   '<div class="ntf-editor"      id="ntf_editor">'    + _ntfRenderEditorHtml(_ntfSelectedEvent) + '</div>'
+      '<div id="ntf_hub_view">'
+    +   testStrip
+    +   '<div class="ntf-filter" id="ntf_filter"></div>'
+    +   '<div id="ntf_hub_tiles"></div>'
+    + '</div>'
+    + '<div id="ntf_detail_view" style="display:none;">'
+    +   '<button type="button" class="btn btn-ghost btn-sm ntf-back" onclick="ntfShowHub()">&larr; All notifications</button>'
+    +   '<div class="ntf-editor" id="ntf_editor"></div>'
     + '</div>';
 
-  _ntfWireEventListClicks();
+  ntfShowHub();
+}
+
+// ── Tile hub ────────────────────────────────────────────────────────────
+// Active channel filter: 'all' | 'email' | 'text' | 'both' | 'letter'.
+var _ntfFilter = 'all';
+
+// Audience groups for the hub, in display order. `match` is tested
+// against the registry entry's recipientType (blank = staff roles).
+var NTF_HUB_GROUPS = [
+  { id:'staff',      label:'Staff alerts',          match:function(t){ return !t || t === 'field_employee'; },
+    ic:'<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>' },
+  { id:'members',    label:'Applicants &amp; tenants', match:function(t){ return t === 'applicant' || t === 'tenant'; },
+    ic:'<path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/>' },
+  { id:'contractors',label:'Contractors',           match:function(t){ return t === 'contractor' || t === 'rfq_contractor'; },
+    ic:'<path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94z"/>' },
+  { id:'finance',    label:'Finance',               match:function(t){ return t === 'finance'; },
+    ic:'<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>' },
+  { id:'letters',    label:'Letters (PDF)',         match:function(t){ return t === 'letter'; },
+    ic:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/>' }
+];
+
+// Delivery channels for an event, read from the saved override (else the
+// registry default) -- the same values the send path uses.
+//   { letter, email, textCapable, text }
+function _ntfEventChannels(cfg) {
+  if (cfg.recipientType === 'letter') return { letter:true, email:false, textCapable:false, text:false };
+  var smsModule   = (typeof window.moduleOn !== 'function') || !!window.moduleOn('sms_notifications');
+  var textCapable = !!cfg.smsCapable && smsModule;
+  var text = false;
+  if (textCapable) {
+    var saved = (window._appSettings && window._appSettings.email_templates
+              && window._appSettings.email_templates[cfg.key]) || {};
+    text = (saved.channels && typeof saved.channels.sms === 'boolean') ? saved.channels.sms : !!cfg.smsDefault;
+  }
+  return { letter:false, email: cfg.emailChannel !== false, textCapable: textCapable, text: text };
+}
+
+function _ntfMatchesFilter(ch) {
+  switch (_ntfFilter) {
+    case 'email':  return ch.email && !ch.text;
+    case 'text':   return ch.text && !ch.email;
+    case 'both':   return ch.email && ch.text;
+    case 'letter': return ch.letter;
+    default:       return true;
+  }
+}
+
+// First sentence of the registry description, for the tile subline.
+function _ntfShortDesc(d) {
+  d = String(d || '');
+  var m = d.match(/^.*?[.!?](\s|$)/);
+  return (m ? m[0] : d).trim();
+}
+
+function _ntfChannelPillsHtml(ch) {
+  if (ch.letter) return '<span class="ntf-ch ntf-ch-on">&#128196; Letter</span>';
+  var out = '';
+  if (ch.email) out += '<span class="ntf-ch ntf-ch-on">&#9993;&#65039; Email</span>';
+  if (ch.textCapable) {
+    out += ch.text
+      ? '<span class="ntf-ch ntf-ch-on">&#128172; Text</span>'
+      : '<span class="ntf-ch ntf-ch-off" title="Text is available for this event but turned off">&#128172; Text off</span>';
+  }
+  if (ch.email && ch.text) out = '<span class="ntf-ch ntf-ch-both">Both</span>' + out;
+  return out;
+}
+
+function _ntfRenderFilterHtml() {
+  var counts = { all:0, email:0, text:0, both:0, letter:0 };
+  EMAIL_EVENT_REGISTRY.forEach(function(ev){
+    var ch = _ntfEventChannels(ev);
+    counts.all++;
+    if (ch.letter) counts.letter++;
+    else if (ch.email && ch.text) counts.both++;
+    else if (ch.text) counts.text++;
+    else if (ch.email) counts.email++;
+  });
+  var opts = [['all','All'],['email','Email only'],['text','Text only'],['both','Email + Text'],['letter','Letters']];
+  return opts.filter(function(o){ return o[0] === 'all' || counts[o[0]] > 0; }).map(function(o){
+    return '<button type="button" class="ntf-filter-chip' + (_ntfFilter === o[0] ? ' is-active' : '') + '" data-ntf-filter="' + o[0] + '">'
+         + o[1] + ' <span class="ntf-filter-n">' + counts[o[0]] + '</span></button>';
+  }).join('');
+}
+
+function _ntfRenderHubTilesHtml() {
+  var html = '';
+  NTF_HUB_GROUPS.forEach(function(g){
+    var items = EMAIL_EVENT_REGISTRY.filter(function(ev){
+      return g.match(ev.recipientType) && _ntfMatchesFilter(_ntfEventChannels(ev));
+    });
+    if (!items.length) return;
+    html += '<div class="hub-sec"><div class="hub-sec-h"><span class="hub-sec-t">' + g.label + '</span><span class="hub-sec-rule"></span></div>'
+          + '<div class="hub-tiles ntf-tiles">';
+    items.forEach(function(ev){
+      var ch = _ntfEventChannels(ev);
+      html += '<button type="button" class="hub-tile ntf-tile" data-ntf-event="' + _ntfEsc(ev.key) + '">'
+            +   (ev.wired ? '' : '<span class="ntf-tile-pending" title="Template saved but not yet wired to a firing point">Pending</span>')
+            +   '<span class="hub-tile-ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">' + g.ic + '</svg></span>'
+            +   '<span class="hub-tile-nm">' + _ntfEsc(ev.label) + '</span>'
+            +   '<span class="hub-tile-sub ntf-tile-sub">' + _ntfEsc(_ntfShortDesc(ev.description)) + '</span>'
+            +   '<span class="ntf-ch-row">' + _ntfChannelPillsHtml(ch) + '</span>'
+            + '</button>';
+    });
+    html += '</div></div>';
+  });
+  return html || '<div class="empty-state-italic">No notifications match this filter.</div>';
+}
+
+// Show the tile hub (re-rendered so channel pills reflect any just-saved change).
+function ntfShowHub() {
+  var hub = document.getElementById('ntf_hub_view');
+  var det = document.getElementById('ntf_detail_view');
+  if (!hub || !det) return;
+  det.style.display = 'none';
+  hub.style.display = '';
+  var f = document.getElementById('ntf_filter');
+  if (f) f.innerHTML = _ntfRenderFilterHtml();
+  var t = document.getElementById('ntf_hub_tiles');
+  if (t) t.innerHTML = _ntfRenderHubTilesHtml();
+  _ntfWireHub();
+}
+window.ntfShowHub = ntfShowHub;
+
+// Open one event's editor in place of the tiles.
+function ntfOpenEvent(eventKey) {
+  _ntfSelectedEvent = eventKey;
+  var hub = document.getElementById('ntf_hub_view');
+  var det = document.getElementById('ntf_detail_view');
+  var ed  = document.getElementById('ntf_editor');
+  if (!hub || !det || !ed) return;
+  ed.innerHTML = _ntfRenderEditorHtml(eventKey);
+  hub.style.display = 'none';
+  det.style.display = '';
   _ntfWireEditor();
+  try { det.scrollIntoView({ block:'start', behavior:'smooth' }); } catch (e) {}
+}
+window.ntfOpenEvent = ntfOpenEvent;
+
+function _ntfWireHub() {
+  var hub = document.getElementById('ntf_hub_view');
+  if (!hub || hub.getAttribute('data-ntf-wired') === '1') return;
+  hub.setAttribute('data-ntf-wired', '1');
+  hub.addEventListener('click', function(e){
+    var chip = e.target.closest && e.target.closest('[data-ntf-filter]');
+    if (chip) { _ntfFilter = chip.getAttribute('data-ntf-filter'); ntfShowHub(); return; }
+    var tile = e.target.closest && e.target.closest('[data-ntf-event]');
+    if (tile) ntfOpenEvent(tile.getAttribute('data-ntf-event'));
+  });
 }
 
 // Send a real test email to the signed-in user through the normal pipeline
@@ -3912,25 +4064,6 @@ function ntfSendTestEmail() {
   });
 }
 window.ntfSendTestEmail = ntfSendTestEmail;
-
-// Left column — one row per registry entry. Wired (live) events get
-// a green dot; pending events get a grey dot so the ED can pre-author
-// templates that take effect once the firing point is wired in code.
-function _ntfRenderEventListHtml() {
-  return EMAIL_EVENT_REGISTRY.map(function(ev){
-    var isActive = ev.key === _ntfSelectedEvent;
-    var dotCls   = ev.wired ? 'ntf-dot ntf-dot-on' : 'ntf-dot ntf-dot-off';
-    var status   = ev.wired ? 'Wired'              : 'Pending';
-    return '<button type="button" data-ntf-event="' + _ntfEsc(ev.key) + '" '
-         + 'class="ntf-event-item' + (isActive ? ' is-active' : '') + '">'
-         + '<span class="' + dotCls + '" title="' + status + '"></span>'
-         + '<div class="ntf-event-text">'
-         +   '<div class="ntf-event-label">' + _ntfEsc(ev.label) + '</div>'
-         +   '<div class="ntf-event-desc">'  + _ntfEsc(ev.description || '') + '</div>'
-         + '</div>'
-         + '</button>';
-  }).join('');
-}
 
 // Right column — recipients picker + subject + placeholder chips +
 // toolbar + contentEditable body. The current saved (or default)
@@ -4075,6 +4208,7 @@ function _ntfRenderEditorHtml(eventKey) {
     +   '<div class="ntf-editor-meta">'
     +     'Status: <strong>' + (cfg.wired ? 'Wired (live)' : 'Pending wiring') + '</strong>'
     +   '</div>'
+    +   '<div class="ntf-ch-row" style="margin-top:8px;">' + _ntfChannelPillsHtml(_ntfEventChannels(cfg)) + '</div>'
     + '</div>'
     + '<div class="ntf-field">'
     +   '<label class="ntf-label">Recipients' + (cfg.recipientType === 'applicant' || cfg.recipientType === 'tenant' || cfg.recipientType === 'contractor' || cfg.recipientType === 'field_employee' || cfg.recipientType === 'finance' || cfg.recipientType === 'letter'
@@ -4105,22 +4239,6 @@ function _ntfRenderEditorHtml(eventKey) {
     +   '<button type="button" class="btn btn-ghost"   onclick="resetNotificationTemplate()">Reset to Default</button>'
     +   '<button type="button" class="btn btn-ghost"   onclick="sendNotificationTest()">Send Test Email</button>'
     + '</div>';
-}
-
-function _ntfWireEventListClicks() {
-  var list = document.getElementById('ntf_event_list');
-  if (!list) return;
-  list.querySelectorAll('[data-ntf-event]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      _ntfSelectedEvent = btn.getAttribute('data-ntf-event');
-      // Re-render only what changed: list selection state + editor pane.
-      list.innerHTML = _ntfRenderEventListHtml();
-      var ed = document.getElementById('ntf_editor');
-      if (ed) ed.innerHTML = _ntfRenderEditorHtml(_ntfSelectedEvent);
-      _ntfWireEventListClicks();
-      _ntfWireEditor();
-    });
-  });
 }
 
 // Wire the toolbar + placeholder chips. Idempotent so it can be re-run
