@@ -967,15 +967,17 @@ function initRenosPage() {
       setTimeout(function(){
         try {
           if (typeof setSowTab === 'function') {
+            // Land on Work Items so the approver first sees the scope they are
+            // being asked to approve/decline (they then use the footer buttons).
             if (deepAction === 'notes') setSowTab('notes');
-            else if (deepAction === 'approve' || deepAction === 'decline') setSowTab('sigs');
+            else if (deepAction === 'approve' || deepAction === 'decline') setSowTab('scope');
           }
           if (typeof showToast === 'function') {
             var msg = deepAction === 'decline'
-                  ? 'Review the request. To decline it, use the "✖ Cancel Request" button in the footer.'
+                  ? 'Review the work items. To decline this request, use the "✖ Cancel Request" button in the footer.'
                   : deepAction === 'notes'
                   ? 'Add your notes in the Notes & Terms section.'
-                  : 'Review the request, then sign off in the Signatures section to approve it.';
+                  : 'Review the work items, then press "✓ Approve" in the footer to approve.';
             showToast(msg, { type: 'info' });
           }
         } catch(e){ console.warn('[RENOS] sow action hint failed:', e); }

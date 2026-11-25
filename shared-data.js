@@ -5860,6 +5860,47 @@ function _magicLinkBrand(){
 }
 window._magicLinkBrand = _magicLinkBrand;
 
+// Rasterize a logo (any image data URL — including SVG, which Gmail will NOT
+// render as an <img>) to a Gmail-safe PNG data URL for email headers. Draws onto
+// a white canvas (so a transparent/SVG logo isn't invisible and flattens
+// cleanly) at <=256px, which also shrinks an oversized logo under the Edge
+// Function's inline-attachment size cap. Cached per source. Resolves null on any
+// failure so the caller can fall back to the hosted app icon. Browser-only
+// (uses Image + canvas); sendNotification only runs in the browser.
+window._emailLogoPngCache = window._emailLogoPngCache || {};
+function _emailLogoPng(src){
+  return new Promise(function(resolve){
+    if(!src){ resolve(null); return; }
+    if(Object.prototype.hasOwnProperty.call(window._emailLogoPngCache, src)){ resolve(window._emailLogoPngCache[src]); return; }
+    try {
+      if(typeof document === 'undefined' || typeof Image === 'undefined'){ resolve(null); return; }
+      var img = new Image();
+      img.onload = function(){
+        try {
+          var W = img.naturalWidth || img.width || 0;
+          var H = img.naturalHeight || img.height || 0;
+          if(!W || !H){ W = 256; H = 256; } // SVG with no intrinsic size
+          var max = 256, scale = Math.min(1, max / Math.max(W, H));
+          var cw = Math.max(1, Math.round(W * scale));
+          var ch = Math.max(1, Math.round(H * scale));
+          var cv = document.createElement('canvas');
+          cv.width = cw; cv.height = ch;
+          var cx = cv.getContext('2d');
+          cx.fillStyle = '#ffffff';
+          cx.fillRect(0, 0, cw, ch);
+          cx.drawImage(img, 0, 0, cw, ch);
+          var out = cv.toDataURL('image/png');
+          window._emailLogoPngCache[src] = out || null;
+          resolve(out || null);
+        } catch(e){ window._emailLogoPngCache[src] = null; resolve(null); }
+      };
+      img.onerror = function(){ window._emailLogoPngCache[src] = null; resolve(null); };
+      img.src = src;
+    } catch(e){ resolve(null); }
+  });
+}
+window._emailLogoPng = _emailLogoPng;
+
 window.sendNotification = async function(opts) {
   if(!opts || !opts.to || !opts.subject || (!opts.message && !opts.html && !opts.bodyHtml)) {
     throw new Error('sendNotification: requires to + subject + (message|html|bodyHtml)');
@@ -5909,13 +5950,28 @@ window.sendNotification = async function(opts) {
     // strip data: URIs from HTML, but the send-notification Edge Function turns
     // logo_data into an INLINE image (cid:) so the header shows the real nation
     // logo instead of the generic app icon above. Prefer the saved theme logo,
-    // else NATION_CONFIG.logo; only when it's a data:image. (logo_url stays as
-    // the https fallback for when there is no data-URL logo.)
+    // else NATION_CONFIG.logo. (logo_url stays as the https fallback for when
+    // there is no data-URL logo.)
+    //
+    // We RASTERIZE the logo to a PNG before sending, because Gmail (and some
+    // other webmail clients) do NOT render an SVG <img> at all -- an SVG data-URL
+    // logo showed as an empty box in the header. _emailLogoPng draws the logo
+    // onto a white canvas and exports PNG (also shrinking an oversized logo under
+    // the Edge Function's inline-attachment size cap). A hosted https logo is
+    // passed through as logo_url instead; on any failure we fall back to the
+    // generic app icon already set on logo_url above.
     if(opts.logo_data == null){
       try {
         var _thm = (window._appSettings && window._appSettings.theme) || {};
-        var _lg = _thm.logo || _nc.logo || '';
-        if(/^data:image\//i.test(String(_lg))) opts.logo_data = _lg;
+        var _lg = String(_thm.logo || _nc.logo || '').trim();
+        if(/^https:\/\//i.test(_lg)){
+          // A hosted logo renders directly; prefer it over the generic app icon.
+          opts.logo_url = _lg;
+        } else if(/^data:image\//i.test(_lg) && typeof _emailLogoPng === 'function'){
+          var _png = await _emailLogoPng(_lg);
+          if(_png) opts.logo_data = _png;          // Gmail-safe PNG of the real logo
+          else if(/^data:image\/(png|jpeg|jpg|gif);/i.test(_lg)) opts.logo_data = _lg; // last resort: raster formats render as-is
+        }
       } catch(e){}
     }
     // Per-nation email delivery method. The Edge Function honours the requested

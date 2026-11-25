@@ -75,6 +75,8 @@ interface Window {
 
   // --- Misc shared-layer helpers referenced across the checked set ---
   _stashLoginReturn: (...args: any[]) => any;   // shared-auth.js (deep-link return)
+  _emailLogoPng: (src: string) => Promise<string | null>; // shared-data.js (rasterize email logo to PNG)
+  _emailLogoPngCache: Record<string, any>;      // shared-data.js (email-logo PNG cache)
   _removeScoringGateBar: (...args: any[]) => any; // housing-app.js scoring gate bar
   aiWriteLetter: (...args: any[]) => any;        // ai-assistant.js (DocLibrary letter writer)
   sendSms: (...args: any[]) => any;              // shared-data.js (SMS Edge Function wrapper)
