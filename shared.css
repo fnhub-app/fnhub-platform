@@ -1184,9 +1184,12 @@ tr.empty-row td { text-align: center; padding: 40px; color: var(--muted); }
 .doclib-table td:first-child,
 .doclib-table th:first-child { width: 32px; }
 .doclib-table td:nth-child(2),
-.doclib-table th:nth-child(2) { width: auto; max-width: none; }
-/* Filename cell — allow wrapping for long names */
-.doclib-table .std-cell-primary { white-space: normal; word-break: break-word; max-width: none; }
+.doclib-table th:nth-child(2) { width: auto; min-width: 150px; max-width: none; }
+/* Filename cell — wrap long names, but keep a width floor so the auto-layout
+   table can't starve this column down to ~1 character (which made a long,
+   space-less filename stack one letter per line on narrow phones). The wrap
+   itself scrolls horizontally via .doclib-table-wrap when space is tight. */
+.doclib-table .std-cell-primary { white-space: normal; overflow-wrap: anywhere; min-width: 150px; max-width: 320px; }
 .upload-zone  { border: 2px dashed var(--border); border-radius: 10px; padding: 28px 20px; text-align: center; cursor: pointer; transition: var(--tr); }
 .upload-zone:hover,
 .upload-zone.is-drag  { border-color: var(--yellow); background: var(--yellow-light); }
