@@ -1942,7 +1942,7 @@ window.DocLibrary = (function(){
           }
           return '<tr>' +
             '<td style="width:44px;padding:6px 4px;">'+icon+'</td>' +
-            '<td class="std-cell-primary" style="max-width:320px;white-space:normal;word-break:break-word;">' +
+            '<td class="std-cell-primary" style="min-width:150px;max-width:320px;white-space:normal;overflow-wrap:anywhere;">' +
               _escHtml(f.name.replace(/^\d+_/, '')) +
               '<div style="font-size:11px;color:var(--muted);font-weight:normal;">' +
                 _escHtml(f.addedAt||'') + (f.addedBy?' \u00B7 '+_escHtml(f.addedBy):'') + '</div>' +
