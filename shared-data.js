@@ -6965,13 +6965,37 @@ async function emailContractorAgreement() {
     return;
   }
 
-  // Per-recipient picker (all default on). showConfirm with `checkboxes`
-  // resolves { ok, selected:[emails] }.
+  // Build the record the PDF reads (incl. any key contacts typed but not yet
+  // saved) once, so the Preview button and the send use the exact same data.
+  var ctForPdf = Object.assign({}, ct, { people: people });
+
+  // One-shot Preview handler for the dialog's "Preview" button — opens the SAME
+  // branded Contractor Agreement PDF that will be attached, in a new tab,
+  // WITHOUT closing the dialog, so staff can review it before sending. Cleared
+  // after the dialog resolves.
+  window._ctAgreementPreview = function(){
+    try {
+      if (typeof _generateContractorAgreementPdfBase64 === 'function') {
+        Promise.resolve(_generateContractorAgreementPdfBase64(ctForPdf, 'print')).catch(function(e){
+          console.warn('[contractor agreement] preview failed:', e);
+          if (typeof showToast === 'function') showToast('Could not generate the preview PDF.', {type:'error'});
+        });
+      } else if (typeof showToast === 'function') {
+        showToast('Agreement PDF generator is not available on this page.', {type:'error'});
+      }
+    } catch(e){}
+  };
+
+  // Per-recipient picker (all default on) + a Preview button. showConfirm with
+  // `checkboxes` resolves { ok, selected:[emails] }. The <button> is valid
+  // phrasing content inside showConfirm's <p>; return false keeps the dialog open.
   var res = { ok: true, selected: recips.map(function(r){ return r.email; }) };
   if (typeof showConfirm === 'function') {
     res = await showConfirm({
       title: 'Email Contractor Agreement',
-      message: 'Send the branded Contractor Agreement PDF to:',
+      message: 'Send the branded Contractor Agreement PDF to:'
+        + '<br/><button type="button" class="btn btn-ghost btn-sm" style="margin-top:10px;" '
+        + 'onclick="window._ctAgreementPreview&amp;&amp;window._ctAgreementPreview();return false;">👁 Preview agreement PDF</button>',
       checkboxes: recips.map(function(r){
         return {
           id: r.email,
@@ -6983,6 +7007,7 @@ async function emailContractorAgreement() {
       cancelText: 'Cancel'
     });
   }
+  try { window._ctAgreementPreview = undefined; } catch(e){}
   if (!res || !res.ok) return;
   var chosen = (res.selected && res.selected.length) ? res.selected : [];
   if (!chosen.length) { showToast('No recipients selected.', {type:'info'}); return; }
@@ -6990,8 +7015,8 @@ async function emailContractorAgreement() {
   var btn = document.getElementById('ct_email_btn');
   if (btn) btn.disabled = true;
   try {
-    // Pass the (possibly unsaved) key contacts so the PDF reads the live record.
-    var ctForPdf = Object.assign({}, ct, { people: people });
+    // ctForPdf (built above, incl. any unsaved key contacts) is what the Preview
+    // button showed — the emailed PDF is the identical document.
     var ok = await notifyContractorAgreement(ctForPdf, chosen);
     if (ok) {
       showToast('✓ Contractor agreement emailed.', {type:'info'});
