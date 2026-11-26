@@ -4914,7 +4914,25 @@
     var pPhone = ow.phone || PROVIDER.phone;
     var pEmail = ow.email || PROVIDER.email;
     var hx = M;
-    if (_logoData){ try { doc.addImage(_logoData, 'PNG', M, y - 11, 40, 40); hx = M + 52; } catch (e){} }
+    if (_logoData){
+      try {
+        // Size the logo from its real aspect ratio so it isn't squished into a
+        // square, and scale it up to sit level with the provider text block
+        // (title + 3 lines, ~55pt tall). Target ~50pt tall, width capped at
+        // 150pt so a wide wordmark doesn't crowd the title; vertically centred.
+        var _lp = doc.getImageProperties(_logoData);
+        var _lh = 50, _lw;
+        if (_lp && _lp.width && _lp.height) {
+          _lw = (_lp.width / _lp.height) * _lh;
+          if (_lw > 150) { _lw = 150; _lh = (_lp.height / _lp.width) * _lw; }
+        } else { _lw = _lh; } // unknown dims -> square fallback
+        var _ltop = (y + 15) - _lh / 2;           // centre against the text block
+        doc.addImage(_logoData, 'PNG', M, _ltop, _lw, _lh);
+        hx = M + _lw + 14;
+      } catch (e){
+        try { doc.addImage(_logoData, 'PNG', M, y - 11, 40, 40); hx = M + 52; } catch (e2){}
+      }
+    }
     t(pName, hx, y, { style: 'bold', size: 16 });
     t('INVOICE', W - M, y, { style: 'bold', size: 18, align: 'right', color: [120, 120, 120] });
     y += 16; t('Housing Management Platform', hx, y, { size: 10, color: [110, 110, 110] });
