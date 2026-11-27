@@ -224,8 +224,15 @@ serve(async (req: Request) => {
   const personRole    = String(body.personRole ?? "").trim().slice(0, 80);
   const personEmail   = String(body.personEmail ?? "").trim().slice(0, 160);
 
+  // WSIB / insurance are account-level compliance proofs: they file to the
+  // contractor record and (as of the global-compliance change) are uploaded from
+  // the portal's account-level card with NO work order, so they are exempt from
+  // the unitId/projectNumber requirement like add_person. (A compliance upload
+  // that DOES carry a work order still works through the main path below.)
+  const isCompliance = COMPLIANCE_KINDS.indexOf(kind) !== -1;
+
   // add_person is account-level (no work order), so it does not require unitId.
-  if (kind !== "add_person" && (!unitId || !projectNumber)) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
+  if (kind !== "add_person" && !isCompliance && (!unitId || !projectNumber)) return jsonResponse({ error: "Missing unitId / projectNumber" }, 400);
   if (ALLOWED_KINDS.indexOf(kind) === -1) return jsonResponse({ error: "Invalid kind" }, 400);
   if (kind === "invoice" && !(amount > 0)) return jsonResponse({ error: "Invoice amount must be greater than zero" }, 400);
   if (kind === "note") {
@@ -234,8 +241,11 @@ serve(async (req: Request) => {
   } else if (kind === "progress") {
     if (!Number.isFinite(Number(body.percent))) return jsonResponse({ error: "Invalid percent" }, 400);
   } else if (kind === "add_person") {
-    if (!personName || !personPhone) return jsonResponse({ error: "Name and mobile number are required" }, 400);
-    if (personPhone.replace(/[^0-9]/g, "").length < 10) return jsonResponse({ error: "Enter a valid mobile number" }, 400);
+    // A teammate can be invited by mobile OR email (either supports portal
+    // sign-in), so require the name plus at least one reachable identity.
+    if (!personName || (!personPhone && !personEmail)) return jsonResponse({ error: "A name and a mobile number or email are required" }, 400);
+    if (personPhone && personPhone.replace(/[^0-9]/g, "").length < 10) return jsonResponse({ error: "Enter a valid mobile number" }, 400);
+    if (personEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personEmail)) return jsonResponse({ error: "Enter a valid email address" }, 400);
   } else {
     if (!isAllowedType(contentType)) return jsonResponse({ error: "Only images and PDFs are allowed" }, 415);
     // Strip a data: URI prefix if the client left one on.
@@ -286,6 +296,74 @@ serve(async (req: Request) => {
     } catch (_e) { /* non-fatal: the request row above is the authoritative record */ }
     await notifyStaffOfSubmission(admin, { kind: "add_person", contractorId, address: "", amount: null });
     return jsonResponse({ ok: true, kind: "add_person" });
+  }
+
+  // Account-level WSIB / insurance proof (no work order). Files to the
+  // contractor record (contractors/<id>/<kind>/) exactly as the per-unit path
+  // did, writes the file_uploaded meta against the CONTRACTOR entity (so it
+  // surfaces on the Contractor card), flags staff on the worklist, and texts
+  // them -- but is NOT tied to any job. The file was already type/size-validated
+  // above (compliance is a file kind). Handled BEFORE the work-order ownership
+  // check, which does not apply when there is no work order.
+  if (isCompliance && !unitId) {
+    let cbytes: Uint8Array;
+    try {
+      const bin = atob(dataBase64);
+      cbytes = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) cbytes[i] = bin.charCodeAt(i);
+    } catch (_e) {
+      return jsonResponse({ error: "Could not decode file" }, 400);
+    }
+    const cpath = "contractors/" + contractorId + "/" + kind + "/" + Date.now() + "_" + filename;
+    const cEncoded = cpath.split("/").map(encodeURIComponent).join("/");
+    const cup = await fetch(SUPABASE_URL + "/storage/v1/object/" + STORAGE_BUCKET + "/" + cEncoded, {
+      method: "POST",
+      headers: {
+        "Authorization": "Bearer " + SUPABASE_SERVICE_KEY,
+        "apikey": SUPABASE_SERVICE_KEY,
+        "Content-Type": contentType,
+        "x-upsert": "true",
+      },
+      body: cbytes,
+    });
+    if (!cup.ok) {
+      const t = await cup.text().catch(() => "");
+      return jsonResponse({ error: "Upload failed", detail: t.slice(0, 200) }, 502);
+    }
+    const cName  = (kind === "wsib" ? "[Contractor WSIB] " : "[Contractor insurance] ") + filename;
+    const cActor = user.phone || user.email || contractorId;
+    const cNow   = new Date().toISOString();
+    // Resolve the contractor's business name so the staff worklist row is
+    // legible (account-level uploads have no property address to show).
+    let cCtName = "";
+    try {
+      const { data: cctRows } = await admin.from("housing_contractors").select("name").eq("id", contractorId).limit(1);
+      if (cctRows && cctRows[0]) cCtName = String((cctRows[0] as Record<string, unknown>).name || "");
+    } catch (_e) { /* non-fatal */ }
+    try {
+      await admin.from("housing_audit_log").insert({
+        entity_type: "contractor",
+        entity_id:   contractorId,
+        action:      "file_uploaded",
+        detail:      JSON.stringify({
+          path: cpath, name: cName, size: cbytes.length, type: contentType,
+          source: "contractor_portal", kind: kind, actor_name: cActor,
+        }),
+        actor:       user.phone || user.email || user.id,
+        created_at:  cNow,
+      });
+    } catch (_e) { /* non-fatal: the file is stored regardless */ }
+    // Flag it on the staff worklist. Account-level: the NOT NULL unit columns
+    // take an empty string (no job is associated).
+    try {
+      await admin.from("contractor_submissions").insert({
+        contractor_id: contractorId, unit_id: "", sow_project_number: "", address: cCtName,
+        kind: kind, status: "new", file_path: cpath, file_name: filename,
+        file_type: contentType, created_by: cActor, created_at: cNow,
+      });
+    } catch (_e) { /* non-fatal: the file + audit row above are authoritative */ }
+    await notifyStaffOfSubmission(admin, { kind, contractorId, address: cCtName, amount: null });
+    return jsonResponse({ ok: true, name: cName });
   }
 
   // 2) Confirm the work order is THEIRS.
@@ -470,7 +548,7 @@ serve(async (req: Request) => {
   //    to the CONTRACTOR record (contractors/<id>/<bucket>/), the exact path the
   //    Contractor card's Documents reads back (_loadCtFilesFromStorage buckets by
   //    path segment 2). Photos / invoices file under the unit's work-order path.
-  const isCompliance = COMPLIANCE_KINDS.indexOf(kind) !== -1;
+  //    (isCompliance computed once near the top of the handler.)
   const path = isCompliance
     ? "contractors/" + contractorId + "/" + kind + "/" + Date.now() + "_" + filename
     : "contractor-uploads/" + unitId + "/" + projectNumber + "/" + kind + "s/" + Date.now() + "_" + filename;

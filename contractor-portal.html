@@ -116,6 +116,20 @@
                   border:0; border-radius:8px; background:var(--cp-accent); color:var(--cp-accent-ink); cursor:pointer; }
     .cp-tm-row { display:flex; align-items:center; gap:8px; padding:8px 0; border-top:1px solid var(--line); }
     .cp-tm-row .cp-sub-name { flex:1 1 auto; min-width:0; font-size:14px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    /* Account-level compliance card (WSIB / insurance) — shown only when a
+       certificate is missing or expired. */
+    .cp-compliance { border:1px solid var(--err); background:#fef2f2; border-radius:12px; padding:14px 16px; margin:4px 0 18px; }
+    .cp-compliance h3 { margin:0 0 4px; font-size:14px; font-weight:800; color:var(--err); }
+    .cp-compliance .cp-comp-lead { font-size:12.5px; color:var(--ink); margin:0 0 6px; }
+    .cp-comp-item { display:flex; align-items:center; justify-content:space-between; gap:10px;
+                    padding:10px 0; border-top:1px solid var(--line); flex-wrap:wrap; }
+    .cp-comp-item:first-of-type { border-top:0; }
+    .cp-comp-label { font-weight:700; font-size:14px; }
+    .cp-comp-state { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.4px; }
+    .cp-comp-state.missing, .cp-comp-state.expired { color:var(--err); }
+    .cp-comp-btn { width:auto; margin:0; padding:9px 14px; font-size:14px; font-weight:700;
+                   background:var(--cp-accent); color:var(--cp-accent-ink); border:0; border-radius:8px; cursor:pointer; }
+    .cp-signout { width:auto; margin-top:22px; padding:9px 16px; font-size:13px; }
     .hidden { display:none; }
   </style>
 </head>
@@ -167,19 +181,27 @@
     <div class="cp-card hidden" id="cp_app">
       <h1>My Work Orders</h1>
       <div class="cp-count" id="cp_count"></div>
+
+      <!-- Account-level compliance (WSIB / liability insurance). Self-renders
+           ONLY when a certificate is missing or past its expiry date. -->
+      <div id="cp_compliance"></div>
+
       <div id="cp_list"></div>
 
       <!-- Request to add a key person to this contractor's portal access. -->
       <div class="cp-team">
         <h3 class="cp-h3">My team</h3>
-        <p class="cp-note">Need to give a colleague access to this portal? Request it below. The housing office reviews it, and once approved the person can sign in with their own mobile number.</p>
+        <p class="cp-note">Need to give a colleague access to this portal? Request it below. The housing office reviews it, and once approved the person can sign in with their own mobile number or email. Enter a mobile number, an email, or both.</p>
         <input id="cp_tm_name" type="text" placeholder="Full name" autocomplete="off"/>
-        <input id="cp_tm_phone" type="tel" inputmode="tel" placeholder="Mobile number" autocomplete="off"/>
+        <input id="cp_tm_phone" type="tel" inputmode="tel" placeholder="Mobile number (optional if email given)" autocomplete="off"/>
+        <input id="cp_tm_email" type="email" inputmode="email" placeholder="Email (optional if mobile given)" autocomplete="off"/>
         <input id="cp_tm_role" type="text" placeholder="Role / trade (optional)" autocomplete="off"/>
         <button id="cp_tm_send" type="button" class="cp-tm-send" data-cp-addperson="1">Request access for this person</button>
         <div class="cp-msg" id="cp_tm_msg"></div>
         <div id="cp_tm_list"></div>
       </div>
+
+      <button id="cp_signout" type="button" class="cp-ghost cp-signout">Sign out</button>
     </div>
 
     <!-- Work-order detail (shown when a work order is tapped) -->
