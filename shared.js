@@ -491,10 +491,34 @@ window.loadJsPdf = function loadJsPdf(opts) {
 // "(705)-555-0100" without a DB migration.
 // ═══════════════════════════════════════════════════════════════════════
 window.formatPhone = function(str){
-  var v = String(str || '').replace(/\D/g, '').slice(0, 10);
+  var v = String(str || '').replace(/\D/g, '');
+  // Drop a leading NANP country code so typing "1 705 372 5639" doesn't shift
+  // the 1 into the area code ("(170)-537-..."). 11 digits starting with 1 -> 10.
+  if (v.length === 11 && v.charAt(0) === '1') v = v.slice(1);
+  v = v.slice(0, 10);
   if (v.length >= 7) return '(' + v.slice(0, 3) + ')-' + v.slice(3, 6) + '-' + v.slice(6);
   if (v.length >= 4) return '(' + v.slice(0, 3) + ')-' + v.slice(3);
   return v ? '(' + v : '';
+};
+
+// Format a phone <input> as the user types, AND flag a completed-but-invalid
+// number (bad NANP area/exchange code -- must start 2-9 -- or wrong digit
+// count) by toggling the .phone-invalid class (red border, shared.css). Blank
+// or still-typing (<10 digits) is never flagged. The single global used by
+// every phone field via oninput="fmtPhone(this)" on every page (shared.js loads
+// everywhere, unlike the old housing-app.js copy).
+window.fmtPhone = function(input){
+  if (!input) return;
+  input.value = (typeof window.formatPhone === 'function') ? window.formatPhone(input.value) : input.value;
+  try {
+    var d = String(input.value || '').replace(/\D/g, '');
+    var bad = false;
+    if (d.length === 10)      bad = !/^[2-9]\d{2}[2-9]\d{6}$/.test(d);
+    else if (d.length === 11) bad = !/^1[2-9]\d{2}[2-9]\d{6}$/.test(d);
+    // Other lengths: partial entry or an international number -- leave unflagged.
+    if (input.classList) input.classList.toggle('phone-invalid', bad);
+    input.title = bad ? 'This does not look like a valid phone number - check the area code and digits.' : '';
+  } catch (e) {}
 };
 
 // ═══════════════════════════════════════════════════════════════════════

@@ -95,12 +95,9 @@ function _calcCoArrearsMonths(){
 // ── Phone formatter ──
 // Now a thin wrapper around the shared window.formatPhone — single source
 // of truth for "(705)-000-0000" canonical formatting (parens + dashes).
-function fmtPhone(input){
-  if (!input) return;
-  input.value = (typeof formatPhone === 'function')
-    ? formatPhone(input.value)
-    : input.value;
-}
+// fmtPhone now lives in shared.js (window.fmtPhone) so phone formatting + the
+// invalid-number flag apply on every page, not just the ones that load this
+// file. Inline oninput="fmtPhone(this)" resolves to that global.
 
 // ── App ID ──
 function generateAppId(){
