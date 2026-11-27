@@ -47,6 +47,50 @@
   var _resendTimer = null;
   var workOrders = [];   // last-loaded rows, indexed by the detail view
   var currentWO = null;  // the work order whose detail is open (for downloads)
+  var _compliance = null; // {wsib:{expiry,state}, insurance:{expiry,state}} from contractor-claim
+
+  // ── Session persistence (rolling 24h) ─────────────────────────────────────
+  // The contractor stays signed in for up to 24h of inactivity: the Supabase
+  // session (access + refresh token) is stashed in localStorage and rehydrated
+  // on load, refreshing the short-lived access token when it has expired. Each
+  // successful use re-stamps savedAt, so the 24h window rolls forward. Sign-out
+  // clears it. All reads/writes are try/caught so a private window (no storage)
+  // simply falls back to in-memory, sign-in-each-time behaviour.
+  var _PERSIST_KEY = 'cp_session_v1';
+  var _MAX_AGE_MS  = 24 * 60 * 60 * 1000;
+  function _persistSession() {
+    try {
+      if (!session || !session.access_token) return;
+      localStorage.setItem(_PERSIST_KEY, JSON.stringify({
+        access_token:  session.access_token,
+        refresh_token: session.refresh_token || '',
+        expires_at:    session.expires_at || 0,   // unix seconds
+        savedAt:       Date.now()
+      }));
+    } catch (e) { /* storage unavailable: session stays in-memory only */ }
+  }
+  function _clearPersisted() { try { localStorage.removeItem(_PERSIST_KEY); } catch (e) { /* ignore */ } }
+  function _loadPersisted() {
+    try {
+      var raw = localStorage.getItem(_PERSIST_KEY);
+      if (!raw) return null;
+      var rec = JSON.parse(raw);
+      if (!rec || !rec.access_token) return null;
+      if (!rec.savedAt || (Date.now() - rec.savedAt) > _MAX_AGE_MS) { _clearPersisted(); return null; }
+      return rec;
+    } catch (e) { return null; }
+  }
+  // Exchange a refresh token for a fresh session (access tokens expire ~1h).
+  async function _refreshSession(refreshToken) {
+    var r = await fetch(SB + '/auth/v1/token?grant_type=refresh_token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'apikey': ANON },
+      body: JSON.stringify({ refresh_token: refreshToken })
+    });
+    var d = await r.json().catch(function () { return {}; });
+    if (!r.ok || !d.access_token) throw new Error(d.msg || d.error_description || d.error || ('HTTP ' + r.status));
+    return d;
+  }
 
   // Active sign-in channel: 'phone' (SMS code) or 'email' (email code).
   var _authChannel = 'phone';
@@ -158,6 +202,7 @@
         throw new Error(d.msg || d.error_description || d.error || ('HTTP ' + r.status));
       }
       session = d;
+      _persistSession();
       await claimAndLoad();
     } catch (err) { setMsg('Verification failed: ' + err.message, true); }
   }
@@ -179,6 +224,7 @@
       });
       var cd = await cr.json().catch(function () { return {}; });
       if (!cr.ok || !cd.linked) { showNotLinked(cd && cd.reason); return; }
+      _compliance = (cd && cd.compliance) || null;
     } catch (e) { showNotLinked('error'); return; }
     await loadWorkOrders();
   }
@@ -220,8 +266,92 @@
       var rows = await r.json();
       renderWorkOrders(Array.isArray(rows) ? rows : []);
       hide('cp_login'); show('cp_app');
+      renderCompliance();
       loadPeopleRequests();
     } catch (e) { setMsg('Could not load your work orders: ' + e.message, true); }
+  }
+
+  // Account-level compliance card (WSIB / liability insurance). Renders into
+  // #cp_compliance ONLY when a certificate is missing or past its expiry date
+  // (per the summary contractor-claim returns); hidden entirely when both are
+  // valid. Upload goes to contractor-upload with NO work order (account-level).
+  function renderCompliance() {
+    var mount = el('cp_compliance');
+    if (!mount) return;
+    var c = _compliance;
+    function needs(x) { return x && (x.state === 'missing' || x.state === 'expired'); }
+    var items = [];
+    if (c && needs(c.wsib))      items.push({ kind: 'wsib',      label: 'WSIB clearance',     st: c.wsib });
+    if (c && needs(c.insurance)) items.push({ kind: 'insurance', label: 'Liability insurance', st: c.insurance });
+    if (!items.length) { mount.innerHTML = ''; return; }
+    var rows = items.map(function (it) {
+      var stateTxt = (it.st.state === 'expired')
+        ? ('Expired' + (it.st.expiry ? ' ' + it.st.expiry : ''))
+        : 'Not on file';
+      return '<div class="cp-comp-item"><div>'
+           + '<div class="cp-comp-label">' + esc(it.label) + '</div>'
+           + '<div class="cp-comp-state ' + esc(it.st.state) + '">' + esc(stateTxt) + '</div></div>'
+           + '<button type="button" class="cp-comp-btn" data-cp-cupload="' + esc(it.kind) + '">Upload</button>'
+           + '</div>';
+    }).join('');
+    mount.innerHTML =
+      '<div class="cp-compliance">'
+      + '<h3>&#9888; Compliance documents needed</h3>'
+      + '<p class="cp-comp-lead">The housing office needs a current copy of the following. Upload a photo or PDF and they will review it and update your file.</p>'
+      + rows
+      + '<input type="file" id="cp_up_c_wsib" accept="image/*,application/pdf" class="hidden"/>'
+      + '<input type="file" id="cp_up_c_insurance" accept="image/*,application/pdf" class="hidden"/>'
+      + '<div class="cp-msg" id="cp_comp_msg"></div>'
+      + '</div>';
+  }
+
+  function compMsg(m, isErr) {
+    var e = el('cp_comp_msg'); if (!e) return;
+    e.textContent = m || ''; e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
+  }
+
+  // Upload an account-level WSIB / insurance certificate (no work order). One
+  // file per tap; posts to contractor-upload WITHOUT unitId/projectNumber.
+  function uploadComplianceFiles(kind, files) {
+    if (!files || !files.length || !session || !session.access_token) return;
+    var f = files[0];
+    compMsg('Uploading...');
+    var rd = new FileReader();
+    rd.onload = function () {
+      var b64 = String(rd.result || '').split(',').pop();
+      fetch(SB + '/functions/v1/contractor-upload', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
+        body: JSON.stringify({ kind: kind, filename: f.name, contentType: f.type || 'application/octet-stream', dataBase64: b64 })
+      }).then(function (r) {
+        return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
+      }).then(function (res) {
+        if (res.ok && res.d && res.d.ok) {
+          compMsg('✓ Sent to the housing office. They will review it and update your file.');
+        } else {
+          compMsg((res.d && res.d.error) || 'Upload failed. Please try again.', true);
+        }
+      }).catch(function () { compMsg('Upload failed. Please try again.', true); });
+    };
+    rd.onerror = function () { compMsg('Could not read that file.', true); };
+    rd.readAsDataURL(f);
+  }
+
+  // Clear the stored session + sign out, returning to the login card.
+  function signOut() {
+    var tok = session && session.access_token;
+    _clearPersisted();
+    session = null; _compliance = null; currentWO = null; workOrders = [];
+    try {
+      if (tok) fetch(SB + '/auth/v1/logout', {
+        method: 'POST', headers: { 'apikey': ANON, 'Authorization': 'Bearer ' + tok }
+      }).catch(function () { /* best-effort revoke */ });
+    } catch (e) { /* ignore */ }
+    hide('cp_app'); hide('cp_detail'); hide('cp_notlinked');
+    hide('cp_step_code'); hide('cp_step_email');
+    show('cp_login'); show('cp_step_phone');
+    _authChannel = 'phone';
+    setMsg('You have been signed out.');
   }
 
   function renderWorkOrders(rows) {
@@ -528,16 +658,11 @@
       + '<div class="cp-upload-row">'
       +   '<button type="button" class="cp-upbtn" data-cp-note="1">&#128221; Add note</button>'
       + '</div>'
-      + '<h3 class="cp-h3">Company compliance documents</h3>'
-      + '<div class="cp-note">Upload your current WSIB clearance and liability insurance certificates. These go to the housing office and are kept on your contractor file.</div>'
-      + '<div class="cp-upload-row">'
-      +   '<button type="button" class="cp-upbtn" data-cp-upload="wsib">&#128737; Upload WSIB proof</button>'
-      +   '<button type="button" class="cp-upbtn" data-cp-upload="insurance">&#128737; Upload insurance proof</button>'
-      + '</div>'
+      // WSIB / liability insurance are handled at the account level now (the
+      // compliance card on the home screen, shown only when missing/expired) --
+      // not per work order.
       + '<input type="file" id="cp_up_photo" accept="image/*" multiple class="hidden"/>'
       + '<input type="file" id="cp_up_invoice" accept="image/*,application/pdf" class="hidden"/>'
-      + '<input type="file" id="cp_up_wsib" accept="image/*,application/pdf" class="hidden"/>'
-      + '<input type="file" id="cp_up_insurance" accept="image/*,application/pdf" class="hidden"/>'
       + '<div class="cp-msg" id="cp_up_msg"></div>';
     hide('cp_app'); show('cp_detail');
     loadSubmissionStatus(w);
@@ -600,21 +725,26 @@
     if (!session || !session.access_token) return;
     var name  = (el('cp_tm_name')  || {}).value || '';
     var phone = (el('cp_tm_phone') || {}).value || '';
+    var email = (el('cp_tm_email') || {}).value || '';
     var role  = (el('cp_tm_role')  || {}).value || '';
-    name = name.trim(); phone = phone.trim(); role = role.trim();
+    name = name.trim(); phone = phone.trim(); email = email.trim().toLowerCase(); role = role.trim();
     if (!name)  { tmMsg('Enter the person’s full name.', true); return; }
-    if (!e164(phone)) { tmMsg('Enter a valid mobile number.', true); return; }
+    // A teammate can sign in by mobile OR email, so require at least one.
+    var e164Phone = phone ? e164(phone) : '';
+    if (phone && !e164Phone) { tmMsg('Enter a valid mobile number, or leave it blank and enter an email.', true); return; }
+    if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { tmMsg('Enter a valid email address.', true); return; }
+    if (!e164Phone && !email) { tmMsg('Enter a mobile number or an email so they can sign in.', true); return; }
     tmMsg('Sending request…');
     fetch(SB + '/functions/v1/contractor-upload', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'apikey': ANON, 'Authorization': 'Bearer ' + session.access_token },
-      body: JSON.stringify({ kind: 'add_person', personName: name, personPhone: e164(phone), personRole: role })
+      body: JSON.stringify({ kind: 'add_person', personName: name, personPhone: e164Phone, personEmail: email, personRole: role })
     }).then(function (r) {
       return r.json().catch(function () { return {}; }).then(function (d) { return { ok: r.ok, d: d }; });
     }).then(function (res) {
       if (res.ok && res.d && res.d.ok) {
         tmMsg('✓ Request sent to the housing office. We’ll let you know once it’s approved.');
-        ['cp_tm_name', 'cp_tm_phone', 'cp_tm_role'].forEach(function (id) { var i = el(id); if (i) i.value = ''; });
+        ['cp_tm_name', 'cp_tm_phone', 'cp_tm_email', 'cp_tm_role'].forEach(function (id) { var i = el(id); if (i) i.value = ''; });
         loadPeopleRequests();
       } else {
         tmMsg((res.d && res.d.error) || 'Could not send the request. Please try again.', true);
@@ -662,7 +792,25 @@
     // cp_app alongside the work-order list).
     var appEl = el('cp_app');
     if (appEl) appEl.addEventListener('click', function (e) {
-      if (e.target && e.target.closest && e.target.closest('[data-cp-addperson]')) submitAddPerson();
+      if (!e.target || !e.target.closest) return;
+      if (e.target.closest('[data-cp-addperson]')) { submitAddPerson(); return; }
+      if (e.target.closest('#cp_signout')) { signOut(); return; }
+      var cup = e.target.closest('[data-cp-cupload]');
+      if (cup) {
+        var k = cup.getAttribute('data-cp-cupload');   // wsib | insurance
+        var inp = el('cp_up_c_' + k);
+        if (inp) inp.click();
+        return;
+      }
+    });
+    // Compliance file pickers (account-level WSIB / insurance) live in the home
+    // card; one delegated change listener catches both across re-renders.
+    if (appEl) appEl.addEventListener('change', function (e) {
+      var t = e.target;
+      if (!t || !t.id || t.id.indexOf('cp_up_c_') !== 0) return;
+      var kind = t.id.slice(8);   // wsib | insurance
+      if (['wsib', 'insurance'].indexOf(kind) === -1) return;
+      uploadComplianceFiles(kind, t.files); t.value = '';
     });
     // Tap a work order -> detail; delegated so it survives list re-renders.
     var listEl = el('cp_list');
@@ -703,11 +851,37 @@
     if (detailEl) detailEl.addEventListener('change', function (e) {
       var t = e.target;
       if (!t || !t.id || t.id.indexOf('cp_up_') !== 0) return;
-      var kind = t.id.slice(6);   // photo | invoice | wsib | insurance
-      if (['photo', 'invoice', 'wsib', 'insurance'].indexOf(kind) === -1) return;
+      var kind = t.id.slice(6);   // photo | invoice (WSIB/insurance are account-level now)
+      if (['photo', 'invoice'].indexOf(kind) === -1) return;
       uploadFiles(kind, t.files); t.value = '';
     });
     applyNationBranding();
+    _rehydrateSession();
+  }
+
+  // On load, restore a stored session (rolling 24h) so the contractor isn't
+  // asked to sign in again. If the access token is still valid, use it; if it
+  // has expired, refresh it with the stored refresh token. Any failure clears
+  // the stored session and falls back to the normal login card.
+  function _rehydrateSession() {
+    var rec = _loadPersisted();
+    if (!rec) return;
+    hide('cp_login');   // avoid a flash of the sign-in form while we restore
+    var nowSec = Math.floor(Date.now() / 1000);
+    var stillValid = rec.expires_at && (rec.expires_at - 60) > nowSec;
+    if (stillValid) {
+      session = { access_token: rec.access_token, refresh_token: rec.refresh_token, expires_at: rec.expires_at };
+      _persistSession();   // re-stamp savedAt -> rolling 24h window
+      claimAndLoad();
+      return;
+    }
+    if (rec.refresh_token) {
+      _refreshSession(rec.refresh_token).then(function (d) {
+        session = d; _persistSession(); claimAndLoad();
+      }).catch(function () { _clearPersisted(); show('cp_login'); });
+      return;
+    }
+    _clearPersisted(); show('cp_login');
   }
 
   // Brand the portal dynamically from the resolved nation (name + colour +

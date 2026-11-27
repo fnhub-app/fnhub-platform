@@ -47,6 +47,29 @@ function emailKey(v: unknown): string {
   return String(v ?? "").trim().toLowerCase();
 }
 
+// Compliance (WSIB / liability insurance) summary for the portal's global
+// compliance card. The portal cannot read housing_contractors directly (RLS),
+// so the claim response carries the contractor's own WSIB / insurance expiry +
+// a state the portal uses to decide whether to prompt for a fresh certificate:
+//   missing  -> no expiry date on file
+//   expired  -> expiry date is in the past
+//   valid    -> expiry date is today or later
+// These ride inside the housing_contractors `data` jsonb (wsibExpiry/insExpiry).
+function complianceState(expiry: string): string {
+  if (!expiry) return "missing";
+  const today = new Date().toISOString().slice(0, 10);
+  return expiry < today ? "expired" : "valid";
+}
+function computeCompliance(ctData: unknown): Record<string, unknown> {
+  const d = (ctData && typeof ctData === "object") ? ctData as Record<string, unknown> : {};
+  const wsibExp = String(d.wsibExpiry ?? "").slice(0, 10);
+  const insExp  = String(d.insExpiry ?? "").slice(0, 10);
+  return {
+    wsib:      { expiry: wsibExp || null, state: complianceState(wsibExp) },
+    insurance: { expiry: insExp  || null, state: complianceState(insExp) },
+  };
+}
+
 serve(async (req: Request) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: corsHeaders });
   if (req.method !== "POST")    return jsonResponse({ error: "Method not allowed" }, 405);
@@ -83,7 +106,15 @@ serve(async (req: Request) => {
     if (existing && existing.length) {
       const row = existing[0] as Record<string, unknown>;
       if (row.is_active === false) return jsonResponse({ linked: false, reason: "deactivated" });
-      return jsonResponse({ linked: true, contractor_id: row.contractor_id });
+      // Carry the current compliance summary so the portal's global WSIB /
+      // insurance card reflects the latest status on every sign-in / rehydrate.
+      let compliance: Record<string, unknown> | null = null;
+      try {
+        const { data: ctRows } = await admin
+          .from("housing_contractors").select("data").eq("id", row.contractor_id).limit(1);
+        if (ctRows && ctRows[0]) compliance = computeCompliance((ctRows[0] as Record<string, unknown>).data);
+      } catch (_e) { /* non-fatal: card just won't prompt */ }
+      return jsonResponse({ linked: true, contractor_id: row.contractor_id, compliance });
     }
   }
 
@@ -163,5 +194,5 @@ serve(async (req: Request) => {
     });
   } catch (_e) { /* non-fatal */ }
 
-  return jsonResponse({ linked: true, contractor_id: invite.contractor_id });
+  return jsonResponse({ linked: true, contractor_id: invite.contractor_id, compliance: computeCompliance(ctData) });
 });

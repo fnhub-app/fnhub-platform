@@ -4100,41 +4100,53 @@ async function _wlApproveContractorPerson(id){
   var ct = (window._contractors || []).find(function(c){ return String(c.id) === String(pr.contractor_id); });
   if(!ct){ if(typeof showToast==='function') showToast('The contractor for this request was not found. Reload and try again.', {type:'error'}); return; }
   var e164 = (typeof _toE164 === 'function') ? _toE164(pr.phone) : String(pr.phone || '');
-  if(!e164){ if(typeof showToast==='function') showToast('That mobile number is not valid, so a sign-in cannot be created.', {type:'error'}); return; }
+  var pemail = String(pr.email || '').trim().toLowerCase();
+  // A teammate can be invited by mobile OR email (either supports portal sign-in),
+  // so allow approval as long as at least one valid channel is on the request.
+  if(!e164 && !pemail){ if(typeof showToast==='function') showToast('This request has no valid mobile number or email, so a sign-in cannot be created.', {type:'error'}); return; }
   if(typeof showConfirm !== 'function') return;
+  var _via = (e164 && pemail) ? (escapeHtml(e164) + ' / ' + escapeHtml(pemail)) : escapeHtml(e164 || pemail);
+  var _channel = (e164 && pemail) ? 'their mobile number or email' : (e164 ? 'their mobile number' : 'their email');
   var ok = await showConfirm({
     title:       'Approve ' + (pr.name || 'this person') + '?',
-    message:     'Adds <strong>' + escapeHtml(pr.name || '') + '</strong> (' + escapeHtml(e164) + ')'
-                 + ' to <strong>' + escapeHtml(ct.name || 'the contractor') + '</strong> and lets them sign in to the portal with their mobile number.',
+    message:     'Adds <strong>' + escapeHtml(pr.name || '') + '</strong> (' + _via + ')'
+                 + ' to <strong>' + escapeHtml(ct.name || 'the contractor') + '</strong> and lets them sign in to the portal with ' + _channel + '.',
     confirmText: 'Approve & grant access'
   });
   if(!ok) return;
   try {
-    // 1) Add to people[] (dedup by normalized phone).
+    // 1) Add to people[] (dedup by normalized phone OR email).
     ct.people = Array.isArray(ct.people) ? ct.people : [];
-    var dup = ct.people.some(function(p){ return p && p.phone && typeof _toE164==='function' && _toE164(p.phone) === e164; });
+    var dup = ct.people.some(function(p){
+      if(!p) return false;
+      if(e164 && p.phone && typeof _toE164==='function' && _toE164(p.phone) === e164) return true;
+      if(pemail && p.email && String(p.email).trim().toLowerCase() === pemail) return true;
+      return false;
+    });
     if(!dup) ct.people.push({ name: pr.name || '', phone: pr.phone || '', email: pr.email || '', role: pr.role || '' });
     if(typeof sbSaveContractor === 'function'){
       var okSave = await sbSaveContractor(ct);
       if(okSave === false) throw new Error('could not update the contractor record');
     }
-    // 2) Create the portal invite authorizing this phone (30-day window).
+    // 2) Create the portal invite authorizing this phone and/or email (30-day
+    //    window). An email-only teammate gets a phone-null invite (the column is
+    //    nullable as of 20261113) so they can claim by email.
     var expires = new Date(Date.now() + 30*24*60*60*1000).toISOString();
     var invitedBy = (window.HOUSING_SESSION && HOUSING_SESSION.email) || window.currentRole || 'staff';
     var inv = await fetch(SUPABASE_URL + '/rest/v1/contractor_invites', {
       method: 'POST', headers: Object.assign({}, HOUSING_HEADERS, { 'Prefer': 'return=minimal' }),
-      body: JSON.stringify([{ phone: e164, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires }])
+      body: JSON.stringify([{ phone: e164 || null, email: pemail || null, contractor_id: String(ct.id), role: 'contact', invited_by: invitedBy, expires_at: expires }])
     });
     if(!inv.ok) throw new Error('could not create the sign-in invite (HTTP ' + inv.status + ')');
     // 3) Mark the request approved.
     await _sbResolvePeopleRequest(id, 'approved');
-    if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_person_approved', 'Approved portal access for ' + (pr.name || e164), window.currentRole || 'staff');
+    if(typeof auditEntry === 'function') auditEntry('CT:' + ct.id, 'contractor_person_approved', 'Approved portal access for ' + (pr.name || e164 || pemail), window.currentRole || 'staff');
     // 4) Courtesy invite email with the portal link (fire-and-forget).
     var _portalLink = ((window.NATION_CONFIG && window.NATION_CONFIG.portal_base) || (window.location && window.location.origin) || '') + '/contractor-portal.html';
     if(typeof notifyContractorPortalInvite === 'function'){
       try { notifyContractorPortalInvite(ct, [{ name: pr.name || '', phone: pr.phone || '', email: pr.email || '' }], _portalLink).catch(function(){}); } catch(_e){}
     }
-    if(typeof showToast === 'function') showToast('✓ ' + (pr.name || 'Contact') + ' approved — they can now sign in at the portal with their mobile number.', {type:'info'});
+    if(typeof showToast === 'function') showToast('✓ ' + (pr.name || 'Contact') + ' approved — they can now sign in at the portal with ' + _channel + '.', {type:'info'});
   } catch(e){
     console.warn('[contractor-people] approve failed:', e);
     if(typeof showToast === 'function') showToast('Could not approve: ' + (e && e.message || e), {type:'error'});
