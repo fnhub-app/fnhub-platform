@@ -1176,12 +1176,16 @@ create policy staff_select on public.tenants as PERMISSIVE for SELECT to authent
 create policy staff_update on public.tenants as PERMISSIVE for UPDATE to authenticated using ((get_my_role() IS NOT NULL)) with check ((get_my_role() IS NOT NULL));
 create policy unit_notes_insert_staff on public.unit_notes as PERMISSIVE for INSERT to public with check ((get_my_role() IS NOT NULL));
 create policy unit_notes_select_staff on public.unit_notes as PERMISSIVE for SELECT to public using ((get_my_role() IS NOT NULL));
-create policy "Allow authenticated uploads" on storage.objects as PERMISSIVE for INSERT to authenticated with check ((bucket_id = 'housing-files'::text));
-create policy "authenticated_delete 58041z_0" on storage.objects as PERMISSIVE for DELETE to public using ((auth.role() = 'authenticated'::text));
-create policy "authenticated_delete 58041z_1" on storage.objects as PERMISSIVE for SELECT to public using ((auth.role() = 'authenticated'::text));
-create policy "authenticated_insert 58041z_0" on storage.objects as PERMISSIVE for INSERT to public with check ((auth.role() = 'authenticated'::text));
-create policy "authenticated_read 58041z_0" on storage.objects as PERMISSIVE for SELECT to public using ((auth.role() = 'authenticated'::text));
-create policy authenticated_update on storage.objects as PERMISSIVE for UPDATE to authenticated using ((auth.role() = 'authenticated'::text)) with check ((auth.role() = 'authenticated'::text));
+-- Storage access is STAFF-scoped (see 20261127_storage_rls_lockdown.sql): the
+-- broad "any authenticated user" policies were removed so Contractor / Community
+-- portal users can't read or delete arbitrary housing-files objects. Active staff
+-- get full access; applicants are scoped to their own application-intake folder
+-- by the intake_owner_* policies below.
+create policy hs_storage_staff_select on storage.objects as PERMISSIVE for SELECT to authenticated using (((bucket_id = 'housing-files'::text) AND (EXISTS ( SELECT 1 FROM staff s WHERE ((lower(s.email) = lower((auth.jwt() ->> 'email'::text))) AND s.is_active)))));
+create policy hs_storage_staff_insert on storage.objects as PERMISSIVE for INSERT to authenticated with check (((bucket_id = 'housing-files'::text) AND (EXISTS ( SELECT 1 FROM staff s WHERE ((lower(s.email) = lower((auth.jwt() ->> 'email'::text))) AND s.is_active)))));
+create policy hs_storage_staff_update on storage.objects as PERMISSIVE for UPDATE to authenticated using (((bucket_id = 'housing-files'::text) AND (EXISTS ( SELECT 1 FROM staff s WHERE ((lower(s.email) = lower((auth.jwt() ->> 'email'::text))) AND s.is_active))))) with check (((bucket_id = 'housing-files'::text) AND (EXISTS ( SELECT 1 FROM staff s WHERE ((lower(s.email) = lower((auth.jwt() ->> 'email'::text))) AND s.is_active)))));
+create policy hs_storage_staff_delete on storage.objects as PERMISSIVE for DELETE to authenticated using (((bucket_id = 'housing-files'::text) AND (EXISTS ( SELECT 1 FROM staff s WHERE ((lower(s.email) = lower((auth.jwt() ->> 'email'::text))) AND s.is_active)))));
+create policy intake_owner_update on storage.objects as PERMISSIVE for UPDATE to authenticated using (((bucket_id = 'housing-files'::text) AND ((storage.foldername(name))[1] = 'application-intake'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text))) with check (((bucket_id = 'housing-files'::text) AND ((storage.foldername(name))[1] = 'application-intake'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text)));
 create policy intake_owner_delete on storage.objects as PERMISSIVE for DELETE to authenticated using (((bucket_id = 'housing-files'::text) AND ((storage.foldername(name))[1] = 'application-intake'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text)));
 create policy intake_owner_insert on storage.objects as PERMISSIVE for INSERT to authenticated with check (((bucket_id = 'housing-files'::text) AND ((storage.foldername(name))[1] = 'application-intake'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text)));
 create policy intake_owner_select on storage.objects as PERMISSIVE for SELECT to authenticated using (((bucket_id = 'housing-files'::text) AND ((storage.foldername(name))[1] = 'application-intake'::text) AND ((storage.foldername(name))[2] = (auth.uid())::text)));
