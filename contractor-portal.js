@@ -530,10 +530,26 @@
     var e = el('cp_complete_msg'); if (!e) return;
     e.textContent = m || ''; e.className = isErr ? 'cp-msg cp-err' : 'cp-msg';
   }
+  // Two-tap inline confirm instead of window.confirm(): an installed PWA / some
+  // mobile webviews suppress window.confirm (it returns false), which silently
+  // aborted "Mark work complete" -- the one contractor action that used it, so
+  // completion appeared broken while progress/photos/notes (no confirm) worked.
+  // First tap arms (shows a confirm message); second tap within the window sends.
+  var _completeArmed = false, _completeArmTimer = null;
+  function _disarmComplete() {
+    _completeArmed = false;
+    if (_completeArmTimer) { clearTimeout(_completeArmTimer); _completeArmTimer = null; }
+  }
   function markComplete() {
     if (!currentWO || !session || !session.access_token) return;
-    if (typeof window.confirm === 'function' &&
-        !window.confirm('Mark this job complete and send it to the housing office for their final sign-off?')) return;
+    if (!_completeArmed) {
+      _completeArmed = true;
+      completeMsg('Tap "Mark work complete" again to confirm sending this to the housing office.');
+      if (_completeArmTimer) clearTimeout(_completeArmTimer);
+      _completeArmTimer = setTimeout(function () { _completeArmed = false; _completeArmTimer = null; completeMsg(''); }, 6000);
+      return;
+    }
+    _disarmComplete();
     completeMsg('Sending…');
     fetch(SB + '/functions/v1/contractor-upload', {
       method: 'POST',
@@ -559,6 +575,7 @@
     var w = workOrders[idx];
     if (!w) return;
     currentWO = w;
+    _disarmComplete();   // clear any armed "tap again to confirm" from another job
     var d = w.data || {};
     var statusLabel = ({ active: 'Active', in_process: 'In process', awaiting_signoff: 'Awaiting sign-off', closed: 'Closed' })[w.status || 'active'] || (w.status || '');
     // A completed / cancelled job is locked for progress, but invoices, photos
